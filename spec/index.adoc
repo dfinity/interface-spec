@@ -1,0 +1,107 @@
+= Public DFINITY interfaces
+:toc2:
+:toclevels: 3
+:stem: latexmath
+:source-highlighter: rouge
+:icons: font
+
+== Introduction
+
+Welcome to the DFINITY Internet Computer! We speak of “the” DFINITY Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the DFINITY computer to run their applications, or use these applications.
+
+This documents describes this external view of the DFINITY Internet Computer:
+Which interfaces it provides to applicaion developers and users, and what will happen when you use these interfaces.
+
+WARNING: While this document describes the public interface and behaviour of the DFINITY Internet Computer, it is not the primary end-user documentation. DFINITY provides further tools, such as the ActorScript programming language, the IDL tooling and the SDK tools, to make programming and using the DFINITY Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
+
+
+To the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of DFINITY, please consult the link:component-architecture{outfilesuffix}[Component Architecture].  #TODO: Other documents to link?#
+
+== Overview
+
+If you want to use the DFINITY Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<rest-interface,public REST interface>>. You can create canisters using the ActorScript langauge and the DFINITY SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+
+Once your application is running on DFINITY, it is a _canister_, and users can interact with it. They can use the <<rest-interface,public REST interface>> to send _ingess messages_ to the canister, which are eventually delivered to the canister, according to the <<system-api,System API>>.
+
+The user can also use the REST interface to issue read-only queries, which are faster but cannot actually change the canister.
+
+The following section describes these interfaces, together with a brief description of what they do. Afterwards, you will find a slightly <<public-spec,more formal description>> of the DFINITY Internet Computer that more precisely describes its behaviour.
+
+== Public Interfaces
+
+[#rest-interface]
+=== REST Interface
+
+You can interact with the DFINITY Computer using a typical rest interface.
+
+This documents does not explain how to find the location and port of a running DFINITY node. If you use a local node, you can use `http://127.0.0.1:4200/`.
+
+==== Deploying a new canister
+
+Path:: `/api/canister/new`
+Method:: `POST`
+Payload format:: A <<canister-module-format,canister module>>
+Response format:: JSON record with these fields
+ * `request-nonce`: A unique number identifying the request
+
+Uploading a new canister will install this canister, and invoke its `start` method as explained below #TODO link#.
+
+#TODO: Canister parameters -- in canister module or in the request?#
+
+The `request-nonce` identifies this request, and can be used to poll for its status using `/api/request/status`. If the request succeeds, the `/api/request/status` call will in `result` return a JSON record with these fields:
+
+* `canister-id`: ID of the newly created canister
+
+==== Sending a message to a canister
+
+Path:: `/api/canister/send`
+Method:: `POST`
+Payload format:: JSON record with these fields:
+ * `destination` (Canister Id): Canister id of the destination
+ * `method` (text): Name of the method to invoke
+ * `payload` (blob): Payload of the message
+Response format:: JSON record with these fields
+ * `request-nonce`: A unique number identifying the request
+
+The `request-nonce` identifies this request, and can be used to poll for its status using `/api/request/status`. If the request succeeds, the `/api/request/status` call will in `result` return a blob representing the response of the message call.
+
+==== Do a fast-track read-only read message
+
+Path:: `/api/canister/query`
+Method:: `POST`
+Payload format:: JSON record with these fields:
+ * `destination` (Canister Id): Canister id of the destination
+ * `method` (text): Name of the method to invoke
+ * `payload` (blob): Payload of the message
+Response format:: JSON record with these fields
+ * `request-nonce`: A unique number identifying the request
+
+The `request-nonce` identifies this request, and can be used to poll for its status using `/api/request/status`. If the request succeeds, the `/api/request/status` call will in `result` return a blob representing the response of the message call.
+
+==== Polling request status
+
+Path:: `/api/request/status/:request-nonce:`
+Method:: `GET`
+Response format:: JSON record with these fields:
+ * `status`: one of `pending`, `failed` or `completed`
+ * `result`: (if status is `completed`) A result according to the method spec above.
+ * `error` (text): (if status is `failed`) An error message
+
+#TODO explain expiry of message status#
+
+[#system-api]
+=== Canister interface (System API)
+
+#TODO#
+
+[#canister-module-format]
+=== Canister module format
+
+A canister module is simply a https://webassembly.github.io/spec/core/index.html[WebAssembly module] in binary format (typically `.wasm`).
+
+WARNING: This is a scaffolding spec, close to the current implementation, but needs refinement for features like initialization parameters, dynamically linked libraries. We probably want to go for some zip-file-with-metadata approach.
+
+
+
+[#public-spec]
+== Public behaviour
