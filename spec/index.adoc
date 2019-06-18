@@ -1,7 +1,7 @@
 = Public DFINITY interfaces
 Joachim Breitner <joachim@dfinity.org>
 :toc2:
-:toclevels: 2
+:toclevels: 3
 :stem: latexmath
 :source-highlighter: rouge
 :icons: font
@@ -242,12 +242,12 @@ WasmFunc = WasmState -> FuncResult
 FuncResult ::=  Trap | Ok {
   new_state : WasmState;
   new_calls : List SendCall;
-  result : NoResult | Result;
+  result : NoResult | CallResult;
 }
 CallResult ::= Reply Blob | Reject ErrCode;
 SendCall ::= {
   destination : CanId;
-  method: MethodName;
+  method_name: MethodName;
   payload: Blob;
   callback: CallResult -> WasmFunc;
 }
@@ -269,8 +269,9 @@ The state of the DFINITY Internet computer can be described as a record with the
 S ::= {
   requests : ReqId ↦ ReqState;
   canisters : CanId ↦ CanState;
-  messages : Set Message;
-  to_install : UnorderedList InstallRequest;
+  call_contexts : CallId ↦ CallCtxt;
+  messages : Bag Message;
+  to_install : Bag InstallRequest;
 }
 ReqState
   ::= Pending
@@ -279,10 +280,10 @@ ReqState
 CanState ::= {
   wasm_state : WasmState;
   exports : MethodName ↦ (Blob -> WasmFunc);
-  call_contexts : CallId ↦ CallCtxt;
 }
 CallbackId = (abstract)
 CallCtxt ::= {
+  canister : CanId;
   origin : MsgOrigin;
   replied : bool;
 }
@@ -291,18 +292,25 @@ MsgOrigin
       request : ReqId;
     }
   | FromCanister {
-      sender : CanId;
-      call_context : CallId;
+      calling_context : CallId;
       callback: CallResult -> WasmFunc
     }
-  | ResponseMessage {
-    call_context : CallId;
-  }
-Message ::= {
-  origin : MsgOrigin
-  receiver : CanId
-  method : WasmFunc
-}
+Message
+  ::=
+    PublicMessage {
+      origin : MsgOrigin;
+      canister : CanId;
+      method_name : Text;
+      payload : Text;
+    }
+    | PendingMessage {
+      call_context : CallId;
+      func : WasmFunc;
+    }
+    | DoneMessage {
+      call_context : CallId;
+      result : CallResult
+    }
 InstallRequest ::= {
   request : ReqId;
   canister : CanisterModule;
@@ -313,23 +321,25 @@ InstallRequest ::= {
 === Initial state
 
 The initial state of the system is
-...
+....
 {
   requests = ();
   canisters = ();
   messages = ();
   to_install = ();
 }
-...
-using `()` to denote the empty map/set/list.
+....
+using `()` to denote the empty map or bag.
 
 === State transitions
 
 Based on this abstract notion of the state, we can describe the behaviour of the system.
 
-Some transitions are trigged by invoking the REST API; these indicate the REST method parameters and response. Other transitions are modelled as spontaneous, and only have the state before and after.
+Some transitions are trigged by invoking the REST API; these indicate the REST method parameters and response. Other transitions are modelled as spontaneous transitions, and only describe the state before and after.
 
 ==== Actor installation request
+
+If a user uploads a new canister module, it is not immediatelly instantiated, but queued in `S.to_install`.
 
 State before::
 ....
@@ -350,6 +360,8 @@ A JSON record with `{request-nonce: <req_id>}`
 
 ==== Request status query
 
+The user can query the status of a request. The type of `result` below can vary depending on the request type.
+
 State before::
 ....
 S
@@ -367,6 +379,8 @@ A JSON record with
 * `{status: completed; result : <result>}` if `S.requests[req_id] = Completed { result = result }`
 
 ==== Actor installation
+
+Actor installation turns a canister module into a running canister. #TODO: Invoke the start function with appropriate parameters#.
 
 State before::
 ....
@@ -387,6 +401,8 @@ S with
 
 ==== User message send
 
+Incoming user messages are queued as `PublicMessage` with an origin that ties it to the user's request.
+
 State before::
 ....
 S
@@ -398,10 +414,11 @@ State after::
 S with
     requests[req_id] = Pending
     messages =
-      {
+      PublicMessage {
         origin = FromUser { request = req_id };
-        receiver = cid;
-        method = S.canisters[cid](payload).
+        canister = cid;
+        method_name = meth
+        payload = payload
       } · S.messages
   where
     req_id ∉ dom S.requests
@@ -409,24 +426,165 @@ S with
 REST response::
 A JSON record with `{request-nonce: <req_id>}`
 
-==== Message execution (non-trapping)
+==== Call context creation
+
+Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports.
 
 State before::
 ....
-S with
-    messages = M · S.message
-  where
-    M.method (S.canisters[M.receiver].wasm_state) = Ok res
-    ∀ call ∈ M.new_calls:
-      S.canisters[call.destination].exports[call.method] exists
+S where
+    S.messages = PublicMessage M · other_messages
+    C = S.canisters[M.canister]
+    F = C.exports[M.method_name]
 ....
 State after::
 ....
 S with
-    messages = S.message · map msg_of_call M.new_calls
+    messages = PendingMessage {
+        call_context = ctxt_id;
+        canister = M.canister;
+        func = F(M.payload)
+      } · other_messages
+    call_contexts[ctxt_id] = {
+      canister = M.canister;
+      origin = M.origin
+      replied = false;
+    }
+  where
+    ctxt_id ∉ dom S.call_contexts
+....
 
-msg_of_call call =
-  {
-     origin : FromCanister {
-       sender : M.receiver; 
+==== Message execution (non-trapping)
+
+The actual message execution, if successful, may enqueue further messages and
+possibly record a result.
+
+State before::
+....
+S where
+    S.messages = PendingMessage M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    (res = NoResult) or (S.call_contexts[M.call_context].replied = false)
+....
+State after::
+....
+S with
+    canisters[M.receiver].wasm_state = res.new_state;
+    messages =
+      [ DoneMessage {
+          call_context = M.call_context;
+          result : res.result
+        }
+      | if res.result ≠ NoResult
+      ] ·
+      other_messages ·
+      [ PublicMessage {
+          origin = FromCanister {
+            call_contexts = M.call_context;
+            callback = call.callback
+          };
+          canister = call.destination;
+          method_name = call.method_name;
+          payload = call.payload
+        }
+      | for call ∈ res.new_calls ]
+     S.call_contexts[M.call_context].replied ||= (res ≠ NoResult)
+....
+
+==== Message execution (trapping)
+
+If a message traps, it gets dropped. No response is generated (some other message may still fulfil this calling context).
+
+State before::
+....
+S where
+    S.messages = PendingMessage M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state = Trap
+....
+State after::
+....
+S with messages = other_messages
+....
+
+==== Message execution (double reply)
+
+If a message tries to respond when its calling context has already be responded to, then we treat it like a trapping message.
+
+State before::
+....
+S where
+    S.messages = PendingMessage M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    (res ≠ NoResult) and (S.call_contexts[M.call_context].replied = true)
+....
+State after::
+....
+S with messages = other_messages
+....
+
+==== Call context starvation
+
+If there is no message any more that could possibly fulfill a calling context, then an error message is synthesized.
+
+State before::
+....
+S where
+    S.call_contexts[ctxt_id].replied = false
+    ∀ msg ∈ S.messages. msg.call_contexts ≠ ctxt_id
+....
+State after::
+....
+S with
+    messages =
+      [ DoneMessage {
+          call_context = ctxt_id
+          result : Reject starvation_error_code
+        }
+      ] · other_messages
+     S.call_contexts[ctxt_id].replied = true
+....
+
+==== Callback invokation
+
+When an inter-canister messages has been responded to, we can queue the call to
+the callback.
+
+State before::
+....
+S where
+    S.messages = DoneMessage M · other_messages
+    C1 = S.call_contexts[M.call_context]
+    C1.origin = FromCanister {
+      call_context = ctxt_id2
+      callback = F
+    }
+....
+State after::
+....
+S with messages =
+  PendingMessage {
+    call_context = ctxt_id2
+    func = F (M.result)
+  } · other_messages
+....
+
+
+==== Respond to user message
+
+When an ingress messages has been responded to, we can record the result in the list of queries.
+
+State before::
+....
+S where
+    S.messages = DoneMessage M · other_messages
+    C1 = S.call_contexts[M.call_context]
+    C1.origin = FromUser { request = req_id }
+....
+State after::
+....
+S with
+  messages = other_messages
+  requests[req_id]
+    | Completed { result = payload } if M.result = Reply payload
+    | Failed { message = toErrorMessage errcode } if M.result = Reject errcode
 ....
