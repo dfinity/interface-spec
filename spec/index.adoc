@@ -788,7 +788,7 @@ As explained in Section “<<system-api-module>>”, the WebAssembly module impo
 We model `mem` as an array of bytes, and `table` as an array of execution functions.
 
 
-==== The execution monad
+==== The execution state
 
 We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
 ....
