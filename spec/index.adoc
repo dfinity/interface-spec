@@ -319,6 +319,22 @@ To get some consistency in this document, we try to use the following terms arou
 
 The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. This is implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response. The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value.
 
+=== Notation
+
+We specify the behaviour of the system using pseudo-code.
+
+The manipulated values are primitive values (numbers, text, binary blobs), aggregate types (lists, unordered lists a.k.a. bags, partial maps written as `Key ↦ Value`, records with fixed fields, named constructors) and function types (`Argument -> Result`).
+
+The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`).
+
+NOTE: All values are immutable! State change is specified by describing the new state, not by changing existing state.
+
+Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To create a new record from an existing record `R` with some fields changed, the syntax `R where field = new_value` is used.
+
+
+In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be followed for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
+
+For example, the condition `S.messages = M · Other_messages` says that `M` is a message in field `messages` of the record `S`, and that `Other_messages` are the other messages. IF the state after specifies `S with messages = Other_messages`, then the message `M` is removed from the state.
 
 === Abstract state
 
@@ -347,19 +363,19 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 ....
 WasmState = (abstract)
 WasmFunc = WasmState -> FuncResult
-FuncResult ::= Trap | Return {
+FuncResult = Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
   response : NoResponse | Response;
 }
-Response ::= Reply Blob | Reject ErrCode;
-MethodCall ::= {
+Response = Reply Blob | Reject ErrCode;
+MethodCall = {
   callee : CanId;
   method_name: MethodName;
   payload: Blob;
   callback: Response -> WasmFunc;
 }
-CanisterModule ::= {
+CanisterModule = {
   init : Blob -> FuncResult;
   exports : MethodName ↦ (Blob -> WasmFunc)
 }
@@ -376,14 +392,14 @@ The DFINITY Internet Computer provides certain messaging guarantees: If a user o
 To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `replied` field is set to `true` once the call has received a response, further attempts to send a response fail.
 
 ....
-CallCtxt ::= {
+CallCtxt = {
   canister : CanId;
   caller : CallOrigin;
   replied : bool;
 }
 CallId = (abstract)
 CallOrigin
-  ::= FromUser {
+  = FromUser {
       request : ReqId;
     }
   | FromCanister {
@@ -398,13 +414,13 @@ In this abstract description, call contexts are never garbage collected, even if
 
 Calls into and within the DFINITY Internet Computer are implemented as messages between the canisters. We model the lifetime of calls and message as follows:
 ....
-Call ::= {
+Call = {
   caller : CallOrigin;
   callee : CanId;
   method_name : Text;
   payload : Blob;
 }
-Message := {
+Message = {
   call_context : CallId;
   receiver : CanId;
   func : WasmFunc;
@@ -420,7 +436,7 @@ A `Message` can be executed; this causes further calls to appear, and potentiall
 Finally, we can describe the state of the DFINITY Internet Computer as a record having the following fields:
 
 ....
-S ::= {
+S = {
   requests : ReqId ↦ ReqState;
   canisters : CanId ↦ CanState;
   to_install : Bag InstallRequest;
@@ -430,14 +446,14 @@ S ::= {
   responses : CallId ↦ Response;
 }
 ReqState
-  ::= Pending
+  = Pending
   | Failed { message : Text }
   | Completed { result : Value }
-CanState ::= {
+CanState = {
   wasm_state : WasmState;
   exports : MethodName ↦ (Blob -> WasmFunc);
 }
-InstallRequest ::= {
+InstallRequest = {
   request : ReqId;
   canister : CanisterModule;
 }
@@ -474,77 +490,68 @@ If a user uploads a new canister module, it is not immediately instantiated, but
 
 HTTP request::
 `/api/canister/new` with body `C : CanisterModule`
-State before::
+Conditions::
 ....
-S
+    Req_id ∉ dom S.requests
 ....
 State after::
 ....
 S with
-    requests[req_id] = Pending
-    to_install = { request = req_id; canister = C } · S.to_install
-  where
-    req_id ∉ dom S.requests
+    requests[Req_id] = Pending
+    to_install = { request = Req_id; canister = C } · S.to_install
 ....
 HTTP response::
-A JSON record with `{request-nonce: <req_id>}`
+A JSON record with `{request-nonce: <Req_id>}`
 
 ==== Request status query
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
 
 HTTP request::
-`/api/requests/<req_id>/status`
-State before::
-....
-S
-....
+`/api/requests/<Req_id>/status`
 State after::
 ....
 S
 ....
 HTTP response::
 A JSON record with
-* `{status: pending}` if `S.requests[req_id] = Pending`
-* `{status: failed; message: <msg>}` if `S.requests[req_id] = Failed { message = msg }`
-* `{status: completed; result : <result>}` if `S.requests[req_id] = Completed { result = result }`
+* `{status: pending}` if `S.requests[Req_id] = Pending`
+* `{status: failed; message: <msg>}` if `S.requests[Req_id] = Failed { message = msg }`
+* `{status: completed; result : <result>}` if `S.requests[Req_id] = Completed { result = result }`
 
 ==== Canister installation (successful)
 
 Canister installation turns a canister module into a running canister. This involves invoking the `start` system method (see <<system-api-start>>), which must succeed and must not invoke other methods.
 
-State before::
+Conditions::
 ....
-S where
-    S.requests[req_id] = Pending
-    S.to_install = { request = req_id; canister = C; payload = P } · other_to_install
-    C.init P = Return { new_state = new_state; new_calls = (); response = NoResponse }
+    S.requests[Req_id] = Pending
+    S.to_install = { request = Req_id; canister = C; payload = P } · Other_to_install
+    C.init P = Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
 ....
 S with
-    requests[req_id] = Completed { result = { canister_id = cid } }
-    to_install = other_to_install
-    canisters[cid] = { new_state }
+    requests[Req_id] = Completed { result = { canister_id = cid } }
+    to_install = Other_to_install
+    canisters[cid] = { New_state }
 ....
 
 ==== Canister installation (failing)
 
 Canister installation fails under certain conditions, such a trapping or otherwise misbehaving `start` method:
 
-State before::
+Conditions::
 ....
-S where
-    S.requests[req_id] = Pending
-    S.to_install = { request = req_id; canister = C; payload = P } · other_to_install
+    S.requests[Req_id] = Pending
+    S.to_install = { request = Req_id; canister = C; payload = P } · Other_to_install
     C.init P = Trap
 ....
 State after::
 ....
 S with
-    requests[req_id] = Failed { message = "Canister installation failed" }
-    to_install = other_to_install
-    canisters[cid] = { new_state }
+    requests[Req_id] = Failed { message = "Canister installation failed" }
+    to_install = Other_to_install
 ....
 
 An implementation may create a more helpful error message based on why the canister trapped.
@@ -555,53 +562,51 @@ Incoming user messages are queued as calls with an `caller` field that ties it t
 
 HTTP request::
 `/api/canister/<cid>/<meth>/call` with body `{ payload : <payload> }`
-State before::
+Conditions::
 ....
-S
+    Req_id ∉ dom S.requests
 ....
 State after::
 ....
 S with
-    requests[req_id] = Pending
+    requests[Req_id] = Pending
     calls =
       {
-        caller = FromUser { request = req_id };
+        caller = FromUser { request = Req_id };
         canister = cid;
         method_name = meth
         payload = payload
       } · S.calls
   where
-    req_id ∉ dom S.requests
 ....
 HTTP response::
-A JSON record with `{request-nonce: <req_id>}`
+A JSON record with `{request-nonce: <Req_id>}`
 
 ==== Call context creation
 
 Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports.
 
-State before::
+Conditions::
 ....
-S where
-    S.calls = C · other_calls
+    S.calls = C · Other_calls
     F = S.canisters[C.callee].exports[M.method_name]
 ....
 State after::
 ....
 S with
-    calls = other_calls
+    calls = Other_calls
     messages = {
-        call_context = ctxt_id;
+        call_context = Ctxt_id;
         receiver = C.callee;
         func = F(C.payload)
       } · S.messages
-    call_contexts[ctxt_id] = {
+    call_contexts[Ctxt_id] = {
       canister = C.callee;
       caller = C.caller;
       replied = false;
     }
   where
-    ctxt_id ∉ dom S.call_contexts
+    Ctxt_id ∉ dom S.call_contexts
 ....
 
 ==== Message execution (non-trapping)
@@ -609,17 +614,16 @@ S with
 The actual message execution, if successful, may enqueue further messages and
 possibly record a response.
 
-State before::
+Conditions::
 ....
-S where
-    S.messages = M · other_messages
+    S.messages = M · Other_messages
     M.func (S.canisters[M.receiver].wasm_state) = Ok res
     (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
 ....
 S with
-    messages = other_messages
+    messages = Other_messages
     canisters[M.receiver].wasm_state = res.new_state;
     calls =
       [ {
@@ -642,73 +646,68 @@ S with
 
 If a message traps, it gets dropped. No response is generated (some other message may still fulfill this calling context).
 
-State before::
+Conditions::
 ....
-S where
-    S.messages = M · other_messages
+    S.messages = M · Other_messages
     M.func (S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
-S with messages = other_messages
+S with messages = Other_messages
 ....
 
 ==== Message execution (double response)
 
 If a message tries to respond when its calling context has already be responded to, then we treat it like a trapping message.
 
-State before::
+Conditions::
 ....
-S where
-    S.messages = M · other_messages
+    S.messages = M · Other_messages
     M.func (S.canisters[M.receiver].wasm_state) = Ok res
     res ≠ NoResponse
     S.call_contexts[M.call_context].replied = true
 ....
 State after::
 ....
-S with messages = other_messages
+S with messages = Other_messages
 ....
 
 ==== Call context starvation
 
 If there is no message any more that could possibly fulfill a calling context, then an error message is synthesized.
 
-State before::
+Conditions::
 ....
-S where
-    S.call_contexts[ctxt_id].replied = false
-    ∀ msg ∈ S.messages. msg.call_context ≠ ctxt_id
+    S.call_contexts[Ctxt_id].replied = false
+    ∀ msg ∈ S.messages. msg.call_context ≠ Ctxt_id
 ....
 State after::
 ....
 S with
-    S.call_contexts[ctxt_id].replied = true
-    S.responses[ctxt_id] = Reject starvation_error_code
+    S.call_contexts[Ctxt_id].replied = true
+    S.responses[Ctxt_id] = Reject starvation_error_code
 ....
 
 ==== Callback invocation
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
-State before::
+Conditions::
 ....
-S where
-    response = S.responses[ctxt_id]
-    S.call_contexts[ctxt_id].origin =
+    S.call_contexts[Ctxt_id].origin =
       FromCanister {
-        call_context = ctxt_id2
+        call_context = Ctxt_id2
         callback = F
       }
 ....
 State after::
 ....
 S with
-    S.responses[ctxt_id] = (deleted)
+    S.responses[Ctxt_id] = (deleted)
     messages =
       {
-        call_context = ctxt_id2
-        func = F response
+        call_context = Ctxt_id2
+        func = F (S.responses[Ctxt_id])
       } · S.messages
 ....
 
@@ -717,18 +716,17 @@ S with
 
 When an ingress method call has been responded to, we can record the response in the list of queries.
 
-State before::
+Conditions::
 ....
-S where
-    response = S.responses[ctxt_id]
-    S.call_contexts[ctxt_id].origin =
-      FromUser { request = req_id }
+    response = S.responses[Ctxt_id]
+    S.call_contexts[Ctxt_id].origin =
+      FromUser { request = Req_id }
 ....
 State after::
 ....
 S with
-    S.responses[ctxt_id] = (deleted)
-    requests[req_id]
+    S.responses[Ctxt_id] = (deleted)
+    requests[Req_id]
       | Completed { result = payload } if response = Reply payload
       | Failed { message = toErrorMessage errcode } if response = Reject errcode
 ....
@@ -739,9 +737,8 @@ Ready-only queries are executed immediately
 
 HTTP request::
 `/api/canister/<cid>/<meth>/query` with body `{ payload : <payload> }`
-State before::
+Conditions::
 ....
-S where
   C = S.canisters[cid]
   F = C.exports[M.method_name]
 ....
