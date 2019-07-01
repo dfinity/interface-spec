@@ -321,7 +321,7 @@ The public entry points of canisters are called _methods_. Methods can be _calle
 
 === Notation
 
-We specify the behaviour of the system using pseudo-code.
+We specify the behavior of the system using pseudo-code.
 
 The manipulated values are primitive values (numbers, text, binary blobs), aggregate types (lists, unordered lists a.k.a. bags, partial maps written as `Key ↦ Value`, records with fixed fields, named constructors) and function types (`Argument -> Result`).
 
