@@ -1,0 +1,896 @@
+= The DFINITY Computer, from end to end
+Joachim Breitner <joachim@dfinity.org>
+:toc2:
+:toclevels: 3
+:stem: latexmath
+:source-highlighter: pygments
+:icons: font
+
+== Preamble
+
+This document is work in progress, initially authored by mailto:joachim@dfinity.org[Joachim]. The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of DFINITY in a hopefully concrete way. It could also be a document that we can publish to users of DFINITY.
+
+Because of its focus on the externally visible behavior of DFINITY, it will also help uncover abstraction leaks. Because it aims to describe the full behaviour, it helps to show which designs are unexpectedly complicated.
+
+=== Contact
+
+It will be everyone’s shared responsibility to keep this document accurate, but the editor’s responsibility to keep it focused and consistent. If you have additions or corrections, either talk to Joachim in whatever form you prefer, or propose changes to the document directly (but be prepared for editorial rewrites of your text).
+
+=== Status
+
+We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example.
+
+The basic functionality of installing a canister and canister method calls, should already be rather precise. Beyond that, there are open questions and missing bits (see below). I need your help to correct these, and either adjust the content to reality, or at least to our actual plans.
+
+=== Open questions and missing bits
+
+As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.
+
+* Rest interface: Structure of the request bodies (JSON or something better)
+* Canister IDs: Really just 64 bit numbers, and which textual format?
+* Missing: Message ordering is not yet enforced in the formalism.
+* Missing: How long are request ids kept around.
+* Missing: Listing well-known error codes.
+* Missing: Canister initialization parameters
+* Likely wrong: The “The Dfinity Protocol Overview” has empty canisters, and installation is a two-step process of installing an empty canister, and upgrading from that. This needs to be put in here.
+* Missing: Programmatic canister creation
+* Missing: Canister upgrades
+* Missing: User identity and accounts
+* Missing: References in call arguments and responses? Which references are supported?
+* Missing: Payment
+* Missing: Gas accounting
+* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts)
+* Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
+* Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
+* Missing: Certified variables (globals pointing to memory? specially marked read-only methods?)
+
+
+== Introduction
+
+Welcome to the DFINITY Internet Computer! We speak of “the” DFINITY Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the DFINITY computer to run their applications and those who use these applications.
+
+=== Scope of this document
+
+This documents describes this external view of the DFINITY Internet Computer:
+Which interfaces it provides to application developers and users, and what will happen when you use these interfaces.
+
+WARNING: While this document describes the public interface and behavior of the DFINITY Internet Computer, it is not the primary end-user documentation. DFINITY provides further tools, such as the ActorScript programming language, the IDL tooling and the SDK tools, to make programming and using the DFINITY Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
+
+If you think of the DFINITY Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of DFINITY, please consult the link:../old/component-architecture{outfilesuffix}[Component Architecture].
+
+This document tries to be implementation agnostic: If we decide to re-do the implementation of the DFINITY Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
+
+This implies that this document does not speak of the interface of the DFINITY Internet Computer towards its engineers and administrators, as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
+
+
+=== Overview of the Internet Computer
+
+If you want to use the DFINITY Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the ActorScript language and the DFINITY SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+
+Once your application is running on DFINITY, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to send _ingress method calls_ to the canister, which are eventually delivered to the canister, according to the <<system-api,System API>>.
+
+The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of the canister.
+
+
+
+.A typical use of the DFINITY computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
+[plantuml]
+....
+actor Developer
+actor User
+participant DFINITY
+participant "Canister 1" as Can1
+Developer -> DFINITY : /canister/new
+create Can1
+DFINITY -> Can1 : create
+DFINITY -> Can1 : initialize
+Developer <-- DFINITY : canister-id=1
+|||
+User -> DFINITY : /canister/1/hello/call
+DFINITY -> Can1 : hello
+return "Hello world!"
+User <-- DFINITY : "Hello World!"
+
+....
+
+
+The following section describes these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the DFINITY Internet Computer that describes its abstract behavior with high precision.
+
+== Public Interfaces
+
+[#http-interface]
+=== HTTP Interface
+
+You can interact with the DFINITY Computer using a typical HTTP interface.
+
+This document does not explain how to find the location and port of a running DFINITY node. If you use a local node, you can use `http://127.0.0.1:4200/`.
+
+The following API calls are provided, and explained below:
+....
+/api/request/<request-nonce>/status
+/api/canister/new
+/api/canister/<canister-id>/<method-name>/call
+/api/canister/<canister-id>/<method-name>/query
+....
+
+
+
+[#api-request-status]
+==== Polling request status
+
+Path:: `/api/request/<request-nonce>/status`
+Method:: `GET`
+Response format:: JSON record with these fields:
+ * `status`: one of `pending`, `failed` or `completed`
+ * `result`: (if status is `completed`) A result according to the method spec below.
+ * `error` (text): (if status is `failed`) An error message
+
+Some API calls below are asynchronous, i.e. the response is not immediately
+returned to the client. In these cases, a _request nonce_ is returned, and this request can be used to query its state or fetch the final response.
+
+==== Deploying a new canister
+
+Path:: `/api/canister/new`
+Method:: `POST`
+Payload format:: A <<canister-module-format,canister module>>
+Response format:: JSON record with these fields
+ * `request-nonce`: A unique number identifying the request
+
+Uploading a new canister will install this canister, and invoke its `start` method as explained below #TODO link#.
+
+#TODO: Canister parameters -- in canister module or in the request?#
+
+If the canister installation succeeds, the `result` of <<api-request-status,`/api/request/<request-nonce>/status`>> is a JSON record with these fields:
+
+* `canister-id` (64 bit number): ID of the newly created canister
+
+[#api-canister-call]
+==== Calling a canister method
+
+Path:: `/api/canister/<canister-id>/<method-name>/call`
+Method:: `POST`
+Payload format:: JSON record with these fields:
+ * `payload` (blob): Payload of the message
+
+Response format:: JSON record with these fields
+ * `request-nonce`: A unique number identifying the request
+
+If the method execution succeeds, the `result` of <<api-request-status,`/api/request/<request-nonce>/status`>> is a blob representing the response of the method call.
+
+[#api-canister-query]
+==== Fast-track read-only query
+
+Path:: `/api/canister/<canister-id>/<method-name>/query`
+Method:: `POST`
+Payload format:: JSON record with these fields:
+ * `payload` (blob): Payload of the call
+
+Response format:: JSON record with these fields
+ * `status`: one of `failed` or `completed`
+ * `result` (blob): (if status is `completed`) the response of the query
+ * `error` (text): (if status is `failed`) An error message
+
+Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the response synchronously.
+
+[#canister-module-format]
+=== Canister module format
+
+A canister module is simply a https://webassembly.github.io/spec/core/index.html[WebAssembly module] in binary format (typically `.wasm`).
+
+WARNING: This is a scaffolding spec, close to the current implementation. It will need refinement for features like initialization parameters, dynamically linked libraries. We probably want to go for some zip-file-with-metadata approach.
+
+
+[#system-api]
+=== Canister interface (System API)
+
+The System API is the interface between the running canister and the DFINITY Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
+
+[#system-api-module]
+==== WebAssembly module requirements
+
+In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
+
+* If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
+* If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
+* It may only import functions listed below, at the type given below.
+* It may have a `(start)` function. (Note that all system calls will trap when called from `(start)`, as it cannot have a valid `api_nonce`.)
+* If it exports a function called `start`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports any functions called `dfn_msg <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* No floating point instructions are used in the module. (This may be allowed in the future.)
+
+NOTE: This document assumes that WebAssembly host references can be used (e.g. `anyref`). Until this is so, every `anyref` is replaced with an `i64` that should be treated as opaque by the WebAssembly code.
+
+==== The API nonce
+
+A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all calls into the canister have an `api_nonce` parameter, and all calls into the system require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
+
+[#system-api-messages]
+==== Accepting messages
+
+To define a public method of name `name`, a WebAssembly module exports a function with name `dfn_msg <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_.
+
+NOTE: The space in `dfn_msg <name>` is intentional.
+
+The payload of the call (e.g. the content of the `payload` field in <<api-canister-call,API call to call a canister method>>) is copied into the canister on demand.
+ In the success callback for a further <<system-api-send,method call>>, the payload refers to the response of that call; in error callbacks, no payload is available. In other words, the lifetime of the payload is a single WebAssembly function execution, not a whole method call tree.
+
+* `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
++
+Size, in bytes, of the argument payload.
+
+* `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
++
+Copies `length` bytes from `msg_payload[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument payload into the Wasm memory.
++
+This traps if `offset+length` is greater than the size of the argument payload, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside an error callback (see below).
+
+In an error callback, no payload is available, but the error code can be queried:
+
+** `+msg.error_code : (api_nonce : anyref) -> i32+`
++
+Returns the error code, if the the current function is invoked as an error callback.
++
+It returns the special “no error” code `0` if the it is _not_ invoked as an error callback; this allows canisters to use a single entry point for both the success and error callback, if they choose to do so.
+
+Eventually, the canister will want to respond to the original call, either with success or by signaling an error:
+
+* `+msg.reply : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
++
+Replies to the sender with the bytes at `memory[offset..offset+length]`. Traps if `offset+length` exceeds the size of the WebAssembly memory.
++
+This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
+
+* `+msg.reject : (api_nonce : anyref, errcode : i32) -> ()+`
++
+Replies to sender with the given error code. The error code must not be 0, otherwise this traps.
+
+If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `msg.send`), are discarded.
+
+[#system-api-canister-id]
+==== Resolving canister ids
+
+To future-proof the System API, references to canisters are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references and their transparent public id, as used by the HTTP interface.
+
+In a future where not all canisters are publicly addressable by anyone, these conversion functions may become partial.
+
+* `+canister.lookup : (api_nonce : anyref, canister_id : i64) -> (canister_ref : anyref)+`
+* `+canister.id : (api_nonce : anyref, canister_ref : anyref) -> (canister_id : i64)+`
+
+[#system-api-send]
+==== Sending messages
+
+A canister can do further calls to other canisters, using the following function call.
+
+* {blank}
++
+
+  msg.call : (
+    api_nonce      : anyref,
+    callee         : anyref, // a canister reference
+    name_offset    : i32,    // a pointer to and the length of the
+    name_len       : i32,    //   destination’s unmangled method name
+    payload_offset : i32,    // a pointer to and the length of the
+    payload_len    : i32,    //   payload of message to send
+    onreply        : i32,    // funtab entry (api : anyref, env : i32) -> ()
+    onreply_env    : i32,    // an environment to give back to onreply
+    onreject       : i32,    // funtab entry (api : anyref, env : i32) -> ()
+    onreject_env   : i32     // an environment to give back to onreject
+  ) -> ()
++
+This function copies the data referred to by `payload_len`/`payload_offset` out of the canister, notes the current function table entries at the indices `onreply` and `onreject`, and queues a message to the given destination (but does not send it until the current WebAssembly function returns without trapping).
++
+Upon successful completion of the method call, the WebAssembly function specified by the `onreply` parameter is executed, and the response data can be queries using `msg.arg_data_size`/`msg.arg_data_copy`. If the method call fails, the `onreject` function is executed.
++
+Further extensions of this function call will happen by extending the parameter list; thanks to WebAssembly import overloading, canisters importing the system call at an old version (with fewer function arguments) can still work.
++
+This system call traps if the `payload_offset+payload_len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
+
+[#public-spec]
+== Abstract public behavior
+
+The sections above describe the interface, i.e. outer edges of the DFINITY Internet Computer, but gives only intuitive and rather vague information about what these interfaces actually do.
+
+This section aims to address that question with great precision, by describing the _abstract state_ of the whole DFINITY Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
+
+The design of this abstract specification (e.g. how and where pending messages are stored) are _not_ to be understood to in any way prescribe a concrete implementation or software architecture. The goals here are formal precision and clarity, but not implementability, so this can lead to different ways of phrasing.
+
+=== Nomenclature
+
+(This section is mostly relevant for editors of this document.)
+
+To get some consistency in this document, we try to use the following terms around method calls and messaging:
+
+The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. This is implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response. The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value.
+
+
+=== Abstract state
+
+In this specification, we describe the DFINITY Internet Computer as a state machine. In particular, there is a single bit of data that describes the complete state of the system (called `S` below).
+
+Of course, this is a huge simplification: The real DFINITY Internet Computer is distributed and has a multi-component architecture, and the state is spread over many different components, some physically separated. But this simplification allows us to have a concise description of the system, and to easily make global decisions (such as, “is there any pending message”), without having to specify the bookkeeping that allows such global decision.
+
+==== Identifiers
+
+Canisters and requests are addressed simply by natural numbers; method names can be arbitrary pieces of text:
+....
+CanId = Nat
+ReqId = Nat
+MethodName = Text
+....
+
+[#abstract-canisters]
+==== Abstract canisters
+
+The <<system-api,WebAssembly System API>> is relatively low-level, and some of its details (e.g. that the payload data is queried using separate calls, and that closures are represented by a function pointer and a number, that method names need to be mangled) would clutter this section. Therefore, we abstract over the WebAssembly details as follows:
+
+* The state of a WebAssembly module (memory, tables, globals) is hidden behind an abstract `WasmState`.
+
+* A canister module `CanisterModule` consists of an initial state, and a (pure) function that models function invocation. It either indicate that the canister function traps, or returns a new state together with a description of the invoked asynchronous System API calls.
++
+....
+WasmState = (abstract)
+WasmFunc = WasmState -> FuncResult
+FuncResult ::= Trap | Return {
+  new_state : WasmState;
+  new_calls : List MethodCall;
+  response : NoResponse | Response;
+}
+Response ::= Reply Blob | Reject ErrCode;
+MethodCall ::= {
+  callee : CanId;
+  method_name: MethodName;
+  payload: Blob;
+  callback: Response -> WasmFunc;
+}
+CanisterModule ::= {
+  initial : WasmState;
+  exports : MethodName ↦ (Blob -> WasmFunc)
+}
+....
++
+Note that `WasmFunc` is an abstract notion of a WebAssembly-state-modifying-function, not merely a concrete function in a WebAssembly module. In particular, it hides the `onreply_env` bookkeeping that we have seen in Section <<system-api>> and can thus model a form of closure, which (currently) do not exist on the WebAssembly level.
+
+The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
+
+==== Call contexts
+
+The DFINITY Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
+
+To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `replied` field is set to `true` once the call has received a response, further attempts to send a response fail.
+
+....
+CallCtxt ::= {
+  canister : CanId;
+  caller : CallOrigin;
+  replied : bool;
+}
+CallId = (abstract)
+CallOrigin
+  ::= FromUser {
+      request : ReqId;
+    }
+  | FromCanister {
+      calling_context : CallId;
+      callback: Response -> WasmFunc
+    }
+....
+
+In this abstract description, call contexts are never garbage collected, even if nothing references them any more; an implementation can do that.
+
+==== Calls and Messages
+
+Calls into and within the DFINITY Internet Computer are implemented as messages between the canisters. We model the lifetime of calls and message as follows:
+....
+Call ::= {
+  caller : CallOrigin;
+  callee : CanId;
+  method_name : Text;
+  payload : Blob;
+}
+Message := {
+  call_context : CallId;
+  receiver : CanId;
+  func : WasmFunc;
+}
+....
+
+A `Call` initiates a call to a public entry point of a canister; when this entry point is resolved to an actual WebAssembly function, we create a call context for this call and turn it into `Message`.
+
+A `Message` can be executed; this causes further calls to appear, and potentially a `Response` recorded (see below).
+
+==== The system state
+
+Finally, we can describe the state of the DFINITY Internet Computer as a record having the following fields:
+
+....
+S ::= {
+  requests : ReqId ↦ ReqState;
+  canisters : CanId ↦ CanState;
+  to_install : Bag InstallRequest;
+  calls : Bag Call;
+  call_contexts : CallId ↦ CallCtxt;
+  messages : Bag Message;
+  responses : CallId ↦ Response;
+}
+ReqState
+  ::= Pending
+  | Failed { message : Text }
+  | Completed { result : Value }
+CanState ::= {
+  wasm_state : WasmState;
+  exports : MethodName ↦ (Blob -> WasmFunc);
+}
+InstallRequest ::= {
+  request : ReqId;
+  canister : CanisterModule;
+}
+....
+
+
+==== Initial state
+
+The initial state of the system is
+....
+{
+  requests = ();
+  canisters = ();
+  to_install = ();
+  calls = ();
+  call_contexts = ();
+  messages = ();
+  responses = ();
+}
+....
+using `()` to denote the empty map or bag.
+
+=== State transitions
+
+Based on this abstract notion of the state, we can describe the behavior of the system.
+
+Some transitions are triggered by invoking the HTTP API; these indicate the HTTP method parameters and response. Other transitions are modeled as spontaneous transitions, and only describe the state before and after.
+
+The state transitions are not complete with regard to error handling. For example, the behavior of sending a message to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
+
+==== Canister installation request
+
+If a user uploads a new canister module, it is not immediately instantiated, but queued in `S.to_install`.
+
+HTTP request::
+`/api/canister/new` with body `C : CanisterModule`
+State before::
+....
+S
+....
+State after::
+....
+S with
+    requests[req_id] = Pending
+    to_install = { request = req_id; canister = C } · S.to_install
+  where
+    req_id ∉ dom S.requests
+....
+HTTP response::
+A JSON record with `{request-nonce: <req_id>}`
+
+==== Request status query
+
+The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
+
+HTTP request::
+`/api/requests/<req_id>/status`
+State before::
+....
+S
+....
+State after::
+....
+S
+....
+HTTP response::
+A JSON record with
+* `{status: pending}` if `S.requests[req_id] = Pending`
+* `{status: failed; message: <msg>}` if `S.requests[req_id] = Failed { message = msg }`
+* `{status: completed; result : <result>}` if `S.requests[req_id] = Completed { result = result }`
+
+==== Canister installation
+
+Canister installation turns a canister module into a running canister. #TODO: Invoke the start function with appropriate parameters#.
+
+State before::
+....
+S where
+    S.requests[req_id] = Pending
+    S.to_install = { request = req_id; canister = C} · other_to_install
+....
+State after::
+....
+S with
+    requests[req_id] = Completed { result = { canister_id = cid } }
+    to_install = other_to_install
+    canisters[cid] = {
+      wasm_state = C.initial;
+      call_contexts = ()
+    }
+....
+
+==== User message send
+
+Incoming user messages are queued as calls with an `caller` field that ties it to the user's request.
+
+HTTP request::
+`/api/canister/<cid>/<meth>/call` with body `{ payload : <payload> }`
+State before::
+....
+S
+....
+State after::
+....
+S with
+    requests[req_id] = Pending
+    calls =
+      {
+        caller = FromUser { request = req_id };
+        canister = cid;
+        method_name = meth
+        payload = payload
+      } · S.calls
+  where
+    req_id ∉ dom S.requests
+....
+HTTP response::
+A JSON record with `{request-nonce: <req_id>}`
+
+==== Call context creation
+
+Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports.
+
+State before::
+....
+S where
+    S.calls = C · other_calls
+    F = S.canisters[C.callee].exports[M.method_name]
+....
+State after::
+....
+S with
+    calls = other_calls
+    messages = {
+        call_context = ctxt_id;
+        receiver = C.callee;
+        func = F(C.payload)
+      } · S.messages
+    call_contexts[ctxt_id] = {
+      canister = C.callee;
+      caller = C.caller;
+      replied = false;
+    }
+  where
+    ctxt_id ∉ dom S.call_contexts
+....
+
+==== Message execution (non-trapping)
+
+The actual message execution, if successful, may enqueue further messages and
+possibly record a response.
+
+State before::
+....
+S where
+    S.messages = M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
+....
+State after::
+....
+S with
+    messages = other_messages
+    canisters[M.receiver].wasm_state = res.new_state;
+    calls =
+      [ {
+          origin = FromCanister {
+            call_contexts = M.call_context;
+            callback = call.callback
+          };
+          callee = call.callee;
+          method_name = call.method_name;
+          payload = call.payload
+        }
+      | for call ∈ res.new_calls ] · S.calls
+
+     // and only if res.response ≠ NoResponse:
+     responses[M.call_context] = res.response
+     call_contexts[M.call_context].replied = true
+....
+
+==== Message execution (trapping)
+
+If a message traps, it gets dropped. No response is generated (some other message may still fulfill this calling context).
+
+State before::
+....
+S where
+    S.messages = M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state) = Trap
+....
+State after::
+....
+S with messages = other_messages
+....
+
+==== Message execution (double response)
+
+If a message tries to respond when its calling context has already be responded to, then we treat it like a trapping message.
+
+State before::
+....
+S where
+    S.messages = M · other_messages
+    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    res ≠ NoResponse
+    S.call_contexts[M.call_context].replied = true
+....
+State after::
+....
+S with messages = other_messages
+....
+
+==== Call context starvation
+
+If there is no message any more that could possibly fulfill a calling context, then an error message is synthesized.
+
+State before::
+....
+S where
+    S.call_contexts[ctxt_id].replied = false
+    ∀ msg ∈ S.messages. msg.call_context ≠ ctxt_id
+....
+State after::
+....
+S with
+    S.call_contexts[ctxt_id].replied = true
+    S.responses[ctxt_id] = Reject starvation_error_code
+....
+
+==== Callback invocation
+
+When an inter-canister call has been responded to, we can queue the call to the callback.
+
+State before::
+....
+S where
+    response = S.responses[ctxt_id]
+    S.call_contexts[ctxt_id].origin =
+      FromCanister {
+        call_context = ctxt_id2
+        callback = F
+      }
+....
+State after::
+....
+S with
+    S.responses[ctxt_id] = (deleted)
+    messages =
+      {
+        call_context = ctxt_id2
+        func = F response
+      } · S.messages
+....
+
+
+==== Respond to user message
+
+When an ingress method call has been responded to, we can record the response in the list of queries.
+
+State before::
+....
+S where
+    response = S.responses[ctxt_id]
+    S.call_contexts[ctxt_id].origin =
+      FromUser { request = req_id }
+....
+State after::
+....
+S with
+    S.responses[ctxt_id] = (deleted)
+    requests[req_id]
+      | Completed { result = payload } if response = Reply payload
+      | Failed { message = toErrorMessage errcode } if response = Reject errcode
+....
+
+==== Read-only query
+
+Ready-only queries are executed immediately
+
+HTTP request::
+`/api/canister/<cid>/<meth>/query` with body `{ payload : <payload> }`
+State before::
+....
+S where
+  C = S.canisters[cid]
+  F = C.exports[M.method_name]
+....
+State after::
+....
+S
+....
+HTTP response::
+* If `F(payload) = Trap` then a JSON record with
++
+....
+{status: failed; error: "Query execution trapped"}
+....
+* Else if `F(payload) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
++
+....
+{status: failed; error: "Query execution tried to send further messages "}
+....
+* Else if `F(payload) = Ok res` and `res.response = NoResponse` then a JSON record with
++
+....
+{status: failed; error: "Query execution did not issue a result" }
+....
+* Else if `F(payload) = Ok res` and `res.response = Reject errcode` then a JSON record with
++
+....
+{status: failed; error: <toErrorMessage errcode> }
+....
+* Else if `F(payload) = Ok res` and `res.response = Reply payload` then a JSON record with
++
+....
+{status: success; result: <payload> }
+....
+
+
+[#concrete-canisters]
+=== Abstract Canisters to System API
+
+In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the DFINITY Internet Computer from WebAssembly details. In this section, we will the fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
+
+==== The concrete `WasmState`
+
+The abstract `WasmState` maps to the WebAssembly _store_ `S`, which encompasses the functions, tables, memories and globals of the WebAssembly program.
+
+As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (reps. table) will trap if the module does not import the memory (resp. table).
+
+We model `mem` as an array of bytes, and `table` as an array of execution functions.
+
+
+==== The execution monad
+
+We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
+....
+Params = {
+  arg : NoArg | Blob;
+  errcode : Nat;
+}
+ExecutionState = {
+  wasm_state : S; // a store as per WebAssembly spec
+  api_nonce : (abstract)
+  params : Params;
+  response : NoResponse | Response;
+  calls : List MethodCall;
+}
+....
+This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
+
+Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets. As syntactic convenience; `x.field := val` describes setting field `field` in the mutable reference `x`. An equivalent formulation using monadic functions in a state monad would be feasible.
+
+==== The concrete `WasmFunc`
+
+We can wrap such an execution function into an abstract `WasmFunc = WasmState -> FuncResult`, e.g. for exports and callbacks, as follows:
+....
+mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> ()) : WasmFunc =
+  λ wasm_state ->
+    let es = ref {
+      wasm_state = wasm_state;
+      api_nonce = fresh_nonce();
+      params = params;
+      response = NoResponse;
+      calls = ();
+    }
+    func<es>(api_nonce)
+    if this trapped
+    then return Trap
+    else return (Return {
+      new_state = es.wasm_state;
+      new_calls = es.calls;
+      response = es.response;
+    })
+....
+The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a `WasmFunc`.
+
+WARNING: It is nonsensical to pass to a `WasmFunc` a `WasmState` that comes from a different WebAssembly module than the `func` passed to `mkWasmFunc`. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
+
+==== System imports
+
+Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
+
+....
+msg.arg_data_size<es>(api_nonce : anyref) : i32 =
+  if api_nonce ≠ es.api_nonce then Trap
+  if arg = NoArg then Trap
+  return |arg|
+
+msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, length:i32, offset:i32) =
+  if api_nonce ≠ es.api_nonce then Trap
+  if arg = NoArg then Trap
+  if offset+length > |arg| then Trap
+  if dst+length > |es.S.mem| then Trap
+  es.S.mem[dst..dst+length] := arg[offset..offset+length]
+
+msg.error_code<es>(api_nonce : anyref) : i32 =
+  if api_nonce ≠ es.api_nonce then Trap
+  es.error_code
+
+msg.reply<es>(api_nonce : anyref, offset : i32, length : i32) =
+  if api_nonce ≠ es.api_nonce then Trap
+  if es.response ≠ NoResponse then Trap
+  if offset+length > |es.S.mem| then Trap
+  es.response := Reply (es.S.mem[offset..offset+length])
+
+msg.reject<es>(api_nonce : anyref, errcode : i32) =
+  if api_nonce ≠ es.api_nonce then Trap
+  if es.response ≠ NoResponse then Trap
+  if errcode = 0 then Trap
+  es.response := Reject errcode
+
+canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
+  if api_nonce ≠ es.api_nonce then Trap
+  return canister_id
+
+canister.id<es>(api_nonce : anyref, canister_ref : anyref) : 64 =
+  if api_nonce ≠ es.api_nonce then Trap
+  return canister_ref
+
+msg.call<es>(
+  api_nonce      : anyref,
+  callee         : anyref,
+  name_offset    : i32,
+  name_len       : i32,
+  payload_offset : i32,
+  payload_len    : i32,
+  onreply        : i32,
+  onreply_env    : i32,
+  onreject       : i32,
+  onreject_env   : i32
+) =
+  if api_nonce ≠ es.api_nonce then Trap
+  if typeof(callee) ≠ i64 then Trap
+  if name_offset+name_len > |es.S.mem| then Trap
+  if payload_offset+payload_len > |es.S.mem| then Trap
+  if onreply > |es.S.table| then Trap
+  if typeof(es.S.table[onreply]) ≠ func (anyref, i32) -> () then Trap
+  if onreject > |es.S.table| then Trap
+  if typeof(es.S.table[onreject]) ≠ func (anyref, i32) -> () then Trap
+
+  es.S.calls := es.S.calls ·
+    {
+      callee = callee;
+      method_name = es.S.mem[name_offset..name_offset+name_len];
+      payload = es.S.mem[payload_offset..payload_offset+name_len];
+      callback = λ response -> match response with
+        Reply blob -> mkWasmFunc
+          ( { arg = blob; errcode = 0 }
+          , λ<es'>(api) -> es.S.table[onreply]<es'>(api, onreply_env)
+          )
+        Reject errcode -> mkWasmFunc
+          ( { arg = NoArg; errcode = errcode }
+          , λ<es>(api') -> es.S.table[onreject]<es'>(api, onreject_env)
+          )
+    }
+....
+
+==== The concrete `CanisterModule`
+
+Finally we can specify the meaning of an abstract `CanisterModule`:
+
+* The `initial` state of an abstract `CanisterModule` is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>.
++
+This includes executing a potential `(start)` function, which must not use any of the system api calls. (Actually, it cannot, since they require access to an `api_nonce`.)
+
+* The partial map `exports` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_msg <meth>`, and has value
++
+....
+λ blob -> mkWasmFunc ( { arg = blob; errcode 0 }, f )
+....
+
