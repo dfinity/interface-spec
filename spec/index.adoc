@@ -18,7 +18,7 @@ It will be everyone’s shared responsibility to keep this document accurate, bu
 
 === Status
 
-We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example.
+We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example. 
 
 The basic functionality of installing a canister and canister method calls, should already be rather precise. Beyond that, there are open questions and missing bits (see below). I need your help to correct these, and either adjust the content to reality, or at least to our actual plans.
 
