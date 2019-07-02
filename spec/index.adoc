@@ -43,7 +43,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
 * Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
 * Missing: Certified variables (globals pointing to memory? specially marked read-only methods?)
-* Minor post-merge todo: Use `args` instead of `payload` in the HTTP interface
 
 
 == Introduction
@@ -136,13 +135,13 @@ Path:: `/api/canister/new`
 Method:: `POST`
 Payload format:: JSON record with these fields:
  * `module` (blob): A <<canister-module-format,canister module>>
- * `payload` (optional, blob): Initialization parameters
+ * `arg` (optional, blob): Initialization arguments
 Response format:: JSON record with these fields
  * `request-nonce`: A unique number identifying the request
 
-Uploading a new canister will install this canister, and invoke its `start` system method as explained in Section “<<system-api-start>>“, passing the `payload`, if given, as the method argument.
+Uploading a new canister will install this canister, and invoke its `start` system method as explained in Section “<<system-api-start>>“, passing the `arg`, if given, as the method argument.
 
-If the canister does not have a `start` system method, then it is an error to pass a `payload`. If no `payload` is given but a `start` system method is present, a payload of length 0 is assumed.
+If the canister does not have a `start` system method, then it is an error to pass a `arg`. If no `arg` is given but a `start` system method is present, an argument of length 0 is assumed.
 
 If the canister installation succeeds, the `result` of <<api-request-status,`/api/request/<request-nonce>/status`>> is a JSON record with this field:
 
@@ -154,7 +153,7 @@ If the canister installation succeeds, the `result` of <<api-request-status,`/ap
 Path:: `/api/canister/<canister-id>/<method-name>/call`
 Method:: `POST`
 Payload format:: JSON record with these fields:
- * `payload` (blob): Payload of the message
+ * `arg` (blob): Argument to pass to the method
 
 Response format:: JSON record with these fields
  * `request-nonce`: A unique number identifying the request
@@ -167,7 +166,7 @@ If the method execution succeeds, the `result` of <<api-request-status,`/api/req
 Path:: `/api/canister/<canister-id>/<method-name>/query`
 Method:: `POST`
 Payload format:: JSON record with these fields:
- * `payload` (blob): Payload of the call
+ * `arg` (blob): Argument to pass to the method
 
 Response format:: JSON record with these fields
  * `status`: one of `failed` or `completed`
@@ -215,20 +214,20 @@ To define a public method of name `name`, a WebAssembly module exports a functio
 
 NOTE: The space in `dfn_msg <name>` is intentional.
 
-The payload of the call (e.g. the content of the `payload` field in <<api-canister-call,API call to call a canister method>>) is copied into the canister on demand.
- In the success callback for a further <<system-api-send,method call>>, the payload refers to the response of that call; in error callbacks, no payload is available. In other words, the lifetime of the payload is a single WebAssembly function execution, not a whole method call tree.
+The argument of the call (e.g. the content of the `arg` field in <<api-canister-call,API call to call a canister method>>) is copied into the canister on demand.
+In the success callback for a further <<system-api-send,method call>>, the argument refers to the response of that call; in error callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
 * `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
 +
-Size, in bytes, of the argument payload.
+Size, in bytes, of the argument data.
 
 * `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
 +
-Copies `length` bytes from `msg_payload[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument payload into the Wasm memory.
+Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
 +
-This traps if `offset+length` is greater than the size of the argument payload, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside an error callback (see below).
+This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside an error callback (see below).
 
-In an error callback, no payload is available, but the error code can be queried:
+In an error callback, no argument is available, but the error code can be queried:
 
 ** `+msg.error_code : (api_nonce : anyref) -> i32+`
 +
@@ -282,25 +281,25 @@ A canister can do further calls to other canisters, using the following function
 +
 
   msg.call : (
-    api_nonce      : anyref,
-    callee         : anyref, // a canister reference
-    name_offset    : i32,    // a pointer to and the length of the
-    name_len       : i32,    //   destination’s unmangled method name
-    payload_offset : i32,    // a pointer to and the length of the
-    payload_len    : i32,    //   payload of message to send
-    onreply        : i32,    // funtab entry (api : anyref, env : i32) -> ()
-    onreply_env    : i32,    // an environment to give back to onreply
-    onreject       : i32,    // funtab entry (api : anyref, env : i32) -> ()
-    onreject_env   : i32     // an environment to give back to onreject
+    api_nonce    : anyref,
+    callee       : anyref, // a canister reference
+    name_offset  : i32,    // a pointer to and the length of the
+    name_len     : i32,    //   destination’s unmangled method name
+    arg_offset   : i32,    // a pointer to and the length of the
+    arg_len      : i32,    //   argument to pass to the method
+    onreply      : i32,    // funtab entry (api : anyref, env : i32) -> ()
+    onreply_env  : i32,    // an environment to give back to onreply
+    onreject     : i32,    // funtab entry (api : anyref, env : i32) -> ()
+    onreject_env : i32     // an environment to give back to onreject
   ) -> ()
 +
-This function copies the data referred to by `payload_len`/`payload_offset` out of the canister, notes the current function table entries at the indices `onreply` and `onreject`, and queues a message to the given destination (but does not send it until the current WebAssembly function returns without trapping).
+This function copies the data referred to by `arg_len`/`arg_offset` out of the canister, notes the current function table entries at the indices `onreply` and `onreject`, and queues a message to the given destination (but does not send it until the current WebAssembly function returns without trapping).
 +
 Upon successful completion of the method call, the WebAssembly function specified by the `onreply` parameter is executed, and the response data can be queries using `msg.arg_data_size`/`msg.arg_data_copy`. If the method call fails, the `onreject` function is executed.
 +
 Further extensions of this function call will happen by extending the parameter list; thanks to WebAssembly import overloading, canisters importing the system call at an old version (with fewer function arguments) can still work.
 +
-This system call traps if the `payload_offset+payload_len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
+This system call traps if the `arg_offset+arg_len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
 
 [#public-spec]
 == Abstract public behavior
@@ -317,7 +316,11 @@ The design of this abstract specification (e.g. how and where pending messages a
 
 To get some consistency in this document, we try to use the following terms around method calls and messaging:
 
-The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. This is implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response. The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value.
+The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method my have _parameters_, which are provided with concrete _arguments_ in a method call.
+
+This are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
+
+The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value. Functions also have parameters and take arguments.
 
 === Notation
 
@@ -354,7 +357,7 @@ MethodName = Text
 [#abstract-canisters]
 ==== Abstract canisters
 
-The <<system-api,WebAssembly System API>> is relatively low-level, and some of its details (e.g. that the payload data is queried using separate calls, and that closures are represented by a function pointer and a number, that method names need to be mangled) would clutter this section. Therefore, we abstract over the WebAssembly details as follows:
+The <<system-api,WebAssembly System API>> is relatively low-level, and some of its details (e.g. that the argument data is queried using separate calls, and that closures are represented by a function pointer and a number, that method names need to be mangled) would clutter this section. Therefore, we abstract over the WebAssembly details as follows:
 
 * The state of a WebAssembly module (memory, tables, globals) is hidden behind an abstract `WasmState`.
 
@@ -372,7 +375,7 @@ Response = Reply Blob | Reject ErrCode;
 MethodCall = {
   callee : CanId;
   method_name: MethodName;
-  payload: Blob;
+  arg: Blob;
   callback: Response -> WasmFunc;
 }
 CanisterModule = {
@@ -418,7 +421,7 @@ Call = {
   caller : CallOrigin;
   callee : CanId;
   method_name : Text;
-  payload : Blob;
+  arg : Blob;
 }
 Message = {
   call_context : CallId;
@@ -526,8 +529,8 @@ Canister installation turns a canister module into a running canister. This invo
 Conditions::
 ....
     S.requests[Req_id] = Pending
-    S.to_install = { request = Req_id; canister = C; payload = P } · Other_to_install
-    C.init P = Return { new_state = New_state; new_calls = (); response = NoResponse }
+    S.to_install = { request = Req_id; canister = C; arg = A } · Other_to_install
+    C.init A = Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
 ....
@@ -544,8 +547,8 @@ Canister installation fails under certain conditions, such a trapping or otherwi
 Conditions::
 ....
     S.requests[Req_id] = Pending
-    S.to_install = { request = Req_id; canister = C; payload = P } · Other_to_install
-    C.init P = Trap
+    S.to_install = { request = Req_id; canister = C; arg = P } · Other_to_install
+    C.init A = Trap
 ....
 State after::
 ....
@@ -561,7 +564,7 @@ An implementation may create a more helpful error message based on why the canis
 Incoming user messages are queued as calls with an `caller` field that ties it to the user's request.
 
 HTTP request::
-`/api/canister/<cid>/<meth>/call` with body `{ payload : <payload> }`
+`/api/canister/<Cid>/<Meth>/call` with body `{ arg : <Arg> }`
 Conditions::
 ....
     Req_id ∉ dom S.requests
@@ -573,9 +576,9 @@ S with
     calls =
       {
         caller = FromUser { request = Req_id };
-        canister = cid;
-        method_name = meth
-        payload = payload
+        canister = Cid;
+        method_name = Meth
+        arg = Arg
       } · S.calls
   where
 ....
@@ -598,7 +601,7 @@ S with
     messages = {
         call_context = Ctxt_id;
         receiver = C.callee;
-        func = F(C.payload)
+        func = F(C.arg)
       } · S.messages
     call_contexts[Ctxt_id] = {
       canister = C.callee;
@@ -633,7 +636,7 @@ S with
           };
           callee = call.callee;
           method_name = call.method_name;
-          payload = call.payload
+          arg = call.arg
         }
       | for call ∈ res.new_calls ] · S.calls
 
@@ -727,8 +730,8 @@ State after::
 S with
     S.responses[Ctxt_id] = (deleted)
     requests[Req_id]
-      | Completed { result = payload } if response = Reply payload
-      | Failed { message = toErrorMessage errcode } if response = Reject errcode
+      | Completed { result = R } if response = Reply R
+      | Failed { message = toErrorMessage E } if response = Reject E
 ....
 
 ==== Read-only query
@@ -736,10 +739,10 @@ S with
 Ready-only queries are executed immediately
 
 HTTP request::
-`/api/canister/<cid>/<meth>/query` with body `{ payload : <payload> }`
+`/api/canister/<Cid>/<Meth>/query` with body `{ arg : <Arg> }`
 Conditions::
 ....
-  C = S.canisters[cid]
+  C = S.canisters[Cid]
   F = C.exports[M.method_name]
 ....
 State after::
@@ -747,30 +750,30 @@ State after::
 S
 ....
 HTTP response::
-* If `F(payload) = Trap` then a JSON record with
+* If `F(Arg) = Trap` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(payload) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
+* Else if `F(Arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution tried to send further messages "}
 ....
-* Else if `F(payload) = Ok res` and `res.response = NoResponse` then a JSON record with
+* Else if `F(Arg) = Ok res` and `res.response = NoResponse` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution did not issue a result" }
 ....
-* Else if `F(payload) = Ok res` and `res.response = Reject errcode` then a JSON record with
+* Else if `F(Arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(payload) = Ok res` and `res.response = Reply payload` then a JSON record with
+* Else if `F(Arg) = Ok res` and `res.response = Reply R` then a JSON record with
 +
 ....
-{status: success; result: <payload> }
+{status: success; result: <R> }
 ....
 
 
@@ -876,21 +879,21 @@ canister.id<es>(api_nonce : anyref, canister_ref : anyref) : 64 =
   return canister_ref
 
 msg.call<es>(
-  api_nonce      : anyref,
-  callee         : anyref,
-  name_offset    : i32,
-  name_len       : i32,
-  payload_offset : i32,
-  payload_len    : i32,
-  onreply        : i32,
-  onreply_env    : i32,
-  onreject       : i32,
-  onreject_env   : i32
+  api_nonce    : anyref,
+  callee       : anyref,
+  name_offset  : i32,
+  name_len     : i32,
+  arg_offset   : i32,
+  arg_len      : i32,
+  onreply      : i32,
+  onreply_env  : i32,
+  onreject     : i32,
+  onreject_env : i32
 ) =
   if api_nonce ≠ es.api_nonce then Trap
   if typeof(callee) ≠ i64 then Trap
   if name_offset+name_len > |es.S.mem| then Trap
-  if payload_offset+payload_len > |es.S.mem| then Trap
+  if arg_offset+arg_len > |es.S.mem| then Trap
   if onreply > |es.S.table| then Trap
   if typeof(es.S.table[onreply]) ≠ func (anyref, i32) -> () then Trap
   if onreject > |es.S.table| then Trap
@@ -900,7 +903,7 @@ msg.call<es>(
     {
       callee = callee;
       method_name = es.S.mem[name_offset..name_offset+name_len];
-      payload = es.S.mem[payload_offset..payload_offset+name_len];
+      arg = es.S.mem[arg_offset..arg_offset+arg_len];
       callback = λ response -> match response with
         Reply blob -> mkWasmFunc
           ( { arg = blob; errcode = 0 }
