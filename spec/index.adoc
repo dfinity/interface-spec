@@ -1,4 +1,4 @@
-= The DFINITY Computer, from end to end
+= The DFINITY Computer, public view
 Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
