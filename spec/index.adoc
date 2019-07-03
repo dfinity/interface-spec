@@ -31,6 +31,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Message ordering is not yet enforced in the formalism.
 * Missing: How long are request ids kept around.
 * Missing: Listing well-known error codes.
+* Missing: Canister states to keep (Is it observable that method calls to go the lates state, but method reads to the last finalized state? Should replies indicate from when they are.)
 * Missing: Canister upgrades. Related: The “The DFINITY Protocol Overview” has empty canisters, and installation is a two-step process of installing an empty canister, and upgrading from that. This needs to be put in here.
 * Missing: User identity and accounts
 * Missing: Payment
