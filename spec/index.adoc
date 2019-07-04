@@ -18,7 +18,7 @@ It will be everyone’s shared responsibility to keep this document accurate, bu
 
 === Status
 
-We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example. 
+We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example.
 
 The basic functionality of installing a canister and canister method calls, should already be rather precise. Beyond that, there are open questions and missing bits (see below). I need your help to correct these, and either adjust the content to reality, or at least to our actual plans.
 
@@ -31,7 +31,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Message ordering is not yet enforced in the formalism.
 * Missing: How long are request ids kept around.
 * Missing: Listing well-known error codes.
-* Missing: Canister states to keep (Is it observable that method calls to go the lates state, but method reads to the last finalized state? Should replies indicate from when they are.)
 * Missing: Canister upgrades. Related: The “The DFINITY Protocol Overview” has empty canisters, and installation is a two-step process of installing an empty canister, and upgrading from that. This needs to be put in here.
 * Missing: User identity and accounts
 * Missing: Payment
@@ -113,6 +112,13 @@ The following API calls are provided, and explained below:
 ....
 
 
+==== Synchronicity across nodes
+
+This documents describes the DFINITY Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
+
+As long as you talk to one node only, the observed behavior is nicely sequential. If you issue a state-mutating method call in a canister (e.g. bump a counter), and node A indicates that the call has executed, and you then issue a read query to node A, then is guaranteed to include the effect of the method call (and you will receive the updated counter value).
+
+If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
 [#api-request-status]
 ==== Polling request status
