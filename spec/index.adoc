@@ -120,6 +120,10 @@ As long as you talk to one node only, the observed behavior is nicely sequential
 
 If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
+The system does not explicitly help with that (e.g. by indicating which particular state a read query is based on, or by allowing the user to request a specific state), as applications have other ways to deal with that issue:
+* They can make sure to use a single node, first ask for the status of a message call, and only if that says that the call has been completed, do the read-only query.
+* The application can include sufficient information in the read-only query to tell whether the message call has happened, such as keeping an internal counter of processed messages, or other ways.
+
 [#api-request-status]
 ==== Polling request status
 
