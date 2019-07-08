@@ -446,7 +446,9 @@ Finally, we can describe the state of the DFINITY Internet Computer as a record 
 ....
 S = {
   requests : ReqId ↦ ReqState;
+  user_pubkeys : PublicKey  ↦ UserId;
   canisters : CanId ↦ CanState;
+  to_register : Bag RegisterRequest;
   to_install : Bag InstallRequest;
   calls : Bag Call;
   call_contexts : CallId ↦ CallCtxt;
@@ -465,6 +467,7 @@ InstallRequest = {
   request : ReqId;
   canister : CanisterModule;
 }
+
 ....
 
 
@@ -473,8 +476,10 @@ InstallRequest = {
 The initial state of the system is
 ....
 {
+  user_pubkeys = ();
   requests = ();
   canisters = ();
+  to_register = ();
   to_install = ();
   calls = ();
   call_contexts = ();
@@ -491,6 +496,22 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 Some transitions are triggered by invoking the HTTP API; these indicate the HTTP method parameters and response. Other transitions are modeled as spontaneous transitions, and only describe the state before and after.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a message to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
+
+==== New user public key registeration (successful)
+
+Procedures for user management, registration of public key, revocation, etc., is not yet defined. We model the registration of a user public key as a spontaneous state transition for now.
+
+Registering public key `PublicKey` to user identity `UserId`
+
+Conditions::
+....
+    PublicKey ∉ dom S.user_pubkeys
+....
+State after::
+....
+S with
+    user_pubkeys[PublicKey] = UserId
+....
 
 ==== Canister installation request
 
