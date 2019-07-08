@@ -29,7 +29,9 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Rest interface: Structure of the request bodies (JSON or something better)
 * Canister IDs: Really just 64 bit numbers, and which textual format?
 * Missing: Message ordering is not yet enforced in the formalism.
+* Missing: Methods without responses/fire-and-forget calls
 * Missing: How long are request ids kept around.
+* Missing: Getting your own canister id
 * Missing: Listing well-known error codes.
 * Missing: Canister upgrades. Related: The “The DFINITY Protocol Overview” has empty canisters, and installation is a two-step process of installing an empty canister, and upgrading from that. This needs to be put in here.
 * Missing: User identity and accounts
