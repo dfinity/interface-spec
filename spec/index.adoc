@@ -306,9 +306,9 @@ A canister can do further calls to other canisters, using the following function
 +
 This function copies the data referred to by `arg_len`/`arg_offset` out of the canister, notes the current function table entries at the indices `onreply` and `onreject`, and queues a message to the given destination (but does not send it until the current WebAssembly function returns without trapping).
 +
-Upon successful completion of the method call, the WebAssembly function specified by the `onreply` parameter is executed, and the response data can be queries using `msg.arg_data_size`/`msg.arg_data_copy`. If the method call fails, the `onreject` function is executed.
+Upon successful completion of the method call, the WebAssembly function specified by the `onreply` parameter is executed, and the response data can be queried using `msg.arg_data_size`/`msg.arg_data_copy`. If the method call fails, the `onreject` function is executed.
 +
-Further extensions of this function call will happen by extending the parameter list; thanks to WebAssembly import overloading, canisters importing the system call at an old version (with fewer function arguments) can still work.
+NOTE: Further extensions of this function call will happen by extending the parameter list; thanks to WebAssembly import overloading, canisters importing the system call at an old version (with fewer function arguments) can still work.
 +
 This system call traps if the `arg_offset+arg_len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
 
@@ -327,9 +327,9 @@ The design of this abstract specification (e.g. how and where pending messages a
 
 To get some consistency in this document, we try to use the following terms around method calls and messaging:
 
-The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method my have _parameters_, which are provided with concrete _arguments_ in a method call.
+The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
-This are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
+These are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
 
 The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value. Functions also have parameters and take arguments.
 
@@ -372,7 +372,7 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 
 * The state of a WebAssembly module (memory, tables, globals) is hidden behind an abstract `WasmState`.
 
-* A canister module `CanisterModule` consists of an initial state, and a (pure) function that models function invocation. It either indicate that the canister function traps, or returns a new state together with a description of the invoked asynchronous System API calls.
+* A canister module `CanisterModule` consists of an initial state, and a (pure) function that models function invocation. It either indicates that the canister function traps, or returns a new state together with a description of the invoked asynchronous System API calls.
 +
 ....
 WasmState = (abstract)
@@ -812,13 +812,13 @@ HTTP response::
 [#concrete-canisters]
 === Abstract Canisters to System API
 
-In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the DFINITY Internet Computer from WebAssembly details. In this section, we will the fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
+In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the DFINITY Internet Computer from WebAssembly details. In this section, we will fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
 
 ==== The concrete `WasmState`
 
 The abstract `WasmState` maps to the WebAssembly _store_ `S`, which encompasses the functions, tables, memories and globals of the WebAssembly program.
 
-As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (reps. table) will trap if the module does not import the memory (resp. table).
+As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (resp. table) will trap if the module does not import the memory (resp. table).
 
 We model `mem` as an array of bytes, and `table` as an array of execution functions.
 
