@@ -278,10 +278,10 @@ The system assumes the canister to be fully instantiated if the `start` method e
 
 To future-proof the System API, references to canisters are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references and their transparent public id, as used by the HTTP interface.
 
-In a future where not all canisters are publicly addressable by anyone, these conversion functions may become partial.
-
 * `+canister.lookup : (api_nonce : anyref, canister_id : i64) -> (canister_ref : anyref)+`
 * `+canister.id : (api_nonce : anyref, canister_ref : anyref) -> (canister_id : i64)+`
+
+NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp. a `canister_id`). In a future where not all canisters are publicly addressable by anyone, these conversion functions may become partial. Moreover, while they technically could, these functions do *not* check for the existence of the canister.
 
 [#system-api-send]
 ==== Sending messages
