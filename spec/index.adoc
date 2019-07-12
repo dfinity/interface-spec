@@ -56,7 +56,8 @@ Which interfaces it provides to application developers and users, and what will 
 
 WARNING: While this document describes the public interface and behavior of the DFINITY Internet Computer, it is not the primary end-user documentation. DFINITY provides further tools, such as the ActorScript programming language, the IDL tooling and the SDK tools, to make programming and using the DFINITY Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
 
-If you think of the DFINITY Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of DFINITY, please consult the link:../../old/component-architecture{outfilesuffix}[Component Architecture].
+If you think of the DFINITY Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. 
+//If you want to learn more about the exciting inner workings of DFINITY, please consult the link:../../old/component-architecture{outfilesuffix}[Component Architecture].
 
 This document tries to be implementation agnostic: If we decide to re-do the implementation of the DFINITY Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
 
