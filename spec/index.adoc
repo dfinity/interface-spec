@@ -286,31 +286,82 @@ NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp
 [#system-api-send]
 ==== Sending messages
 
-A canister can do further calls to other canisters, using the following function call.
+A canister can do further calls to other canister. Performing a call is a multi-step process:
+
+1. A canister/method-name pair is turned into an opaque `methodref`.
+2. A new call can be created from such a `methodref`, represented by a `callref`.
+3. A number of functions can add arguments (data, payments, etc.) to the call.
+4. When everything is setup, the canister tells the system to perform the call.
+
+The `methodref` can be used multiple times, it just represents the canister/method-name pair.
+
+The `callref` reference is only valid between `call.create` and `call.perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
+
+This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
 
 * {blank}
 +
-
-  msg.call : (
+  method.public : (
     api_nonce    : anyref,
     callee       : anyref, // a canister reference
     name_offset  : i32,    // a pointer to and the length of the
     name_len     : i32,    //   destination’s unmangled method name
-    arg_offset   : i32,    // a pointer to and the length of the
-    arg_len      : i32,    //   argument to pass to the method
-    onreply      : i32,    // funtab entry (api : anyref, env : i32) -> ()
-    onreply_env  : i32,    // an environment to give back to onreply
-    onreject     : i32,    // funtab entry (api : anyref, env : i32) -> ()
-    onreject_env : i32     // an environment to give back to onreject
+  ) -> ( methodref : anyref )
++
+Creates a new `methref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
+
+* {blank}
++
+  call.create : ( methref : anyref ) -> ( callref : anyref )
++
+Begins the assembly of a new call, to the given method.
+Returns the `callref` that can be filled further on.
+This function always succeeds.
+* {blank}
++
+  call.append_data : (
+    callref  : anyref  // the call to extend
+    offset   : i32,    // a pointer to and the length of the
+    len      : i32,    //   argument to pass to the method
   ) -> ()
 +
-This function copies the data referred to by `arg_len`/`arg_offset` out of the canister, notes the current function table entries at the indices `onreply` and `onreject`, and queues a message to the given destination (but does not send it until the current WebAssembly function returns without trapping).
+Copies the data referred to by `offset`/`len` out of the canister and appends it to the (initially empty) data argument of the call.
 +
-Upon successful completion of the method call, the WebAssembly function specified by the `onreply` parameter is executed, and the response data can be queried using `msg.arg_data_size`/`msg.arg_data_copy`. If the method call fails, the `onreject` function is executed.
+NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-NOTE: Further extensions of this function call will happen by extending the parameter list; thanks to WebAssembly import overloading, canisters importing the system call at an old version (with fewer function arguments) can still work.
+This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
+* {blank}
 +
-This system call traps if the `arg_offset+arg_len` exceeds the size of the WebAssembly memory, or if it is calling during the handling of a <<api-canister-query,read-only query>>.
+  call.on_reply : (
+    callref : anyref  // the call to extend
+    fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
+    env     : i32,    // an environment to give back to fun
+  ) -> ()
++
+The system records the current function table entry at the index `fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `msg.arg_data_size`/`msg.arg_data_copy`.
++
+There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_replay` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
+* {blank}
++
+  call.on_reject : (
+    callref : anyref  // the call to extend
+    fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
+    env     : i32,    // an environment to give back to fun
+  ) -> ()
++
+The system records the current function table entry at the index `fun`. If the method call fails, the noted function is executed.
++
+There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_replay` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
+
+* {blank}
++
+  call.perform : ( callref : anyref ) -> ()
++
+Indicate that the call is ready to be performed. The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
++
+After `call.perform`, the `callref` must not be used any more. Invoking any system function with with that callref will trap.
++
+If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
 [#public-spec]
 == Abstract public behavior
@@ -352,7 +403,7 @@ For example, the condition `S.messages = M · Other_messages` says that `M` is a
 
 === Abstract state
 
-In this specification, we describe the DFINITY Internet Computer as a state machine. In particular, there is a single bit of data that describes the complete state of the system (called `S` below).
+In this specification, we describe the DFINITY Internet Computer as a state machine. In particular, there is a single piece of data that describes the complete state of the system (called `S` below).
 
 Of course, this is a huge simplification: The real DFINITY Internet Computer is distributed and has a multi-component architecture, and the state is spread over many different components, some physically separated. But this simplification allows us to have a concise description of the system, and to easily make global decisions (such as, “is there any pending message”), without having to specify the bookkeeping that allows such global decision.
 
@@ -822,7 +873,6 @@ As explained in Section “<<system-api-module>>”, the WebAssembly module impo
 
 We model `mem` as an array of bytes, and `table` as an array of execution functions.
 
-
 ==== The execution state
 
 We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
@@ -831,12 +881,23 @@ Params = {
   arg : NoArg | Blob;
   errcode : Nat;
 }
+PartialCall = {
+  callee : CanId;
+  method : MethodName;
+  arg : Blob;
+  on_reply : StillMissing;
+  on_reply_env : i32;
+  on_reject : StillMissing;
+  on_reject_env : i32;
+  performed : Bool;
+}
 ExecutionState = {
   wasm_state : S; // a store as per WebAssembly spec
   api_nonce : (abstract)
   params : Params;
   response : NoResponse | Response;
-  calls : List MethodCall;
+  calls : List PartialCall;
+  performed_calls : List Call
 }
 ....
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
@@ -861,7 +922,7 @@ mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> 
     then return Trap
     else return (Return {
       new_state = es.wasm_state;
-      new_calls = es.calls;
+      new_calls = es.performed_calls;
       response = es.response;
     })
 ....
@@ -869,81 +930,142 @@ The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is tha
 
 WARNING: It is nonsensical to pass to a `WasmFunc` a `WasmState` that comes from a different WebAssembly module than the `func` passed to `mkWasmFunc`. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
 
+==== Host references
+
+The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methodref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
+....
+type anyref
+  = APIRef (abstract)
+  | CanisterRef CanId
+  | MethodRef (CanId, MethodName)
+  | CallRef Nat
+....
+
+The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping is the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these references are not mixed up.
+
 ==== System imports
 
 Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
 
 ....
 msg.arg_data_size<es>(api_nonce : anyref) : i32 =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   if arg = NoArg then Trap
   return |arg|
 
 msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, length:i32, offset:i32) =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   if arg = NoArg then Trap
   if offset+length > |arg| then Trap
   if dst+length > |es.S.mem| then Trap
   es.S.mem[dst..dst+length] := arg[offset..offset+length]
 
 msg.error_code<es>(api_nonce : anyref) : i32 =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   es.error_code
 
 msg.reply<es>(api_nonce : anyref, offset : i32, length : i32) =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if offset+length > |es.S.mem| then Trap
   es.response := Reply (es.S.mem[offset..offset+length])
 
 msg.reject<es>(api_nonce : anyref, errcode : i32) =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if errcode = 0 then Trap
   es.response := Reject errcode
 
 canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   return canister_id
 
 canister.id<es>(api_nonce : anyref, canister_ref : anyref) : 64 =
-  if api_nonce ≠ es.api_nonce then Trap
+  if api_nonce ≠ APIRef es.api_nonce then Trap
   return canister_ref
 
-msg.call<es>(
+method.public<es>(
   api_nonce    : anyref,
-  callee       : anyref,
+  canister_ref : anyref,
   name_offset  : i32,
   name_len     : i32,
-  arg_offset   : i32,
-  arg_len      : i32,
-  onreply      : i32,
-  onreply_env  : i32,
-  onreject     : i32,
-  onreject_env : i32
-) =
-  if api_nonce ≠ es.api_nonce then Trap
-  if typeof(callee) ≠ i64 then Trap
+) : ( anyref ) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  let CanisterRef callee = canister_ref else Trap
   if name_offset+name_len > |es.S.mem| then Trap
-  if arg_offset+arg_len > |es.S.mem| then Trap
-  if onreply > |es.S.table| then Trap
-  if typeof(es.S.table[onreply]) ≠ func (anyref, i32) -> () then Trap
-  if onreject > |es.S.table| then Trap
-  if typeof(es.S.table[onreject]) ≠ func (anyref, i32) -> () then Trap
 
-  es.S.calls := es.S.calls ·
-    {
+  return (MethodRef callee es.S.mem[name_offset..name_offset+name_len])
+
+call.create<es>(
+  method_ref   : anyref,
+) : ( anyref ) =
+  let MethodRef callee method_name = method_ref else Trap
+
+  callref := |es.calls|
+  es.calls := es.calls ·
+   {
       callee = callee;
-      method_name = es.S.mem[name_offset..name_offset+name_len];
-      arg = es.S.mem[arg_offset..arg_offset+arg_len];
+      method_name = method_name;
+      arg = "";
+      on_reply = StillMissing;
+      on_reply_env = 0;
+      on_reject = StillMissing;
+      on_reject_env = 0;
+      performed = False;
+    }
+  return callref
+
+call.append_data<es>(callref : anyref, offset : i32, len : i32) =
+  let CallRef callidx = callref else Trap
+  if callidx >= |es.calls| then Trap
+  if es.calls[callidx].performed then Trap
+  if offset+len > |es.S.mem| then Trap
+
+  es.calls[callidx].arg := es.calls[callidx].arg · es.S.mem[offset..offset+len];
+
+call.on_reply<es>(callref : anyref, fun : i32, env : i32) =
+  let CallRef callidx = callref else Trap
+  if callidx >= |es.calls| then Trap
+  if es.calls[callidx].performed then Trap
+  if fun > |es.S.table| then Trap
+  if typeof(es.S.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if es.calls[callidx].on_reply ≠ StillMissing then Trap
+
+  es.calls[callidx].on_reply := es.S.table[fun]
+  es.calls[callidx].on_reply_env := env
+
+call.on_reject<es>(callref : anyref, fun : i32, env : i32) =
+  let CallRef callidx = callref else Trap
+  if callidx >= |es.calls| then Trap
+  if es.calls[callidx].performed then Trap
+  if fun > |es.S.table| then Trap
+  if typeof(es.S.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if es.calls[callidx].on_reject ≠ StillMissing then Trap
+
+  es.calls[callidx].on_reject := es.S.table[fun]
+  es.calls[callidx].on_reject_env := env
+
+call.perform<es>(callref : anyref) =
+  let CallRef callidx = callref else Trap
+  if callidx >= |es.calls| then Trap
+  if es.calls[callidx].performed then Trap
+
+  es.calls[callidx].performed := True
+
+  pc := es.calls[callidx]
+  es.performed_calls := es.performed_calls ·
+    {
+      callee = pc.callee;
+      method_name = pc.method_name;
+      arg = pc.arg;
       callback = λ response -> match response with
         Reply blob -> mkWasmFunc
           ( { arg = blob; errcode = 0 }
-          , λ<es'>(api) -> es.S.table[onreply]<es'>(api, onreply_env)
+          , λ<es'>(api') -> pc.on_reply<es'>(api', pc.onreply_env)
           )
         Reject errcode -> mkWasmFunc
           ( { arg = NoArg; errcode = errcode }
-          , λ<es>(api') -> es.S.table[onreject]<es'>(api, onreject_env)
+          , λ<es>(api') -> pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
 ....
