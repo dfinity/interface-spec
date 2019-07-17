@@ -22,6 +22,8 @@ We are figuring our the right structure and scope of the document itself, using 
 
 The basic functionality of installing a canister and canister method calls, should already be rather precise. Beyond that, there are open questions and missing bits (see below). I need your help to correct these, and either adjust the content to reality, or at least to our actual plans.
 
+Please also skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
+
 === Open questions and missing bits
 
 As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.
