@@ -365,6 +365,19 @@ After `call.perform`, the `callref` must not be used any more. Invoking any syst
 +
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
+
+[#system-api-rand]
+==== Randomness
+
+With every method call or response, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value. During read-only queries, no such randomness is provided.
+
+* `+msg.get_entropy : (api_nonce : anyref) -> ( i64 )+`
++
+Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
++
+During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing a read-only query or not before it should call this funcition. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
+
+
 [#public-spec]
 == Abstract public behavior
 
@@ -429,7 +442,8 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 +
 ....
 WasmState = (abstract)
-WasmFunc = WasmState -> FuncResult
+WasmFunc = (Entropy, WasmState) -> FuncResult
+Entropy = NoEntropy | FreshEntropy i64
 FuncResult = Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
@@ -443,12 +457,14 @@ MethodCall = {
   callback: Response -> WasmFunc;
 }
 CanisterModule = {
-  init : Blob -> FuncResult;
+  init : (Entropy, Blob) -> FuncResult;
   exports : MethodName ↦ (Blob -> WasmFunc)
 }
 ....
-+
+
 Note that `WasmFunc` is an abstract notion of a WebAssembly-state-modifying-function, not merely a concrete function in a WebAssembly module. In particular, it hides the `onreply_env` bookkeeping that we have seen in Section <<system-api>> and can thus model a form of closure, which (currently) do not exist on the WebAssembly level.
+
+A the `Entropy` parameter of a `WasmFunc` is merely passed through to the canister, via the `msg.get_entropy` system call.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -556,7 +572,7 @@ Some transitions are triggered by invoking the HTTP API; these indicate the HTTP
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a message to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
 
-==== New user public key registeration (successful)
+==== New user public key registration (successful)
 
 Procedures for user management, registration of public key, revocation, etc., is not yet defined. We model the registration of a user public key as a spontaneous state transition for now.
 
@@ -611,18 +627,21 @@ A JSON record with
 
 Canister installation turns a canister module into a running canister. This involves invoking the `start` system method (see <<system-api-start>>), which must succeed and must not invoke other methods.
 
+The value `R : i64` is cryptographically randomly chosen.
+
 Conditions::
 ....
     S.requests[Req_id] = Pending
     S.to_install = { request = Req_id; canister = C; arg = A } · Other_to_install
-    C.init A = Return { new_state = New_state; new_calls = (); response = NoResponse }
+    C.init (FreshEntropy R, A) =
+      Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
 ....
 S with
     requests[Req_id] = Completed { result = { canister_id = cid } }
     to_install = Other_to_install
-    canisters[cid] = { New_state }
+    canisters[cid] = { wasm_state = New_state; module = C }
 ....
 
 ==== Canister installation (failing)
@@ -737,7 +756,7 @@ If a message traps, it gets dropped. No response is generated (some other messag
 Conditions::
 ....
     S.messages = M · Other_messages
-    M.func (S.canisters[M.receiver].wasm_state) = Trap
+    M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
@@ -751,7 +770,7 @@ If a message tries to respond when its calling context has already be responded 
 Conditions::
 ....
     S.messages = M · Other_messages
-    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Ok res
     res ≠ NoResponse
     S.call_contexts[M.call_context].replied = true
 ....
@@ -821,7 +840,7 @@ S with
 
 ==== Read-only query
 
-Ready-only queries are executed immediately
+Ready-only queries are executed immediately, and without randomness.
 
 HTTP request::
 `/api/canister/<Cid>/<Meth>/query` with body `{ arg : <Arg> }`
@@ -835,27 +854,27 @@ State after::
 S
 ....
 HTTP response::
-* If `F(Arg) = Trap` then a JSON record with
+* If `F(NoEntropy, Arg) = Trap` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
+* Else if `F(NoEntropy, Arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution tried to send further messages "}
 ....
-* Else if `F(Arg) = Ok res` and `res.response = NoResponse` then a JSON record with
+* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = NoResponse` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution did not issue a result" }
 ....
-* Else if `F(Arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
+* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(Arg) = Ok res` and `res.response = Reply R` then a JSON record with
+* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = Reply R` then a JSON record with
 +
 ....
 {status: success; result: <R> }
@@ -897,6 +916,7 @@ ExecutionState = {
   wasm_state : S; // a store as per WebAssembly spec
   api_nonce : (abstract)
   params : Params;
+  entropy : Entropy;
   response : NoResponse | Response;
   calls : List PartialCall;
   performed_calls : List Call
@@ -911,10 +931,11 @@ Syntactically, we express this using an implicit argument of type `ref Execution
 We can wrap such an execution function into an abstract `WasmFunc = WasmState -> FuncResult`, e.g. for exports and callbacks, as follows:
 ....
 mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> ()) : WasmFunc =
-  λ wasm_state ->
+  λ (entropy, wasm_state) ->
     let es = ref {
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
+      entropy = entropy;
       params = params;
       response = NoResponse;
       calls = ();
@@ -1070,6 +1091,11 @@ call.perform<es>(callref : anyref) =
           , λ<es>(api') -> pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
+
+msg.get_entropy<es>(api_nonce : anyref) : i64 =
+  if api_nonce ≠ es.api_nonce then Trap
+  let (FreshEntropy x) = es.entropy else Trap
+  return x
 ....
 
 ==== The concrete `CanisterModule`
