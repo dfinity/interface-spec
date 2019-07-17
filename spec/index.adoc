@@ -120,13 +120,13 @@ The following API calls are provided, and explained below:
 
 This documents describes the DFINITY Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
 
-As long as you talk to one node only, the observed behavior is nicely sequential. If you issue a state-mutating method call in a canister (e.g. bump a counter), and node A indicates that the call has executed, and you then issue a read query to node A, then is guaranteed to include the effect of the method call (and you will receive the updated counter value).
+As long as you talk to one node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call in a canister (e.g. bump a counter), and node A indicates that the call has executed, and you then issue a read query to node A, then is guaranteed to include the effect of the update call (and you will receive the updated counter value).
 
 If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
 The system does not explicitly help with that (e.g. by indicating which particular state a read query is based on, or by allowing the user to request a specific state), as applications have other ways to deal with that issue:
-* They can make sure to use a single node, first ask for the status of a message call, and only if that says that the call has been completed, do the read-only query.
-* The application can include sufficient information in the read-only query to tell whether the message call has happened, such as keeping an internal counter of processed messages, or other ways.
+* They can make sure to use a single node, first ask for the status of a update call, and only if that says that the update call has been completed, do the read-only query.
+* The application can include sufficient information in the read-only query to tell whether the update call has happened, such as keeping an internal counter of processed messages, or other ways.
 
 [#api-request-status]
 ==== Polling request status
@@ -161,7 +161,7 @@ If the canister installation succeeds, the `result` of <<api-request-status,`/ap
 * `canister-id` (64 bit number): ID of the newly created canister
 
 [#api-canister-call]
-==== Calling a canister method
+==== Calling a canister method (update call)
 
 Path:: `/api/canister/<canister-id>/<method-name>/call`
 Method:: `POST`
@@ -174,7 +174,7 @@ Response format:: JSON record with these fields
 If the method execution succeeds, the `result` of <<api-request-status,`/api/request/<request-nonce>/status`>> is a blob representing the response of the method call.
 
 [#api-canister-query]
-==== Fast-track read-only query
+==== Fast-track read-only query call
 
 Path:: `/api/canister/<canister-id>/<method-name>/query`
 Method:: `POST`
@@ -186,7 +186,7 @@ Response format:: JSON record with these fields
  * `result` (blob): (if status is `completed`) the response of the query
  * `error` (text): (if status is `failed`) An error message
 
-Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the response synchronously.
+Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the response synchronously.
 
 [#canister-module-format]
 === Canister module format
@@ -218,7 +218,7 @@ NOTE: This document assumes that WebAssembly host references can be used (e.g. `
 
 ==== The API nonce
 
-A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all calls into the canister have an `api_nonce` parameter, and all calls into the system require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
+A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all funciton exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
 
 [#system-api-messages]
 ==== Public methods
@@ -288,7 +288,7 @@ NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp
 [#system-api-send]
 ==== Sending messages
 
-A canister can do further calls to other canister. Performing a call is a multi-step process:
+A canister can do further update calls to other canister. Performing a call is a multi-step process:
 
 1. A canister/method-name pair is turned into an opaque `methodref`.
 2. A new call can be created from such a `methodref`, represented by a `callref`.
@@ -369,13 +369,13 @@ If a call is created, but not performed by the time the WebAssembly function end
 [#system-api-rand]
 ==== Randomness
 
-With every method call or response, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value. During read-only queries, no such randomness is provided.
+With every update method call or response, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value.
 
 * `+msg.get_entropy : (api_nonce : anyref) -> ( i64 )+`
 +
 Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
 +
-During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing a read-only query or not before it should call this funcition. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
+During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this funcition. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
 
 
 [#public-spec]
@@ -393,7 +393,7 @@ The design of this abstract specification (e.g. how and where pending messages a
 
 To get some consistency in this document, we try to use the following terms around method calls and messaging:
 
-The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
+The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call. Calls can be _update calls_ (state mutation is preserved) or _query calls_ (state mutation is discarded).
 
 These are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
 
@@ -838,9 +838,9 @@ S with
       | Failed { message = toErrorMessage E } if response = Reject E
 ....
 
-==== Read-only query
+==== Read-only query call
 
-Ready-only queries are executed immediately, and without randomness.
+Ready-only query calls are executed immediately, and without randomness.
 
 HTTP request::
 `/api/canister/<Cid>/<Meth>/query` with body `{ arg : <Arg> }`
