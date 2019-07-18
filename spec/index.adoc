@@ -753,7 +753,7 @@ S with
     canisters[M.receiver].wasm_state = res.new_state;
     calls =
       [ {
-          origin = FromCanister {
+          caller = FromCanister {
             call_contexts = M.call_context;
             callback = call.callback
           };
@@ -800,12 +800,15 @@ S with messages = Other_messages
 
 ==== Call context starvation
 
-If there is no message any more that could possibly fulfill a calling context, then an error message is synthesized.
+If there is no call, downstream calling context or response that could possibly fulfill a calling context, then an error message is synthesized.
 
 Conditions::
 ....
     S.call_contexts[Ctxt_id].replied = false
-    ∀ msg ∈ S.messages. msg.call_context ≠ Ctxt_id
+    ∀ calls ∈ S.calls. msg.call_context ≠ Ctxt_id
+    ∀ ctxt_ids.
+        (S.call_contexts[ctxt_ids].replied = false || S.response[ctxt_ids] exists)
+	==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -820,7 +823,7 @@ When an inter-canister call has been responded to, we can queue the call to the 
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].origin =
+    S.call_contexts[Ctxt_id].caller =
       FromCanister {
         call_context = Ctxt_id2
         callback = F
@@ -845,7 +848,7 @@ When an ingress method call has been responded to, we can record the response in
 Conditions::
 ....
     response = S.responses[Ctxt_id]
-    S.call_contexts[Ctxt_id].origin =
+    S.call_contexts[Ctxt_id].caller =
       FromUser { request = Req_id }
 ....
 State after::
