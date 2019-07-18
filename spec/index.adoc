@@ -220,7 +220,7 @@ NOTE: This document assumes that WebAssembly host references can be used (e.g. `
 
 ==== The API nonce
 
-A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all funciton exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
+A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all functions exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
 
 [#system-api-messages]
 ==== Public methods
@@ -377,7 +377,7 @@ With every update method call or response, the system provides fresh unpredictab
 +
 Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
 +
-During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this funcition. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
+During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this function. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
 
 
 [#public-spec]
