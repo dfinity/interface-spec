@@ -35,7 +35,9 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: How long are request ids kept around.
 * Missing: Getting your own canister id
 * Missing: Listing well-known error codes.
-* Missing: Canister upgrades. Related: The “The DFINITY Protocol Overview” has empty canisters, and installation is a two-step process of installing an empty canister, and upgrading from that. This needs to be put in here.
+* Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
+* Wrong here: Canister installation: Likely multi-step: Register, upload canister module (possibly incremental if bigger than a message), activate.
+* Missing: Canister upgrades.
 * Missing: User identity and accounts
 * Missing: Payment
 * Missing: Gas accounting
