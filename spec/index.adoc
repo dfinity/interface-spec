@@ -214,7 +214,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may have a `(start)` function. (Note that all system calls will trap when called from `(start)`, as it cannot have a valid `api_nonce`.)
 * If it exports a function called `start`, it must have type `+(api_nonce : anyref) -> ()+`.
 * If it exports any functions called `dfn_msg <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
-* No floating point instructions are present in the module. (This may be allowed in the future.)
+* No floating point instructions are used in the module. (This may be allowed in the future.)
 
 NOTE: This document assumes that WebAssembly host references can be used (e.g. `anyref`). Until this is so, every `anyref` is replaced with an `i64` that should be treated as opaque by the WebAssembly code.
 
@@ -538,11 +538,13 @@ ReqState
   | Completed { result : Value }
 CanState = {
   wasm_state : WasmState;
-  exports : MethodName ↦ (Blob -> WasmFunc);
+  module : CanisterModule;
 }
 InstallRequest = {
   request : ReqId;
-  canister : CanisterModule;
+  module : CanisterModule;
+  arg : Blob;
+}
 }
 
 ....
@@ -610,7 +612,7 @@ S with
 If a user uploads a new canister module, it is not immediately instantiated, but queued in `S.to_install`.
 
 HTTP request::
-`/api/canister/new` with body `C : CanisterModule`
+`/api/canister/new` with body `{module : <C : CanisterModule>; arg : <A>}`
 Conditions::
 ....
     Req_id ∉ dom S.requests
@@ -619,7 +621,7 @@ State after::
 ....
 S with
     requests[Req_id] = Pending
-    to_install = { request = Req_id; canister = C } · S.to_install
+    to_install = { request = Req_id; module = C; arg = A } · S.to_install
 ....
 HTTP response::
 A JSON record with `{request-nonce: <Req_id>}`
@@ -649,7 +651,7 @@ The value `R : i64` is cryptographically randomly chosen.
 Conditions::
 ....
     S.requests[Req_id] = Pending
-    S.to_install = { request = Req_id; canister = C; arg = A } · Other_to_install
+    S.to_install = { request = Req_id; module = C; arg = A } · Other_to_install
     C.init (FreshEntropy R, A) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
@@ -668,8 +670,8 @@ Canister installation fails under certain conditions, such a trapping or otherwi
 Conditions::
 ....
     S.requests[Req_id] = Pending
-    S.to_install = { request = Req_id; canister = C; arg = P } · Other_to_install
-    C.init A = Trap
+    S.to_install = { request = Req_id; module = C; arg = P } · Other_to_install
+    // the conditions of the previous rule do not apply
 ....
 State after::
 ....
@@ -713,7 +715,7 @@ Before invoking a message to a public entry point, some bookkeeping is required:
 Conditions::
 ....
     S.calls = C · Other_calls
-    F = S.canisters[C.callee].exports[M.method_name]
+    F = S.canisters[C.callee].module.exports[M.method_name]
 ....
 State after::
 ....
@@ -864,7 +866,7 @@ HTTP request::
 Conditions::
 ....
   C = S.canisters[Cid]
-  F = C.exports[M.method_name]
+  F = C.module.exports[M.method_name]
 ....
 State after::
 ....
