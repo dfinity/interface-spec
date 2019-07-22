@@ -97,9 +97,42 @@ User <-- DFINITY : "Hello World!"
 
 ....
 
+Section “<<interfaces>>” describes these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the DFINITY Internet Computer that describes its abstract behavior with high precision.
 
-The following section describes these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the DFINITY Internet Computer that describes its abstract behavior with high precision.
 
+== About calls and messages
+
+
+=== Nomenclature
+
+To get some consistency in this document, we try to use the following terms around method calls and messaging:
+
+The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call. Calls can be _update calls_ (state mutation is preserved) or _query calls_ (state mutation is discarded).
+
+These are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
+
+WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
+
+=== Ordering guarantees
+
+In order to allow for a distributed implementation of the DFINITY Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
+
+The  guarantee we do give is that that function calls between two canisters are executed in order, so that a canister who cares about in-order delivery does not have to wait for the response before sending the next message.
+
+More precisely:
+
+ * Method calls between any _two_ canisters are delivered in order, as if they
+   were communicating over a single simple FIFO queue.
+ * If a WebAssembly function, within a single invocation, makes multiple calls
+   to the same canister, they are queued in the order of invocations to `msg.call`.
+ * Responses (including replies with `msg.reply`, explicit rejects with `msg.reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
+ * There is no particular order guarantee for ingress messages submitted via
+   the HTTP interface.
+
+WARNING: There is a currently a discrepancy between the
+link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ to be ordered) and a later design document calling for all _calls_ to be ordered; this may need resolving.
+
+[#interfaces]
 == Public Interfaces
 
 [#http-interface]
@@ -380,6 +413,7 @@ Get the random entropy provided with this call. This function is constant during
 During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this function. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
 
 
+
 [#public-spec]
 == Abstract public behavior
 
@@ -389,34 +423,23 @@ This section aims to address that question with great precision, by describing t
 
 The design of this abstract specification (e.g. how and where pending messages are stored) are _not_ to be understood to in any way prescribe a concrete implementation or software architecture. The goals here are formal precision and clarity, but not implementability, so this can lead to different ways of phrasing.
 
-=== Nomenclature
-
-(This section is mostly relevant for editors of this document.)
-
-To get some consistency in this document, we try to use the following terms around method calls and messaging:
-
-The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call. Calls can be _update calls_ (state mutation is preserved) or _query calls_ (state mutation is discarded).
-
-These are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
-
-The System API provides and expects _functions_ which are _invoked_. They can either _trap_ or _return_, possibly with a return value. Functions also have parameters and take arguments.
-
 === Notation
 
 We specify the behavior of the system using pseudo-code.
 
-The manipulated values are primitive values (numbers, text, binary blobs), aggregate types (lists, unordered lists a.k.a. bags, partial maps written as `Key ↦ Value`, records with fixed fields, named constructors) and function types (`Argument -> Result`).
+The manipulated values are primitive values (numbers, text, binary blobs), aggregate values (lists, unordered lists a.k.a. bags, partial maps, records with fixed fields, named constructors) and functions.
 
-The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`).
+We use an concatenation operator `·` with various types: To extend sets and maps, or to concatenate lists with lists or lists with elements.
+
+The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`). Partial maps are written as  `Key ↦ Value` and the function type as `Argument -> Result`.
 
 NOTE: All values are immutable! State change is specified by describing the new state, not by changing existing state.
 
-Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To create a new record from an existing record `R` with some fields changed, the syntax `R where field = new_value` is used.
-
+Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To create a new record from an existing record `R` with some fields changed, the syntax `R where field = new_value` is used. This syntax can also be used to create new records with some deeply nested field changed: `R where some_map[key].field = new_value`.
 
 In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be followed for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
 
-For example, the condition `S.messages = M · Other_messages` says that `M` is a message in field `messages` of the record `S`, and that `Other_messages` are the other messages. IF the state after specifies `S with messages = Other_messages`, then the message `M` is removed from the state.
+For example, the condition `S.messages = Younger_messages · M · Older_messages` says that `M` is some message in field `messages` of the record `S`, and that `Younger_messages` and `Older_messages` are the other messages in the system. If the “state after” specifies `S with messages = Younger_messages · Older_messages`, then the message `M` is removed from the state.
 
 === Abstract state
 
@@ -497,24 +520,34 @@ In this abstract description, call contexts are never garbage collected, even if
 
 ==== Calls and Messages
 
-Calls into and within the DFINITY Internet Computer are implemented as messages between the canisters. We model the lifetime of calls and message as follows:
+Calls into and within the DFINITY Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
+
+Therefore, a message can have different shapes:
 ....
-Call = {
-  caller : CallOrigin;
-  callee : CanId;
-  method_name : Text;
-  arg : Blob;
-}
-Message = {
-  call_context : CallId;
-  receiver : CanId;
-  func : WasmFunc;
-}
+Queue = Unordered | Queue { from : CanId; to : CanId }
+Message
+  = CallMessage {
+      caller : CallOrigin;
+      callee : CanId;
+      method_name : Text;
+      arg : Blob;
+      queue : Queue;
+    }
+  | FuncMessage {
+      call_context : CallId;
+      receiver : CanId;
+      func : WasmFunc;
+      queue : Queue;
+    }
+  | ResponseMessage {
+      call_context : CallId;
+      response : Response;
+    }
 ....
 
-A `Call` initiates a call to a public entry point of a canister; when this entry point is resolved to an actual WebAssembly function, we create a call context for this call and turn it into `Message`.
+The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and not otherwise interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
 
-A `Message` can be executed; this causes further calls to appear, and potentially a `Response` recorded (see below).
+A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document chooses this approach for a simpler and more concise system state.
 
 ==== The system state
 
@@ -523,14 +556,12 @@ Finally, we can describe the state of the DFINITY Internet Computer as a record 
 ....
 S = {
   requests : ReqId ↦ ReqState;
-  user_pubkeys : PublicKey  ↦ UserId;
+  user_pubkeys : PublicKey ↦ UserId;
   canisters : CanId ↦ CanState;
   to_register : Bag RegisterRequest;
   to_install : Bag InstallRequest;
-  calls : Bag Call;
   call_contexts : CallId ↦ CallCtxt;
-  messages : Bag Message;
-  responses : CallId ↦ Response;
+  messages : List Message; // ordered!
 }
 ReqState
   = Pending
@@ -546,7 +577,6 @@ InstallRequest = {
   arg : Blob;
 }
 }
-
 ....
 
 
@@ -684,7 +714,7 @@ An implementation may create a more helpful error message based on why the canis
 
 ==== User message send
 
-Incoming user messages are queued as calls with an `caller` field that ties it to the user's request.
+Incoming user messages are queued as calls with an `caller` field that ties it to the user's request. We do not make any guarantees about the order of incoming messages.
 
 HTTP request::
 `/api/canister/<Cid>/<Meth>/call` with body `{ arg : <Arg> }`
@@ -696,13 +726,14 @@ State after::
 ....
 S with
     requests[Req_id] = Pending
-    calls =
-      {
+    messages =
+      CallMessage {
         caller = FromUser { request = Req_id };
         canister = Cid;
-        method_name = Meth
-        arg = Arg
-      } · S.calls
+        method_name = Meth;
+        arg = Arg;
+        queue = Unordered;
+      } · S.messages
   where
 ....
 HTTP response::
@@ -712,20 +743,25 @@ A JSON record with `{request-nonce: <Req_id>}`
 
 Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports.
 
+The position of the message in the queue is unchanged.
+
 Conditions::
 ....
-    S.calls = C · Other_calls
+    S.messages = Older_messages · CallMessage CM · Younger_messages
     F = S.canisters[C.callee].module.exports[M.method_name]
 ....
 State after::
 ....
 S with
-    calls = Other_calls
-    messages = {
+    messages =
+      Older_messages ·
+      FuncMessage {
         call_context = Ctxt_id;
-        receiver = C.callee;
-        func = F(C.arg)
-      } · S.messages
+        receiver = CM.callee;
+        func = F(CM.arg)
+        queue = CM.queue;
+      } ·
+      Younger_messages
     call_contexts[Ctxt_id] = {
       canister = C.callee;
       caller = C.caller;
@@ -737,34 +773,44 @@ S with
 
 ==== Message execution (non-trapping)
 
+We can execute any message that is at the head of its queue, i.e. there is no
+older message with the same abstract `queue` field.
 The actual message execution, if successful, may enqueue further messages and
-possibly record a response.
+-- if the function returns a response -- record this response.
+The new call and response messages are enqueued at the end.
 
 Conditions::
 ....
-    S.messages = M · Other_messages
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.func (S.canisters[M.receiver].wasm_state) = Ok res
     (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
 ....
 S with
-    messages = Other_messages
     canisters[M.receiver].wasm_state = res.new_state;
-    calls =
-      [ {
+    messages =
+      Older_messages ·
+      Younger_messages ·
+      [ CallMessage {
           caller = FromCanister {
             call_contexts = M.call_context;
             callback = call.callback
           };
           callee = call.callee;
           method_name = call.method_name;
-          arg = call.arg
+          arg = call.arg;
+          queue = Queue { from = M.receiver; to = call.callee };
         }
-      | for call ∈ res.new_calls ] · S.calls
+      | for call ∈ res.new_calls ] ·
+      [ ResponseMessage {
+          call_context = M.call_context;
+          response = res.response;
+        }
+      | if res.response ≠ NoResponse ]
 
-     // and only if res.response ≠ NoResponse:
-     responses[M.call_context] = res.response
+     // only if res.response ≠ NoResponse:
      call_contexts[M.call_context].replied = true
 ....
 
@@ -774,12 +820,13 @@ If a message traps, it gets dropped. No response is generated (some other messag
 
 Conditions::
 ....
-    S.messages = M · Other_messages
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
-S with messages = Other_messages
+S with messages = Older_messages · Younger_messages
 ....
 
 ==== Message execution (double response)
@@ -788,14 +835,15 @@ If a message tries to respond when its calling context has already be responded 
 
 Conditions::
 ....
-    S.messages = M · Other_messages
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Ok res
-    res ≠ NoResponse
     S.call_contexts[M.call_context].replied = true
+    res ≠ NoResponse
 ....
 State after::
 ....
-S with messages = Other_messages
+S with messages = Older_messages · Younger_messages
 ....
 
 ==== Call context starvation
@@ -805,7 +853,7 @@ If there is no call, downstream calling context or response that could possibly 
 Conditions::
 ....
     S.call_contexts[Ctxt_id].replied = false
-    ∀ calls ∈ S.calls. msg.call_context ≠ Ctxt_id
+    ∀ CallMessage msg ∈ S.messages. msg.call_context ≠ Ctxt_id
     ∀ ctxt_ids.
         (S.call_contexts[ctxt_ids].replied = false || S.response[ctxt_ids] exists)
 	==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
@@ -813,8 +861,13 @@ Conditions::
 State after::
 ....
 S with
-    S.call_contexts[Ctxt_id].replied = true
-    S.responses[Ctxt_id] = Reject starvation_error_code
+    call_contexts[Ctxt_id].replied = true
+    messages =
+      S.messages ·
+      ResponseMessage {
+        call_context = Ctxt_id;
+        response = Reject starvation_error_code;
+      }
 ....
 
 ==== Callback invocation
@@ -823,7 +876,8 @@ When an inter-canister call has been responded to, we can queue the call to the 
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].caller =
+    S.messages = Older_messages · ResponseMessage RM · Younger_messages
+    S.call_contexts[RM.call_contexts].origin =
       FromCanister {
         call_context = Ctxt_id2
         callback = F
@@ -832,12 +886,14 @@ Conditions::
 State after::
 ....
 S with
-    S.responses[Ctxt_id] = (deleted)
     messages =
-      {
+      Older_messages ·
+      FuncMessage {
         call_context = Ctxt_id2
-        func = F (S.responses[Ctxt_id])
-      } · S.messages
+        func = F (RM.response)
+        queue = Unordered
+      } ·
+      Younger_messages
 ....
 
 
@@ -847,14 +903,14 @@ When an ingress method call has been responded to, we can record the response in
 
 Conditions::
 ....
-    response = S.responses[Ctxt_id]
-    S.call_contexts[Ctxt_id].caller =
+    S.messages = Older_messages · ResponseMessage RM · Younger_messages
+    S.call_contexts[RM.call_context].origin =
       FromUser { request = Req_id }
 ....
 State after::
 ....
 S with
-    S.responses[Ctxt_id] = (deleted)
+    messages = Older_messages · Younger_messages
     requests[Req_id]
       | Completed { result = R } if response = Reply R
       | Failed { message = toErrorMessage E } if response = Reject E
@@ -1169,5 +1225,4 @@ It is open whether UserId's are deleted if they have no associated public keys. 
 
 As with keys, user ids and user accounts will also be subject to management. Their statuses can be: pre-activation, active, suspended, blacklisted, deleted. There may be usage constraints associated with them, and they may hold public information about a user, e.g., name.
 
-In the future we want explicit interfaces over which a user registers a public key and manage their accounts. One could imagine the user creating an ingress message with new public key, optional existing user id, registration evidence (e.g. signature by existing public key or evidence of PKI certificate), user info (e.g. name or KYC), and signature on everything. Similarly, we would need methods for other types of key management and user management. 
-
+In the future we want explicit interfaces over which a user registers a public key and manage their accounts. One could imagine the user creating an ingress message with new public key, optional existing user id, registration evidence (e.g. signature by existing public key or evidence of PKI certificate), user info (e.g. name or KYC), and signature on everything. Similarly, we would need methods for other types of key management and user management.
