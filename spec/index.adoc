@@ -155,11 +155,12 @@ The following API calls are provided, and explained below:
 
 This documents describes the DFINITY Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
 
-As long as you talk to one node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call in a canister (e.g. bump a counter), and node A indicates that the call has executed, and you then issue a read query to node A, then is guaranteed to include the effect of the update call (and you will receive the updated counter value).
+As long as you talk to one node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call in a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a read query to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
 
 If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
 The system does not explicitly help with that (e.g. by indicating which particular state a read query is based on, or by allowing the user to request a specific state), as applications have other ways to deal with that issue:
+
 * They can make sure to use a single node, first ask for the status of a update call, and only if that says that the update call has been completed, do the read-only query.
 * The application can include sufficient information in the read-only query to tell whether the update call has happened, such as keeping an internal counter of processed messages, or other ways.
 
