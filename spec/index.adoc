@@ -440,7 +440,7 @@ Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To crea
 
 In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be followed for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
 
-For example, the condition `S.messages = Younger_messages · M · Older_messages` says that `M` is some message in field `messages` of the record `S`, and that `Younger_messages` and `Older_messages` are the other messages in the system. If the “state after” specifies `S with messages = Younger_messages · Older_messages`, then the message `M` is removed from the state.
+For example, the condition `S.messages = Older_messages · M · Younger_messages` says that `M` is some message in field `messages` of the record `S`, and that `Younger_messages` and `Older_messages` are the other messages in the system. If the “state after” specifies `S with messages = Older_messages · Younger_messages`, then the message `M` is removed from the state.
 
 === Abstract state
 
