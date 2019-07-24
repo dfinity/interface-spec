@@ -1149,6 +1149,8 @@ call.perform<es>(callref : anyref) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
+  if es.calls[callidx].on_reply = StillMissing then Trap
+  if es.calls[callidx].on_reject = StillMissing then Trap
 
   es.calls[callidx].performed := True
 
