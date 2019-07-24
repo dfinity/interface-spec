@@ -32,7 +32,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Canister IDs: Really just 64 bit numbers, and which textual format?
 * Missing: Message ordering is not yet enforced in the formalism.
 * Missing: Methods without responses/fire-and-forget calls
-* Missing: How long are request ids kept around.
+* Missing: Deleting request responses after some amount of time.
 * Missing: Getting your own canister id
 * Missing: Listing well-known error codes.
 * Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
@@ -170,12 +170,18 @@ The system does not explicitly help with that (e.g. by indicating which particul
 Path:: `/api/request/<request-nonce>/status`
 Method:: `GET`
 Response format:: JSON record with these fields:
- * `status`: one of `pending`, `failed` or `completed`
+ * `status`: one of `failed` or `completed`
  * `result`: (if status is `completed`) A result according to the method spec below.
  * `error` (text): (if status is `failed`) An error message
 
-Some API calls below are asynchronous, i.e. the response is not immediately
-returned to the client. In these cases, a _request nonce_ is returned, and this request can be used to query its state or fetch the final response.
+Some API calls below are asynchronous, i.e. the response is not immediately returned to the client. In these cases, a _request nonce_ is returned, and this
+request can be used to query its state or fetch the final response.
+
+WARNING: Immediately after issuing a request, this may fail (e.g. return with a “request not found”); it will only succeed when a response (a result or an error) is available.
+
+NOTE: This API call may be extended to indicate when a request has been _inducted_ (e.g. guaranteed to be executed eventually).
+
+NOTE: Request responses will not actually be kept around indefinitely; the policy for when they can be dropped is not defined yet.
 
 [#api-canister-new]
 ==== Deploying a new canister
@@ -565,8 +571,7 @@ S = {
   messages : List Message; // ordered!
 }
 ReqState
-  = Pending
-  | Failed { message : Text }
+  = Failed { message : Text }
   | Completed { result : Value }
 CanState = {
   wasm_state : WasmState;
@@ -651,7 +656,6 @@ Conditions::
 State after::
 ....
 S with
-    requests[Req_id] = Pending
     to_install = { request = Req_id; module = C; arg = A } · S.to_install
 ....
 HTTP response::
@@ -669,7 +673,6 @@ S
 ....
 HTTP response::
 A JSON record with
-* `{status: pending}` if `S.requests[Req_id] = Pending`
 * `{status: failed; message: <msg>}` if `S.requests[Req_id] = Failed { message = msg }`
 * `{status: completed; result : <result>}` if `S.requests[Req_id] = Completed { result = result }`
 
@@ -681,7 +684,6 @@ The value `R : i64` is cryptographically randomly chosen.
 
 Conditions::
 ....
-    S.requests[Req_id] = Pending
     S.to_install = { request = Req_id; module = C; arg = A } · Other_to_install
     C.init (FreshEntropy R, A) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
@@ -700,7 +702,6 @@ Canister installation fails under certain conditions, such a trapping or otherwi
 
 Conditions::
 ....
-    S.requests[Req_id] = Pending
     S.to_install = { request = Req_id; module = C; arg = P } · Other_to_install
     // the conditions of the previous rule do not apply
 ....
@@ -726,7 +727,6 @@ Conditions::
 State after::
 ....
 S with
-    requests[Req_id] = Pending
     messages =
       CallMessage {
         caller = FromUser { request = Req_id };
@@ -735,7 +735,6 @@ S with
         arg = Arg;
         queue = Unordered;
       } · S.messages
-  where
 ....
 HTTP response::
 A JSON record with `{request-nonce: <Req_id>}`
@@ -750,6 +749,7 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     F = S.canisters[C.callee].module.exports[M.method_name]
+    Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
 ....
@@ -768,8 +768,6 @@ S with
       caller = C.caller;
       replied = false;
     }
-  where
-    Ctxt_id ∉ dom S.call_contexts
 ....
 
 ==== Message execution (non-trapping)
