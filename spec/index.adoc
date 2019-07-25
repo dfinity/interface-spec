@@ -565,23 +565,29 @@ S = {
   requests : ReqId ↦ ReqState;
   user_pubkeys : PublicKey ↦ UserId;
   canisters : CanId ↦ CanState;
-  to_register : Bag RegisterRequest;
   to_install : Bag InstallRequest;
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
 }
+PendingRequest = CallRequest | InstallRequest
 ReqState
-  = Failed { message : Text }
+  = Pending PendingRequest
+  | Accepted
+  | Failed { message : Text }
   | Completed { result : Value }
 CanState = {
   wasm_state : WasmState;
   module : CanisterModule;
 }
-InstallRequest = {
+CallRequest = CallRequest {
+  callee : CanId;
+  method_name : Text;
+  arg : Blob;
+}
+InstallRequest = InstallRequest {
   request : ReqId;
   module : CanisterModule;
   arg : Blob;
-}
 }
 ....
 
@@ -591,15 +597,13 @@ InstallRequest = {
 The initial state of the system is
 ....
 {
-  user_pubkeys = ();
+  pending_requests = ();
   requests = ();
+  user_pubkeys = ();
   canisters = ();
-  to_register = ();
   to_install = ();
-  calls = ();
   call_contexts = ();
   messages = ();
-  responses = ();
 }
 ....
 using `()` to denote the empty map or bag.
@@ -656,7 +660,7 @@ Conditions::
 State after::
 ....
 S with
-    to_install = { request = Req_id; module = C; arg = A } · S.to_install
+    S.requests[Req_id] = InstallRequest { request = Req_id; module = C; arg = A }
 ....
 HTTP response::
 A JSON record with `{request-nonce: <Req_id>}`
@@ -664,6 +668,8 @@ A JSON record with `{request-nonce: <Req_id>}`
 ==== Request status query
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
+
+NOTE: There is a phase where a request was issued by the client, but not accepted yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as accepted, as seen in the following rules.
 
 HTTP request::
 `/api/requests/<Req_id>/status`
@@ -673,8 +679,62 @@ S
 ....
 HTTP response::
 A JSON record with
+* `{status: accepted}` if `S.requests[Req_id] = Accepted`
 * `{status: failed; message: <msg>}` if `S.requests[Req_id] = Failed { message = msg }`
 * `{status: completed; result : <result>}` if `S.requests[Req_id] = Completed { result = result }`
++
+Otherwise, it responds with a 404 error (even if `S.requests[Req_id]` is `Pending`).
+
+==== Dropping a pending request
+
+Conditions::
+....
+    requests[Req_id] = Pending PR
+....
+State after::
+....
+S with
+    requests[Req_id] = (deleted)
+....
+
+==== Request acceptance
+
+We have acceptance transitions for the various kinds of requests.
+
+
+===== For Installation requests:
+
+Conditions::
+....
+    requests[Req_id] = Pending (InstallRequest IR)
+....
+State after::
+....
+S with
+    requests[Req_id] = Accepted
+    to_install = IR · S.to_install
+....
+
+===== For Call requests:
+
+Conditions::
+....
+    requests[Req_id] = Pending (CallRequest CR)
+....
+State after::
+....
+S with
+    requests[Req_id] = Accepted
+    messages =
+      CallMessage {
+        caller = FromUser { request = Req_id };
+        callee = CR.canister;
+        method_name = CR.method_name;
+        arg = CR.arg;
+        queue = Unordered;
+      } · S.messages
+....
+
 
 ==== Canister installation (successful)
 
@@ -684,6 +744,7 @@ The value `R : i64` is cryptographically randomly chosen.
 
 Conditions::
 ....
+    requests[Req_id] = Accepted
     S.to_install = { request = Req_id; module = C; arg = A } · Other_to_install
     C.init (FreshEntropy R, A) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
@@ -702,6 +763,7 @@ Canister installation fails under certain conditions, such a trapping or otherwi
 
 Conditions::
 ....
+    requests[Req_id] = Accepted
     S.to_install = { request = Req_id; module = C; arg = P } · Other_to_install
     // the conditions of the previous rule do not apply
 ....
@@ -727,14 +789,13 @@ Conditions::
 State after::
 ....
 S with
-    messages =
-      CallMessage {
-        caller = FromUser { request = Req_id };
-        canister = Cid;
+    S.requests[Req_id] = Pending (CallRequest
+      {
+        callee = Cid;
         method_name = Meth;
         arg = Arg;
-        queue = Unordered;
-      } · S.messages
+      }
+    )
 ....
 HTTP response::
 A JSON record with `{request-nonce: <Req_id>}`
@@ -902,6 +963,7 @@ When an ingress method call has been responded to, we can record the response in
 
 Conditions::
 ....
+    requests[Req_id] = Accepted
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     S.call_contexts[RM.call_context].origin =
       FromUser { request = Req_id }
