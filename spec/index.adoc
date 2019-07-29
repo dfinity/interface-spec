@@ -30,7 +30,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 
 * Rest interface: Structure of the request bodies (JSON or something better)
 * Canister IDs: Really just 64 bit numbers, and which textual format?
-* Missing: Message ordering is not yet enforced in the formalism.
 * Missing: Methods without responses/fire-and-forget calls
 * Missing: Deleting request responses after some amount of time.
 * Missing: Getting your own canister id
