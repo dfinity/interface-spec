@@ -32,7 +32,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Canister IDs: Really just 64 bit numbers, and which textual format?
 * Missing: Methods without responses/fire-and-forget calls
 * Missing: Deleting request responses after some amount of time.
-* Missing: Getting your own canister id
 * Missing: Listing well-known error codes.
 * Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
 * Wrong here: Canister installation: Likely multi-step: Register, upload canister module (possibly incremental if bigger than a message), activate.
@@ -326,6 +325,10 @@ To future-proof the System API, references to canisters are represented as abstr
 
 NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp. a `canister_id`). In a future where not all canisters are publicly addressable by anyone, these conversion functions may become partial. Moreover, while they technically could, these functions do *not* check for the existence of the canister.
 
+Furthermore, a canister can learn about its own canister id:
+
+* `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
+
 [#system-api-send]
 ==== Sending messages
 
@@ -473,7 +476,7 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 +
 ....
 WasmState = (abstract)
-WasmFunc = (Entropy, WasmState) -> FuncResult
+WasmFunc = (Entropy, CanId, WasmState) -> FuncResult
 Entropy = NoEntropy | FreshEntropy i64
 FuncResult = Trap | Return {
   new_state : WasmState;
@@ -488,7 +491,7 @@ MethodCall = {
   callback: Response -> WasmFunc;
 }
 CanisterModule = {
-  init : (Entropy, Blob) -> FuncResult;
+  init : (Entropy, CanId, Blob) -> FuncResult;
   exports : MethodName ↦ (Blob -> WasmFunc)
 }
 ....
@@ -745,7 +748,8 @@ Conditions::
 ....
     requests[Req_id] = Accepted
     S.to_install = { request = Req_id; module = C; arg = A } · Other_to_install
-    C.init (FreshEntropy R, A) =
+    Cid ∉ dom S.canisters
+    C.init (FreshEntropy R, Cid, A) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
@@ -753,7 +757,7 @@ State after::
 S with
     requests[Req_id] = Completed { result = { canister_id = cid } }
     to_install = Other_to_install
-    canisters[cid] = { wasm_state = New_state; module = C }
+    canisters[Cid] = { wasm_state = New_state; module = C }
 ....
 
 ==== Canister installation (failing)
@@ -842,7 +846,7 @@ Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.func (S.canisters[M.receiver].wasm_state) = Ok res
+    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Ok res
     (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
@@ -881,7 +885,7 @@ Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Trap
+    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
@@ -896,7 +900,7 @@ Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.func(FreshEntropy R, S.canisters[M.receiver].wasm_state) = Ok res
+    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Ok res
     S.call_contexts[M.call_context].replied = true
     res ≠ NoResponse
 ....
@@ -992,27 +996,27 @@ State after::
 S
 ....
 HTTP response::
-* If `F(NoEntropy, Arg) = Trap` then a JSON record with
+* If `F(NoEntropy, Cid, Arg) = Trap` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(NoEntropy, Arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
+* Else if `F(NoEntropy, Cid, Arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution tried to send further messages "}
 ....
-* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = NoResponse` then a JSON record with
+* Else if `F(NoEntropy, Cid, Arg) = Ok res` and `res.response = NoResponse` then a JSON record with
 +
 ....
 {status: failed; error: "Query execution did not issue a result" }
 ....
-* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
+* Else if `F(NoEntropy, Cid, Arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(NoEntropy, Arg) = Ok res` and `res.response = Reply R` then a JSON record with
+* Else if `F(NoEntropy, Cid, Arg) = Ok res` and `res.response = Reply R` then a JSON record with
 +
 ....
 {status: success; result: <R> }
@@ -1053,6 +1057,7 @@ PartialCall = {
 ExecutionState = {
   wasm_state : S; // a store as per WebAssembly spec
   api_nonce : (abstract)
+  self_id : CanId;
   params : Params;
   entropy : Entropy;
   response : NoResponse | Response;
@@ -1066,13 +1071,14 @@ Syntactically, we express this using an implicit argument of type `ref Execution
 
 ==== The concrete `WasmFunc`
 
-We can wrap such an execution function into an abstract `WasmFunc = WasmState -> FuncResult`, e.g. for exports and callbacks, as follows:
+We can wrap such an execution function into an abstract `WasmFunc = (Randomness, CanId, WasmState) -> FuncResult`, e.g. for exports and callbacks, as follows:
 ....
 mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> ()) : WasmFunc =
-  λ (entropy, wasm_state) ->
+  λ (entropy, self_id, wasm_state) ->
     let es = ref {
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
+      self_id = self_id;
       entropy = entropy;
       params = params;
       response = NoResponse;
@@ -1139,11 +1145,16 @@ msg.reject<es>(api_nonce : anyref, errcode : i32) =
 
 canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  return canister_id
+  return (CanisterRef canister_id)
 
 canister.id<es>(api_nonce : anyref, canister_ref : anyref) : 64 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  return canister_ref
+  let CanisterRef canister_id = canister_ref else Trap
+  return canister_id
+
+canister.self<es>(api_nonce : anyref) : anyref =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  return (CanisterRef es.self_id)
 
 method.public<es>(
   api_nonce    : anyref,
@@ -1247,7 +1258,7 @@ Finally we can specify the meaning of an abstract `CanisterModule`:
 If the WebAssembly module does not export a function called under the name `start`, it is
 +
 ....
-λ blob ->
+λ (randomness, self_id, blob) ->
   if |blob| > 0
   then Trap
   else Return {
@@ -1260,7 +1271,9 @@ If the WebAssembly module does not export a function called under the name `star
 Otherwise, if the WebAssembly module exports a function `f` under the name `start`, it is
 +
 ....
-λ blob -> match (mkWasmFunc ({ arg = blob; errcode 0 }, f))(wasm_state) with
+λ (randomness, self_id, blob) ->
+  let wasm_func = mkWasmFunc ({ arg = blob; errcode 0 }, f) in
+  match (wasm_func(randomness, self_id, wasm_state)) with
   Return res when new_calls = () and response = NoResponse -> Return res
   otherwise -> Trap
 ....
