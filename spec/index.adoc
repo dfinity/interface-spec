@@ -42,6 +42,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests)
 * Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
 * Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
+* Missing: Reads may specify a specific (future) state
 * Missing (optional): References in call arguments and responses? Which references are supported? Can we have `funcrefs`?
 * Missing (optional): Certified variables (globals pointing to memory? specially marked read-only methods?)
 * Missing (optional): Programmatic canister creation
@@ -157,10 +158,11 @@ As long as you talk to one node only, the observed behavior is nicely sequential
 
 If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
-The system does not explicitly help with that (e.g. by indicating which particular state a read query is based on, or by allowing the user to request a specific state), as applications have other ways to deal with that issue:
+A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the client might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
 
-* They can make sure to use a single node, first ask for the status of a update call, and only if that says that the update call has been completed, do the read-only query.
-* The application can include sufficient information in the read-only query to tell whether the update call has happened, such as keeping an internal counter of processed messages, or other ways.
+Both problems can be solved if read requests can specify a desired state that they should be queried again, either at-least-this (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
+
+NOTE: Even without this feature, applications can solve these problems: For the first problem, the query result could be such that the client can tell if the query has been received or not. For the second problem, if the reply is monotonous in some sense the client can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the client can get assurance in those events returned by many nodes).
 
 [#api-request-status]
 ==== Polling request status
