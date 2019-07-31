@@ -294,17 +294,27 @@ It returns the special “no error” code `0` if the it is _not_ invoked as an 
 
 Eventually, the canister will want to respond to the original call, either with success or by signaling an error:
 
-* `+msg.reply : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
+* `+msg.append_reply_data : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
 +
-Replies to the sender with the bytes at `memory[offset..offset+length]`. Traps if `offset+length` exceeds the size of the WebAssembly memory.
+Copies the data referred to by `offset`/`length` out of the canister and appends it to the (initially empty) data reply.
++
+NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
++
+This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
+
+* `+msg.reply : (api_nonce : anyref) -> ()+`
++
+Replies to the sender with the data assembled using `msg.append_reply_data`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
 * `+msg.reject : (api_nonce : anyref, errcode : i32) -> ()+`
 +
 Replies to sender with the given error code. The error code must not be 0, otherwise this traps.
++
+Possible reply data assembled using `+msg.append_reply_data` is discarded.
 
-If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `msg.send`), are discarded.
+If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `call.invoke`), are discarded.
 
 ==== System methods
 
@@ -315,7 +325,7 @@ A canister may export a system methods. In contrast to public methods, system me
 
 If the canister exports a system method called `start`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the actor initialization (see <<api-canister-new>>), it is passed as the argument, otherwise the argument is the empty blob.
 
-The following system calls will trap when called during the execution of `start`: `msg.reply`, `msg.reject`, `msg.call`.
+The following system calls will trap when called during the execution of `start`: `msg.reply`, `msg.append_reply_data`, `msg.reject`, `call.create`.
 
 The system assumes the canister to be fully instantiated if the `start` method entry point returns.  If the `start` method entry point traps, then canister installation has failed, and the canister is deleted.
 
@@ -1065,6 +1075,7 @@ ExecutionState = {
   params : Params;
   entropy : Entropy;
   response : NoResponse | Response;
+  reply_params : { arg : Blob };
   calls : List PartialCall;
   performed_calls : List Call
 }
@@ -1086,6 +1097,7 @@ mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> 
       entropy = entropy;
       params = params;
       response = NoResponse;
+      reply_params : { arg : "" };
       calls = ();
     }
     func<es>(api_nonce)
@@ -1135,11 +1147,16 @@ msg.error_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   es.error_code
 
-msg.reply<es>(api_nonce : anyref, offset : i32, length : i32) =
+msg.append_reply_data<es>(api_nonce : anyref, offset : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if offset+length > |es.S.mem| then Trap
-  es.response := Reply (es.S.mem[offset..offset+length])
+  es.reply_params.arg := es.reply_params.arg · es.S.mem[offset..offset+len];
+
+msg.reply<es>(api_nonce : anyref) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if es.response ≠ NoResponse then Trap
+  es.response := Reply (es.reply_params.arg)
 
 msg.reject<es>(api_nonce : anyref, errcode : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1278,8 +1295,11 @@ Otherwise, if the WebAssembly module exports a function `f` under the name `star
 λ (randomness, self_id, blob) ->
   let wasm_func = mkWasmFunc ({ arg = blob; errcode 0 }, f) in
   match (wasm_func(randomness, self_id, wasm_state)) with
-  Return res when new_calls = () and response = NoResponse -> Return res
-  otherwise -> Trap
+    Return res
+      when res.new_calls = ()
+      and res.response = NoResponse
+      -> Return res
+    otherwise -> Trap
 ....
 +
 where `wasm_state` is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
