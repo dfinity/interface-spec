@@ -256,6 +256,10 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 NOTE: This document assumes that WebAssembly host references can be used (e.g. `anyref`). Until this is so, every `anyref` is replaced with an `i64` that should be treated as opaque by the WebAssembly code.
 
+==== Interpretation of numbers
+
+WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless otherwise noted, whenever the the System API interprets them as numbers (e.g. memory offsets, array lengths), they are to be interpreted as unsigned, unless noted otherwise.
+
 ==== The API nonce
 
 A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all functions exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
