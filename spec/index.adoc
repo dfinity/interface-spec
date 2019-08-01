@@ -242,9 +242,9 @@ Message fields::
 Reply fields::
 * None
 
-This will instantiate the canister module and invoke its `start` system method, as explained in Section “<<system-api-start>>“, passing the `arg`, if given, as the method argument.
+This will instantiate the canister module and invoke its `dfn_init` system method, as explained in Section “<<system-api-init>>“, passing the `arg`, if given, as the method argument.
 
-If the canister does not have a `start` system method, then it is an error to pass a `arg`. If no `arg` is given but a `start` system method is present, an argument of length 0 is assumed.
+If the canister does not have a `dfn_init` system method, then it is an error to pass a `arg`. If no `arg` is given but a `dfn_init` system method is present, an argument of length 0 is assumed.
 
 This is atomic: If the response to this message is a `reject`, then this message had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
 
@@ -325,7 +325,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import functions listed below, at the type given below.
 * It may have a `(start)` function. (Note that all system calls will trap when called from `(start)`, as it cannot have a valid `api_nonce`.)
-* If it exports a function called `start`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports a function called `dfn_init`, it must have type `+(api_nonce : anyref) -> ()+`.
 * If it exports any functions called `dfn_msg <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
 * No floating point instructions are used in the module. (This may be allowed in the future.)
 
@@ -393,16 +393,16 @@ If the execution of the function traps for any reason, then all changes to the W
 
 ==== System methods
 
-A canister may export a system methods. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `start`, not `dfn_msg start`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
+A canister may export a system methods. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `dfn_init`, not `dfn_msg init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
 
-[#system-api-start]
-==== System method: start
+[#system-api-init]
+==== System method: dfn_init
 
-If the canister exports a system method called `start`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the actor initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
+If the canister exports a system method called `dfn_init`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the actor initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
 
-The following system calls will trap when called during the execution of `start`: `msg.reply`, `msg.append_reply_data`, `msg.reject`, `call.create`.
+The following system calls will trap when called during the execution of `dfn_init`: `msg.reply`, `msg.append_reply_data`, `msg.reject`, `call.create`.
 
-The system assumes the canister to be fully instantiated if the `start` method entry point returns.  If the `start` method entry point traps, then canister installation has failed, and the canister is deleted.
+The system assumes the canister to be fully instantiated if the `dfn_init` method entry point returns.  If the `dfn_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
 [#system-api-canister-id]
 ==== Resolving canister ids
@@ -832,7 +832,7 @@ S with
 
 ==== Canister code installation
 
-Canister installation upload the initial canister module and turns an empty canister into a running canister. This involves invoking the `start` system method (see <<system-api-start>>), which must succeed and must not invoke other methods.
+Canister installation upload the initial canister module and turns an empty canister into a running canister. This involves invoking the `dfn_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The value `R : i64` is cryptographically randomly chosen.
 
@@ -1367,7 +1367,7 @@ Finally we can specify the meaning of an abstract `CanisterModule`:
 
 * The `init` field of the `CanisterModule` is defined as follow:
 +
-If the WebAssembly module does not export a function called under the name `start`, it is
+If the WebAssembly module does not export a function called under the name `dfn_init`, it is
 +
 ....
 λ (randomness, self_id, blob) ->
@@ -1380,7 +1380,7 @@ If the WebAssembly module does not export a function called under the name `star
   }
 ....
 +
-Otherwise, if the WebAssembly module exports a function `f` under the name `start`, it is
+Otherwise, if the WebAssembly module exports a function `f` under the name `dfn_init`, it is
 +
 ....
 λ (randomness, self_id, blob) ->
