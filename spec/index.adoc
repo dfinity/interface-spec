@@ -185,13 +185,32 @@ The following API endpoints are provided:
 
 NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
-For all endpoints, the client performs a POST HTTP request with `Content-type: application/json`. The body is an JSON object containing the message resp. read request object.
+For all endpoints, the client performs a POST HTTP request with `Content-type: application/cbor`. The body is an CBOR value containing the message resp. read request object.
 
-The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) HTTP response without a body; the user uses a separate `message-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a JSON object) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 500) may occur.
+The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) HTTP response without a body; the user uses a separate `message-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a CBOR value) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 500) may occur.
 
 NOTE: For some reads (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
 NOTE: Some or all calls to `/api/v1/query` might have to be paid for using a micro payment scheme (e.g. state-channel). This would be specified here, as a mechanism that is abstract in the content of the read request.
+
+[#api-cbor]
+==== CBOR encoding of messages and responses
+
+Messages and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
+
+Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]),
+followed by a data item with major type 5 (“Map of pairs of data items”), followed by the the fields of the record. The keys are encoded with major type 3 (“Text string”). The values are one of these major types (with more to be added as needed):
+
+* Strings: Major type 3 (“Text string”).
+* Blobs: Major type 2 (“Byte string”)
+* Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
+* Nested records: Major type 5 followed by string keys.
+
+As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols” of the CBOR spec], we clarify that:
+
+* Floating-point numbers may not be used to encode integers.
+* Duplicate keys are prohibited in CBOR maps.
+
 
 [#api-common-fields]
 ==== Common fields of messages
@@ -1084,7 +1103,7 @@ Conditions::
    S.api_messages[M] = MS
 ....
 Read response::
-A JSON record with
+A record with
 * `{status: accepted}` if `MS = Accepted` or `MS = Processing`
 * `{status: failed; message: <msg>}` if `MS = Failed { message = msg }`
 * `{status: completed; result : <result>}` if `MS = Completed { result = result }`
@@ -1101,27 +1120,27 @@ Conditions::
   F = C.module.exports[Q.method_name]
 ....
 Read response::
-* If `F(NoEntropy, Q.callee, Q.arg) = Trap` then a JSON record with
+* If `F(NoEntropy, Q.callee, Q.arg) = Trap` then a record with
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.new_calls ≠ ()` then a JSON record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.new_calls ≠ ()` then a record with
 +
 ....
 {status: failed; error: "Query execution tried to send further messages "}
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = NoResponse` then a JSON record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = NoResponse` then a record with
 +
 ....
 {status: failed; error: "Query execution did not issue a result" }
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reject errcode` then a JSON record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reject errcode` then a record with
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reply R` then a JSON record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reply R` then a record with
 +
 ....
 {status: success; result: <R> }
