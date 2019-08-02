@@ -314,7 +314,7 @@ Canister methods that do not change the canister state in a meaningful way can b
 Endpoint:: `/api/v1/query`
 Message type:: `query`
 Message fields::
-* `canister_id`: The id of the canister to install code for.
+* `canister_id`: The id of the canister to query.
 * `method_name`: Name of the canister method to call
 * `arg` (blob): Argument to pass to the canister method
 Response fields::
