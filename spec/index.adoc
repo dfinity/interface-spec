@@ -26,22 +26,22 @@ Please also skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3
 
 === Open questions and missing bits
 
-As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.
+As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.  (Items marked [MM] are things Mack has committed to take a cut at clarifying functional requirements for by August 19.)
 
-* Canister IDs: Really just 64 bit numbers, and which textual format?
+* Canister IDs: Really just 64 bit numbers, and which textual format? [MM]
 * Missing: Methods without responses/fire-and-forget calls
 * Missing: Specifying when responses are deleted.
 * Missing: Listing well-known error codes.
 * Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
 * Wrong here: Canister installation: Likely multi-step: Register, upload canister module (possibly incremental if bigger than a message), activate.
 * Missing: Canister upgrades.
-* Missing: User identity and accounts
-* Missing: Payment
-* Missing: Gas accounting
-* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests)
-* Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
+* Missing: User identity and accounts [MM]
+* Missing: Payment [MM]
+* Missing: Gas accounting [MM or Dom]
+* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests) [MM]
+* Missing: Time (idea: separate per-canister time, nondeterministic time step transition) [MM]
 * Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
-* Missing: Reads may specify a specific (future) state
+* Missing: Reads may specify a specific (future or past) state
 * Missing (optional): References in call arguments and responses? Which references are supported? Can we have `funcrefs`?
 * Missing (optional): Certified variables (globals pointing to memory? specially marked read-only methods?)
 * Missing (optional): Programmatic canister creation
