@@ -116,7 +116,7 @@ WebAssembly  _functions_ are exported by the WebAssembly module or provided by t
 
 In order to allow for a distributed implementation of the DFINITY Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
 
-The  guarantee we do give is that that function calls between two canisters are executed in order, so that a canister who cares about in-order delivery does not have to wait for the response before sending the next message.
+The  guarantee we do give is that function calls between two canisters are executed in order, so that a canister that requires in-order execution need not wait for the response from an earlier message to a canister before sending a later message to that same canister.
 
 More precisely:
 
@@ -152,7 +152,7 @@ Certain interactions change the state of the DFINITY Internet Computer. By the v
 
 When asking the system about the state or response of a request, the client uses a message id.
 
-NOTE: I expect that the message id will be calculated from on the message data, so there is no explicit `message_id` field below, but this is contested, and adding a `message_id` field will not fundamentally affect this design.
+NOTE: I expect that the message id will be calculated from the message data, so there is no explicit `message_id` field below, but this is contested, and adding a `message_id` field will not fundamentally affect this design.
 
 Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading message statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
@@ -169,9 +169,9 @@ If you then (very quickly) issue a read request to node B, it may be that B resp
 
 A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the client might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
 
-Both problems can be solved if read requests can specify a desired state that they should be queried again, either at-least-this (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
+Both problems can be solved if read requests can specify the desired state to query, either at-least-this-state (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
 
-NOTE: Even without this feature, applications can solve these problems: For the first problem, the query result could be such that the client can tell if the query has been received or not. For the second problem, if the reply is monotonous in some sense the client can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the client can get assurance in those events returned by many nodes).
+NOTE: Even without this feature, applications can work around these problems. For the first problem, the query result could be such that the client can tell if the query has been received or not. For the second problem, if replies are monotonic in some sense the client can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the client can get assurance in those events returned by many nodes).
 
 [#api-endpoints]
 ==== Endpoints
@@ -264,9 +264,9 @@ Reply fields::
 
 This will instantiate the canister module and invoke its `dfn_init` system method, as explained in Section “<<system-api-init>>“, passing the `arg`, if given, as the method argument.
 
-If the canister does not have a `dfn_init` system method, then it is an error to pass a `arg`. If no `arg` is given but a `dfn_init` system method is present, an argument of length 0 is assumed.
+If the canister does not have a `dfn_init` system method, then it is an error to pass an `arg`. If no `arg` is given but a `dfn_init` system method is present, an argument of length 0 is assumed.
 
-This is atomic: If the response to this message is a `reject`, then this message had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
+This is atomic: If the response to this message is a `reject`, then this message had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
 
 NOTE: This assumes that a canister module fits into a single message. If this assumption turns out to be false, we will provide a more elaborate multi-step interface for code installation. But even then, this simple, atomic way is worth keeping (less error conditions), so we are forward-compatible.
 
@@ -321,7 +321,7 @@ Message fields::
 Response fields::
 * `status`: one of `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the call reply, just as specified in <<api-update>>.
- * `error`: If the status is `rejected`, then this member contains the rejection object (e.g. error code or error message)
+* `error`: If the status is `rejected`, then this member contains the rejection object (e.g. error code or error message)
 
 [#canister-module-format]
 === Canister module format
@@ -353,7 +353,7 @@ NOTE: This document assumes that WebAssembly host references can be used (e.g. `
 
 ==== Interpretation of numbers
 
-WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless otherwise noted, whenever the the System API interprets them as numbers (e.g. memory offsets, array lengths), they are to be interpreted as unsigned, unless noted otherwise.
+WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory offsets, array lengths), they are to be interpreted as unsigned.
 
 ==== The API nonce
 
@@ -372,6 +372,8 @@ In the success callback for a further <<system-api-send,method call>>, the argum
 * `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
 +
 Size, in bytes, of the argument data.
++
+This traps if there is no argument data is available (e.g. in a reply callback).
 
 * `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
 +
@@ -383,9 +385,9 @@ In an error callback, no argument is available, but the error code can be querie
 
 ** `+msg.error_code : (api_nonce : anyref) -> i32+`
 +
-Returns the error code, if the the current function is invoked as an error callback.
+Returns the error code, if the current function is invoked as an error callback.
 +
-It returns the special “no error” code `0` if the it is _not_ invoked as an error callback; this allows canisters to use a single entry point for both the success and error callback, if they choose to do so.
+It returns the special “no error” code `0` if the callback is _not_ invoked as an error callback; this allows canisters to use a single entry point for both the success and error callback, if they choose to do so.
 
 Eventually, the canister will want to respond to the original call, either with success or by signaling an error:
 
@@ -407,13 +409,13 @@ This function can be called at most once (a second call will trap), and must be 
 +
 Replies to sender with the given error code. The error code must not be 0, otherwise this traps.
 +
-Possible reply data assembled using `+msg.append_reply_data` is discarded.
+Possible reply data assembled using `msg.append_reply_data` is discarded.
 
 If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `call.invoke`), are discarded.
 
 ==== System methods
 
-A canister may export a system methods. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `dfn_init`, not `dfn_msg init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
+A canister may export a system method. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `dfn_init`, not `dfn_msg init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
 
 [#system-api-init]
 ==== System method: dfn_init
@@ -496,7 +498,7 @@ This system call traps if `offset+len` exceeds the size of the WebAssembly memor
 +
 The system records the current function table entry at the index `fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `msg.arg_data_size`/`msg.arg_data_copy`.
 +
-There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_replay` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
+There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_reply` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
 * {blank}
 +
   call.on_reject : (
@@ -507,7 +509,7 @@ There must be exactly one invocation of `call.on_reply` for each `callref`. (Omi
 +
 The system records the current function table entry at the index `fun`. If the method call fails, the noted function is executed.
 +
-There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_replay` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
+There must be exactly one invocation of `call.on_reject` for each `callref`. (Omitting `call.on_reject` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
 
 * {blank}
 +
@@ -515,10 +517,12 @@ There must be exactly one invocation of `call.on_reply` for each `callref`. (Omi
 +
 Indicate that the call is ready to be performed. The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
 +
-After `call.perform`, the `callref` must not be used any more. Invoking any system function with with that callref will trap.
+After `call.perform`, the `callref` must not be used any more. Invoking any system function with that callref will trap.
 +
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
+NOTE: The `call.`-prefixed system functions do not require an 'api_nonce', only the construction of the `methref` passed to `call.create` does.
+This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
 [#system-api-rand]
 ==== Randomness
@@ -530,8 +534,6 @@ With every update method call or response, the system provides fresh unpredictab
 Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
 +
 During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this function. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
-
-
 
 [#public-spec]
 == Abstract public behavior
@@ -548,7 +550,7 @@ We specify the behavior of the system using pseudo-code.
 
 The manipulated values are primitive values (numbers, text, binary blobs), aggregate values (lists, unordered lists a.k.a. bags, partial maps, records with fixed fields, named constructors) and functions.
 
-We use an concatenation operator `·` with various types: To extend sets and maps, or to concatenate lists with lists or lists with elements.
+We use an concatenation operator `·` with various types: to extend sets and maps, or to concatenate lists with lists or lists with elements.
 
 The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`). Partial maps are written as  `Key ↦ Value` and the function type as `Argument -> Result`.
 
@@ -606,9 +608,10 @@ CanisterModule = {
 }
 ....
 
-Note that `WasmFunc` is an abstract notion of a WebAssembly-state-modifying-function, not merely a concrete function in a WebAssembly module. In particular, it hides the `onreply_env` bookkeeping that we have seen in Section <<system-api>> and can thus model a form of closure, which (currently) do not exist on the WebAssembly level.
+Note that `WasmFunc` is an abstract notion of a WebAssembly-state-modifying-function, not merely a concrete function in a WebAssembly module. In particular,
+it abstracts the bookkeeping of `fun` and `env` arguments to `call.onreply` and `call.onreject` that we encountered in Section <<system-api>>. `WasmFunc`s model a form of closure, which (currently) do not exist on the WebAssembly level.
 
-A the `Entropy` parameter of a `WasmFunc` is merely passed through to the canister, via the `msg.get_entropy` system call.
+The `Entropy` parameter of a `WasmFunc` is merely passed through to the canister, via the `msg.get_entropy` system call.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -719,7 +722,7 @@ if "" then
 endif
 ....
 
-Note that all gray states are _not_ represented in the system state, and are indistinguishable from “message does not exist”. In order to avoid replay-attacks, messages have a limited validity, and the last transition (forgetting the message)
+Note that all gray states are _not_ represented in the system state, and are indistinguishable from “message does not exist”. In order to avoid replay-attacks, messages have a limited validity, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
 
 The states `Accepted` and `Processing` are for internal bookkeeping, both are presented as “Accepted” to the user. The processing state may be skipped for certain messages.
 
@@ -738,7 +741,7 @@ APIReadMessage
   }
 ....
 
-A `ReadStatus` refers to a message by way of a _message id_, which is a hash of a message content:
+A `ReadStatus` refers to a message by way of a _message id_, which is a hash of the message content:
 ....
 MessageId = Blob
 message_id_of : APIMessage -> MessageId
@@ -781,6 +784,7 @@ using `()` to denote the empty map or bag.
 === State transitions
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
+
  * Asynchronous API messages that are submitted via `/api/v1/read`. These transitions describes checks that the message must pass to be accepted.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
  * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read message and the current system state.
@@ -833,10 +837,9 @@ S with
     PublicKey ∉ dom S.user_pubkeys
 ....
 
-
 ==== Canister registration
 
-Canister registration api message have the effect of allocating a fresh canister id:
+A Canister registration api message has the effect of allocating a fresh canister id:
 
 Conditions::
 ....
@@ -852,7 +855,7 @@ S with
 
 ==== Canister code installation
 
-Canister installation upload the initial canister module and turns an empty canister into a running canister. This involves invoking the `dfn_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Canister installation uploads the initial canister module and turns an empty canister into a running canister. This involves invoking the `dfn_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The value `R : i64` is cryptographically randomly chosen.
 
@@ -872,7 +875,7 @@ S with
 
 ===== Initiating canister calls
 
-A first step in processing a canister update calls is to create a `CallMessage` in the message queue.
+A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
 The `api_message` field of the `FromUser` caller establishes the connection to the api message. One could use the corresponding `message_id_of` for this purpose, but this formulation is more abstract.
 
@@ -941,7 +944,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
-    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Ok res
+    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
     (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
@@ -953,7 +956,7 @@ S with
       Younger_messages ·
       [ CallMessage {
           caller = FromCanister {
-            call_contexts = M.call_context;
+            call_context = M.call_context;
             callback = call.callback
           };
           callee = call.callee;
@@ -997,7 +1000,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
-    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Ok res
+    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
     S.call_contexts[M.call_context].replied = true
     res ≠ NoResponse
 ....
@@ -1126,22 +1129,22 @@ Read response::
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.new_calls ≠ ()` then a record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.new_calls ≠ ()` then a record with
 +
 ....
 {status: failed; error: "Query execution tried to send further messages "}
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = NoResponse` then a record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = NoResponse` then a record with
 +
 ....
 {status: failed; error: "Query execution did not issue a result" }
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reject errcode` then a record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = Reject errcode` then a record with
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Ok res` and `res.response = Reply R` then a record with
+* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = Reply R` then a record with
 +
 ....
 {status: success; result: <R> }
@@ -1211,14 +1214,14 @@ mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> 
       reply_params : { arg : "" };
       calls = ();
     }
-    func<es>(api_nonce)
-    if this trapped
-    then return Trap
-    else return (Return {
-      new_state = es.wasm_state;
-      new_calls = es.performed_calls;
-      response = es.response;
-    })
+    try
+      func<es>(api_nonce);
+      FuncResult.Return {
+        new_state = es.wasm_state;
+        new_calls = es.performed_calls;
+        response = es.response;
+      }
+    with Trap -> FuncResult.Trap
 ....
 The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a `WasmFunc`.
 
@@ -1235,7 +1238,7 @@ type anyref
   | CallRef Nat
 ....
 
-The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping is the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these references are not mixed up.
+The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping if the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
 
 ==== System imports
 
@@ -1244,15 +1247,15 @@ Upon _instantiation_ of the WebAssembly module, we can provide the following exe
 ....
 msg.arg_data_size<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if arg = NoArg then Trap
-  return |arg|
+  if es.params.arg = NoArg then Trap
+  return |es.params.arg|
 
 msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, length:i32, offset:i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if arg = NoArg then Trap
-  if offset+length > |arg| then Trap
-  if dst+length > |es.S.mem| then Trap
-  es.S.mem[dst..dst+length] := arg[offset..offset+length]
+  if es.params.arg = NoArg then Trap
+  if offset+length > |es.params.arg| then Trap
+  if dst+length > |es.wasm_state.mem| then Trap
+  es.wasm_state.mem[dst..dst+length] := es.params.arg[offset..offset+length]
 
 msg.error_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1261,8 +1264,8 @@ msg.error_code<es>(api_nonce : anyref) : i32 =
 msg.append_reply_data<es>(api_nonce : anyref, offset : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if offset+length > |es.S.mem| then Trap
-  es.reply_params.arg := es.reply_params.arg · es.S.mem[offset..offset+len];
+  if offset+length > |es.wasm_state.mem| then Trap
+  es.reply_params.arg := es.reply_params.arg · es.wasm_state.mem[offset..offset+len];
 
 msg.reply<es>(api_nonce : anyref) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1296,9 +1299,9 @@ method.public<es>(
 ) : ( anyref ) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef callee = canister_ref else Trap
-  if name_offset+name_len > |es.S.mem| then Trap
+  if name_offset+name_len > |es.wasm_state.mem| then Trap
 
-  return (MethodRef callee es.S.mem[name_offset..name_offset+name_len])
+  return (MethodRef callee es.wasm_state.mem[name_offset..name_offset+name_len])
 
 call.create<es>(
   method_ref   : anyref,
@@ -1323,30 +1326,30 @@ call.append_data<es>(callref : anyref, offset : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if offset+len > |es.S.mem| then Trap
+  if offset+len > |es.wasm_state.mem| then Trap
 
-  es.calls[callidx].arg := es.calls[callidx].arg · es.S.mem[offset..offset+len];
+  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.mem[offset..offset+len];
 
 call.on_reply<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if fun > |es.S.table| then Trap
-  if typeof(es.S.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if fun > |es.wasm_state.table| then Trap
+  if typeof(es.wasm_state.table[fun]) ≠ func (anyref, i32) -> () then Trap
   if es.calls[callidx].on_reply ≠ StillMissing then Trap
 
-  es.calls[callidx].on_reply := es.S.table[fun]
+  es.calls[callidx].on_reply := es.wasm_state.table[fun]
   es.calls[callidx].on_reply_env := env
 
 call.on_reject<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if fun > |es.S.table| then Trap
-  if typeof(es.S.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if fun > |es.wasm_state.table| then Trap
+  if typeof(es.wasm_state.table[fun]) ≠ func (anyref, i32) -> () then Trap
   if es.calls[callidx].on_reject ≠ StillMissing then Trap
 
-  es.calls[callidx].on_reject := es.S.table[fun]
+  es.calls[callidx].on_reject := es.wasm_state.table[fun]
   es.calls[callidx].on_reject_env := env
 
 call.perform<es>(callref : anyref) =
