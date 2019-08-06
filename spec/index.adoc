@@ -908,8 +908,8 @@ The position of the message in the queue is unchanged.
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
-    S.canisters[C.callee] ≠ EmptyCanister
-    F = S.canisters[C.callee].module.exports[M.method_name]
+    S.canisters[CM.callee] ≠ EmptyCanister
+    F = S.canisters[CM.callee].module.exports[CM.method_name]
     Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
@@ -920,13 +920,13 @@ S with
       FuncMessage {
         call_context = Ctxt_id;
         receiver = CM.callee;
-        func = F(CM.arg)
+        func = F (CM.arg)
         queue = CM.queue;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
-      canister = C.callee;
-      caller = C.caller;
+      canister = CM.callee;
+      caller = CM.caller;
       replied = false;
     }
 ....
@@ -945,7 +945,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
     M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
-    (res = NoResponse) or (S.call_contexts[M.call_context].replied = false)
+    (res.response = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
 ....
@@ -983,7 +983,7 @@ Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    S.canisters[C.callee] ≠ EmptyCanister
+    S.canisters[M.callee] ≠ EmptyCanister
     M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
@@ -999,7 +999,7 @@ Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    S.canisters[C.callee] ≠ EmptyCanister
+    S.canisters[M.callee] ≠ EmptyCanister
     M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
     S.call_contexts[M.call_context].replied = true
     res ≠ NoResponse
@@ -1040,7 +1040,7 @@ When an inter-canister call has been responded to, we can queue the call to the 
 Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
-    S.call_contexts[RM.call_contexts].origin =
+    S.call_contexts[RM.call_context].origin =
       FromCanister {
         call_context = Ctxt_id2
         callback = F
@@ -1053,6 +1053,7 @@ S with
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id2
+        receiver = S.call_contexts[RM.call_context].canister
         func = F (RM.response)
         queue = Unordered
       } ·
