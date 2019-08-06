@@ -286,6 +286,8 @@ Message fields::
 Reply fields::
 * `arg` (blob): The blob representing the data replied by the canister.
 
+This message type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
+
 NOTE: Other arguments besides data (e.g. payments) will be represented in further fields next to `arg`.
 
 [#api-status]
@@ -316,7 +318,7 @@ Endpoint:: `/api/v1/query`
 Message type:: `query`
 Message fields::
 * `canister_id`: The id of the canister to query.
-* `method_name`: Name of the canister method to call
+* `method_name`: Name of the canister query method to call
 * `arg` (blob): Argument to pass to the canister method
 Response fields::
 * `status`: one of `replied` or `rejected`
@@ -346,7 +348,9 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import functions listed below, at the type given below.
 * It may have a `(start)` function. (Note that all system calls will trap when called from `(start)`, as it cannot have a valid `api_nonce`.)
 * If it exports a function called `dfn_init`, it must have type `+(api_nonce : anyref) -> ()+`.
-* If it exports any functions called `dfn_msg <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports any functions called `dfn_update <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports any functions called `dfn_query <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* It may not export both `dfn_update <name>` and `dfn_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This may be allowed in the future.)
 
 NOTE: This document assumes that WebAssembly host references can be used (e.g. `anyref`). Until this is so, every `anyref` is replaced with an `i64` that should be treated as opaque by the WebAssembly code.
@@ -362,9 +366,9 @@ A design goal of the System API is that the canister can restrict which parts of
 [#system-api-messages]
 ==== Public methods
 
-To define a public method of name `name`, a WebAssembly module exports a function with name `dfn_msg <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_.
+To define a public method of name `name`, a WebAssembly module exports a function with name `dfn_update <name>` or `dfn_query <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query calls.
 
-NOTE: The space in `dfn_msg <name>` is intentional.
+NOTE: The space in `dfn_update <name>` resp. `dfn_query <name>` is intentional.
 
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API message to call a canister method>>) is copied into the canister on demand.
 In the success callback for a further <<system-api-send,method call>>, the argument refers to the response of that call; in error callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
@@ -415,7 +419,7 @@ If the execution of the function traps for any reason, then all changes to the W
 
 ==== System methods
 
-A canister may export a system method. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `dfn_init`, not `dfn_msg init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
+A canister may export a system method. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `dfn_init`, not `dfn_update init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
 
 [#system-api-init]
 ==== System method: dfn_init
@@ -443,7 +447,7 @@ Furthermore, a canister can learn about its own canister id:
 [#system-api-send]
 ==== Sending messages
 
-A canister can do further update calls to other canister. Performing a call is a multi-step process:
+During an update call, a canister can do further update calls to another canister. Performing a call is a multi-step process:
 
 1. A canister/method-name pair is turned into an opaque `methodref`.
 2. A new call can be created from such a `methodref`, represented by a `callref`.
@@ -533,7 +537,7 @@ With every update method call or response, the system provides fresh unpredictab
 +
 Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
 +
-During the execution of a read-only query, this function traps. It is up to the canister to know whether it might be currently processing an update call or query call before it should call this function. (A possible extension of this API could be the addition of a `msg.has_entropy` call to check if entropy is available.)
+During the execution of a query call, this function traps.
 
 [#public-spec]
 == Abstract public behavior
@@ -588,30 +592,35 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 +
 ....
 WasmState = (abstract)
-WasmFunc = (Entropy, CanId, WasmState) -> FuncResult
+
 Entropy = NoEntropy | FreshEntropy i64
-FuncResult = Trap | Return {
-  new_state : WasmState;
-  new_calls : List MethodCall;
-  response : NoResponse | Response;
-}
 Response = Reply Blob | Reject ErrCode;
 MethodCall = {
   callee : CanId;
   method_name: MethodName;
   arg: Blob;
-  callback: Response -> WasmFunc;
+  callback: Response -> UpdateFunc;
 }
+
+InitFunc = (Entropy, CanId, Blob) -> Trap | Return WasmState
+UpdateFunc = (Entropy, CanId, WasmState) -> Trap | Return {
+  new_state : WasmState;
+  new_calls : List MethodCall;
+  response : NoResponse | Response;
+}
+QueryFunc = (CanId, WasmState) -> Trap | Return Response
+
+
 CanisterModule = {
-  init : (Entropy, CanId, Blob) -> FuncResult;
-  exports : MethodName ↦ (Blob -> WasmFunc)
+  init : InitFunc
+  update_methods : MethodName ↦ (Blob -> UpdateFunc)
+  query_methods : MethodName ↦ (Blob -> QueryFunc)
 }
 ....
 
-Note that `WasmFunc` is an abstract notion of a WebAssembly-state-modifying-function, not merely a concrete function in a WebAssembly module. In particular,
-it abstracts the bookkeeping of `fun` and `env` arguments to `call.onreply` and `call.onreject` that we encountered in Section <<system-api>>. `WasmFunc`s model a form of closure, which (currently) do not exist on the WebAssembly level.
+This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
-The `Entropy` parameter of a `WasmFunc` is merely passed through to the canister, via the `msg.get_entropy` system call.
+Parameters like `Entropy` and `CanId` are merely passed through to the canister, via the `msg.get_entropy` and `canister.self` system calls.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -644,7 +653,7 @@ In this abstract description, call contexts are never garbage collected, even if
 
 Calls into and within the DFINITY Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
 
-NOTE: These messages are a different thing from the messages that occur in the RPC API; the latter are called API Messages
+NOTE: These messages are a different thing from the messages that occur in the RPC API; the latter are called API Messages in this document.
 
 Therefore, a message can have different shapes:
 ....
@@ -660,7 +669,7 @@ Message
   | FuncMessage {
       call_context : CallId;
       receiver : CanId;
-      func : WasmFunc;
+      func : UpdateFunc;
       queue : Queue;
     }
   | ResponseMessage {
@@ -670,6 +679,8 @@ Message
 ....
 
 The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and not otherwise interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
+
+Although the `func` field of `FuncMessage` has type `UpdateFunc`, it could also be a query call. We will see below that an `QueryFunc` can be modeled as an `UpdateFunc`.
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document chooses this approach for a simpler and more concise system state.
 
@@ -909,7 +920,10 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
-    F = S.canisters[CM.callee].module.exports[CM.method_name]
+    M = S.canisters[CM.callee].module
+    F = if M.method_name ∈ M.update_methods
+        then M.update_methods[CM.method_name]
+        else query_to_update_func (M.query_methods[CM.method_name])
     Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
@@ -930,6 +944,20 @@ S with
       replied = false;
     }
 ....
+
+The function `query_to_update_func` simply turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
+....
+query_to_update_func f =
+  λ blob → λ (entropy, self_id, wasm_state) →
+    match f(blob)(self_id, wasm_state) with
+      Trap → Trap
+      Return res → Return {
+        new_state = wasm_state;
+        new_calls = [];
+        response = res;
+      }
+....
+Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
 ==== Message execution (non-trapping)
 
@@ -1019,7 +1047,7 @@ Conditions::
     ∀ CallMessage msg ∈ S.messages. msg.call_context ≠ Ctxt_id
     ∀ ctxt_ids.
         (S.call_contexts[ctxt_ids].replied = false || S.response[ctxt_ids] exists)
-	==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
+        ==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -1115,37 +1143,27 @@ A record with
 
 ==== Read: query call
 
-Canister query calls are executed immediately. They are not provided randomness.
+Canister query calls can be executed directly.
 
 Read message:: CanisterQuery Q
 Conditions::
 ....
   S.canisters[Q.callee] ≠ EmptyCanister
   C = S.canisters[Q.callee]
-  F = C.module.exports[Q.method_name]
+  F = C.module.query_methods[Q.method_name]
 ....
 Read response::
-* If `F(NoEntropy, Q.callee, Q.arg) = Trap` then a record with
+* If `F(Q.callee, Q.arg) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.new_calls ≠ ()` then a record with
-+
-....
-{status: failed; error: "Query execution tried to send further messages "}
-....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = NoResponse` then a record with
-+
-....
-{status: failed; error: "Query execution did not issue a result" }
-....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = Reject errcode` then a record with
+* Else if `F(Q.callee, Q.arg) = Return (Reject error_code)` then
 +
 ....
 {status: failed; error: <toErrorMessage errcode> }
 ....
-* Else if `F(NoEntropy, Q.callee, Q.arg) = Return res` and `res.response = Reply R` then a record with
+* Else if `F(Q.callee, Q.arg) = Return (Reply R)` then
 +
 ....
 {status: success; result: <R> }
@@ -1194,39 +1212,107 @@ ExecutionState = {
   calls : List PartialCall;
   performed_calls : List Call
 }
+
 ....
+
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
+Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(api_nonce)` for the invocation of a WebAssembly function with type `+(api_nonce : anyref) -> ()+`).  The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a function.
 
-Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets. As syntactic convenience; `x.field := val` describes setting field `field` in the mutable reference `x`. An equivalent formulation using monadic functions in a state monad would be feasible.
+WARNING: It is nonsensical to pass to an execution function a `WasmState` that comes from a different WebAssembly module than one defining the function The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
 
-==== The concrete `WasmFunc`
+==== The concrete `CanisterModule`
 
-We can wrap such an execution function into an abstract `WasmFunc = (Randomness, CanId, WasmState) -> FuncResult`, e.g. for exports and callbacks, as follows:
+Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+
+* The `initial_wasm_state` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
+
+* For more convenience when creating a new `ExecutionState`, we define the following partial record:
++
 ....
-mkWasmFunc (params : Params, func : <ref ExecutionState>(api_nonce : anyref) -> ()) : WasmFunc =
-  λ (entropy, self_id, wasm_state) ->
-    let es = ref {
+empty_execution_state = {
+  wasm_state = (undefined);
+  api_nonce = (undefined);
+  self_id = (undefined);
+  params = (undefined);
+  entropy = (undefined);
+  response = NoResponse;
+  reply_params : { arg = "" };
+  calls : [];
+  performed_calls : [];
+}
+....
+
+
+* The `init` field of the `CanisterModule` is defined as follows:
++
+If the WebAssembly module does not export a function called under the name `dfn_init`, we have
++
+....
+init = λ (entropy, self_id, blob) →
+  if |blob| > 0
+  then Trap
+  else Return initial_wasm_state
+....
++
+Otherwise, if the WebAssembly module exports a function `f` under the name `dfn_init`, it is
++
+....
+init = λ (entropy, self_id, blob) →
+  let es = ref {empty_execution_state with
+      wasm_state = initial_wasm_state;
+      api_nonce = fresh_nonce();
+      self_id = self_id;
+      entropy = entropy;
+      params = { arg = blog; errcode = 0; }
+    }
+  try func<es>(es.api_nonce) with Trap then Trap
+  if es.performed_calls ≠ [] then Trap
+  if es.response ≠ NoResponse then Trap
+  Return es.wasm_state
+....
++
+This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap already when these system calls are invoked.
+
+* The partial map `update_methods` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_update <meth>`, and has value
++
+....
+update_methods[meth] = λ blob → λ (entropy, self_id, wasm_state) →
+  let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
       self_id = self_id;
       entropy = entropy;
-      params = params;
-      response = NoResponse;
-      reply_params : { arg : "" };
-      calls = ();
+      params = { arg = blog; errcode = 0; }
     }
-    try
-      func<es>(api_nonce);
-      FuncResult.Return {
-        new_state = es.wasm_state;
-        new_calls = es.performed_calls;
-        response = es.response;
-      }
-    with Trap -> FuncResult.Trap
+  try func<es>(es.api_nonce) with Trap then Trap
+  Return {
+    new_state = es.wasm_state;
+    new_calls = es.performed_calls;
+    response = es.response;
+  }
 ....
-The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a `WasmFunc`.
 
-WARNING: It is nonsensical to pass to a `WasmFunc` a `WasmState` that comes from a different WebAssembly module than the `func` passed to `mkWasmFunc`. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
+* The partial map `query_methods` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_query <meth>`, and has value
++
+....
+query_methods[meth] = λ blob → λ (self_id, wasm_state) →
+  let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      api_nonce = fresh_nonce();
+      self_id = self_id;
+      entropy = NoEntropy;
+      params = { arg = blog; errcode = 0; }
+    }
+  try func<es>(es.api_nonce) with Trap then Trap
+  if es.performed_calls ≠ () then Trap
+  if es.response = NoResponse then Trap
+  Return es.response;
+....
++
+This formulation checks afterwards that the system calls `call.perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
++
+By construction, the (possibly) modified `es.wasm_state` is discarded.
+
 
 ==== Host references
 
@@ -1368,14 +1454,14 @@ call.perform<es>(callref : anyref) =
       callee = pc.callee;
       method_name = pc.method_name;
       arg = pc.arg;
-      callback = λ response -> match response with
-        Reply blob -> mkWasmFunc
+      callback = λ response → match response with
+        Reply blob → mkWasmFunc
           ( { arg = blob; errcode = 0 }
-          , λ<es'>(api') -> pc.on_reply<es'>(api', pc.onreply_env)
+          , λ<es'>(api') → pc.on_reply<es'>(api', pc.onreply_env)
           )
-        Reject errcode -> mkWasmFunc
+        Reject errcode → mkWasmFunc
           ( { arg = NoArg; errcode = errcode }
-          , λ<es>(api') -> pc.on_reject<es'>(api, pc.onreject_env)
+          , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
 
@@ -1385,47 +1471,6 @@ msg.get_entropy<es>(api_nonce : anyref) : i64 =
   return x
 ....
 
-==== The concrete `CanisterModule`
-
-Finally we can specify the meaning of an abstract `CanisterModule`:
-
-* The `init` field of the `CanisterModule` is defined as follow:
-+
-If the WebAssembly module does not export a function called under the name `dfn_init`, it is
-+
-....
-λ (randomness, self_id, blob) ->
-  if |blob| > 0
-  then Trap
-  else Return {
-    new_state = wasm_state;
-    new_calls = ();
-    response = NoResponse
-  }
-....
-+
-Otherwise, if the WebAssembly module exports a function `f` under the name `dfn_init`, it is
-+
-....
-λ (randomness, self_id, blob) ->
-  let wasm_func = mkWasmFunc ({ arg = blob; errcode 0 }, f) in
-  match (wasm_func(randomness, self_id, wasm_state)) with
-    Return res
-      when res.new_calls = ()
-      and res.response = NoResponse
-      -> Return res
-    otherwise -> Trap
-....
-+
-where `wasm_state` is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
-+
-This checks afterwards that the system calls `msg.call` or `msg.reply` were not invoked; an implementation can of course trap already when these system calls have been invoked.
-
-* The partial map `exports` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_msg <meth>`, and has value
-+
-....
-λ blob -> mkWasmFunc ({ arg = blob; errcode 0 }, f)
-....
 
 == Discussion and comments
 
