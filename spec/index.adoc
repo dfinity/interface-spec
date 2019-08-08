@@ -33,14 +33,14 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Canisters need to _declare_ which calls are query calls (e.g. `msg_update <name>` vs. `msg_query <name>`)
 * Missing: Specifying when responses are deleted.
 * Missing: Listing well-known error codes.
-* Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
-* Wrong here: Canister installation: Likely multi-step: Register, upload canister module (possibly incremental if bigger than a message), activate.
+* Missing: Ingress messages signature and public key scheme
 * Missing: Canister upgrades.
 * Missing: User identity and accounts [MM]
 * Missing: Payment [MM]
 * Missing: Gas accounting [MM or Dom]
 * Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests) [MM]
 * Missing: Time (idea: separate per-canister time, nondeterministic time step transition) [MM]
+* Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
 * Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
 * Missing: Reads may specify a specific (future or past) state
 * Missing (optional): References in call arguments and responses? Which references are supported? Can we have `funcrefs`?
