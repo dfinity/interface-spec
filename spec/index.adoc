@@ -30,6 +30,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 
 * Canister IDs: Really just 64 bit numbers, and which textual format? [MM]
 * Missing: Methods without responses/fire-and-forget calls
+* To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API messages.
 * Missing: Canisters need to _declare_ which calls are query calls (e.g. `msg_update <name>` vs. `msg_query <name>`)
 * Missing: Specifying when responses are deleted.
 * Missing: Listing well-known error codes.
