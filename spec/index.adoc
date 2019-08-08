@@ -136,9 +136,9 @@ link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ t
 == Public Interfaces
 
 [#http-interface]
-=== RPC Interface
+=== Cloud API Interface
 
-You can interact with the DFINITY Computer using a RPC interface, exposing a small number of endpoints that take structured requests.
+You can interact with the DFINITY Computer using a RRPCPC interface, called the _Cloud API_, which exposes a small number of endpoints that take structured requests.
 
 ==== Submitting requests vs. reading
 
@@ -654,7 +654,7 @@ In this abstract description, call contexts are never garbage collected, even if
 
 Calls into and within the DFINITY Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
 
-NOTE: These messages are a different thing from the messages that occur in the RPC API; the latter are called API Messages in this document.
+NOTE: These messages are a different thing from the messages that occur in the Cloud API; the latter are called API Messages in this document.
 
 Therefore, a message can have different shapes:
 ....
