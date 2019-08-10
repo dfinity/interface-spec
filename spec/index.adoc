@@ -540,6 +540,21 @@ Get the random entropy provided with this call. This function is constant during
 +
 During the execution of a query call, this function traps.
 
+==== Debug output
+
+During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
+
+NOTE: This system call is intentionally not guarded by an `api_nonce`, so that one can do Printf-like debugging of code that otherwise is not allowed to issue system calls without having to refactor the code first.
+
+* `+debug.print : (offset : i32, len : i32) -> ()+`
++
+When executing in an environment that supports debugging, this copies out the data specified by `offset` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
++
+Semantically, this function is always a no-op, and never traps, even if the `offset+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
+
+NOTE: We may at some point require modules deployed to the real network to not even import this function.
+
+
 [#public-spec]
 == Abstract public behavior
 
@@ -1470,6 +1485,9 @@ msg.get_entropy<es>(api_nonce : anyref) : i64 =
   if api_nonce ≠ es.api_nonce then Trap
   let (FreshEntropy x) = es.entropy else Trap
   return x
+
+debug.print<es>(offset : i32, len : i32) =
+  return
 ....
 
 
