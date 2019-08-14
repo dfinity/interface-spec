@@ -138,7 +138,7 @@ link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ t
 [#http-interface]
 === Cloud API Interface
 
-You can interact with the DFINITY Computer using a RRPCPC interface, called the _Cloud API_, which exposes a small number of endpoints that take structured requests.
+You can interact with the DFINITY Computer using an RPC interface, called the _Cloud API_, which exposes a small number of endpoints that take structured requests.
 
 ==== Submitting requests vs. reading
 
