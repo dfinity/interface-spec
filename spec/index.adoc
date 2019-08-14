@@ -153,7 +153,7 @@ Certain interactions change the state of the DFINITY Internet Computer. By the v
 
 When asking the system about the state or response of a request, the client uses a message id.
 
-NOTE: I expect that the message id will be calculated from the message data, so there is no explicit `message_id` field below, but this is contested, and adding a `message_id` field will not fundamentally affect this design.
+NOTE: I expect that the message id will be calculated from the message data, so there is no explicit `message_id` returned from the node, but this is contested, and returning a `message_id` will not fundamentally affect this design.
 
 Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading message statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
