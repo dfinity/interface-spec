@@ -193,7 +193,7 @@ The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) 
 
 NOTE: For some reads (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
-NOTE: Some or all calls to `/api/v1/query` might have to be paid for using a micro payment scheme (e.g. state-channel). This would be specified here, as a mechanism that is abstract in the content of the read request.
+NOTE: Some or all calls to `/api/v1/read` might have to be paid for using a micro payment scheme (e.g. state-channel). This would be specified here, as a mechanism that is abstract in the content of the read request.
 
 [#api-cbor]
 ==== CBOR encoding of messages and responses
@@ -294,7 +294,7 @@ NOTE: Other arguments besides data (e.g. payments) will be represented in furthe
 [#api-status]
 ==== Message status
 
-Endpoint:: `/api/v1/query`
+Endpoint:: `/api/v1/read`
 Message type:: `message-status`
 Message fields::
 * `message_id`: The message id to check the status for.
@@ -315,7 +315,7 @@ NOTE: Request responses will not actually be kept around indefinitely, and event
 
 Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
-Endpoint:: `/api/v1/query`
+Endpoint:: `/api/v1/read`
 Message type:: `query`
 Message fields::
 * `canister_id`: The id of the canister to query.
