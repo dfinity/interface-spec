@@ -142,11 +142,11 @@ You can interact with the DFINITY Computer using an RPC interface, called the _C
 
 ==== Submitting requests vs. reading
 
-Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, fail to get the request on the way. This implies the following high-level workflow:
+Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
 1. A client submits a message via the `submit` RPC endpoint. No useful information is returned from the node (as it would not be trustworthy anyways).
 2. For a certain amount of time, the system behaves as if it does not know about the message.
-3. At some point, the system agrees to accept the message. From now on, the client can ask any node (of the right subnet) about the status of the message. The system is now in the process of processing the message.
+3. At some point, the system agrees to accept the message. From now on, the client can ask any node (of the right subnet) about the status of the message. The system is now processing the message.
 4. At some later point, the request is acted upon. For some messages this is atomically, for others this involves multiple internal steps.
 5. Eventually, a response (indicating success or failure, and possibly carrying data) will be produced, and can be retrieved from any node for a certain amount of time.
 6. At the end, the system forgets about the request and its response.
