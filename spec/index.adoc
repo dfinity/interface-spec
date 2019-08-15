@@ -1,4 +1,4 @@
-= The DFINITY Computer, public view
+= Public specification of the DFINITY Computer
 Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
@@ -152,8 +152,6 @@ Certain interactions change the state of the DFINITY Internet Computer. By the v
 
 When asking the system about the state or response of a request, the client uses a message id.
 
-NOTE: I expect that the message id will be calculated from the message data, so there is no explicit `message_id` returned from the node, but this is contested, and returning a `message_id` will not fundamentally affect this design.
-
 Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading message statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
 We use the term _message_ both for the asynchronous messages that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
@@ -218,18 +216,19 @@ As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating 
 
 While different types of messages have additional fields (listed below as “Message fields”), some fields are common among all messages:
 
-* `message-type` (string): One of the message types specified below.
+* `message_type` (string): One of the message types specified below.
 
 Furthermore, some fields are common among all _asynchronous_ messages, i.e. those submitted to `/api/v1/submit`:
 
 * `expiry`: time(?) until the message must be executed or dropped #TODO: details#
-* `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct messages with otherwise identical fields. (Note: This is contested and may be augmented or replaced by a plain `message_id` field.)
+* `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct messages with otherwise identical fields.
 * `sender`: The id of the user issuing this message.
 * `sender_sig`: Signature authenticating the `sender`. This is a placeholder field to indicate that these messages are signed, but the precise signature scheme is not yet defined. Also see <<abstract-signature>>.
 
 NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various message types.
 
-NOTE: There is no `message_id` field. Instead, there is a procedure (to be specified) to calculate the `message_id` based on the content of the message fields. (This is contested, though.)
+NOTE: There is no `message_id` field. Instead, there is a procedure to calculate the `message_id` based on the content of the message fields, see <<api-message-id>>.
+
 
 [#api-register-user]
 ==== User registration
@@ -246,7 +245,6 @@ Reply fields::
 NOTE: Precise format and meaning of the public key field will be specified together with message signatures.
 
 NOTE: Lots of user management messages are still missing, of course, such as adding additional keys, removing keys etc.
-
 
 [#api-create-canister]
 ==== Canister registration
@@ -316,7 +314,7 @@ NOTE: Other arguments besides data (e.g. payments) will be represented in furthe
 Endpoint:: `/api/v1/read`
 Message type:: `message-status`
 Message fields::
-* `message_id`: The message id to check the status for.
+* `message_id` (blob): The message id to check the status for.
 Response fields::
 * `status`: one of `unknown`, `accepted`, `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the message-type specific reply object (see the specification for the individual message types for which fields exist).
@@ -363,6 +361,50 @@ Rejection codes are member of the following enumeration:
 The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=1` etc.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
+
+[#api-message-id]
+==== Message ids
+
+When querying the status of a message (see <<api-status>>), the user identifies the message using a _message id_. The message id is a simple “object hash” of the message, as described here. The hash operation is always SHA-256.
+
+1. For each field that is present in the message (i.e. omitted optional fields are indeed omitted), including `message_type`, hash the fields name (in ascii-encoding, without terminal `\0`) and the value (with the encoding specified below).
+2. Sort these by the hash of the field name.
+3. Concatenate these hashes, and hash the result
+
+The resulting hash is the id of the message.
+
+NOTE: The message id is independent of the representation of the message (JSON, CBOR, something else), and does not change if the specification adds further optional field to a message type.
+
+The following encodings of field values are used
+* String fields (`message_type`, `method_name`) are encoded in UTF-8, without a terminal `\0`.
+* Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
+* Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
+
+[TIP]
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
+[source,,options="nowrap"]
+----
+message_id_of({ message_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\0\253*"})
+ = H(concat (sort
+   [ H("message_type") · H("call")
+   , H("callee") · H("\0\0\0\0\0\0\4\210")
+   , H("method_name") · H("hello")
+   , H("arg") · H("DIDL\0\253*")
+   ]))
+ = H(concat (sort
+   [ 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf587edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
+   , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b62cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ffb05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
+   ]))
+ = H(concat
+   [ 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b62cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf587edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ffb05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
+   ])
+ = b2353e5f132031736451832d5a0c90a4360a0425889fcb55df7887002f9a7312
+----
 
 [#canister-module-format]
 === Canister module format
@@ -842,7 +884,7 @@ MessageId = Blob
 message_id_of : APIMessage -> MessageId
 ....
 
-The precise algorithm to calculate this message id is yet to be specified.
+The precise algorithm to calculate this message id is specified in <<api-message-id>>.
 
 [#abstract-signature]
 ==== Abstract signature scheme
@@ -1141,7 +1183,7 @@ S with messages = Older_messages · Younger_messages
 
 ==== Call context starvation
 
-If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the inital message handler trapped with an out-of-memory access).
+If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
 Conditions::
 ....
