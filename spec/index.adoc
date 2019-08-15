@@ -29,14 +29,14 @@ Please also skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3
 As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.  (Items marked [MM] are things Mack has committed to take a cut at clarifying functional requirements for by August 19.)
 
 * Canister IDs: Really just 64 bit numbers, and which textual format? [MM]
+* User IDs: Same question. Do these share the same namespace?
 * Missing: Methods without responses/fire-and-forget calls
 * To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API messages.
 * Missing: Canisters need to _declare_ which calls are query calls (e.g. `msg_update <name>` vs. `msg_query <name>`)
 * Missing: Specifying when responses are deleted.
 * Missing: Ingress messages signature and public key scheme
 * Missing: Canister upgrades.
-* Missing: User identity and accounts [MM]
-* Missing: Payment [MM]
+* Missing: Payment and accounts [MM]
 * Missing: Gas accounting [MM or Dom]
 * Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests) [MM]
 * Missing: Time (idea: separate per-canister time, nondeterministic time step transition) [MM]
@@ -46,7 +46,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing (optional): References in call arguments and responses? Which references are supported? Can we have `funcrefs`?
 * Missing (optional): Certified variables (globals pointing to memory? specially marked read-only methods?)
 * Missing (optional): Programmatic canister creation
-
+* Missing (optional): Incremental canister upload for big canister modules.
 
 == Introduction
 
@@ -224,18 +224,36 @@ Furthermore, some fields are common among all _asynchronous_ messages, i.e. thos
 
 * `expiry`: time(?) until the message must be executed or dropped #TODO: details#
 * `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct messages with otherwise identical fields. (Note: This is contested and may be augmented or replaced by a plain `message_id` field.)
-
-NOTE: Field for the signatures to authenticate users or payments will also be specified here.
+* `sender`: The id of the user issuing this message.
+* `sender_sig`: Signature authenticating the `sender`. This is a placeholder field to indicate that these messages are signed, but the precise signature scheme is not yet defined. Also see <<abstract-signature>>.
 
 NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various message types.
 
 NOTE: There is no `message_id` field. Instead, there is a procedure (to be specified) to calculate the `message_id` based on the content of the message fields. (This is contested, though.)
+
+[#api-register-user]
+==== User registration
+
+Users are registered via ingress messages. This will allocate a fresh user id, associate the provided public key with that user, and (not yet specified here) create an empty payment account.
+
+Endpoint:: `/api/v1/submit`
+Message type:: `create_user`
+Message fields::
+* `public_key`: The public key that may be used to authenticate the user.
+Reply fields::
+* `user_id`: The user id of the just registered user.
+
+NOTE: Precise format and meaning of the public key field will be specified together with message signatures.
+
+NOTE: Lots of user management messages are still missing, of course, such as adding additional keys, removing keys etc.
 
 
 [#api-create-canister]
 ==== Canister registration
 
 Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
+
+A canister has a list of _admin users_; initially, the user who has registered the canister is the only admin user.
 
 Endpoint:: `/api/v1/submit`
 Message type:: `create_canister`
@@ -246,7 +264,7 @@ Reply fields::
 
 Until code is installed, the canister behaves like one with no public methods.
 
-NOTE: The message may later contain specifications of particular features needed from the hosting subnet, an initial set of “admin users” etc.
+NOTE: This message may later contain specifications of particular features needed from the hosting subnet
 
 [#api-install-code]
 ==== Canister code installation
@@ -261,6 +279,8 @@ Message fields::
 * `arg` (optional, blob): Initialization arguments
 Reply fields::
 * None
+
+Only a user who is an _admin user_ for the canister can install code.
 
 This will instantiate the canister module and invoke its `dfn_init` system method, as explained in Section “<<system-api-init>>“, passing the `arg`, if given, as the method argument.
 
@@ -620,12 +640,15 @@ Of course, this is a huge simplification: The real DFINITY Internet Computer is 
 
 ==== Identifiers
 
-Canisters and requests are addressed simply by natural numbers; method names can be arbitrary pieces of text:
+Canisters and users are addressed simply by natural numbers; method names can be arbitrary pieces of text:
 ....
 CanId = Nat
-ReqId = Nat
+UserId = Nat
 MethodName = Text
 ....
+
+The system keeps `CanId` and `UserId` disjoint.
+
 
 [#abstract-canisters]
 ==== Abstract canisters
@@ -735,19 +758,33 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 We distinguish between the _asynchronous_ API messages passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API messages passed to `/api/v1/read`, which are only ephemeral.
 
+The `sender` field is always the id of the user who submits the message, and is authenticated (once we have defined signatures).
+
 ....
 APIMessage
   = RegisterCanister = {
     nonce : Blob;
+    sender : UserId;
+    sender_sig : Signature;
+  }
+  | RegisterUser = {
+    nonce : Blob;
+    sender : UserId;
+    sender_sig : Signature;
+    public_key : PublicKey;
   }
   | InstallCode = {
     nonce : Blob;
+    sender : UserId;
+    sender_sig : Signature;
     canister_id :  CanId;
     module : CanisterModule;
     arg : Blob;
   }
   | CanisterUpdateCall = {
     nonce : Blob;
+    sender : UserId;
+    sender_sig : Signature;
     callee : CanId;
     method_name : Text;
     arg : Blob;
@@ -807,6 +844,19 @@ message_id_of : APIMessage -> MessageId
 
 The precise algorithm to calculate this message id is yet to be specified.
 
+[#abstract-signature]
+==== Abstract signature scheme
+
+The precise signature scheme is not yet specified, but we can already abstractly describe how signing interacts with the system, which messages are signed, and where the signature is verified.
+
+To this end we assume abstract types for public keys (or hashes thereof), a function verifies the signature on an `APIMessage` and a function that extracts the public key from a signature:
+....
+Signature = Blob
+PublicKey = Blob
+verify_signature : APIMessage -> Signature -> Bool
+public_key_of_signature : Signature -> PublicKey
+....
+
 ==== The system state
 
 Finally, we can describe the state of the DFINITY Internet Computer as a record having the following fields:
@@ -814,14 +864,18 @@ Finally, we can describe the state of the DFINITY Internet Computer as a record 
 ....
 S = {
   api_messages : APIMessage ↦ APIMessageStatus ;
-  user_pubkeys : PublicKey ↦ UserId;
+  users : UserId ↦ UserData;
   canisters : CanId ↦ CanState;
+  admins : CanId ↦ Set UserId;
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
 }
 CanState = EmptyCanister | {
   wasm_state : WasmState;
   module : CanisterModule;
+}
+UserData = {
+  public_keys : Set PublicKey
 }
 ....
 
@@ -831,8 +885,9 @@ The initial state of the system is
 ....
 {
   api_messages = ();
-  user_pubkeys = ();
+  users = ();
   canisters = ();
+  admins = ();
   call_contexts = ();
   messages = ();
 }
@@ -853,46 +908,45 @@ The state transitions are not complete with regard to error handling. For exampl
 
 After a node accepts a message via `/api/v1/submit`, it gets added to the system in the `Accepted` state.
 
-At this step, yet to be defined early validation steps can happen.
+This may only happen if the following validation steps pass:
 
-Submitted message:: M
+ * The signature on the message is valid.
+ * The key used to sign the message is among the sending user’s public keys.
+
+More validation (e.g. authorization) steps may be added here.
+
+Submitted message:: `M`
+Conditions::
+....
+    verify_signature M M.sender_sig = true
+    public_key_of_signature M.sender_sig ∈ S.users[M.sender].public_keys
+....
 State after::
 ....
 S with
     api_messages[M] = Accepted
 ....
 
-NOTE: This is not instantaneous (the system takes some time to agree it accepts the message) nor guaranteed (a node could just drop the messages, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
+NOTE: This is not instantaneous (the system takes some time to agree it accepts the message) nor guaranteed (a node could just drop the message, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
 
+NOTE: Due this check, the `sender` field of any message in the system state is authenticated, so an implementation may actually drop the `sender_sig` field at this point.
 
-==== User public key registration
+==== User registration
 
-Procedures for user management, registration of public key, revocation, etc., is not yet defined. We model the registration of a user public key as a spontaneous state transition for now.
-
-Registering public key `PublicKey` to user identity `UserId`
+User registration api message have the effect of allocating a fresh user id:
 
 Conditions::
 ....
-    PublicKey ∉ dom S.user_pubkeys
+    S.api_messages[RegisterUser M] = Accepted
+    UserId ∉ (dom S.users ∪ dom S.canisters)
 ....
 State after::
 ....
 S with
-    user_pubkeys[PublicKey] = UserId
-....
-
-==== User public key deletion
-
-Deleting public key `PublicKey` associated with identity `UserId`
-
-Conditions::
-....
-    user_pubkeys[PublicKey] = UserId
-....
-State after::
-....
-S with
-    PublicKey ∉ dom S.user_pubkeys
+    api_messages[RegisterUser M] = Completed { result = { user_id = UserId } }
+    users[UserId] = {
+      public_keys = { M.public_key }
+    }
 ....
 
 ==== Canister registration
@@ -913,7 +967,7 @@ S with
 
 ==== Canister code installation
 
-Canister installation uploads the initial canister module and turns an empty canister into a running canister. This involves invoking the `dfn_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Only an admin of the given canister can install new code. This turns an empty canister into a running canister. This involves invoking the `dfn_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The value `R : i64` is cryptographically randomly chosen.
 
@@ -921,6 +975,7 @@ Conditions::
 ....
     S.api_messages[InstallCode M] = Accepted
     S.canisters[M.canister_id] = EmptyCanister
+    M.sender ∈ S.admins[M.canister_id]
     M.module.init (FreshEntropy R, M.arg) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
