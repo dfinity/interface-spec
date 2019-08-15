@@ -33,7 +33,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API messages.
 * Missing: Canisters need to _declare_ which calls are query calls (e.g. `msg_update <name>` vs. `msg_query <name>`)
 * Missing: Specifying when responses are deleted.
-* Missing: Listing well-known error codes.
 * Missing: Ingress messages signature and public key scheme
 * Missing: Canister upgrades.
 * Missing: User identity and accounts [MM]
@@ -301,7 +300,8 @@ Message fields::
 Response fields::
 * `status`: one of `unknown`, `accepted`, `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the message-type specific reply object (see the specification for the individual message types for which fields exist).
-* `error`: If the status is `rejected`, then this member contains the rejection object (e.g. error code or error message)
+* `reject_code` (natural number): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
+* `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 
 The status `accepted` is used for messages that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
 
@@ -324,7 +324,25 @@ Message fields::
 Response fields::
 * `status`: one of `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the call reply, just as specified in <<api-update>>.
-* `error`: If the status is `rejected`, then this member contains the rejection object (e.g. error code or error message)
+* `reject_code` (natural number): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
+* `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
+
+[#reject-codes]
+=== Reject codes
+
+An API message or inter-canister call that was accepted into the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
+
+Rejection codes are member of the following enumeration:
+
+* `SYS_FATAL`:  Fatal system error, retry unlikely to be useful.
+* `SYS_TRANSIENT`: Transient system error, retry might be possible.
+* `DESTINATION_INVALID`: Invalid destination (e.g. canister/account does not exist)
+* `CANISTER_REJECT`: Explicit reject by the canister.
+* `CANISTER_ERROR`: Canister error (e.g., trap, no response)
+
+The symbolic names of this enumeration is used throughout this specification, but on all interfaces (Cloud API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=1` etc.
+
+The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
 [#canister-module-format]
 === Canister module format
@@ -372,7 +390,7 @@ To define a public method of name `name`, a WebAssembly module exports a functio
 NOTE: The space in `dfn_update <name>` resp. `dfn_query <name>` is intentional.
 
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API message to call a canister method>>) is copied into the canister on demand.
-In the success callback for a further <<system-api-send,method call>>, the argument refers to the response of that call; in error callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
+In the reply callback for a further <<system-api-send,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
 * `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
 +
@@ -384,17 +402,27 @@ This traps if there is no argument data is available (e.g. in a reply callback).
 +
 Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
 +
-This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside an error callback (see below).
+This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
 
-In an error callback, no argument is available, but the error code can be queried:
+In a reject callback, no argument is available, but the reject code can be queried:
 
-** `+msg.error_code : (api_nonce : anyref) -> i32+`
+** `+msg.reject_code : (api_nonce : anyref) -> i32+`
 +
-Returns the error code, if the current function is invoked as an error callback.
+Returns the reject code, if the current function is invoked as a reject callback.
 +
-It returns the special “no error” code `0` if the callback is _not_ invoked as an error callback; this allows canisters to use a single entry point for both the success and error callback, if they choose to do so.
+It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
++
+** `+msg.reject_msg_len : (api_nonce : anyref) -> i32+`
++
+Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
+** `+msg.reject_msg_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
++
+Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
++
+This traps if `offset+length` is greater than the size of the reject message, or if `dst+length` exceeds the size of the Wasm memory, or if not called from inside a reject callback.
 
-Eventually, the canister will want to respond to the original call, either with success or by signaling an error:
+
+Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
 * `+msg.append_reply_data : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
 +
@@ -410,9 +438,11 @@ Replies to the sender with the data assembled using `msg.append_reply_data`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
-* `+msg.reject : (api_nonce : anyref, errcode : i32) -> ()+`
+* `+msg.reject : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
 +
-Replies to sender with the given error code. The error code must not be 0, otherwise this traps.
+Rejects the call. The data referred to by `offset`/`length` is used for the diagnostic message.
++
+This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `offset`/`length` is not valid UTF8.
 +
 Possible reply data assembled using `msg.append_reply_data` is discarded.
 
@@ -610,7 +640,8 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 WasmState = (abstract)
 
 Entropy = NoEntropy | FreshEntropy i64
-Response = Reply Blob | Reject ErrCode;
+RejectCode = Nat
+Response = Reply Blob | Reject (RejectCode, Text);
 MethodCall = {
   callee : CanId;
   method_name: MethodName;
@@ -728,7 +759,7 @@ The evolution of an `APIMessage` goes through these states:
 APIMessageStatus
   = Accepted
   | Processing
-  | Failed { message : Text }
+  | Failed (RejectCode, Text)
   | Completed { result : Value }
 ....
 
@@ -1055,7 +1086,7 @@ S with messages = Older_messages · Younger_messages
 
 ==== Call context starvation
 
-If there is no call, downstream calling context or response that could possibly fulfill a calling context, then an error message is synthesized.
+If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the inital message handler trapped with an out-of-memory access).
 
 Conditions::
 ....
@@ -1073,7 +1104,7 @@ S with
       S.messages ·
       ResponseMessage {
         call_context = Ctxt_id;
-        response = Reject starvation_error_code;
+        response = Reject (CANISTER_ERROR, "starvation");
       }
 ....
 
@@ -1120,8 +1151,8 @@ State after::
 S with
     messages = Older_messages · Younger_messages
     api_messages[M] =
-      | Completed { result = R }               if response = Reply R
-      | Failed { message = toErrorMessage E }  if response = Reject E
+      | Completed { result = R } if response = Reply R
+      | Failed R                 if response = Reject R
 ....
 
 ==== API Message expiry
@@ -1154,7 +1185,7 @@ Conditions::
 Read response::
 A record with
 * `{status: accepted}` if `MS = Accepted` or `MS = Processing`
-* `{status: failed; message: <msg>}` if `MS = Failed { message = msg }`
+* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Failed (code, msg)`
 * `{status: completed; result : <result>}` if `MS = Completed { result = result }`
 
 ==== Read: query call
@@ -1174,10 +1205,10 @@ Read response::
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Q.callee, Q.arg) = Return (Reject error_code)` then
+* Else if `F(Q.callee, Q.arg) = Return (Reject (code, msg))` then
 +
 ....
-{status: failed; error: <toErrorMessage errcode> }
+{status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
 * Else if `F(Q.callee, Q.arg) = Return (Reply R)` then
 +
@@ -1205,7 +1236,8 @@ We can model the execution of WebAssembly functions as stateful functions that h
 ....
 Params = {
   arg : NoArg | Blob;
-  errcode : Nat;
+  reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
+  reject_message : Text;
 }
 PartialCall = {
   callee : CanId;
@@ -1279,7 +1311,7 @@ init = λ (entropy, self_id, blob) →
       api_nonce = fresh_nonce();
       self_id = self_id;
       entropy = entropy;
-      params = { arg = blog; errcode = 0; }
+      params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1298,7 +1330,7 @@ update_methods[meth] = λ blob → λ (entropy, self_id, wasm_state) →
       api_nonce = fresh_nonce();
       self_id = self_id;
       entropy = entropy;
-      params = { arg = blog; errcode = 0; }
+      params = { arg = blog; reject_code = 0; reject_message = "" }
     }
   try func<es>(es.api_nonce) with Trap then Trap
   Return {
@@ -1317,7 +1349,7 @@ query_methods[meth] = λ blob → λ (self_id, wasm_state) →
       api_nonce = fresh_nonce();
       self_id = self_id;
       entropy = NoEntropy;
-      params = { arg = blog; errcode = 0; }
+      params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
   if es.performed_calls ≠ () then Trap
@@ -1360,9 +1392,21 @@ msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, length:i32, offset:i32) =
   if dst+length > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+length] := es.params.arg[offset..offset+length]
 
-msg.error_code<es>(api_nonce : anyref) : i32 =
+msg.reject_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  es.error_code
+  es.params.reject_code
+
+msg.reject_msg_len<es>(api_nonce : anyref) : i32 =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if es.reject_code = 0 then Trap
+  return |es.params.reject_msg|
+
+msg.reject_msg_copy<es>(api_nonce : anyref) : i32 =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if es.reject_code = 0 then Trap
+  if offset+length > |es.params.reject_msg| then Trap
+  if dst+length > |es.wasm_state.mem| then Trap
+  es.wasm_state.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
 
 msg.append_reply_data<es>(api_nonce : anyref, offset : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1375,11 +1419,11 @@ msg.reply<es>(api_nonce : anyref) =
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
-msg.reject<es>(api_nonce : anyref, errcode : i32) =
+msg.reject<es>(api_nonce : anyref, offset : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if errcode = 0 then Trap
-  es.response := Reject errcode
+  if offset+length > |es.wasm_state.mem| then Trap
+  es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[offset..ofset+len])
 
 canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1472,11 +1516,11 @@ call.perform<es>(callref : anyref) =
       arg = pc.arg;
       callback = λ response → match response with
         Reply blob → mkWasmFunc
-          ( { arg = blob; errcode = 0 }
+          ( { arg = blob; reject_code = 0 }
           , λ<es'>(api') → pc.on_reply<es'>(api', pc.onreply_env)
           )
-        Reject errcode → mkWasmFunc
-          ( { arg = NoArg; errcode = errcode }
+        Reject (reject_code, _message) → mkWasmFunc
+          ( { arg = NoArg; reject_code = reject_code }
           , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
