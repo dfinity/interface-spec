@@ -428,7 +428,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
 * If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import functions listed below, at the type given below.
-* It may have a `(start)` function. (Note that all system calls will trap when called from `(start)`, as it cannot have a valid `api_nonce`.)
+* It may have a `(start)` function. (Note that by construction, system calls that require a valid `api_nonce` will trap when called from `(start)`.)
 * If it exports a function called `dfn_init`, it must have type `+(api_nonce : anyref) -> ()+`.
 * If it exports any functions called `dfn_update <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
 * If it exports any functions called `dfn_query <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
@@ -633,7 +633,7 @@ Get the random entropy provided with this call. This function is constant during
 +
 During the execution of a query call, this function traps.
 
-==== Debug output
+==== Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
 
@@ -646,6 +646,14 @@ When executing in an environment that supports debugging, this copies out the da
 Semantically, this function is always a no-op, and never traps, even if the `offset+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
 
 NOTE: We may at some point require modules deployed to the real network to not even import this function.
+
+Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
+
+* `+debug.trap : (offset : i32, len : i32) -> ()+`
++
+This function always traps.
++
+The environment may copy out the data specified by `offset` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 
 
 [#public-spec]
@@ -1630,6 +1638,9 @@ msg.get_entropy<es>(api_nonce : anyref) : i64 =
 
 debug.print<es>(offset : i32, len : i32) =
   return
+
+debug.trap<es>(offset : i32, len : i32) =
+  Trap
 ....
 
 
