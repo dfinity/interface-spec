@@ -376,6 +376,7 @@ The resulting hash is the id of the message.
 NOTE: The message id is independent of the representation of the message (JSON, CBOR, something else), and does not change if the specification adds further optional field to a message type.
 
 The following encodings of field values are used
+
 * String fields (`message_type`, `method_name`) are encoded in UTF-8, without a terminal `\0`.
 * Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
 * Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
