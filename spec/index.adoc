@@ -358,7 +358,7 @@ Rejection codes are member of the following enumeration:
 * `CANISTER_REJECT`: Explicit reject by the canister.
 * `CANISTER_ERROR`: Canister error (e.g., trap, no response)
 
-The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=1` etc.
+The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=2` etc.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
