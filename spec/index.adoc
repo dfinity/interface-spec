@@ -487,7 +487,7 @@ This traps if `offset+length` is greater than the size of the reject message, or
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
-* `+msg.append_reply_data : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
+* `+msg.reply_data_append : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
 +
 Copies the data referred to by `offset`/`length` out of the canister and appends it to the (initially empty) data reply.
 +
@@ -497,7 +497,7 @@ This system call traps if `offset+len` exceeds the size of the WebAssembly memor
 
 * `+msg.reply : (api_nonce : anyref) -> ()+`
 +
-Replies to the sender with the data assembled using `msg.append_reply_data`.
+Replies to the sender with the data assembled using `msg.reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
@@ -507,7 +507,7 @@ Rejects the call. The data referred to by `offset`/`length` is used for the diag
 +
 This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `offset`/`length` is not valid UTF8.
 +
-Possible reply data assembled using `msg.append_reply_data` is discarded.
+Possible reply data assembled using `msg.reply_data_append` is discarded.
 
 If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `call.invoke`), are discarded.
 
@@ -520,7 +520,7 @@ A canister may export a system method. In contrast to public methods, system met
 
 If the canister exports a system method called `dfn_init`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the actor initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
 
-The following system calls will trap when called during the execution of `dfn_init`: `msg.reply`, `msg.append_reply_data`, `msg.reject`, `call.create`.
+The following system calls will trap when called during the execution of `dfn_init`: `msg.reply`, `msg.reply_data_append`, `msg.reject`, `call.create`.
 
 The system assumes the canister to be fully instantiated if the `dfn_init` method entry point returns.  If the `dfn_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
@@ -575,7 +575,7 @@ Returns the `callref` that can be filled further on.
 This system call traps if it is calling during the handling of a <<api-query,query call>>.
 * {blank}
 +
-  call.append_data : (
+  call.data_append : (
     callref  : anyref  // the call to extend
     offset   : i32,    // a pointer to and the length of the
     len      : i32,    //   argument to pass to the method
@@ -1514,7 +1514,7 @@ msg.reject_msg_copy<es>(api_nonce : anyref) : i32 =
   if dst+length > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
 
-msg.append_reply_data<es>(api_nonce : anyref, offset : i32, length : i32) =
+msg.reply_data_append<es>(api_nonce : anyref, offset : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if offset+length > |es.wasm_state.mem| then Trap
@@ -1575,7 +1575,7 @@ call.create<es>(
     }
   return callref
 
-call.append_data<es>(callref : anyref, offset : i32, len : i32) =
+call.data_append<es>(callref : anyref, offset : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
