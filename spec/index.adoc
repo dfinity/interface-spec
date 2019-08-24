@@ -627,7 +627,7 @@ This API design supports delegating the initialization of a given `callref` to l
 
 With every update method call or response, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value.
 
-* `+msg.get_entropy : (api_nonce : anyref) -> ( i64 )+`
+* `+msg.entropy : (api_nonce : anyref) -> ( i64 )+`
 +
 Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
 +
@@ -741,7 +741,7 @@ CanisterModule = {
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
-Parameters like `Entropy` and `CanId` are merely passed through to the canister, via the `msg.get_entropy` and `canister.self` system calls.
+Parameters like `Entropy` and `CanId` are merely passed through to the canister, via the `msg.entropy` and `canister.self` system calls.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -1631,7 +1631,7 @@ call.perform<es>(callref : anyref) =
           )
     }
 
-msg.get_entropy<es>(api_nonce : anyref) : i64 =
+msg.entropy<es>(api_nonce : anyref) : i64 =
   if api_nonce ≠ es.api_nonce then Trap
   let (FreshEntropy x) = es.entropy else Trap
   return x
