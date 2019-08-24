@@ -715,7 +715,7 @@ WasmState = (abstract)
 
 Entropy = NoEntropy | FreshEntropy i64
 RejectCode = Nat
-Response = Reply Blob | Reject (RejectCode, Text);
+Response = Reply Blob | Reject (RejectCode, Text)
 MethodCall = {
   callee : CanId;
   method_name: MethodName;
