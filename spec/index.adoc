@@ -518,7 +518,7 @@ A canister may export a system method. In contrast to public methods, system met
 [#system-api-init]
 ==== System method: dfn_init
 
-If the canister exports a system method called `dfn_init`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the actor initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
+If the canister exports a system method called `dfn_init`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the canister initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
 
 The following system calls will trap when called during the execution of `dfn_init`: `msg.reply`, `msg.reply_data_append`, `msg.reject`, `call.create`.
 
