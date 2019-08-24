@@ -641,7 +641,7 @@ NOTE: This system call is intentionally not guarded by an `api_nonce`, so that o
 
 * `+debug.print : (offset : i32, len : i32) -> ()+`
 +
-When executing in an environment that supports debugging, this copies out the data specified by `offset` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+When executing in an environment that supports debugging, this copies out the data specified by `offset` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 +
 Semantically, this function is always a no-op, and never traps, even if the `offset+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
 
@@ -653,7 +653,7 @@ Similarly, the system allows the canister to effectively trap, but give some ind
 +
 This function always traps.
 +
-The environment may copy out the data specified by `offset` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+The environment may copy out the data specified by `offset` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 
 
 [#public-spec]
