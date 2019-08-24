@@ -575,7 +575,7 @@ Returns the `callref` that can be filled further on.
 This system call traps if it is calling during the handling of a <<api-query,query call>>.
 * {blank}
 +
-  call.data_append : (
+  call.arg_data_append : (
     callref  : anyref  // the call to extend
     offset   : i32,    // a pointer to and the length of the
     len      : i32,    //   argument to pass to the method
@@ -1575,7 +1575,7 @@ call.create<es>(
     }
   return callref
 
-call.data_append<es>(callref : anyref, offset : i32, len : i32) =
+call.arg_data_append<es>(callref : anyref, offset : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
