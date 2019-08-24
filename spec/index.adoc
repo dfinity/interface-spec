@@ -541,7 +541,7 @@ Furthermore, a canister can learn about its own canister id:
 [#system-api-send]
 ==== Sending messages
 
-During an update call, a canister can do further update calls to another canister. Performing a call is a multi-step process:
+During an update call, a canister can do further calls to another canister. Performing a call is a multi-step process:
 
 1. A canister/method-name pair is turned into an opaque `methodref`.
 2. A new call can be created from such a `methodref`, represented by a `callref`.
