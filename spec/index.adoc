@@ -543,25 +543,25 @@ Furthermore, a canister can learn about its own canister id:
 
 During an update call, a canister can do further calls to another canister. Performing a call is a multi-step process:
 
-1. A canister/method-name pair is turned into an opaque `methodref`.
-2. A new call can be created from such a `methodref`, represented by a `callref`.
+1. A canister/method-name pair is turned into an opaque `methref`.
+2. A new call can be created from such a `methref`, represented by a `callref`.
 3. A number of functions can add arguments (data, payments, etc.) to the call.
 4. When everything is setup, the canister tells the system to perform the call.
 
-The `methodref` can be used multiple times, it just represents the canister/method-name pair.
+The `methref` can be used multiple times, it just represents the canister/method-name pair.
 
 The `callref` reference is only valid between `call.create` and `call.perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
 
-This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
+This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
 
 * {blank}
 +
-  method.public : (
+  meth.public : (
     api_nonce    : anyref,
     callee       : anyref, // a canister reference
     name_offset  : i32,    // a pointer to and the length of the
     name_len     : i32,    //   destination’s unmangled method name
-  ) -> ( methodref : anyref )
+  ) -> ( methref : anyref )
 +
 Creates a new `methref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
 
@@ -1470,7 +1470,7 @@ By construction, the (possibly) modified `es.wasm_state` is discarded.
 
 ==== Host references
 
-The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methodref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
+The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
 ....
 type anyref
   = APIRef (abstract)
@@ -1479,7 +1479,7 @@ type anyref
   | CallRef Nat
 ....
 
-The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping if the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
+The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methref`, trapping if the reference is not actually a `methref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
 
 ==== System imports
 
@@ -1544,7 +1544,7 @@ canister.self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   return (CanisterRef es.self_id)
 
-method.public<es>(
+meth.public<es>(
   api_nonce    : anyref,
   canister_ref : anyref,
   name_offset  : i32,
@@ -1557,9 +1557,9 @@ method.public<es>(
   return (MethodRef callee es.wasm_state.mem[name_offset..name_offset+name_len])
 
 call.create<es>(
-  method_ref   : anyref,
+  meth_ref   : anyref,
 ) : ( anyref ) =
-  let MethodRef callee method_name = method_ref else Trap
+  let MethodRef callee method_name = meth_ref else Trap
 
   callref := |es.calls|
   es.calls := es.calls ·
