@@ -1036,7 +1036,7 @@ S with
     canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
 ....
 
-===== Initiating canister calls
+==== Initiating canister calls
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
