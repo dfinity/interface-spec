@@ -3,7 +3,6 @@ Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
 :stem: latexmath
-:source-highlighter: pygments
 :icons: font
 
 == Preamble
