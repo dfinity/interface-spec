@@ -461,7 +461,7 @@ Size, in bytes, of the argument data.
 +
 This traps if there is no argument data is available (e.g. in a reply callback).
 
-* `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
+* `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
 +
@@ -478,7 +478,7 @@ It returns the special “no error” code `0` if the callback is _not_ invoked 
 ** `+msg.reject_msg_len : (api_nonce : anyref) -> i32+`
 +
 Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
-** `+msg.reject_msg_copy : (api_nonce : anyref, dst : i32, length : i32, offset : i32) -> ()+`
+** `+msg.reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
 +
@@ -1491,7 +1491,7 @@ msg.arg_data_size<es>(api_nonce : anyref) : i32 =
   if es.params.arg = NoArg then Trap
   return |es.params.arg|
 
-msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, length:i32, offset:i32) =
+msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.params.arg = NoArg then Trap
   if offset+length > |es.params.arg| then Trap
@@ -1507,7 +1507,7 @@ msg.reject_msg_len<es>(api_nonce : anyref) : i32 =
   if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
-msg.reject_msg_copy<es>(api_nonce : anyref) : i32 =
+msg.reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.reject_code = 0 then Trap
   if offset+length > |es.params.reject_msg| then Trap
