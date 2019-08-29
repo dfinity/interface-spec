@@ -348,7 +348,7 @@ Response fields::
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 
 [#reject-codes]
-=== Reject codes
+==== Reject codes
 
 An API request or inter-canister call that was accepted into the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
 
