@@ -543,31 +543,31 @@ Furthermore, a canister can learn about its own canister id:
 
 During an update call, a canister can do further calls to another canister. Performing a call is a multi-step process:
 
-1. A canister/method-name pair is turned into an opaque `methref`.
-2. A new call can be created from such a `methref`, represented by a `callref`.
+1. A canister/method-name pair is turned into an opaque `methodref`.
+2. A new call can be created from such a `methodref`, represented by a `callref`.
 3. A number of functions can add arguments (data, payments, etc.) to the call.
 4. When everything is setup, the canister tells the system to perform the call.
 
-The `methref` can be used multiple times, it just represents the canister/method-name pair.
+The `methodref` can be used multiple times, it just represents the canister/method-name pair.
 
 The `callref` reference is only valid between `call.create` and `call.perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
 
-This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
+This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
 
 * {blank}
 +
-  meth.public : (
+  method.public : (
     api_nonce : anyref,
     callee    : anyref, // a canister reference
     name_src  : i32,    // a pointer to and the length of the
     name_len  : i32,    //   destination’s unmangled method name
-  ) -> ( methref : anyref )
+  ) -> ( methodref : anyref )
 +
-Creates a new `methref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
+Creates a new `methodref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
 
 * {blank}
 +
-  call.create : ( methref : anyref ) -> ( callref : anyref )
+  call.create : ( methodref : anyref ) -> ( callref : anyref )
 +
 Begins the assembly of a new call, to the given method.
 Returns the `callref` that can be filled further on.
@@ -619,7 +619,7 @@ After `call.perform`, the `callref` must not be used any more. Invoking any syst
 +
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
-NOTE: The `call.`-prefixed system functions do not require an 'api_nonce', only the construction of the `methref` passed to `call.create` does.
+NOTE: The `call.`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `call.create` does.
 This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
 [#system-api-rand]
@@ -1427,10 +1427,10 @@ init = λ (entropy, self_id, blob) →
 +
 This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap already when these system calls are invoked.
 
-* The partial map `update_methods` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_update <meth>`, and has value
+* The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `dfn_update <method>`, and has value
 +
 ....
-update_methods[meth] = λ blob → λ (entropy, self_id, wasm_state) →
+update_methods[method] = λ blob → λ (entropy, self_id, wasm_state) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
@@ -1446,10 +1446,10 @@ update_methods[meth] = λ blob → λ (entropy, self_id, wasm_state) →
   }
 ....
 
-* The partial map `query_methods` of the `CanisterModule` is defined for all method names `meth` for which the WebAssembly program exports a function `f` named `dfn_query <meth>`, and has value
+* The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `dfn_query <method>`, and has value
 +
 ....
-query_methods[meth] = λ blob → λ (self_id, wasm_state) →
+query_methods[method] = λ blob → λ (self_id, wasm_state) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
@@ -1470,7 +1470,7 @@ By construction, the (possibly) modified `es.wasm_state` is discarded.
 
 ==== Host references
 
-The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
+The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methodref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
 ....
 type anyref
   = APIRef (abstract)
@@ -1479,7 +1479,7 @@ type anyref
   | CallRef Nat
 ....
 
-The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methref`, trapping if the reference is not actually a `methref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
+The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping if the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
 
 ==== System imports
 
@@ -1544,7 +1544,7 @@ canister.self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   return (CanisterRef es.self_id)
 
-meth.public<es>(
+method.public<es>(
   api_nonce    : anyref,
   canister_ref : anyref,
   name_src     : i32,
@@ -1557,9 +1557,9 @@ meth.public<es>(
   return (MethodRef callee es.wasm_state.mem[name_src..name_src+name_len])
 
 call.create<es>(
-  meth_ref   : anyref,
+  method_ref   : anyref,
 ) : ( anyref ) =
-  let MethodRef callee method_name = meth_ref else Trap
+  let MethodRef callee method_name = method_ref else Trap
 
   callref := |es.calls|
   es.calls := es.calls ·
