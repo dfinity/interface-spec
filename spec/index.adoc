@@ -439,7 +439,7 @@ NOTE: This document assumes that WebAssembly host references can be used (e.g. `
 
 ==== Interpretation of numbers
 
-WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory offsets, array lengths), they are to be interpreted as unsigned.
+WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array lengths), they are to be interpreted as unsigned.
 
 ==== The API nonce
 
@@ -487,13 +487,13 @@ This traps if `offset+length` is greater than the size of the reject message, or
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
-* `+msg.reply_data_append : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
+* `+msg.reply_data_append : (api_nonce : anyref, src : i32, length : i32) -> ()+`
 +
-Copies the data referred to by `offset`/`length` out of the canister and appends it to the (initially empty) data reply.
+Copies the data referred to by `src`/`length` out of the canister and appends it to the (initially empty) data reply.
 +
 NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
+This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
 
 * `+msg.reply : (api_nonce : anyref) -> ()+`
 +
@@ -501,11 +501,11 @@ Replies to the sender with the data assembled using `msg.reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
-* `+msg.reject : (api_nonce : anyref, offset : i32, length : i32) -> ()+`
+* `+msg.reject : (api_nonce : anyref, src : i32, length : i32) -> ()+`
 +
-Rejects the call. The data referred to by `offset`/`length` is used for the diagnostic message.
+Rejects the call. The data referred to by `src`/`length` is used for the diagnostic message.
 +
-This system call traps if `offset+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `offset`/`length` is not valid UTF8.
+This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`length` is not valid UTF8.
 +
 Possible reply data assembled using `msg.reply_data_append` is discarded.
 
@@ -557,10 +557,10 @@ This design is extensible and forward compatible to new call destinations (e.g. 
 * {blank}
 +
   meth.public : (
-    api_nonce    : anyref,
-    callee       : anyref, // a canister reference
-    name_offset  : i32,    // a pointer to and the length of the
-    name_len     : i32,    //   destination’s unmangled method name
+    api_nonce : anyref,
+    callee    : anyref, // a canister reference
+    name_src  : i32,    // a pointer to and the length of the
+    name_len  : i32,    //   destination’s unmangled method name
   ) -> ( methref : anyref )
 +
 Creates a new `methref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
@@ -576,16 +576,16 @@ This system call traps if it is calling during the handling of a <<api-query,que
 * {blank}
 +
   call.arg_data_append : (
-    callref  : anyref  // the call to extend
-    offset   : i32,    // a pointer to and the length of the
-    len      : i32,    //   argument to pass to the method
+    callref : anyref  // the call to extend
+    src     : i32,    // a pointer to and the length of the
+    len     : i32,    //   argument to pass to the method
   ) -> ()
 +
-Copies the data referred to by `offset`/`len` out of the canister and appends it to the (initially empty) data argument of the call.
+Copies the data referred to by `src`/`len` out of the canister and appends it to the (initially empty) data argument of the call.
 +
 NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-This system call traps if `offset+len` exceeds the size of the WebAssembly memory.
+This system call traps if `src+len` exceeds the size of the WebAssembly memory.
 * {blank}
 +
   call.on_reply : (
@@ -639,21 +639,21 @@ During local development and execution on a local network, the canister needs a 
 
 NOTE: This system call is intentionally not guarded by an `api_nonce`, so that one can do Printf-like debugging of code that otherwise is not allowed to issue system calls without having to refactor the code first.
 
-* `+debug.print : (offset : i32, len : i32) -> ()+`
+* `+debug.print : (src : i32, len : i32) -> ()+`
 +
-When executing in an environment that supports debugging, this copies out the data specified by `offset` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+When executing in an environment that supports debugging, this copies out the data specified by `src` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 +
-Semantically, this function is always a no-op, and never traps, even if the `offset+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
+Semantically, this function is always a no-op, and never traps, even if the `src+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
 
 NOTE: We may at some point require modules deployed to the real network to not even import this function.
 
 Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
 
-* `+debug.trap : (offset : i32, len : i32) -> ()+`
+* `+debug.trap : (src : i32, len : i32) -> ()+`
 +
 This function always traps.
 +
-The environment may copy out the data specified by `offset` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+The environment may copy out the data specified by `src` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 
 
 [#public-spec]
@@ -1514,22 +1514,22 @@ msg.reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) : i
   if dst+length > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
 
-msg.reply_data_append<es>(api_nonce : anyref, offset : i32, length : i32) =
+msg.reply_data_append<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if offset+length > |es.wasm_state.mem| then Trap
-  es.reply_params.arg := es.reply_params.arg · es.wasm_state.mem[offset..offset+len];
+  if src+length > |es.wasm_state.mem| then Trap
+  es.reply_params.arg := es.reply_params.arg · es.wasm_state.mem[src..src+len];
 
 msg.reply<es>(api_nonce : anyref) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
-msg.reject<es>(api_nonce : anyref, offset : i32, length : i32) =
+msg.reject<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if offset+length > |es.wasm_state.mem| then Trap
-  es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[offset..ofset+len])
+  if src+length > |es.wasm_state.mem| then Trap
+  es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[src..src+len])
 
 canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1547,14 +1547,14 @@ canister.self<es>(api_nonce : anyref) : anyref =
 meth.public<es>(
   api_nonce    : anyref,
   canister_ref : anyref,
-  name_offset  : i32,
+  name_src     : i32,
   name_len     : i32,
 ) : ( anyref ) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef callee = canister_ref else Trap
-  if name_offset+name_len > |es.wasm_state.mem| then Trap
+  if name_src+name_len > |es.wasm_state.mem| then Trap
 
-  return (MethodRef callee es.wasm_state.mem[name_offset..name_offset+name_len])
+  return (MethodRef callee es.wasm_state.mem[name_src..name_src+name_len])
 
 call.create<es>(
   meth_ref   : anyref,
@@ -1575,13 +1575,13 @@ call.create<es>(
     }
   return callref
 
-call.arg_data_append<es>(callref : anyref, offset : i32, len : i32) =
+call.arg_data_append<es>(callref : anyref, src : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if offset+len > |es.wasm_state.mem| then Trap
+  if src+len > |es.wasm_state.mem| then Trap
 
-  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.mem[offset..offset+len];
+  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.mem[src..src+len];
 
 call.on_reply<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
@@ -1636,10 +1636,10 @@ msg.entropy<es>(api_nonce : anyref) : i64 =
   let (FreshEntropy x) = es.entropy else Trap
   return x
 
-debug.print<es>(offset : i32, len : i32) =
+debug.print<es>(src : i32, len : i32) =
   return
 
-debug.trap<es>(offset : i32, len : i32) =
+debug.trap<es>(src : i32, len : i32) =
   Trap
 ....
 
