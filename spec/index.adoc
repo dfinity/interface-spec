@@ -3,7 +3,6 @@ Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
 :stem: latexmath
-:source-highlighter: pygments
 :icons: font
 
 == Preamble
@@ -31,8 +30,7 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Canister IDs: Really just 64 bit numbers, and which textual format? [MM]
 * User IDs: Same question. Do these share the same namespace?
 * Missing: Methods without responses/fire-and-forget calls
-* To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API messages.
-* Missing: Canisters need to _declare_ which calls are query calls (e.g. `msg_update <name>` vs. `msg_query <name>`)
+* To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API requests.
 * Missing: Specifying when responses are deleted.
 * Missing: Ingress messages signature and public key scheme
 * Missing: Canister upgrades.
@@ -75,7 +73,6 @@ Once your application is running on DFINITY, it is a _canister_, and users can i
 The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of the canister.
 
 
-
 .A typical use of the DFINITY computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
 [plantuml]
 ....
@@ -106,9 +103,13 @@ Section “<<interfaces>>” describes these interfaces, together with a brief d
 
 To get some consistency in this document, we try to use the following terms around method calls and messaging:
 
-The public entry points of canisters are called _methods_. Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call. Calls can be _update calls_ (state mutation is preserved) or _query calls_ (state mutation is discarded).
+The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved) or _query methods_ (state mutation is discarded, no further calls can be made).
 
-These are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
+Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
+
+Inter-canister calls do not distinguish between update and query calls. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
+
+Internally, the calls are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
 
 WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
 
@@ -141,20 +142,68 @@ You can interact with the DFINITY Computer using an RPC interface, called the _H
 
 ==== Submitting requests vs. reading
 
+.The classification of requests, with example request types.
+[plantuml]
+....
+object "API Requests" as request
+
+together {
+object "Async" as async {
+{field} Endpoint: /submit
+{field} May change system state
+{field} Response via status polling
+}
+
+object "Sync" as sync {
+{field} Endpoint: /read
+{field} Cannot change state
+{field} Immediate response
+}
+}
+
+object "Certified" as certified {
+provided by the “system”
+}
+object "Uncertified" as uncertified {
+provided by the “node”
+}
+
+together {
+ object "Canister installation" as install
+ object "Canister update call" as call
+ object "Canister query call" as query
+ object "Read request status" as status
+ object "Read account balance" as balance
+}
+
+request <|-- async
+request <|-- sync
+sync <|-- certified
+sync <|-- uncertified
+
+async <|-- install
+async <|-- call
+
+uncertified <|-- query
+certified <|-- balance
+certified <|-- status
+....
+
+
 Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
-1. A client submits a message via the `submit` RPC endpoint. No useful information is returned from the node (as it would not be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the message.
-3. At some point, the system agrees to accept the message. From now on, the client can ask any node (of the right subnet) about the status of the message. The system is now processing the message.
-4. At some later point, the request is acted upon. For some messages this is atomically, for others this involves multiple internal steps.
+1. A client submits a request via the `submit` RPC endpoint. No useful information is returned from the node (as it would not be trustworthy anyways).
+2. For a certain amount of time, the system behaves as if it does not know about the request.
+3. At some point, the system agrees to accept the request. From now on, the client can ask any node (of the right subnet) about the status of the request. The system is now processing the request.
+4. At some later point, the request is acted upon. For some requests this is atomically, for others this involves multiple internal steps.
 5. Eventually, a response (indicating success or failure, and possibly carrying data) will be produced, and can be retrieved from any node for a certain amount of time.
 6. At the end, the system forgets about the request and its response.
 
-When asking the system about the state or response of a request, the client uses a message id.
+When asking the system about the state or response of a request, the client uses a request id.
 
-Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading message statuses, reading account balances). All these reads go through the `read` RPC endpoint.
+Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
-We use the term _message_ both for the asynchronous messages that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
+We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
 
 ==== Synchronicity across nodes
@@ -184,18 +233,18 @@ The following API endpoints are provided:
 
 NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
-For all endpoints, the client performs a POST HTTP request with `Content-type: application/cbor`. The body is an CBOR value containing the message resp. read request object.
+For all endpoints, the client performs a POST HTTP request with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) HTTP response without a body; the user uses a separate `message-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a CBOR value) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 500) may occur.
+The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) HTTP response without a body; the user uses a separate `request-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a CBOR value) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 500) may occur.
 
 NOTE: For some reads (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
 NOTE: Some or all calls to `/api/v1/read` might have to be paid for using a micro payment scheme (e.g. state-channel). This would be specified here, as a mechanism that is abstract in the content of the read request.
 
 [#api-cbor]
-==== CBOR encoding of messages and responses
+==== CBOR encoding of requests and responses
 
-Messages and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
+Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
 
 Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]),
 followed by a data item with major type 5 (“Map of pairs of data items”), followed by the the fields of the record. The keys are encoded with major type 3 (“Text string”). The values are one of these major types (with more to be added as needed):
@@ -212,39 +261,39 @@ As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating 
 
 
 [#api-common-fields]
-==== Common fields of messages
+==== Common fields of requests
 
-While different types of messages have additional fields (listed below as “Message fields”), some fields are common among all messages:
+While different types of requests have additional fields (listed below as “Request fields”), some fields are common among all requests:
 
-* `message_type` (string): One of the message types specified below.
+* `request_type` (string): One of the request types specified below.
 
-Furthermore, some fields are common among all _asynchronous_ messages, i.e. those submitted to `/api/v1/submit`:
+Furthermore, some fields are common among all _asynchronous_ requests, i.e. those submitted to `/api/v1/submit`:
 
-* `expiry`: time(?) until the message must be executed or dropped #TODO: details#
-* `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct messages with otherwise identical fields.
-* `sender`: The id of the user issuing this message.
-* `sender_sig`: Signature authenticating the `sender`. This is a placeholder field to indicate that these messages are signed, but the precise signature scheme is not yet defined. Also see <<abstract-signature>>.
+* `expiry`: time(?) until the request must be executed or dropped #TODO: details#
+* `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
+* `sender`: The id of the user issuing this request.
+* `sender_sig`: Signature authenticating the `sender`. This is a placeholder field to indicate that these requests are signed, but the precise signature scheme is not yet defined. Also see <<abstract-signature>>.
 
-NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various message types.
+NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various request types.
 
-NOTE: There is no `message_id` field. Instead, there is a procedure to calculate the `message_id` based on the content of the message fields, see <<api-message-id>>.
+NOTE: There is no `request_id` field. Instead, there is a procedure to calculate the `request_id` based on the content of the request fields, see <<api-request-id>>.
 
 
 [#api-register-user]
 ==== User registration
 
-Users are registered via ingress messages. This will allocate a fresh user id, associate the provided public key with that user, and (not yet specified here) create an empty payment account.
+Users are registered via a requests. This will allocate a fresh user id, associate the provided public key with that user, and (not yet specified here) create an empty payment account.
 
 Endpoint:: `/api/v1/submit`
-Message type:: `create_user`
-Message fields::
+Request type:: `create_user`
+Request fields::
 * `public_key`: The public key that may be used to authenticate the user.
 Reply fields::
 * `user_id`: The user id of the just registered user.
 
-NOTE: Precise format and meaning of the public key field will be specified together with message signatures.
+NOTE: Precise format and meaning of the public key field will be specified together with request signatures.
 
-NOTE: Lots of user management messages are still missing, of course, such as adding additional keys, removing keys etc.
+NOTE: Lots of user management requests are still missing, of course, such as adding additional keys, removing keys etc.
 
 [#api-create-canister]
 ==== Canister registration
@@ -254,15 +303,15 @@ Before deploying a canister, the administrator of the canister first has to regi
 A canister has a list of _admin users_; initially, the user who has registered the canister is the only admin user.
 
 Endpoint:: `/api/v1/submit`
-Message type:: `create_canister`
-Message fields::
+Request type:: `create_canister`
+Request fields::
 * None
 Reply fields::
 * `canister_id`: The canister id of the just created canister.
 
 Until code is installed, the canister behaves like one with no public methods.
 
-NOTE: This message may later contain specifications of particular features needed from the hosting subnet
+NOTE: This request may later contain specifications of particular features needed from the hosting subnet
 
 [#api-install-code]
 ==== Canister code installation
@@ -270,8 +319,8 @@ NOTE: This message may later contain specifications of particular features neede
 After an empty canister has been created via <<api-create-canister>>, the admin can install the first code:
 
 Endpoint:: `/api/v1/submit`
-Message type:: `install_code`
-Message fields::
+Request type:: `install_code`
+Request fields::
 * `canister_id`: The id of the canister to install code for.
 * `module` (blob): A <<canister-module-format,canister module>>
 * `arg` (optional, blob): Initialization arguments
@@ -284,48 +333,48 @@ This will instantiate the canister module and invoke its `dfn_init` system metho
 
 If the canister does not have a `dfn_init` system method, then it is an error to pass an `arg`. If no `arg` is given but a `dfn_init` system method is present, an argument of length 0 is assumed.
 
-This is atomic: If the response to this message is a `reject`, then this message had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
+This is atomic: If the response to this request is a `reject`, then this request had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
 
-NOTE: This assumes that a canister module fits into a single message. If this assumption turns out to be false, we will provide a more elaborate multi-step interface for code installation. But even then, this simple, atomic way is worth keeping (less error conditions), so we are forward-compatible.
+NOTE: This assumes that a canister module fits into a single request. If this assumption turns out to be false, we will provide a more elaborate multi-step interface for code installation. But even then, this simple, atomic way is worth keeping (less error conditions), so we are forward-compatible.
 
-NOTE: Upgrading (i.e. deploying code while preserving state) is a separate message type, not yet described here.
+NOTE: Upgrading (i.e. deploying code while preserving state) is a separate request type, not yet described here.
 
-NOTE: Undecided: Should this message also be used to re-install  canister code (i.e. replace the code _without_ preserving the state)? If so, should that intention be made explicit via some field `replace: true` or such?
+NOTE: Undecided: Should this request also be used to re-install  canister code (i.e. replace the code _without_ preserving the state)? If so, should that intention be made explicit via some field `replace: true` or such?
 
 [#api-update]
 ==== Canister update call
 
 Endpoint:: `/api/v1/submit`
-Message type:: `call`
-Message fields::
+Request type:: `call`
+Request fields::
 * `canister_id`: The id of the canister to call.
 * `method_name`: Name of the canister method to call
 * `arg` (blob): Argument to pass to the canister method
 Reply fields::
 * `arg` (blob): The blob representing the data replied by the canister.
 
-This message type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
+This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
 
 NOTE: Other arguments besides data (e.g. payments) will be represented in further fields next to `arg`.
 
 [#api-status]
-==== Message status
+==== Request status
 
 Endpoint:: `/api/v1/read`
-Message type:: `message-status`
-Message fields::
-* `message_id` (blob): The message id to check the status for.
+Request type:: `request-status`
+Request fields::
+* `request_id` (blob): The request id to check the status for.
 Response fields::
 * `status`: one of `unknown`, `accepted`, `replied` or `rejected`
-* `reply`: If the status is `replied`, then this member contains the message-type specific reply object (see the specification for the individual message types for which fields exist).
+* `reply`: If the status is `replied`, then this member contains the request-type specific reply object (see the specification for the individual request types for which fields exist).
 * `reject_code` (natural number): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 
-The status `accepted` is used for messages that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
+The status `accepted` is used for requests that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
 
-WARNING: Immediately after submitting a message, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the message.
+WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request.
 
-NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the message’s expiry time, so that replay attacks are prevented. The precise policy is not yet defined.
+NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented. The precise policy is not yet defined.
 
 
 [#api-query]
@@ -334,8 +383,8 @@ NOTE: Request responses will not actually be kept around indefinitely, and event
 Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
 Endpoint:: `/api/v1/read`
-Message type:: `query`
-Message fields::
+Request type:: `query`
+Request fields::
 * `canister_id`: The id of the canister to query.
 * `method_name`: Name of the canister query method to call
 * `arg` (blob): Argument to pass to the canister method
@@ -346,9 +395,9 @@ Response fields::
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 
 [#reject-codes]
-=== Reject codes
+==== Reject codes
 
-An API message or inter-canister call that was accepted into the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
+An API request or inter-canister call that was accepted into the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
 
 Rejection codes are member of the following enumeration:
 
@@ -362,22 +411,22 @@ The symbolic names of this enumeration is used throughout this specification, bu
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
-[#api-message-id]
-==== Message ids
+[#api-request-id]
+==== Requeste ids
 
-When querying the status of a message (see <<api-status>>), the user identifies the message using a _message id_. The message id is a simple “object hash” of the message, as described here. The hash operation is always SHA-256.
+When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request, as described here. The hash operation is always SHA-256.
 
-1. For each field that is present in the message (i.e. omitted optional fields are indeed omitted), including `message_type`, hash the fields name (in ascii-encoding, without terminal `\0`) and the value (with the encoding specified below).
+1. For each field that is present in the request (i.e. omitted optional fields are indeed omitted), including `request_type`, hash the fields name (in ascii-encoding, without terminal `\0`) and the value (with the encoding specified below).
 2. Sort these by the hash of the field name.
 3. Concatenate these hashes, and hash the result
 
-The resulting hash is the id of the message.
+The resulting hash is the id of the request.
 
-NOTE: The message id is independent of the representation of the message (JSON, CBOR, something else), and does not change if the specification adds further optional field to a message type.
+NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
 
 The following encodings of field values are used
 
-* String fields (`message_type`, `method_name`) are encoded in UTF-8, without a terminal `\0`.
+* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\0`.
 * Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
 * Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
 
@@ -385,9 +434,9 @@ The following encodings of field values are used
 Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
 [source,,options="nowrap"]
 ----
-message_id_of({ message_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\0\253*"})
+request_id_of({ request_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\0\253*"})
  = H(concat (sort
-   [ H("message_type") · H("call")
+   [ H("request_type") · H("call")
    , H("callee") · H("\0\0\0\0\0\0\4\210")
    , H("method_name") · H("hello")
    , H("arg") · H("DIDL\0\253*")
@@ -430,8 +479,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import functions listed below, at the type given below.
 * It may have a `(start)` function. (Note that by construction, system calls that require a valid `api_nonce` will trap when called from `(start)`.)
 * If it exports a function called `dfn_init`, it must have type `+(api_nonce : anyref) -> ()+`.
-* If it exports any functions called `dfn_update <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
-* If it exports any functions called `dfn_query <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports any functions called `dfn_update <name>` or `dfn_query <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
 * It may not export both `dfn_update <name>` and `dfn_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This may be allowed in the future.)
 
@@ -445,15 +493,15 @@ WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be
 
 A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all functions exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
 
-[#system-api-messages]
+[#system-api-requests]
 ==== Public methods
 
-To define a public method of name `name`, a WebAssembly module exports a function with name `dfn_update <name>` or `dfn_query <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query calls.
+To define a public method of name `name`, a WebAssembly module exports a function with name `dfn_update <name>` or `dfn_query <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
 
 NOTE: The space in `dfn_update <name>` resp. `dfn_query <name>` is intentional.
 
-The argument of the call (e.g. the content of the `arg` field in the <<api-update,API message to call a canister method>>) is copied into the canister on demand.
-In the reply callback for a further <<system-api-send,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
+The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand.
+In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
 * `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
 +
@@ -538,10 +586,10 @@ Furthermore, a canister can learn about its own canister id:
 
 * `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
 
-[#system-api-send]
-==== Sending messages
+[#system-api-call]
+==== Inter-canister method calls
 
-During an update call, a canister can do further calls to another canister. Performing a call is a multi-step process:
+When handling a call, a canister can do further calls to another canister. Performing a call is a multi-step process:
 
 1. A canister/method-name pair is turned into an opaque `methodref`.
 2. A new call can be created from such a `methodref`, represented by a `callref`.
@@ -553,6 +601,8 @@ The `methodref` can be used multiple times, it just represents the canister/meth
 The `callref` reference is only valid between `call.create` and `call.perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
 
 This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
+
+This API is _not_ available from the canister initialization function, nor from the handler of an _update_ method.
 
 * {blank}
 +
@@ -625,7 +675,7 @@ This API design supports delegating the initialization of a given `callref` to l
 [#system-api-rand]
 ==== Randomness
 
-With every update method call or response, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value.
+With every initialization function invocation, update method hanlder invocation and callback invocation, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value.
 
 * `+msg.entropy : (api_nonce : anyref) -> ( i64 )+`
 +
@@ -760,7 +810,7 @@ CallCtxt = {
 CallId = (abstract)
 CallOrigin
   = FromUser {
-      api_message : APIMessage;
+      request : Request;
     }
   | FromCanister {
       calling_context : CallId;
@@ -805,14 +855,14 @@ Although the `func` field of `FuncMessage` has type `UpdateFunc`, it could also 
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document chooses this approach for a simpler and more concise system state.
 
-==== API messages
+==== API requests
 
-We distinguish between the _asynchronous_ API messages passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API messages passed to `/api/v1/read`, which are only ephemeral.
+We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API requests passed to `/api/v1/read`, which are only ephemeral.
 
 The `sender` field is always the id of the user who submits the message, and is authenticated (once we have defined signatures).
 
 ....
-APIMessage
+Request
   = RegisterCanister = {
     nonce : Blob;
     sender : UserId;
@@ -842,9 +892,9 @@ APIMessage
   }
 ....
 
-The evolution of an `APIMessage` goes through these states:
+The evolution of an `Request` goes through these states:
 ....
-APIMessageStatus
+RequestStatus
   = Accepted
   | Processing
   | Failed (RejectCode, Text)
@@ -876,9 +926,9 @@ The states `Accepted` and `Processing` are for internal bookkeeping, both are pr
 These are the synchronous read messages:
 
 ....
-APIReadMessage
+APIReadRequest
   = ReadStatus = {
-    message_id : MessageId
+    request_id : Request
   }
   | CanisterQuery = {
     callee : CanId;
@@ -887,24 +937,24 @@ APIReadMessage
   }
 ....
 
-A `ReadStatus` refers to a message by way of a _message id_, which is a hash of the message content:
+A `ReadStatus` refers to a request by way of a _request id_, which is a hash of the request content:
 ....
-MessageId = Blob
-message_id_of : APIMessage -> MessageId
+Request = Blob
+request_id_of : Request -> Request
 ....
 
-The precise algorithm to calculate this message id is specified in <<api-message-id>>.
+The precise algorithm to calculate this request id is specified in <<api-request-id>>.
 
 [#abstract-signature]
 ==== Abstract signature scheme
 
-The precise signature scheme is not yet specified, but we can already abstractly describe how signing interacts with the system, which messages are signed, and where the signature is verified.
+The precise signature scheme is not yet specified, but we can already abstractly describe how signing interacts with the system, which requests are signed, and where the signature is verified.
 
-To this end we assume abstract types for public keys (or hashes thereof), a function verifies the signature on an `APIMessage` and a function that extracts the public key from a signature:
+To this end we assume abstract types for public keys (or hashes thereof), a function verifies the signature on an `Request` and a function that extracts the public key from a signature:
 ....
 Signature = Blob
 PublicKey = Blob
-verify_signature : APIMessage -> Signature -> Bool
+verify_signature : Request -> Signature -> Bool
 public_key_of_signature : Signature -> PublicKey
 ....
 
@@ -914,7 +964,7 @@ Finally, we can describe the state of the DFINITY Internet Computer as a record 
 
 ....
 S = {
-  api_messages : APIMessage ↦ APIMessageStatus ;
+  requests : Request ↦ RequestStatus ;
   users : UserId ↦ UserData;
   canisters : CanId ↦ CanState;
   admins : CanId ↦ Set UserId;
@@ -935,7 +985,7 @@ UserData = {
 The initial state of the system is
 ....
 {
-  api_messages = ();
+  requests = ();
   users = ();
   canisters = ();
   admins = ();
@@ -949,24 +999,24 @@ using `()` to denote the empty map or bag.
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API messages that are submitted via `/api/v1/read`. These transitions describes checks that the message must pass to be accepted.
+ * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be accepted.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
- * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read message and the current system state.
+ * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
-The state transitions are not complete with regard to error handling. For example, the behavior of sending a message to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
+The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
 
-==== API Message submission
+==== API Request submission
 
-After a node accepts a message via `/api/v1/submit`, it gets added to the system in the `Accepted` state.
+After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Accepted` state.
 
 This may only happen if the following validation steps pass:
 
- * The signature on the message is valid.
- * The key used to sign the message is among the sending user’s public keys.
+ * The signature on the request is valid.
+ * The key used to sign the request is among the sending user’s public keys.
 
 More validation (e.g. authorization) steps may be added here.
 
-Submitted message:: `M`
+Submitted request:: `M`
 Conditions::
 ....
     verify_signature M M.sender_sig = true
@@ -975,26 +1025,26 @@ Conditions::
 State after::
 ....
 S with
-    api_messages[M] = Accepted
+    requests[M] = Accepted
 ....
 
-NOTE: This is not instantaneous (the system takes some time to agree it accepts the message) nor guaranteed (a node could just drop the message, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
+NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
 
-NOTE: Due this check, the `sender` field of any message in the system state is authenticated, so an implementation may actually drop the `sender_sig` field at this point.
+NOTE: Due to this check, the `sender` field of any request in the system state is authenticated, so an implementation may actually drop the `sender_sig` field at this point.
 
 ==== User registration
 
-User registration api message have the effect of allocating a fresh user id:
+A user registration request has the effect of allocating a fresh user id:
 
 Conditions::
 ....
-    S.api_messages[RegisterUser M] = Accepted
+    S.requests[RegisterUser M] = Accepted
     UserId ∉ (dom S.users ∪ dom S.canisters)
 ....
 State after::
 ....
 S with
-    api_messages[RegisterUser M] = Completed { result = { user_id = UserId } }
+    requests[RegisterUser M] = Completed { result = { user_id = UserId } }
     users[UserId] = {
       public_keys = { M.public_key }
     }
@@ -1002,17 +1052,17 @@ S with
 
 ==== Canister registration
 
-A Canister registration api message has the effect of allocating a fresh canister id:
+A Canister registration request has the effect of allocating a fresh canister id:
 
 Conditions::
 ....
-    S.api_messages[RegisterCanister M] = Accepted
+    S.requests[RegisterCanister M] = Accepted
     CanId ∉ dom S.canisters
 ....
 State after::
 ....
 S with
-    api_messages[RegisterCanister M] = Completed { result = { canister_id = CanId } }
+    requests[RegisterCanister M] = Completed { result = { canister_id = CanId } }
     canisters[CanId] = EmptyCanister
 ....
 
@@ -1024,7 +1074,7 @@ The value `R : i64` is cryptographically randomly chosen.
 
 Conditions::
 ....
-    S.api_messages[InstallCode M] = Accepted
+    S.requests[InstallCode M] = Accepted
     S.canisters[M.canister_id] = EmptyCanister
     M.sender ∈ S.admins[M.canister_id]
     M.module.init (FreshEntropy R, M.arg) =
@@ -1033,29 +1083,29 @@ Conditions::
 State after::
 ....
 S with
-    api_messages[InstallCode M] = Completed { result = { } }
+    requests[InstallCode M] = Completed { result = { } }
     canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
 ....
 
-===== Initiating canister calls
+==== Initiating canister calls
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
-The `api_message` field of the `FromUser` caller establishes the connection to the api message. One could use the corresponding `message_id_of` for this purpose, but this formulation is more abstract.
+The `request` field of the `FromUser` caller establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.api_messages[CanisterUpdateCall M] = Accepted
+    S.requests[CanisterUpdateCall M] = Accepted
 ....
 State after::
 ....
 S with
-    api_messages[CanisterUpdateCall M] = Processing
+    requests[CanisterUpdateCall M] = Processing
     messages =
       CallMessage {
-        caller = FromUser { api_message = CanisterUpdateCall M };
+        caller = FromUser { request = CanisterUpdateCall M };
         callee = M.callee;
         method_name = M.method_name;
         arg = M.arg;
@@ -1242,37 +1292,37 @@ S with
 ....
 
 
-==== Respond to user message
+==== Respond to user request
 
 When an ingress method call has been responded to, we can record the response in the list of queries.
 
 Conditions::
 ....
-    S.api_messages[M] = Processing
+    S.requests[M] = Processing
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
-    S.call_contexts[RM.call_context].origin = FromUser { api_message = M }
+    S.call_contexts[RM.call_context].origin = FromUser { request = M }
 ....
 State after::
 ....
 S with
     messages = Older_messages · Younger_messages
-    api_messages[M] =
+    requests[M] =
       | Completed { result = R } if response = Reply R
       | Failed R                 if response = Reject R
 ....
 
-==== API Message expiry
+==== Request expiry
 
-At some point, a processed message can expire. Precise conditions are yet to be determined.
+At some point, a processed request can expire. Precise conditions are yet to be determined.
 
 Conditions::
 ....
-    (S.api_messages[M] = Completed _) or (S.api_messages[M] = Failed _)
+    (S.requests[M] = Completed _) or (S.requests[M] = Failed _)
 ....
 State after::
 ....
 S with
-    api_messages[M] = (deleted)
+    requests[M] = (deleted)
 ....
 
 
@@ -1282,11 +1332,11 @@ The user can query the status of a request. The type of `result`, given as `Valu
 
 NOTE: There is a phase where a request was issued by the client, but not accepted yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as accepted, as seen in the following rules.
 
-Read message:: ReadStatus { message_id = MI }
+Read request:: ReadStatus { request_id = MI }
 Conditions::
 ....
-   message_id_of(M) = MI
-   S.api_messages[M] = MS
+   request_id_of(M) = MI
+   S.requests[M] = MS
 ....
 Read response::
 A record with
@@ -1298,7 +1348,7 @@ A record with
 
 Canister query calls can be executed directly.
 
-Read message:: CanisterQuery Q
+Read request:: CanisterQuery Q
 Conditions::
 ....
   S.canisters[Q.callee] ≠ EmptyCanister
