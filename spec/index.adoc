@@ -73,7 +73,6 @@ Once your application is running on DFINITY, it is a _canister_, and users can i
 The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of the canister.
 
 
-
 .A typical use of the DFINITY computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
 [plantuml]
 ....
@@ -142,6 +141,54 @@ link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ t
 You can interact with the DFINITY Computer using an RPC interface, called the _HTTPS API_, which exposes a small number of endpoints that take structured requests.
 
 ==== Submitting requests vs. reading
+
+.The classification of requests, with example request types.
+[plantuml]
+....
+object "API Requests" as request
+
+together {
+object "Async" as async {
+{field} Endpoint: /submit
+{field} May change system state
+{field} Response via status polling
+}
+
+object "Sync" as sync {
+{field} Endpoint: /read
+{field} Cannot change state
+{field} Immediate response
+}
+}
+
+object "Certified" as certified {
+provided by the “system”
+}
+object "Uncertified" as uncertified {
+provided by the “node”
+}
+
+together {
+ object "Canister installation" as install
+ object "Canister update call" as call
+ object "Canister query call" as query
+ object "Read request status" as status
+ object "Read account balance" as balance
+}
+
+request <|-- async
+request <|-- sync
+sync <|-- certified
+sync <|-- uncertified
+
+async <|-- install
+async <|-- call
+
+uncertified <|-- query
+certified <|-- balance
+certified <|-- status
+....
+
 
 Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
