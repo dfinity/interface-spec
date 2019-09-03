@@ -1,0 +1,27 @@
+= Implementation status
+:stem: latexmath
+:icons: font
+
+This document is ahead (or behind, or different from) the implementation in various points. Since one goal of this document is to provide the _users_ of these interfaces (e.g. authors of programming language implementations, client libraries) everything they need to know, this section will tell them about all the ways implementation differs from the spec.
+
+By including this document in the repository of the code, users have an easy way of looking up the status quo, even if they have pinned the repository and out-of-band tracking (e.g. tickets) have moved on.
+
+This means:
+
+* Every semantically change to the spec should be accompanyied by a change to this file (preferrably in the same PR).
+* Similarly, every change to the implementation that affects the public interface should probably be reflected here – often simply by deleting a bullet point.
+
+The goal of this section is not to be unreasonably buerocratic; the goal is to be _useful_. Not every deviation of the spec might be worth mentioning here. For example: if the implementation is _more_ permissive than the spec in some way, then this may not have to be tracked here. Apply your own judgemnet.
+
+Nothing in this section indicated “approval” of sorts.
+
+Without further ado, here we go:
+
+== HTTP API
+
+* _help me_
+
+== System API
+
+* No inter-canister calls; the system calls `+method.*+` and `+call.*+` cannot even be imported.
+* No entropy; the system call `msg.entropy` cannot be imported.
