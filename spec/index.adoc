@@ -68,7 +68,7 @@ This implies that this document does not speak of the interface of the DFINITY I
 
 If you want to use the DFINITY Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the ActorScript language and the DFINITY SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
 
-Once your application is running on DFINITY, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to send _ingress method calls_ to the canister, which are eventually delivered to the canister, according to the <<system-api,System API>>.
+Once your application is running on DFINITY, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to send _ingress method calls_ to the canister according to the <<system-api,System API>>.
 
 The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of the canister.
 
@@ -109,7 +109,7 @@ Methods can be _called_, from _caller_ to _callee_, and will eventually incur a 
 
 Inter-canister calls do not distinguish between update and query calls. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
 
-Internally, the calls are implemented using _messages_ from a _sender_ to a _receiver_, messages do not have a response.
+Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
 WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
 
@@ -192,11 +192,11 @@ certified <|-- status
 
 Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
-1. A client submits a request via the `submit` RPC endpoint. No useful information is returned from the node (as it would not be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the request.
-3. At some point, the system agrees to accept the request. From now on, the client can ask any node (of the right subnet) about the status of the request. The system is now processing the request.
-4. At some later point, the request is acted upon. For some requests this is atomically, for others this involves multiple internal steps.
-5. Eventually, a response (indicating success or failure, and possibly carrying data) will be produced, and can be retrieved from any node for a certain amount of time.
+1. A client submits a request via the `submit` RPC endpoint (or multiple RPC endpoints). No useful information is returned from the node (as it would not be trustworthy anyways).
+2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
+3. At some point, the system may accept the request for processing (or it expires). From now on, the client can ask any RPC endpoint (for the canister) about the status of the pending request.
+4. At some later point, a pending request is acted upon. For some requests this is atomically, for others this involves multiple internal steps.
+5. Eventually, a response (indicating success or failure, and possibly carrying data) will be produced, and can be retrieved for a certain amount of time.
 6. At the end, the system forgets about the request and its response.
 
 When asking the system about the state or response of a request, the client uses a request id.
@@ -212,7 +212,7 @@ This documents describes the DFINITY Internet Computer as having a single global
 
 As long as you talk to one (honest) node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call to a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a query call to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
 
-If you then (very quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
+If you then (quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
 A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the client might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
 
@@ -233,9 +233,9 @@ The following API endpoints are provided:
 
 NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
-For all endpoints, the client performs a POST HTTP request with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
+For all endpoints, the client performs a POST HTTPS request with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-The `/api/v1/submit` endpoint returns, upon successful submission, a (code 200) HTTP response without a body; the user uses a separate `request-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a CBOR value) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 500) may occur.
+The `/api/v1/submit` endpoint returns, upon successful submission, a (code 202) HTTP response without a body; the user uses a separate `request-status` read (see <<api-status>>) to determine the response. In contrast, a successful read via `/api/v1/read` returns a response (a CBOR value) as the body of the (code 200) HTTP response. In both cases case, the usual HTTP errors (e.g. 503) may occur.
 
 NOTE: For some reads (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
@@ -365,14 +365,14 @@ Request type:: `request-status`
 Request fields::
 * `request_id` (blob): The request id to check the status for.
 Response fields::
-* `status`: one of `unknown`, `accepted`, `replied` or `rejected`
+* `status`: one of `unknown`, `pending`, `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the request-type specific reply object (see the specification for the individual request types for which fields exist).
 * `reject_code` (natural number): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 
-The status `accepted` is used for requests that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
+The status `pending` is used for requests that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
 
-WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request.
+WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request as pending.
 
 NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented. The precise policy is not yet defined.
 
@@ -397,7 +397,7 @@ Response fields::
 [#reject-codes]
 ==== Reject codes
 
-An API request or inter-canister call that was accepted into the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
+An API request or inter-canister call that is pending in the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
 
 Rejection codes are member of the following enumeration:
 
@@ -407,12 +407,14 @@ Rejection codes are member of the following enumeration:
 * `CANISTER_REJECT`: Explicit reject by the canister.
 * `CANISTER_ERROR`: Canister error (e.g., trap, no response)
 
+//Is expiry = rejection?
+
 The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=2` etc.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
 [#api-request-id]
-==== Requeste ids
+==== Request ids
 
 When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request, as described here. The hash operation is always SHA-256.
 
@@ -442,10 +444,10 @@ request_id_of({ request_type: "call", callee: 1234, method_name: "hello", arg: "
    , H("arg") · H("DIDL\0\253*")
    ]))
  = H(concat (sort
-   [ 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf587edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
-   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
-   , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b62cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ffb05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
+   [ 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf58 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2 · cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
+   , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · b05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
    ]))
  = H(concat
    [ 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b62cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
@@ -478,8 +480,8 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import functions listed below, at the type given below.
 * It may have a `(start)` function. (Note that by construction, system calls that require a valid `api_nonce` will trap when called from `(start)`.)
-* If it exports a function called `dfn_init`, it must have type `+(api_nonce : anyref) -> ()+`.
-* If it exports any functions called `dfn_update <name>` or `dfn_query <name>` for some `name`, it must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports a function called `dfn_init`, the function must have type `+(api_nonce : anyref) -> ()+`.
+* If it exports any functions called `dfn_update <name>` or `dfn_query <name>` for some `name`, the functions must have type `+(api_nonce : anyref) -> ()+`.
 * It may not export both `dfn_update <name>` and `dfn_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This may be allowed in the future.)
 
@@ -584,7 +586,8 @@ NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp
 
 Furthermore, a canister can learn about its own canister id:
 
-* `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
+ * `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
+
 
 [#system-api-call]
 ==== Inter-canister method calls
@@ -920,7 +923,7 @@ endif
 
 Note that all gray states are _not_ represented in the system state, and are indistinguishable from “message does not exist”. In order to avoid replay-attacks, messages have a limited validity, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
 
-The states `Accepted` and `Processing` are for internal bookkeeping, both are presented as “Accepted” to the user. The processing state may be skipped for certain messages.
+The states `Accepted` and `Processing` are for internal bookkeeping, both are presented as “Pending” to the user. The processing state may be skipped for certain messages.
 
 
 These are the synchronous read messages:
@@ -1330,7 +1333,7 @@ S with
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
 
-NOTE: There is a phase where a request was issued by the client, but not accepted yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as accepted, as seen in the following rules.
+NOTE: There is a phase where a request was issued by the client, but not accepted yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
 
 Read request:: ReadStatus { request_id = MI }
 Conditions::
@@ -1340,7 +1343,7 @@ Conditions::
 ....
 Read response::
 A record with
-* `{status: accepted}` if `MS = Accepted` or `MS = Processing`
+* `{status: pending}` if `MS = Accepted` or `MS = Processing`
 * `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Failed (code, msg)`
 * `{status: completed; result : <result>}` if `MS = Completed { result = result }`
 
