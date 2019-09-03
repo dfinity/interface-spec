@@ -272,11 +272,22 @@ Furthermore, some fields are common among all _asynchronous_ requests, i.e. thos
 * `expiry`: time(?) until the request must be executed or dropped #TODO: details#
 * `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
 * `sender`: The id of the user issuing this request.
-* `sender_sig`: Signature authenticating the `sender`. This is a placeholder field to indicate that these requests are signed, but the precise signature scheme is not yet defined. Also see <<abstract-signature>>.
+* `sender_pubkey` (blob): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_sig` (blob): Signature to authenticate this request, see <<request-signatures>>.
 
 NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various request types.
 
 NOTE: There is no `request_id` field. Instead, there is a procedure to calculate the `request_id` based on the content of the request fields, see <<api-request-id>>.
+
+[#request-signatures]
+==== Request signature scheme
+
+The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*].
+
+In particular:
+
+ * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of length 32.
+ * Request fields that indicate signatures (`sender_sig`) are binary blobs of length 64.
 
 
 [#api-register-user]
@@ -827,8 +838,6 @@ In this abstract description, call contexts are never garbage collected, even if
 
 Calls into and within the DFINITY Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
 
-NOTE: These messages are a different thing from the messages that occur in the HTTPS API; the latter are called API Messages in this document.
-
 Therefore, a message can have different shapes:
 ....
 Queue = Unordered | Queue { from : CanId; to : CanId }
@@ -869,17 +878,20 @@ Request
   = RegisterCanister = {
     nonce : Blob;
     sender : UserId;
+    sender_pubkey : PublicKey;
     sender_sig : Signature;
   }
   | RegisterUser = {
     nonce : Blob;
     sender : UserId;
+    sender_pubkey : PublicKey;
     sender_sig : Signature;
     public_key : PublicKey;
   }
   | InstallCode = {
     nonce : Blob;
     sender : UserId;
+    sender_pubkey : PublicKey;
     sender_sig : Signature;
     canister_id :  CanId;
     module : CanisterModule;
@@ -888,6 +900,7 @@ Request
   | CanisterUpdateCall = {
     nonce : Blob;
     sender : UserId;
+    sender_pubkey : PublicKey;
     sender_sig : Signature;
     callee : CanId;
     method_name : Text;
@@ -948,17 +961,12 @@ request_id_of : Request -> Request
 
 The precise algorithm to calculate this request id is specified in <<api-request-id>>.
 
-[#abstract-signature]
-==== Abstract signature scheme
 
-The precise signature scheme is not yet specified, but we can already abstractly describe how signing interacts with the system, which requests are signed, and where the signature is verified.
-
-To this end we assume abstract types for public keys (or hashes thereof), a function verifies the signature on an `Request` and a function that extracts the public key from a signature:
+For the signatures in an `Request`, we assume that the following function implements https://ed25519.cr.yp.to/index.html[*Ed25519*].
 ....
-Signature = Blob
 PublicKey = Blob
-verify_signature : Request -> Signature -> Bool
-public_key_of_signature : Signature -> PublicKey
+Signature = Blob
+verify_signature : PublicKey -> Signature -> Blob -> Bool
 ....
 
 ==== The system state
@@ -1022,8 +1030,8 @@ More validation (e.g. authorization) steps may be added here.
 Submitted request:: `M`
 Conditions::
 ....
+    M.sender_pubkey ∈ S.users[M.sender].public_keys
     verify_signature M M.sender_sig = true
-    public_key_of_signature M.sender_sig ∈ S.users[M.sender].public_keys
 ....
 State after::
 ....
