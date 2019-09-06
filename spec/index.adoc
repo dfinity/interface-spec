@@ -433,7 +433,7 @@ The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
 When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request, as described here. The hash operation is always SHA-256.
 
-1. For each field that is present in the request (i.e. omitted optional fields are indeed omitted), including `request_type`, hash the fields name (in ascii-encoding, without terminal `\0`) and the value (with the encoding specified below).
+1. For each field that is present in the request (i.e. omitted optional fields are indeed omitted), including `request_type`, hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
 2. Sort these by the hash of the field name.
 3. Concatenate these hashes, and hash the result
 
@@ -443,7 +443,7 @@ NOTE: The request id is independent of the representation of the request (JSON, 
 
 The following encodings of field values are used
 
-* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\0`.
+* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
 * Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
 * Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
 
@@ -451,26 +451,26 @@ The following encodings of field values are used
 Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
 [source,,options="nowrap"]
 ----
-request_id_of({ request_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\0\253*"})
+request_id_of({ request_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\x00\xFD*"})
  = H(concat (sort
    [ H("request_type") · H("call")
-   , H("callee") · H("\0\0\0\0\0\0\4\210")
+   , H("callee") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
    , H("method_name") · H("hello")
-   , H("arg") · H("DIDL\0\253*")
+   , H("arg") · H("DIDL\x00\xFD*")
    ]))
  = H(concat (sort
-   [ 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf58 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
-   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2 · cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
+   [ 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
    , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · b05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
    ]))
  = H(concat
-   [ 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b62cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-   , 9143ad758b2499f7f59b3e3cfb72b978d8fc13feda202c119ea9fcc2216bdf587edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
-   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2cd35fe4661e0a51e858e99c71a3822c5388dac7734317b20627976c52084cc96
-   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ffb05b171e1c7a6dc061b994a27cfc7c784946fcd5c115b972d95001e642aba99d
+   [ 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 92ca4c0ced628df1e7b9f336416ead190bd0348615b6f71a64b21d1b68d4e7e2 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
    ])
- = b2353e5f132031736451832d5a0c90a4360a0425889fcb55df7887002f9a7312
+ = 8ef075dddcd53a18bc40d6a1b6ef7b559cc7945e8c7f898c689635a32148c71c
 ----
 
 [#canister-module-format]
