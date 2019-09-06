@@ -241,6 +241,7 @@ NOTE: For some reads (but not all), the node will be able to _prove_ that the ov
 
 NOTE: Some or all calls to `/api/v1/read` might have to be paid for using a micro payment scheme (e.g. state-channel). This would be specified here, as a mechanism that is abstract in the content of the read request.
 
+// tag::cbor-encoding[]
 [#api-cbor]
 ==== CBOR encoding of requests and responses
 
@@ -278,6 +279,7 @@ Furthermore, some fields are common among all _asynchronous_ requests, i.e. thos
 NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various request types.
 
 NOTE: There is no `request_id` field. Instead, there is a procedure to calculate the `request_id` based on the content of the request fields, see <<api-request-id>>.
+// end::cbor-encoding[]
 
 [#request-signatures]
 ==== Request signature scheme
@@ -289,7 +291,7 @@ In particular:
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of length 32.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs of length 64.
 
-
+//tag::HTTPAPI-calls[]
 [#api-register-user]
 ==== User registration
 
@@ -404,6 +406,8 @@ Response fields::
 * `reply`: If the status is `replied`, then this member contains the call reply, just as specified in <<api-update>>.
 * `reject_code` (natural number): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
+//end::HTTPAPI-calls[]
+
 
 [#reject-codes]
 ==== Reject codes
