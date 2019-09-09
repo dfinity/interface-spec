@@ -336,7 +336,7 @@ Request type:: `install_code`
 Request fields::
 * `canister_id`: The id of the canister to install code for.
 * `module` (blob): A <<canister-module-format,canister module>>
-* `arg` (optional, blob): Initialization arguments
+* `arg` (blob): Initialization arguments
 Reply fields::
 * None
 
@@ -344,7 +344,7 @@ Only a user who is an _admin user_ for the canister can install code.
 
 This will instantiate the canister module and invoke its `canister_init` system method, as explained in Section “<<system-api-init>>“, passing the `arg`, if given, as the method argument.
 
-If the canister does not have a `canister_init` system method, then it is an error to pass an `arg`. If no `arg` is given but a `canister_init` system method is present, an argument of length 0 is assumed.
+If the canister does not have a `canister_init` system method, then the argument in `arg` is ignored.
 
 This is atomic: If the response to this request is a `reject`, then this request had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
 
@@ -583,7 +583,7 @@ A canister may export a system method. In contrast to public methods, system met
 [#system-api-init]
 ==== System method: canister_init
 
-If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. If an argument was passed along with the canister initialization (see <<api-install-code>>), it is passed as the argument, otherwise the argument is the empty blob.
+If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `msg.arg_data_size/copy`.
 
 The following system calls will trap when called during the execution of `canister_init`: `msg.reply`, `msg.reply_data_append`, `msg.reject`, `call.create`.
 
@@ -1466,13 +1466,11 @@ empty_execution_state = {
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
-If the WebAssembly module does not export a function called under the name `canister_init`, we have
+If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_state` is returned:
 +
 ....
 init = λ (entropy, self_id, blob) →
-  if |blob| > 0
-  then Trap
-  else Return initial_wasm_state
+  Return initial_wasm_state
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
