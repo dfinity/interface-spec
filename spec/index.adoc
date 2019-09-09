@@ -935,6 +935,8 @@ if "" then
   else
   --> "Failed"
   --> "Expired" #DDDDDD
+  "Accepted" --> "Completed"
+  "Accepted" --> "Failed"
 endif
 ....
 
