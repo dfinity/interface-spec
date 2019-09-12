@@ -408,7 +408,7 @@ Response fields::
 * `reject_message` (string): If the status is `rejected`, then this member contains a textual diagnostic message.
 //end::HTTPAPI-calls[]
 
-
+//tag::reject-codes[]
 [#reject-codes]
 ==== Reject codes
 
@@ -427,7 +427,9 @@ Rejection codes are member of the following enumeration:
 The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers, i.e.`SYS_FATAL=1`, `SYS_TRANSIENT=2` etc.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
+//end::reject-codes[]
 
+//tag::request-id[]
 [#api-request-id]
 ==== Request ids
 
@@ -446,6 +448,7 @@ The following encodings of field values are used
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
 * Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
 * Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
+//end::request-id[]
 
 [TIP]
 Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
