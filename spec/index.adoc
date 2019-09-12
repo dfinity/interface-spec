@@ -287,11 +287,13 @@ NOTE: There is no `request_id` field. Instead, there is a procedure to calculate
 
 When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request, as described here. The hash operation is always SHA-256.
 
-1. For each field that is present in the request (i.e. omitted optional fields are indeed omitted), including `request_type`, hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
-2. Sort these by the hash of the field name.
-3. Concatenate these hashes, and hash the result
+1. Remove the following fields that should not affect the request id (because they are calculated based on the request id): `sender_sig`.
+2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted), including `request_type`:
+   * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
+3. Sort these by the hash of the field name.
+4. Concatenate these hashes, and hash the result.
 
-The resulting hash is the id of the request.
+The resulting hash of 265bits (32 bytes) is the id of the request.
 
 NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
 
@@ -338,6 +340,8 @@ In particular:
 
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of length 32.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs of length 64.
+
+The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
 //tag::HTTPAPI-calls[]
 [#api-register-user]
@@ -1042,7 +1046,7 @@ Submitted request:: `M`
 Conditions::
 ....
     M.sender_pubkey ∈ S.users[M.sender].public_keys
-    verify_signature M M.sender_sig = true
+    verify_signature M.sender_pubkey M.sender_sig (request_id_of M) = true
 ....
 State after::
 ....
