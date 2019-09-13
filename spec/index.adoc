@@ -1,4 +1,4 @@
-= Public specification of the DFINITY Computer
+= Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
@@ -7,9 +7,9 @@ Joachim Breitner <joachim@dfinity.org>
 
 == Preamble
 
-This document is work in progress, initially authored by mailto:joachim@dfinity.org[Joachim]. The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of DFINITY in a hopefully concrete way. It could also be a document that we can publish to users of DFINITY.
+This document is work in progress, initially authored by mailto:joachim@dfinity.org[Joachim]. The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of the Internet Computer in a hopefully concrete way. It could also be a document that we can publish to users of the Internet Computer.
 
-Because of its focus on the externally visible behavior of DFINITY, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated.
+Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated.
 
 === Contact
 
@@ -17,7 +17,7 @@ It will be everyone’s shared responsibility to keep this document accurate, bu
 
 === Status
 
-We are figuring our the right structure and scope of the document itself, using just core functionality of DFINITY as the working example.
+We are figuring our the right structure and scope of the document itself, using just core functionality of the Internet Computer as the working example.
 
 The basic functionality of installing a canister and canister method calls, should already be rather precise. Beyond that, there are open questions and missing bits (see below). I need your help to correct these, and either adjust the content to reality, or at least to our actual plans.
 
@@ -48,52 +48,52 @@ As we are fleshing out this document, we get comments that we cannot immediately
 
 == Introduction
 
-Welcome to the DFINITY Internet Computer! We speak of “the” DFINITY Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the DFINITY computer to run their applications and those who use these applications.
+Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the Internet Computer to run their applications and those who use these applications.
 
 === Scope of this document
 
-This documents describes this external view of the DFINITY Internet Computer:
+This documents describes this external view of the Internet Computer:
 Which interfaces it provides to application developers and users, and what will happen when you use these interfaces.
 
-WARNING: While this document describes the public interface and behavior of the DFINITY Internet Computer, it is not the primary end-user documentation. DFINITY provides further tools, such as the ActorScript programming language, the IDL tooling and the SDK tools, to make programming and using the DFINITY Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
+WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the ActorScript programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
 
-If you think of the DFINITY Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of DFINITY, please consult the link:../index{outfilesuffix}[Component Interface Specifications].
+If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of the Internet Computer, please consult the link:../index{outfilesuffix}[Component Interface Specifications].
 
-This document tries to be implementation agnostic: If we decide to re-do the implementation of the DFINITY Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
+This document tries to be implementation agnostic: If we decide to re-do the implementation of the Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
 
-This implies that this document does not speak of the interface of the DFINITY Internet Computer towards its engineers and administrators, as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
+This implies that this document does not speak of the interface of the Internet Computer towards its engineers and administrators, as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
 
 
 === Overview of the Internet Computer
 
-If you want to use the DFINITY Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the ActorScript language and the DFINITY SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the ActorScript language and the SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
 
-Once your application is running on DFINITY, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to send _ingress method calls_ to the canister according to the <<system-api,System API>>.
+Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to send _ingress method calls_ to the canister according to the <<system-api,System API>>.
 
 The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of the canister.
 
 
-.A typical use of the DFINITY computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
+.A typical use of the Internet Computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
 [plantuml]
 ....
 actor Developer
 actor User
-participant DFINITY
+participant "Internet Computer" as IC
 participant "Canister 1" as Can1
-Developer -> DFINITY : /submit create canister
+Developer -> IC : /submit create canister
 create Can1
-DFINITY -> Can1 : create
-Developer <-- DFINITY : canister-id=1
-Developer -> DFINITY : /submit install module
-DFINITY -> Can1 : initialize
+IC -> Can1 : create
+Developer <-- IC : canister-id=1
+Developer -> IC : /submit install module
+IC -> Can1 : initialize
 |||
-User -> DFINITY : /submit call “hello”
-DFINITY -> Can1 : hello
+User -> IC : /submit call “hello”
+IC -> Can1 : hello
 return "Hello world!"
-User <-- DFINITY : "Hello World!"
+User <-- IC : "Hello World!"
 ....
 
-Section “<<interfaces>>” describes these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the DFINITY Internet Computer that describes its abstract behavior with high precision.
+Section “<<interfaces>>” describes these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with high precision.
 
 
 == About calls and messages
@@ -115,7 +115,7 @@ WebAssembly  _functions_ are exported by the WebAssembly module or provided by t
 
 === Ordering guarantees
 
-In order to allow for a distributed implementation of the DFINITY Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
+In order to allow for a distributed implementation of the Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
 
 The  guarantee we do give is that function calls between two canisters are executed in order, so that a canister that requires in-order execution need not wait for the response from an earlier message to a canister before sending a later message to that same canister.
 
@@ -138,7 +138,7 @@ link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ t
 [#http-interface]
 === HTTPS API Interface
 
-You can interact with the DFINITY Computer using an RPC interface, called the _HTTPS API_, which exposes a small number of endpoints that take structured requests.
+You can interact with the Internet Computer using an RPC interface, called the _HTTPS API_, which exposes a small number of endpoints that take structured requests.
 
 ==== Submitting requests vs. reading
 
@@ -190,7 +190,7 @@ certified <|-- status
 ....
 
 
-Certain interactions change the state of the DFINITY Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation of this interface, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
 1. A client submits a request via the `submit` RPC endpoint (or multiple RPC endpoints). No useful information is returned from the node (as it would not be trustworthy anyways).
 2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
@@ -208,7 +208,7 @@ We use the term _request_ both for the asynchronous requests that passed to `sub
 
 ==== Synchronicity across nodes
 
-This documents describes the DFINITY Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
+This documents describes the Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
 
 As long as you talk to one (honest) node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call to a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a query call to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
 
@@ -223,7 +223,7 @@ NOTE: Even without this feature, applications can work around these problems. Fo
 [#api-endpoints]
 ==== Endpoints
 
-This document does not yet explain how to find the location and port of a running DFINITY node, nor how to find out which node(s) to talk to for a given canister.
+This document does not yet explain how to find the location and port of a running Internet Computer Node, nor how to find out which node(s) to talk to for a given canister.
 
 The following API endpoints are provided:
 ....
@@ -492,7 +492,7 @@ WARNING: This is a scaffolding spec, close to the current implementation. It wil
 [#system-api]
 === Canister interface (System API)
 
-The System API is the interface between the running canister and the DFINITY Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
+The System API is the interface between the running canister and the Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
 
 [#system-api-module]
 ==== WebAssembly module requirements
@@ -736,9 +736,9 @@ The environment may copy out the data specified by `src` and `len`, and log, pri
 [#public-spec]
 == Abstract public behavior
 
-The sections above describe the interface, i.e. outer edges of the DFINITY Internet Computer, but gives only intuitive and rather vague information about what these interfaces actually do.
+The sections above describe the interface, i.e. outer edges of the Internet Computer, but gives only intuitive and rather vague information about what these interfaces actually do.
 
-This section aims to address that question with great precision, by describing the _abstract state_ of the whole DFINITY Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
+This section aims to address that question with great precision, by describing the _abstract state_ of the whole Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
 
 The design of this abstract specification (e.g. how and where pending messages are stored) are _not_ to be understood to in any way prescribe a concrete implementation or software architecture. The goals here are formal precision and clarity, but not implementability, so this can lead to different ways of phrasing.
 
@@ -762,9 +762,9 @@ For example, the condition `S.messages = Older_messages · M · Younger_messages
 
 === Abstract state
 
-In this specification, we describe the DFINITY Internet Computer as a state machine. In particular, there is a single piece of data that describes the complete state of the system (called `S` below).
+In this specification, we describe the Internet Computer as a state machine. In particular, there is a single piece of data that describes the complete state of the system (called `S` below).
 
-Of course, this is a huge simplification: The real DFINITY Internet Computer is distributed and has a multi-component architecture, and the state is spread over many different components, some physically separated. But this simplification allows us to have a concise description of the system, and to easily make global decisions (such as, “is there any pending message”), without having to specify the bookkeeping that allows such global decision.
+Of course, this is a huge simplification: The real Internet Computer is distributed and has a multi-component architecture, and the state is spread over many different components, some physically separated. But this simplification allows us to have a concise description of the system, and to easily make global decisions (such as, “is there any pending message”), without having to specify the bookkeeping that allows such global decision.
 
 ==== Identifiers
 
@@ -824,7 +824,7 @@ The concrete mapping of this abstract `CanisterModule` to actual WebAssembly con
 
 ==== Call contexts
 
-The DFINITY Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
+The Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
 
 To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `replied` field is set to `true` once the call has received a response, further attempts to send a response fail.
 
@@ -849,7 +849,7 @@ In this abstract description, call contexts are never garbage collected, even if
 
 ==== Calls and Messages
 
-Calls into and within the DFINITY Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
+Calls into and within the Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
 
 Therefore, a message can have different shapes:
 ....
@@ -986,7 +986,7 @@ verify_signature : PublicKey -> Signature -> Blob -> Bool
 
 ==== The system state
 
-Finally, we can describe the state of the DFINITY Internet Computer as a record having the following fields:
+Finally, we can describe the state of the Internet Computer as a record having the following fields:
 
 ....
 S = {
@@ -1402,7 +1402,7 @@ Read response::
 [#concrete-canisters]
 === Abstract Canisters to System API
 
-In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the DFINITY Internet Computer from WebAssembly details. In this section, we will fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
+In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the Internet Computer from WebAssembly details. In this section, we will fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
 
 ==== The concrete `WasmState`
 
