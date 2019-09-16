@@ -32,7 +32,6 @@ As we are fleshing out this document, we get comments that we cannot immediately
 * Missing: Methods without responses/fire-and-forget calls
 * To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API requests.
 * Missing: Specifying when responses are deleted.
-* Missing: Ingress messages signature and public key scheme
 * Missing: Canister upgrades.
 * Missing: Payment and accounts [MM]
 * Missing: Gas accounting [MM or Dom]
