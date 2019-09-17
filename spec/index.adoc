@@ -270,7 +270,7 @@ While different types of requests have additional fields (listed below as “Req
 Furthermore, some fields are common among all _asynchronous_ requests, i.e. those submitted to `/api/v1/submit`:
 
 * `expiry`: time(?) until the request must be executed or dropped #TODO: details#
-* `nonce` (optional): Arbitrary client-provided string, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
+* `nonce` (blob, optional): Arbitrary client-provided data, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
 * `sender`: The id of the user issuing this request.
 * `sender_pubkey` (blob): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
 * `sender_sig` (blob): Signature to authenticate this request, see <<request-signatures>>.
