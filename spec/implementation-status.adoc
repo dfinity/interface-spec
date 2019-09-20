@@ -22,6 +22,6 @@ Without further ado, here we go:
 * _help me_
 
 == System API
-
+* `+msg.reply+` and `+msg.reject+` are implemented but have signatures that differ from the spec.
 * No inter-canister calls; the system calls `+method.*+` and `+call.*+` cannot even be imported.
 * No entropy; the system call `msg.entropy` cannot be imported.
