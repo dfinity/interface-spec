@@ -25,7 +25,6 @@ Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen
 
 As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.  (Items marked [MM] are things Mack has committed to take a cut at clarifying functional requirements for by August 19.)
 
-* Canister IDs: Really just 64 bit numbers, and which textual format? [MM]
 * User IDs: Same question. Do these share the same namespace?
 * Missing: Methods without responses/fire-and-forget calls
 * To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API requests.
@@ -189,10 +188,12 @@ The fields are typed and can have one of these types:
 
 For readablity, we use the following type synonyms:
 ....
-type EntityId = u64
+type EntityId = blob
 type CanisterId = EntityId
 type UserId = EntityId
 ....
+
+NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure (e.g. “exactly 64 bits long”). But it is possible that any concrete choice will have to be revised or extended later. In order to not break existing code (especially existing canister), the interface uses arbitrary blobs here.
 
 === Common fields
 
@@ -345,15 +346,14 @@ NOTE: The request id is independent of the representation of the request (JSON, 
 The following encodings of field values are used
 
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Binary blobs (`arg`, `nonce`, `module`) are hashed as they are.
-* Canister IDs (`canister-id`, `callee`) are encoded as big endian 64 bit numbers.
+* Binary blobs (`canister-id`, `arg`, `nonce`, `module`) are hashed as they are.
 //end::request-id[]
 
 [TIP]
 Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
 [source,,options="nowrap"]
 ----
-request_id_of({ request_type: "call", callee: 1234, method_name: "hello", arg: "DIDL\x00\xFD*"})
+request_id_of({ request_type: "call", callee: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
  = H(concat (sort
    [ H("request_type") · H("call")
    , H("callee") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
@@ -618,14 +618,18 @@ The system assumes the canister to be fully instantiated if the `canister_init` 
 [#system-api-canister-id]
 === Resolving canister ids
 
-To future-proof the System API, references to canisters are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references and their transparent public id, as used by the HTTP interface.
+To future-proof the System API, references to canisters are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references (the `anyref`) and their transparent public id (the `blob`, represented by a pointer/length pair).
 
-* `+canister.lookup : (api_nonce : anyref, canister_id : i64) -> (canister_ref : anyref)+`
-* `+canister.id : (api_nonce : anyref, canister_ref : anyref) -> (canister_id : i64)+`
+* `+canister.id_valid : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> i32+`
+* `+canister.id_lookup : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> (canister_ref : anyref)+`
+* `+canister.id_len : (api_nonce : anyref, canister_ref : anyref) -> i32+`
+* `+canister.id_copy : (api_nonce : anyref, canister_ref : anyref, dst: i32) -> ()+`
 
-NOTE: These functions never trap, i.e. they always return a `canister_ref` (resp. a `canister_id`). In a future where not all canisters are publicly addressable by anyone, these conversion functions may become partial. Moreover, while they technically could, these functions do *not* check for the existence of the canister.
+The `canister.id_valid` function returns `1` if the canister id is syntactically valid (e.g.: exactly 8 bytes long if we are using 64 bit canister ids) and `0` otherwise. It does not check whether there exists a canister with that id (as that might not be locally possible)
 
-Furthermore, a canister can learn about its own canister id:
+The `canister.id_lookup` function traps if the the canister id is not valid. As usually, all these function trap if they would read or write canister memory out of bounds.
+
+Furthermore, a canister can learn about its own identity:
 
  * `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
 
@@ -785,14 +789,20 @@ Of course, this is a huge simplification: The real Internet Computer is distribu
 
 ==== Identifiers
 
-Canisters and users are addressed simply by natural numbers; method names can be arbitrary pieces of text:
+Canisters and users are (abstractly) simply blobs, even if the implementation uses only a subset of possible blobs (e.g. 64 bit numbers).
+Method names can be arbitrary pieces of text:
 ....
-CanId = Nat
-UserId = Nat
+CanId = Blob
+UserId = Blob
 MethodName = Text
 ....
 
 The system keeps `CanId` and `UserId` disjoint.
+
+Not all blobs are valid identifiers, but this specification is abstract in the precise form of syntactic validation. We merely assume a function that checks validity:
+....
+is_valid_id : Blob -> Bool
+....
 
 
 [#abstract-canisters]
@@ -1082,6 +1092,7 @@ A user registration request has the effect of allocating a fresh user id:
 Conditions::
 ....
     S.requests[RegisterUser M] = Accepted
+    is_valid_id UserId = true
     UserId ∉ (dom S.users ∪ dom S.canisters)
 ....
 State after::
@@ -1100,7 +1111,8 @@ A Canister registration request has the effect of allocating a fresh canister id
 Conditions::
 ....
     S.requests[RegisterCanister M] = Accepted
-    CanId ∉ dom S.canisters
+    is_valid_id CanId = true
+    CanId ∉ (dom S.users ∪ dom S.canisters)
 ....
 State after::
 ....
@@ -1622,14 +1634,32 @@ msg.reject<es>(api_nonce : anyref, src : i32, length : i32) =
   if src+length > |es.wasm_state.mem| then Trap
   es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[src..src+len])
 
-canister.lookup<es>(api_nonce : anyref, canister_id : i64) : anyref =
+canister.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
+  if src+len > |es.wasm_state.mem| then Trap
+
+  if is_valid_id(es.wasm_state.mem[src..src+len])
+  then return 1
+  then return 0
+
+canister.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if src+len > |es.wasm_state.mem| then Trap
+  canister_id = es.wasm_state.mem[src..src+len]
+  if not is_valid_id(canister_id) then Trap
+
   return (CanisterRef canister_id)
 
-canister.id<es>(api_nonce : anyref, canister_ref : anyref) : 64 =
+canister.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef canister_id = canister_ref else Trap
-  return canister_id
+  return |canister_id|
+
+canister.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  let CanisterRef canister_id = canister_ref else Trap
+  if dst+|canister_id| > |es.wasm_state.mem| then Trap
+  es.wasm_state.mem[dst..dst+|canister_id| := canister_id
 
 canister.self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
