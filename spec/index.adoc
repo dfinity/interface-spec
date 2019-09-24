@@ -1778,3 +1778,5 @@ It is open whether UserId's are deleted if they have no associated public keys. 
 As with keys, user ids and user accounts will also be subject to management. Their statuses can be: pre-activation, active, suspended, blacklisted, deleted. There may be usage constraints associated with them, and they may hold public information about a user, e.g., name.
 
 In the future we want explicit interfaces over which a user registers a public key and manage their accounts. One could imagine the user creating an ingress message with new public key, optional existing user id, registration evidence (e.g. signature by existing public key or evidence of PKI certificate), user info (e.g. name or KYC), and signature on everything. Similarly, we would need methods for other types of key management and user management.
+
+include::implementation-status.adoc[leveloffset=+1]
