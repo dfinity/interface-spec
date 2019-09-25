@@ -720,17 +720,6 @@ If a call is created, but not performed by the time the WebAssembly function end
 NOTE: The `call.`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `call.create` does.
 This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
-[#system-api-rand]
-=== Randomness
-
-With every initialization function invocation, update method hanlder invocation and callback invocation, the system provides fresh unpredictable entropy to the canister. This is cryptographically secure, i.e. neither the caller nor the callee could have had prior knowledge of the value.
-
-* `+msg.entropy : (api_nonce : anyref) -> ( i64 )+`
-+
-Get the random entropy provided with this call. This function is constant during the execution of a single WebAssembly function.
-+
-During the execution of a query call, this function traps.
-
 === Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
@@ -817,7 +806,6 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 ....
 WasmState = (abstract)
 
-Entropy = NoEntropy | FreshEntropy i64
 RejectCode = Nat
 Response = Reply Blob | Reject (RejectCode, Text)
 MethodCall = {
@@ -827,8 +815,8 @@ MethodCall = {
   callback: Response -> UpdateFunc;
 }
 
-InitFunc = (Entropy, CanId, Blob) -> Trap | Return WasmState
-UpdateFunc = (Entropy, CanId, WasmState) -> Trap | Return {
+InitFunc = (CanId, Blob) -> Trap | Return WasmState
+UpdateFunc = (CanId, WasmState) -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
   response : NoResponse | Response;
@@ -845,7 +833,7 @@ CanisterModule = {
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
-Parameters like `Entropy` and `CanId` are merely passed through to the canister, via the `msg.entropy` and `canister.self` system calls.
+Parameters like `CanId` are merely passed through to the canister, via the `canister.self` system calls.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -1125,14 +1113,12 @@ S with
 
 Only an admin of the given canister can install new code. This turns an empty canister into a running canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
-The value `R : i64` is cryptographically randomly chosen.
-
 Conditions::
 ....
     S.requests[InstallCode M] = Accepted
     S.canisters[M.canister_id] = EmptyCanister
     M.sender ∈ S.admins[M.canister_id]
-    M.module.init (FreshEntropy R, M.arg) =
+    M.module.init (M.arg) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
@@ -1206,7 +1192,7 @@ S with
 The function `query_to_update_func` simply turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
 ....
 query_to_update_func f =
-  λ blob → λ (entropy, self_id, wasm_state) →
+  λ blob → λ (self_id, wasm_state) →
     match f(blob)(self_id, wasm_state) with
       Trap → Trap
       Return res → Return {
@@ -1230,7 +1216,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
-    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
+    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Return res
     (res.response = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
@@ -1270,7 +1256,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[M.callee] ≠ EmptyCanister
-    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Trap
+    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
@@ -1286,7 +1272,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[M.callee] ≠ EmptyCanister
-    M.func(FreshEntropy R, M.receiver, S.canisters[M.receiver].wasm_state) = Return res
+    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Return res
     S.call_contexts[M.call_context].replied = true
     res ≠ NoResponse
 ....
@@ -1465,7 +1451,6 @@ ExecutionState = {
   api_nonce : (abstract)
   self_id : CanId;
   params : Params;
-  entropy : Entropy;
   response : NoResponse | Response;
   reply_params : { arg : Blob };
   calls : List PartialCall;
@@ -1493,7 +1478,6 @@ empty_execution_state = {
   api_nonce = (undefined);
   self_id = (undefined);
   params = (undefined);
-  entropy = (undefined);
   response = NoResponse;
   reply_params : { arg = "" };
   calls : [];
@@ -1507,19 +1491,18 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_state` is returned:
 +
 ....
-init = λ (entropy, self_id, blob) →
+init = λ (self_id, blob) →
   Return initial_wasm_state
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
 +
 ....
-init = λ (entropy, self_id, blob) →
+init = λ (self_id, blob) →
   let es = ref {empty_execution_state with
       wasm_state = initial_wasm_state;
       api_nonce = fresh_nonce();
       self_id = self_id;
-      entropy = entropy;
       params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1533,12 +1516,11 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ blob → λ (entropy, self_id, wasm_state) →
+update_methods[method] = λ blob → λ (self_id, wasm_state) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
       self_id = self_id;
-      entropy = entropy;
       params = { arg = blog; reject_code = 0; reject_message = "" }
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1557,7 +1539,6 @@ query_methods[method] = λ blob → λ (self_id, wasm_state) →
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
       self_id = self_id;
-      entropy = NoEntropy;
       params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1751,11 +1732,6 @@ call.perform<es>(callref : anyref) =
           , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
-
-msg.entropy<es>(api_nonce : anyref) : i64 =
-  if api_nonce ≠ es.api_nonce then Trap
-  let (FreshEntropy x) = es.entropy else Trap
-  return x
 
 debug.print<es>(src : i32, len : i32) =
   return
