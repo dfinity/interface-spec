@@ -717,6 +717,23 @@ After `ic.call_perform`, the `callref` must not be used any more. Invoking any s
 +
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
+* {blank}
++
+  ic.call_simple : (
+    api_nonce  : anyref,
+    callee     : anyref,
+    name_src   : i32,
+    name_len   : i32,
+    reply_fun  : i32,
+    reply_env  : i32,
+    reject_fun : i32,
+    reject_env : i32,
+    src        : i32,
+    len        : i32
+  ) -> ()
++
+Primariliy as a scaffolding mechanism, the combination of `ic.method_public`, `ic.call_create`, `ic.call_on_reply`, `ic.call_on_reject`, `ic.call_arg_data_append` and `ic.call_perform` can be performed using a single system function call.
+
 NOTE: The `ic.call_`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `ic.call_create` does.
 This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
@@ -1732,6 +1749,24 @@ ic.call_perform<es>(callref : anyref) =
           , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
           )
     }
+
+ic.call_simple<es>(
+    api_nonce  : anyref,
+    callee     : anyref,
+    name_src   : i32,
+    name_len   : i32,
+    reply_fun  : i32,
+    reply_env  : i32,
+    reject_fun : i32,
+    reject_env : i32,
+    src        : i32,
+    len        : i32)
+  methref := ic.method_public(api_nonce, callee, name_src, name_len)
+  callref := ic.call_create(methref)
+  ic.call_on_reply(callref, reply_fun, reply_env)
+  ic.call_on_reject(callref, reject_fun, reject_env)
+  ic.call_arg_data_append(callref, src, len)
+  ic.call_perform(callref)
 
 ic.debug_print<es>(src : i32, len : i32) =
   return
