@@ -24,6 +24,7 @@ Without further ado, here we go:
 * The handling of the `request-status` request type is not yet implemented.
 
 == System API
+* The `+ic.` prefix is not used yet.
 * `+msg.reply+` and `+msg.reject+` are implemented with different signatures (e.g. no reply data accumulation)
 * No inter-canister calls; the system calls `+method.*+` and `+call.*+` cannot even be imported.
 * `memory.grow` does not actually grow the memory
