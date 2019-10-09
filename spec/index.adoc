@@ -294,7 +294,7 @@ NOTE: Other arguments besides data (e.g. payments) will be represented in furthe
 ==== Request status
 
 Synchronicity:: synchronous
-Request type:: `request-status`
+Request type:: `request_status`
 Request fields::
 * `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
 Response fields::
@@ -346,7 +346,7 @@ NOTE: The request id is independent of the representation of the request (JSON, 
 The following encodings of field values are used
 
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Binary blobs (`canister-id`, `arg`, `nonce`, `module`) are hashed as they are.
+* Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as they are.
 //end::request-id[]
 
 [TIP]
@@ -434,7 +434,7 @@ NOTE: Should we add features that _change the state_ but are node-specific (e.g.
 
 For all endpoints, the client performs a POST HTTPS request with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body; the user can ues separate `request-status` requests (see <<api-status>>) to determine the response.
+* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body; the user can ues separate `request_status` requests (see <<api-status>>) to determine the response.
 * The `/api/v2/read` endpoint accepts the _synchronous__ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
 In both cases case, the usual HTTP errors (e.g. 503) may occur.
