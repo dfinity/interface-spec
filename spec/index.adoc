@@ -406,8 +406,8 @@ More precisely:
  * Method calls between any _two_ canisters are delivered in order, as if they
    were communicating over a single simple FIFO queue.
  * If a WebAssembly function, within a single invocation, makes multiple calls
-   to the same canister, they are queued in the order of invocations to `msg.call`.
- * Responses (including replies with `msg.reply`, explicit rejects with `msg.reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
+   to the same canister, they are queued in the order of invocations to `ic.call_perform`.
+ * Responses (including replies with `ic.msg_reply`, explicit rejects with `ic.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
  * There is no particular order guarantee for ingress messages submitted via
    the HTTP interface.
 
@@ -546,13 +546,13 @@ NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is int
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand.
 In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
-* `+msg.arg_data_size : (api_nonce : anyref) -> i32+`
+* `+ic.msg_arg_data_size : (api_nonce : anyref) -> i32+`
 +
 Size, in bytes, of the argument data.
 +
 This traps if there is no argument data is available (e.g. in a reply callback).
 
-* `+msg.arg_data_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
+* `+ic.msg_arg_data_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
 +
@@ -560,16 +560,16 @@ This traps if `offset+length` is greater than the size of the argument data, or 
 
 In a reject callback, no argument is available, but the reject code can be queried:
 
-** `+msg.reject_code : (api_nonce : anyref) -> i32+`
+** `+ic.msg_reject_code : (api_nonce : anyref) -> i32+`
 +
 Returns the reject code, if the current function is invoked as a reject callback.
 +
 It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
 +
-** `+msg.reject_msg_len : (api_nonce : anyref) -> i32+`
+** `+ic.msg_reject_msg_len : (api_nonce : anyref) -> i32+`
 +
 Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
-** `+msg.reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
+** `+ic.msg_reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
 +
@@ -578,7 +578,7 @@ This traps if `offset+length` is greater than the size of the reject message, or
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
-* `+msg.reply_data_append : (api_nonce : anyref, src : i32, length : i32) -> ()+`
+* `+ic.msg_reply_data_append : (api_nonce : anyref, src : i32, length : i32) -> ()+`
 +
 Copies the data referred to by `src`/`length` out of the canister and appends it to the (initially empty) data reply.
 +
@@ -586,21 +586,21 @@ NOTE: This can be invoked multiple times to build up the argument with data from
 +
 This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
 
-* `+msg.reply : (api_nonce : anyref) -> ()+`
+* `+ic.msg_reply : (api_nonce : anyref) -> ()+`
 +
-Replies to the sender with the data assembled using `msg.reply_data_append`.
+Replies to the sender with the data assembled using `ic.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
-* `+msg.reject : (api_nonce : anyref, src : i32, length : i32) -> ()+`
+* `+ic.msg_reject : (api_nonce : anyref, src : i32, length : i32) -> ()+`
 +
 Rejects the call. The data referred to by `src`/`length` is used for the diagnostic message.
 +
 This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`length` is not valid UTF8.
 +
-Possible reply data assembled using `msg.reply_data_append` is discarded.
+Possible reply data assembled using `ic.msg_reply_data_append` is discarded.
 
-If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `msg.reply`, `msg.reject`, `call.invoke`), are discarded.
+If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic.msg_reply`, `ic.msg_reject`, `ic.call_invoke`), are discarded.
 
 === System methods
 
@@ -609,29 +609,29 @@ A canister may export a system method. In contrast to public methods, system met
 [#system-api-init]
 === System method: canister_init
 
-If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `msg.arg_data_size/copy`.
+If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic.msg_arg_data_size/copy`.
 
-The following system calls will trap when called during the execution of `canister_init`: `msg.reply`, `msg.reply_data_append`, `msg.reject`, `call.create`.
+The following system calls will trap when called during the execution of `canister_init`: `ic.msg_reply`, `ic.msg_reply_data_append`, `ic.msg_reject`, `ic.call_create`.
 
 The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
 [#system-api-canister-id]
-=== Resolving canister ids
+=== Resolving entity ids
 
-To future-proof the System API, references to canisters are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references (the `anyref`) and their transparent public id (the `blob`, represented by a pointer/length pair).
+To future-proof the System API, references to canisters (and users) are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references (the `anyref`) and their transparent public id (the `blob`, represented by a pointer/length pair).
 
-* `+canister.id_valid : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> i32+`
-* `+canister.id_lookup : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> (canister_ref : anyref)+`
-* `+canister.id_len : (api_nonce : anyref, canister_ref : anyref) -> i32+`
-* `+canister.id_copy : (api_nonce : anyref, canister_ref : anyref, dst: i32) -> ()+`
+* `+ic.id_valid : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> i32+`
+* `+ic.id_lookup : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> (canister_ref : anyref)+`
+* `+ic.id_len : (api_nonce : anyref, canister_ref : anyref) -> i32+`
+* `+ic.id_copy : (api_nonce : anyref, canister_ref : anyref, dst: i32) -> ()+`
 
-The `canister.id_valid` function returns `1` if the canister id is syntactically valid (e.g.: exactly 8 bytes long if we are using 64 bit canister ids) and `0` otherwise. It does not check whether there exists a canister with that id (as that might not be locally possible)
+The `ic.id_valid` function returns `1` if the id is syntactically valid (e.g.: exactly 8 bytes long if we are using 64 bit canister ids) and `0` otherwise. It does not check whether there exists an entity with that id (as that might not be locally possible)
 
-The `canister.id_lookup` function traps if the the canister id is not valid. As usually, all these function trap if they would read or write canister memory out of bounds.
+The `ic.id_lookup` function traps if the the canister id is not valid. As usually, all these function trap if they would read or write canister memory out of bounds.
 
 Furthermore, a canister can learn about its own identity:
 
- * `+canister.self : (api_nonce : anyref) -> (canister_ref : anyref)+`
+ * `+ic.canister_self : (api_nonce : anyref) -> (canister_ref : anyref)+`
 
 
 [#system-api-call]
@@ -646,7 +646,7 @@ When handling a call, a canister can do further calls to another canister. Perfo
 
 The `methodref` can be used multiple times, it just represents the canister/method-name pair.
 
-The `callref` reference is only valid between `call.create` and `call.perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
+The `callref` reference is only valid between `ic.call_create` and `ic.call_perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
 
 This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
 
@@ -654,7 +654,7 @@ This API is _not_ available from the canister initialization function, nor from 
 
 * {blank}
 +
-  method.public : (
+  ic.method_public : (
     api_nonce : anyref,
     callee    : anyref, // a canister reference
     name_src  : i32,    // a pointer to and the length of the
@@ -665,7 +665,7 @@ Creates a new `methodref` from a canister reference and the name of a public met
 
 * {blank}
 +
-  call.create : ( methodref : anyref ) -> ( callref : anyref )
+  ic.call_create : ( methodref : anyref ) -> ( callref : anyref )
 +
 Begins the assembly of a new call, to the given method.
 Returns the `callref` that can be filled further on.
@@ -673,7 +673,7 @@ Returns the `callref` that can be filled further on.
 This system call traps if it is calling during the handling of a <<api-query,query call>>.
 * {blank}
 +
-  call.arg_data_append : (
+  ic.call_arg_data_append : (
     callref : anyref  // the call to extend
     src     : i32,    // a pointer to and the length of the
     len     : i32,    //   argument to pass to the method
@@ -686,18 +686,18 @@ NOTE: This can be invoked multiple times to build up the argument with data from
 This system call traps if `src+len` exceeds the size of the WebAssembly memory.
 * {blank}
 +
-  call.on_reply : (
+  ic.call_on_reply : (
     callref : anyref  // the call to extend
     fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
     env     : i32,    // an environment to give back to fun
   ) -> ()
 +
-The system records the current function table entry at the index `fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `msg.arg_data_size`/`msg.arg_data_copy`.
+The system records the current function table entry at the index `fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic.msg_arg_data_size`/`ic.msg_arg_data_copy`.
 +
-There must be exactly one invocation of `call.on_reply` for each `callref`. (Omitting `call.on_reply` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
+There must be exactly one invocation of `ic.call_on_reply` for each `callref`. (Omitting `ic.call_on_reply` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
 * {blank}
 +
-  call.on_reject : (
+  ic.call_on_reject : (
     callref : anyref  // the call to extend
     fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
     env     : i32,    // an environment to give back to fun
@@ -705,19 +705,19 @@ There must be exactly one invocation of `call.on_reply` for each `callref`. (Omi
 +
 The system records the current function table entry at the index `fun`. If the method call fails, the noted function is executed.
 +
-There must be exactly one invocation of `call.on_reject` for each `callref`. (Omitting `call.on_reject` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
+There must be exactly one invocation of `ic.call_on_reject` for each `callref`. (Omitting `ic.call_on_reject` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
 
 * {blank}
 +
-  call.perform : ( callref : anyref ) -> ()
+  ic.call_perform : ( callref : anyref ) -> ()
 +
 Indicate that the call is ready to be performed. The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
 +
-After `call.perform`, the `callref` must not be used any more. Invoking any system function with that callref will trap.
+After `ic.call_perform`, the `callref` must not be used any more. Invoking any system function with that callref will trap.
 +
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
 
-NOTE: The `call.`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `call.create` does.
+NOTE: The `ic.call_`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `ic.call_create` does.
 This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
 === Debugging aids
@@ -726,7 +726,7 @@ During local development and execution on a local network, the canister needs a 
 
 NOTE: This system call is intentionally not guarded by an `api_nonce`, so that one can do Printf-like debugging of code that otherwise is not allowed to issue system calls without having to refactor the code first.
 
-* `+debug.print : (src : i32, len : i32) -> ()+`
+* `+ic.debug_print : (src : i32, len : i32) -> ()+`
 +
 When executing in an environment that supports debugging, this copies out the data specified by `src` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 +
@@ -736,7 +736,7 @@ NOTE: We may at some point require modules deployed to the real network to not e
 
 Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
 
-* `+debug.trap : (src : i32, len : i32) -> ()+`
+* `+ic.trap : (src : i32, len : i32) -> ()+`
 +
 This function always traps.
 +
@@ -1570,52 +1570,52 @@ The syntax `let MethodName (c, m) = ref else Trap` indicates that a system funct
 Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
 
 ....
-msg.arg_data_size<es>(api_nonce : anyref) : i32 =
+ic.msg_arg_data_size<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.params.arg = NoArg then Trap
   return |es.params.arg|
 
-msg.arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
+ic.msg_arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.params.arg = NoArg then Trap
   if offset+length > |es.params.arg| then Trap
   if dst+length > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+length] := es.params.arg[offset..offset+length]
 
-msg.reject_code<es>(api_nonce : anyref) : i32 =
+ic.msg_reject_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   es.params.reject_code
 
-msg.reject_msg_len<es>(api_nonce : anyref) : i32 =
+ic.msg_reject_msg_len<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
-msg.reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) : i32 =
+ic.msg_reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.reject_code = 0 then Trap
   if offset+length > |es.params.reject_msg| then Trap
   if dst+length > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
 
-msg.reply_data_append<es>(api_nonce : anyref, src : i32, length : i32) =
+ic.msg_reply_data_append<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if src+length > |es.wasm_state.mem| then Trap
   es.reply_params.arg := es.reply_params.arg · es.wasm_state.mem[src..src+len];
 
-msg.reply<es>(api_nonce : anyref) =
+ic.msg_reply<es>(api_nonce : anyref) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
-msg.reject<es>(api_nonce : anyref, src : i32, length : i32) =
+ic.msg_reject<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
   if src+length > |es.wasm_state.mem| then Trap
   es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[src..src+len])
 
-canister.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
+ic.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if src+len > |es.wasm_state.mem| then Trap
 
@@ -1623,7 +1623,7 @@ canister.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
   then return 1
   then return 0
 
-canister.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
+ic.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if src+len > |es.wasm_state.mem| then Trap
   canister_id = es.wasm_state.mem[src..src+len]
@@ -1631,22 +1631,22 @@ canister.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
 
   return (CanisterRef canister_id)
 
-canister.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
+ic.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef canister_id = canister_ref else Trap
   return |canister_id|
 
-canister.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
+ic.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef canister_id = canister_ref else Trap
   if dst+|canister_id| > |es.wasm_state.mem| then Trap
   es.wasm_state.mem[dst..dst+|canister_id| := canister_id
 
-canister.self<es>(api_nonce : anyref) : anyref =
+ic.canister_self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   return (CanisterRef es.self_id)
 
-method.public<es>(
+ic.method_public<es>(
   api_nonce    : anyref,
   canister_ref : anyref,
   name_src     : i32,
@@ -1658,7 +1658,7 @@ method.public<es>(
 
   return (MethodRef callee es.wasm_state.mem[name_src..name_src+name_len])
 
-call.create<es>(
+ic.call_create<es>(
   method_ref   : anyref,
 ) : ( anyref ) =
   let MethodRef callee method_name = method_ref else Trap
@@ -1677,7 +1677,7 @@ call.create<es>(
     }
   return callref
 
-call.arg_data_append<es>(callref : anyref, src : i32, len : i32) =
+ic.call_arg_data_append<es>(callref : anyref, src : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
@@ -1685,7 +1685,7 @@ call.arg_data_append<es>(callref : anyref, src : i32, len : i32) =
 
   es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.mem[src..src+len];
 
-call.on_reply<es>(callref : anyref, fun : i32, env : i32) =
+ic.call_on_reply<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
@@ -1696,7 +1696,7 @@ call.on_reply<es>(callref : anyref, fun : i32, env : i32) =
   es.calls[callidx].on_reply := es.wasm_state.table[fun]
   es.calls[callidx].on_reply_env := env
 
-call.on_reject<es>(callref : anyref, fun : i32, env : i32) =
+ic.call_on_reject<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
@@ -1707,7 +1707,7 @@ call.on_reject<es>(callref : anyref, fun : i32, env : i32) =
   es.calls[callidx].on_reject := es.wasm_state.table[fun]
   es.calls[callidx].on_reject_env := env
 
-call.perform<es>(callref : anyref) =
+ic.call_perform<es>(callref : anyref) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
@@ -1733,10 +1733,10 @@ call.perform<es>(callref : anyref) =
           )
     }
 
-debug.print<es>(src : i32, len : i32) =
+ic.debug_print<es>(src : i32, len : i32) =
   return
 
-debug.trap<es>(src : i32, len : i32) =
+ic.trap<es>(src : i32, len : i32) =
   Trap
 ....
 
