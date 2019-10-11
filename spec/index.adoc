@@ -376,7 +376,7 @@ When querying the status of a request (see <<api-status>>), the user identifies 
 4. Sort these by the hash of the field name.
 5. Concatenate these hashes, and hash the result.
 
-The resulting hash of 265bits (32 bytes) is the id of the request.
+The resulting hash of 256bits (32 bytes) is the id of the request.
 
 NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
 
