@@ -972,10 +972,10 @@ The transitions are the following:
    --> "Processing"
 if "" then
   --> "Completed"
-  --> "Expired" #DDDDDD
+  --> "Cleaned" #DDDDDD
   else
   --> "Failed"
-  --> "Expired" #DDDDDD
+  --> "Cleaned" #DDDDDD
   "Accepted" --> "Completed"
   "Accepted" --> "Failed"
 endif
@@ -1369,9 +1369,9 @@ S with
       | Failed R                 if response = Reject R
 ....
 
-==== Request expiry
+==== Request clean up
 
-At some point, a processed request can expire. Precise conditions are yet to be determined.
+At some point, a request will be removed from memory of the system. This must happen no earlier than the expiry time set in the request, and late enough so that the user had a fair chance of retrieving the response. Details are yet to be determined.
 
 Conditions::
 ....
