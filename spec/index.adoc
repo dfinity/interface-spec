@@ -159,21 +159,58 @@ certified <|-- balance
 certified <|-- status
 ....
 
+
+
+[#async-requests]
+=== Asynchronous requests
+
 Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
 1. A client submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
 2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing (or it expires). From now on, the client can ask any RPC endpoint (for the canister) about the status of the pending request.
-4. At some later point, a pending request is acted upon. For some requests this is atomically, for others this involves multiple internal steps.
-5. Eventually, a response (indicating success or failure, and possibly carrying data) will be produced, and can be retrieved for a certain amount of time.
-6. At the end, the system forgets about the request and its response.
+3. At some point, the system may accept the request for processing (or it expires). From now on, the client can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
+4. Once it is clear that the request will be acted upon, the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
+5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
+6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
+7. At the end, the system forgets about the request and its response.
 
-When asking the system about the state or response of a request, the client uses a request id.
+
+Thie yields the following interaction diagram:
+
+[plantuml]
+....
+(*) --> "User creates request" #DDDDDD
+   --> "Submitted to node" #DDDDDD
+   --> "Received"
+   --> "Processing"
+if "" as X then
+  --> "Replied"
+  --> "Cleaned" #DDDDDD
+  else
+  --> "Rejected (canister)"
+  --> "Cleaned" #DDDDDD
+
+  "X"        --> "Rejected (system)"
+  "Received" --> "Rejected (system)"
+             --> "Cleaned" #DDDDDD
+endif
+....
+
+Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages have an expiry date, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
+
+The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+
+The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the use sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+
+A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+
+When asking the system about the state or response of a request, the client uses a request id (see <<api-request-id>>).
+
+=== Synchronous requests
 
 Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
-
 
 === Field types
 
@@ -298,7 +335,7 @@ Request type:: `request_status`
 Request fields::
 * `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
 Response fields::
-* `status` (`text`): one of `unknown`, `pending`, `replied` or `rejected`
+* `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`
 * `reply`: If the status is `replied`, then this member contains the request-type specific reply object (see the specification for the individual request types for which fields exist).
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
@@ -953,41 +990,16 @@ Request
   }
 ....
 
-The evolution of an `Request` goes through these states:
+The evolution of an `Request` goes through these states, as explained in <<async-requests>>:
 ....
 RequestStatus
-  = Accepted
+  = Received
   | Processing
-  | Failed (RejectCode, Text)
+  | Rejected (RejectCode, Text)
   | Completed { result : Value }
 ....
 
-The transitions are the following:
-
-[plantuml]
-....
-(*) --> "Client creates message" #DDDDDD
-   --> "Submitted" #DDDDDD
-   --> "Accepted"
-   --> "Processing"
-if "" then
-  --> "Completed"
-  --> "Cleaned" #DDDDDD
-  else
-  --> "Failed"
-  --> "Cleaned" #DDDDDD
-  "Accepted" --> "Completed"
-  "Accepted" --> "Failed"
-endif
-....
-
-Note that all gray states are _not_ represented in the system state, and are indistinguishable from “message does not exist”. In order to avoid replay-attacks, messages have a limited validity, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
-
-The states `Accepted` and `Processing` are for internal bookkeeping, both are presented as “Pending” to the user. The processing state may be skipped for certain messages.
-
-
 These are the synchronous read messages:
-
 ....
 APIReadRequest
   = ReadStatus = {
@@ -1057,7 +1069,7 @@ using `()` to denote the empty map or bag.
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be accepted.
+ * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
  * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
@@ -1065,7 +1077,7 @@ The state transitions are not complete with regard to error handling. For exampl
 
 ==== API Request submission
 
-After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Accepted` state.
+After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Received` state.
 
 This may only happen if the following validation steps pass:
 
@@ -1083,12 +1095,29 @@ Conditions::
 State after::
 ....
 S with
-    requests[M] = Accepted
+    requests[M] = Received
 ....
 
 NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
 
 NOTE: Due to this check, the `sender` field of any request in the system state is authenticated, so an implementation may actually drop the `sender_sig` field at this point.
+
+==== Request rejection
+
+The system may reject an received message for internal reasons (high load, low resources). The precise conditions are not specified here, but the reject code must indicate this to be a system error.
+
+
+Conditions::
+....
+    S.requests[M] = Received
+    Code = SYS_FATAL or Code = SYS_TRANSIENT
+....
+State after::
+....
+S with
+    requests[M] = Rejected (Code, Msg)
+....
+
 
 ==== User registration
 
@@ -1096,7 +1125,7 @@ A user registration request has the effect of allocating a fresh user id:
 
 Conditions::
 ....
-    S.requests[RegisterUser M] = Accepted
+    S.requests[RegisterUser M] = Received
     is_valid_id UserId = true
     UserId ∉ (dom S.users ∪ dom S.canisters)
 ....
@@ -1115,7 +1144,7 @@ A Canister registration request has the effect of allocating a fresh canister id
 
 Conditions::
 ....
-    S.requests[RegisterCanister M] = Accepted
+    S.requests[RegisterCanister M] = Received
     is_valid_id CanId = true
     CanId ∉ (dom S.users ∪ dom S.canisters)
 ....
@@ -1132,7 +1161,7 @@ Only an admin of the given canister can install new code. This turns an empty ca
 
 Conditions::
 ....
-    S.requests[InstallCode M] = Accepted
+    S.requests[InstallCode M] = Received
     S.canisters[M.canister_id] = EmptyCanister
     M.sender ∈ S.admins[M.canister_id]
     M.module.init (M.arg) =
@@ -1155,7 +1184,7 @@ We do not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.requests[CanisterUpdateCall M] = Accepted
+    S.requests[CanisterUpdateCall M] = Received
 ....
 State after::
 ....
@@ -1366,7 +1395,7 @@ S with
     messages = Older_messages · Younger_messages
     requests[M] =
       | Completed { result = R } if response = Reply R
-      | Failed R                 if response = Reject R
+      | Rejected R               if response = Reject R
 ....
 
 ==== Request clean up
@@ -1375,7 +1404,7 @@ At some point, a request will be removed from memory of the system. This must ha
 
 Conditions::
 ....
-    (S.requests[M] = Completed _) or (S.requests[M] = Failed _)
+    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _)
 ....
 State after::
 ....
@@ -1388,7 +1417,7 @@ S with
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
 
-NOTE: There is a phase where a request was issued by the client, but not accepted yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
+NOTE: There is a phase where a request was issued by the client, but not received yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
 
 Read request:: ReadStatus { request_id = MI }
 Conditions::
@@ -1398,8 +1427,9 @@ Conditions::
 ....
 Read response::
 A record with
-* `{status: pending}` if `MS = Accepted` or `MS = Processing`
-* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Failed (code, msg)`
+* `{status: accpeted}` if `MS = Received`
+* `{status: processing}` if `MS = Processing`
+* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Rejected (code, msg)`
 * `{status: completed; result : <result>}` if `MS = Completed { result = result }`
 
 ==== Read: query call
