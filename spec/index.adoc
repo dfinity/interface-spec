@@ -774,6 +774,43 @@ Primariliy as a scaffolding mechanism, the combination of `ic.method_public`, `i
 NOTE: The `ic.call_`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `ic.call_create` does.
 This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
 
+[#system-api-stable-storage]
+=== Stable storage
+
+Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this _stable memory_ is to provide space to store data beyond upgrades.  The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
+
+The stable memory is initially empty.
+
+* {blank}
++
+  ic.stable_size(api_nonce : anyref) -> (page_count : i32)
++
+returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 65Ki bytes.)
+
+* {blank}
++
+  ic.stable_grow(api_nonce : anyref, new_pages : i32) -> (old_page_count : i32)
++
+tries to grow the memory by `new_pages` many pages containing zeroes.
+
+If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
+
+* {blank}
++
+  ic.stable_write(api_nonce : anyref, offset : i32, src : i32, len : i32) -> ()
++
+copies the data referred to by `src`/`len` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
+
+This system call traps if `src+len` exceeds the size of the WebAssembly memory or `offset+len` exceeds the size of the stable memory.
+
+* {blank}
++
+  ic.stable_read(api_nonce : anyref, dst : i32, offset : i32, len : i32) > ()
++
+copies the data referred to by `offset`/`len` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
+
+This system call traps if `dst+len` exceeds the size of the WebAssembly memory or `offset+len` exceeds the size of the stable memory.
+
 === Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
@@ -870,12 +907,12 @@ MethodCall = {
 }
 
 InitFunc = (CanId, Blob) -> Trap | Return WasmState
-UpdateFunc = (CanId, WasmState) -> Trap | Return {
+UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
   response : NoResponse | Response;
 }
-QueryFunc = (CanId, WasmState) -> Trap | Return Response
+QueryFunc = WasmState -> Trap | Return Response
 
 
 CanisterModule = {
@@ -887,7 +924,7 @@ CanisterModule = {
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
-Parameters like `CanId` are merely passed through to the canister, via the `canister.self` system calls.
+The `CanId` parameter of the `InitFunc` is merely passed through to the canister, via the `canister.self` system call.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -1238,8 +1275,8 @@ S with
 The function `query_to_update_func` simply turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
 ....
 query_to_update_func f =
-  λ blob → λ (self_id, wasm_state) →
-    match f(blob)(self_id, wasm_state) with
+  λ blob → λ wasm_state →
+    match f(blob)(wasm_state) with
       Trap → Trap
       Return res → Return {
         new_state = wasm_state;
@@ -1262,7 +1299,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
-    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Return res
+    M.func(S.canisters[M.receiver].wasm_state) = Return res
     (res.response = NoResponse) or (S.call_contexts[M.call_context].replied = false)
 ....
 State after::
@@ -1302,7 +1339,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[M.callee] ≠ EmptyCanister
-    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Trap
+    M.func(S.canisters[M.receiver].wasm_state) = Trap
 ....
 State after::
 ....
@@ -1318,7 +1355,7 @@ Conditions::
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[M.callee] ≠ EmptyCanister
-    M.func(M.receiver, S.canisters[M.receiver].wasm_state) = Return res
+    M.func(S.canisters[M.receiver].wasm_state) = Return res
     S.call_contexts[M.call_context].replied = true
     res ≠ NoResponse
 ....
@@ -1444,17 +1481,17 @@ Conditions::
   F = C.module.query_methods[Q.method_name]
 ....
 Read response::
-* If `F(Q.callee, Q.arg) = Trap` then
+* If `F(Q.arg) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Q.callee, Q.arg) = Return (Reject (code, msg))` then
+* Else if `F(Q.arg) = Return (Reject (code, msg))` then
 +
 ....
 {status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
-* Else if `F(Q.callee, Q.arg) = Return (Reply R)` then
+* Else if `F(Q.arg) = Return (Reply R)` then
 +
 ....
 {status: success; result: <R> }
@@ -1468,7 +1505,14 @@ In Section <<abstract-canisters>> we introduced an abstraction over the interfac
 
 ==== The concrete `WasmState`
 
-The abstract `WasmState` maps to the WebAssembly _store_ `S`, which encompasses the functions, tables, memories and globals of the WebAssembly program.
+The abstract `WasmState` above models the WebAssembly _store_ `S`, which encompasses the functions, tables, memories and globals of the WebAssembly program, plus additional data maintained by the system, such as the stable memory:
+....
+WasmState = {
+  store : S; // a store as per WebAssembly spec
+  self_id : CanId;
+  stable_mem : Blob
+}
+....
 
 As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (resp. table) will trap if the module does not import the memory (resp. table).
 
@@ -1494,9 +1538,8 @@ PartialCall = {
   performed : Bool;
 }
 ExecutionState = {
-  wasm_state : S; // a store as per WebAssembly spec
-  api_nonce : (abstract)
-  self_id : CanId;
+  wasm_state : WasmState;
+  api_nonce : (abstract);
   params : Params;
   response : NoResponse | Response;
   reply_params : { arg : Blob };
@@ -1509,13 +1552,13 @@ ExecutionState = {
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
 Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(api_nonce)` for the invocation of a WebAssembly function with type `+(api_nonce : anyref) -> ()+`).  The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a function.
 
-WARNING: It is nonsensical to pass to an execution function a `WasmState` that comes from a different WebAssembly module than one defining the function The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
+WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
 
 ==== The concrete `CanisterModule`
 
 Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
 
-* The `initial_wasm_state` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
 
 * For more convenience when creating a new `ExecutionState`, we define the following partial record:
 +
@@ -1523,7 +1566,6 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 empty_execution_state = {
   wasm_state = (undefined);
   api_nonce = (undefined);
-  self_id = (undefined);
   params = (undefined);
   response = NoResponse;
   reply_params : { arg = "" };
@@ -1535,11 +1577,11 @@ empty_execution_state = {
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
-If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_state` is returned:
+If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
 init = λ (self_id, blob) →
-  Return initial_wasm_state
+  Return { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
@@ -1547,9 +1589,8 @@ Otherwise, if the WebAssembly module exports a function `f` under the name `cani
 ....
 init = λ (self_id, blob) →
   let es = ref {empty_execution_state with
-      wasm_state = initial_wasm_state;
+      wasm_state = { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
       api_nonce = fresh_nonce();
-      self_id = self_id;
       params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1563,11 +1604,10 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ blob → λ (self_id, wasm_state) →
+update_methods[method] = λ blob → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
-      self_id = self_id;
       params = { arg = blog; reject_code = 0; reject_message = "" }
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1581,11 +1621,10 @@ update_methods[method] = λ blob → λ (self_id, wasm_state) →
 * The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_query <method>`, and has value
 +
 ....
-query_methods[method] = λ blob → λ (self_id, wasm_state) →
+query_methods[method] = λ blob → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
-      self_id = self_id;
       params = { arg = blog; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
@@ -1626,8 +1665,8 @@ ic.msg_arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.params.arg = NoArg then Trap
   if offset+length > |es.params.arg| then Trap
-  if dst+length > |es.wasm_state.mem| then Trap
-  es.wasm_state.mem[dst..dst+length] := es.params.arg[offset..offset+length]
+  if dst+length > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+length] := es.params.arg[offset..offset+length]
 
 ic.msg_reject_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1642,14 +1681,14 @@ ic.msg_reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) 
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.reject_code = 0 then Trap
   if offset+length > |es.params.reject_msg| then Trap
-  if dst+length > |es.wasm_state.mem| then Trap
-  es.wasm_state.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
+  if dst+length > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
 
 ic.msg_reply_data_append<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if src+length > |es.wasm_state.mem| then Trap
-  es.reply_params.arg := es.reply_params.arg · es.wasm_state.mem[src..src+len];
+  if src+length > |es.wasm_state.store.mem| then Trap
+  es.reply_params.arg := es.reply_params.arg · es.wasm_state.store.mem[src..src+len];
 
 ic.msg_reply<es>(api_nonce : anyref) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1659,21 +1698,21 @@ ic.msg_reply<es>(api_nonce : anyref) =
 ic.msg_reject<es>(api_nonce : anyref, src : i32, length : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   if es.response ≠ NoResponse then Trap
-  if src+length > |es.wasm_state.mem| then Trap
-  es.response := Reject (CANISTER_REJECT, es.wasm_state.mem[src..src+len])
+  if src+length > |es.wasm_state.store.mem| then Trap
+  es.response := Reject (CANISTER_REJECT, es.wasm_state.store.mem[src..src+len])
 
 ic.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if src+len > |es.wasm_state.mem| then Trap
+  if src+len > |es.wasm_state.store.mem| then Trap
 
-  if is_valid_id(es.wasm_state.mem[src..src+len])
+  if is_valid_id(es.wasm_state.store.mem[src..src+len])
   then return 1
   then return 0
 
 ic.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if src+len > |es.wasm_state.mem| then Trap
-  canister_id = es.wasm_state.mem[src..src+len]
+  if src+len > |es.wasm_state.store.mem| then Trap
+  canister_id = es.wasm_state.store.mem[src..src+len]
   if not is_valid_id(canister_id) then Trap
 
   return (CanisterRef canister_id)
@@ -1686,12 +1725,12 @@ ic.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
 ic.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef canister_id = canister_ref else Trap
-  if dst+|canister_id| > |es.wasm_state.mem| then Trap
-  es.wasm_state.mem[dst..dst+|canister_id| := canister_id
+  if dst+|canister_id| > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+|canister_id| := canister_id
 
 ic.canister_self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  return (CanisterRef es.self_id)
+  return (CanisterRef es.wasm_state.self_id)
 
 ic.method_public<es>(
   api_nonce    : anyref,
@@ -1701,9 +1740,9 @@ ic.method_public<es>(
 ) : ( anyref ) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
   let CanisterRef callee = canister_ref else Trap
-  if name_src+name_len > |es.wasm_state.mem| then Trap
+  if name_src+name_len > |es.wasm_state.store.mem| then Trap
 
-  return (MethodRef callee es.wasm_state.mem[name_src..name_src+name_len])
+  return (MethodRef callee es.wasm_state.store.mem[name_src..name_src+name_len])
 
 ic.call_create<es>(
   method_ref   : anyref,
@@ -1728,30 +1767,30 @@ ic.call_arg_data_append<es>(callref : anyref, src : i32, len : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if src+len > |es.wasm_state.mem| then Trap
+  if src+len > |es.wasm_state.store.mem| then Trap
 
-  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.mem[src..src+len];
+  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.store.mem[src..src+len];
 
 ic.call_on_reply<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if fun > |es.wasm_state.table| then Trap
-  if typeof(es.wasm_state.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
   if es.calls[callidx].on_reply ≠ StillMissing then Trap
 
-  es.calls[callidx].on_reply := es.wasm_state.table[fun]
+  es.calls[callidx].on_reply := es.wasm_state.store.table[fun]
   es.calls[callidx].on_reply_env := env
 
 ic.call_on_reject<es>(callref : anyref, fun : i32, env : i32) =
   let CallRef callidx = callref else Trap
   if callidx >= |es.calls| then Trap
   if es.calls[callidx].performed then Trap
-  if fun > |es.wasm_state.table| then Trap
-  if typeof(es.wasm_state.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
   if es.calls[callidx].on_reject ≠ StillMissing then Trap
 
-  es.calls[callidx].on_reject := es.wasm_state.table[fun]
+  es.calls[callidx].on_reject := es.wasm_state.store.table[fun]
   es.calls[callidx].on_reject_env := env
 
 ic.call_perform<es>(callref : anyref) =
@@ -1791,12 +1830,44 @@ ic.call_simple<es>(
     reject_env : i32,
     src        : i32,
     len        : i32)
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+
   methref := ic.method_public(api_nonce, callee, name_src, name_len)
   callref := ic.call_create(methref)
   ic.call_on_reply(callref, reply_fun, reply_env)
   ic.call_on_reject(callref, reject_fun, reject_env)
   ic.call_arg_data_append(callref, src, len)
   ic.call_perform(callref)
+
+ic.stable_size<es>(api_nonce : anyref) -> (page_count : i32) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+
+  return |es.wasm_state.stable_mem| / 64k
+
+ic.stable_grow<es>(api_nonce : anyref, new_pages : i32) -> (old_page_count : i32) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+
+  if arbitrary()
+  then return -1
+  else
+    old_size := |es.wasm_state.stable_mem| / 64k
+    es.wasm_state.stable_mem :=
+      es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
+    return old_size
+
+ic.stable_write<es>(api_nonce : anyref, offset : i32, src : i32, len : i32) -> ()
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if src+len > |es.wasm_state.store.mem| then Trap
+  if offset+len > |es.wasm_state.stable_mem| then Trap
+
+  es.wasm_state.stable_mem[offset..offset+len] :=  es.wasm_state.store.mem[src..src+len]
+
+ic.stable_read<es>(api_nonce : anyref, dst : i32, offset : i32, len : i32) > ()
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if offset+len > |es.wasm_state.stable_mem| then Trap
+  if dst+len > |es.wasm_state.store.mem| then Trap
+
+  es.wasm_state.store.mem[offset..offset+len] :=  es.wasm_state.stable.mem[src..src+len]
 
 ic.debug_print<es>(src : i32, len : i32) =
   return

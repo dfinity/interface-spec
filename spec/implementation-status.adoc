@@ -31,3 +31,4 @@ Without further ado, here we go:
 * `canister.id` and `canister.lookup` expect `i64` canister ids, rather than https://github.com/dfinity-lab/dfinity/pull/1224[blobs], and don’t have the latest names.
 * `msg.arg_data_copy` has the `offset` parameter last, not second-to-last, as it is specified since [the design review](https://docs.google.com/a/dfinity.org/document/d/1V-odGuiXe7IZeUuDEEm8-agSOpSDkveU4bJuBYegt3s/edit?disco=AAAACLAcykA).
 * An import `msg.entropy` is allowed; the spec removed this because of uncertainty about the entropy implementation (it might be async)
+* The `ic.stable_` functions are not yet implemented.
