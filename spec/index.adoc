@@ -746,13 +746,18 @@ There must be exactly one invocation of `ic.call_on_reject` for each `callref`. 
 
 * {blank}
 +
-  ic.call_perform : ( callref : anyref ) -> ()
+  ic.call_perform : ( callref : anyref ) -> ( err_code : i32 )
 +
 Indicate that the call is ready to be performed. The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
 +
 After `ic.call_perform`, the `callref` must not be used any more. Invoking any system function with that callref will trap.
 +
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
++
+If the system returns a non-zero value, the call cannot (and will not be) performed.
++
 If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
+
 
 * {blank}
 +
@@ -767,7 +772,7 @@ If a call is created, but not performed by the time the WebAssembly function end
     reject_env : i32,
     src        : i32,
     len        : i32
-  ) -> ()
+  ) -> ( err_code : i32 )
 +
 Primariliy as a scaffolding mechanism, the combination of `ic.method_public`, `ic.call_create`, `ic.call_on_reply`, `ic.call_on_reject`, `ic.call_arg_data_append` and `ic.call_perform` can be performed using a single system function call.
 
@@ -1802,22 +1807,27 @@ ic.call_perform<es>(callref : anyref) =
 
   es.calls[callidx].performed := True
 
-  pc := es.calls[callidx]
-  es.performed_calls := es.performed_calls ·
-    {
-      callee = pc.callee;
-      method_name = pc.method_name;
-      arg = pc.arg;
-      callback = λ response → match response with
-        Reply blob → mkWasmFunc
-          ( { arg = blob; reject_code = 0 }
-          , λ<es'>(api') → pc.on_reply<es'>(api', pc.onreply_env)
-          )
-        Reject (reject_code, _message) → mkWasmFunc
-          ( { arg = NoArg; reject_code = reject_code }
-          , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
-          )
-    }
+  if arbitrary()
+  then
+    return 1
+  or
+    pc := es.calls[callidx]
+    es.performed_calls := es.performed_calls ·
+      {
+        callee = pc.callee;
+        method_name = pc.method_name;
+        arg = pc.arg;
+        callback = λ response → match response with
+          Reply blob → mkWasmFunc
+            ( { arg = blob; reject_code = 0 }
+            , λ<es'>(api') → pc.on_reply<es'>(api', pc.onreply_env)
+            )
+          Reject (reject_code, _message) → mkWasmFunc
+            ( { arg = NoArg; reject_code = reject_code }
+            , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
+            )
+      }
+    return 0
 
 ic.call_simple<es>(
     api_nonce  : anyref,
@@ -1837,7 +1847,8 @@ ic.call_simple<es>(
   ic.call_on_reply(callref, reply_fun, reply_env)
   ic.call_on_reject(callref, reject_fun, reject_env)
   ic.call_arg_data_append(callref, src, len)
-  ic.call_perform(callref)
+  status := ic.call_perform(callref)
+  return status
 
 ic.stable_size<es>(api_nonce : anyref) -> (page_count : i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
