@@ -22,6 +22,8 @@ Without further ado, here we go:
 * Signatures are not validated
 * Still expects `i64` for user ids resp. canister ids, rather than https://github.com/dfinity-lab/dfinity/pull/1224[blobs].
 * The handling of the `request-status` request type is not yet implemented.
+* No signature required on reads
+* No `sender` field on query calls
 
 == System API
 * The `+ic.` prefix is not used yet.

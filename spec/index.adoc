@@ -212,6 +212,7 @@ Other interactions do not change the state of the system, but only _read_ from i
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
+[#field-types]
 === Field types
 
 The system supports a number of requests, represented as records, i.e. fields with names and values.
@@ -234,17 +235,11 @@ NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs
 
 === Common fields
 
-The following fields are common among all requests:
+The following field is common among all requests:
 
 * `request_type` (`text`): Indicates the type of request, and is one of the values allowed below:
 
-The following fields are common among all _asynchronous_ requests:
-
-* `sender` (`EntityId`): The user who issued the request.
-* `expiry`: time(?) until the request must be executed or dropped #TODO: details#
-* `nonce` (`blob`, optional): Arbitrary client-provided data, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
-
-Besides these, every type of request has a different set of request-specific fields.
+See <<request-signatures>> for additional common fields related to authentication.
 
 === Request types
 
@@ -259,6 +254,7 @@ The user registration request will allocate a fresh user id, associate the provi
 Synchronicity:: asynchronous
 Request type:: `create_user`
 Request fields::
+* `sender` (`EntityId`): The user who issued the request.
 * `public_key` (`blob`): The public key that can be used to authenticate the user.
 Reply fields::
 * `user_id` (`UserId`): The user id of the just registered user.
@@ -275,7 +271,7 @@ A canister has a list of _admin users_; initially, the user who has registered t
 Synchronicity:: asynchronous
 Request type:: `create_canister`
 Request fields::
-* None
+* `sender` (`EntityId`): The user who issued the request.
 Reply fields::
 * `canister_id` (`CanisterId`): The canister id of the just created canister.
 
@@ -291,6 +287,7 @@ After an empty canister has been created via <<api-create-canister>>, the admin 
 Synchronicity:: asynchronous
 Request type:: `install_code`
 Request fields::
+* `sender` (`EntityId`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to install code for.
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
@@ -317,6 +314,7 @@ NOTE: Undecided: Should this request also be used to re-install  canister code (
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
+* `sender` (`EntityId`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -354,6 +352,7 @@ Canister methods that do not change the canister state in a meaningful way can b
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
+* `sender` (`EntityId`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -525,12 +524,16 @@ As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating 
 [#request-signatures]
 === Authentication
 
-A request coming in via the HTTP interface needs to be _authenticated_ using a cryptographic signature. To that end, the following two fields are added by the client to the request object:
+All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
 
 * `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`): Signature to authenticate this request.
+* `expiry`: time(?) until the request must be executed or dropped #TODO: details#.
+* `nonce` (`blob`, optional): Arbitrary client-provided data, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
 
-These fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant.
+For requests that have a `sender` field, the public key must be associated with the user specified by that key.  For the `request_status` request, the public key must be associated with the sender of the original request.
+
+The `sender_pubkey` and `sender_sig` fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant. The `expiry` and `nonce` fields do.
 
 The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
 
@@ -616,18 +619,24 @@ Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+
 +
 This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
 
+* `+ic.msg_caller : (api_nonce : anyref) -> (id : anyref)+`
++
+The identity of the caller, which may be a canister id or a user id. See <<system-api-canister-id>> for more details on ids.
++
+This function is available in the `canister_init` method and any exported method, but it traps in a reply or reject callback.
+
 In a reject callback, no argument is available, but the reject code can be queried:
 
-** `+ic.msg_reject_code : (api_nonce : anyref) -> i32+`
+* `+ic.msg_reject_code : (api_nonce : anyref) -> i32+`
 +
 Returns the reject code, if the current function is invoked as a reject callback.
 +
 It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
 +
-** `+ic.msg_reject_msg_len : (api_nonce : anyref) -> i32+`
+* `+ic.msg_reject_msg_len : (api_nonce : anyref) -> i32+`
 +
 Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
-** `+ic.msg_reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
+* `+ic.msg_reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
 +
@@ -895,20 +904,20 @@ Of course, this is a huge simplification: The real Internet Computer is distribu
 
 ==== Identifiers
 
-Canisters and users are (abstractly) simply blobs, even if the implementation uses only a subset of possible blobs (e.g. 64 bit numbers).
-Method names can be arbitrary pieces of text:
-....
-CanId = Blob
-UserId = Blob
-MethodName = Text
-....
+Canisters and users are (abstractly) simply blobs, even if the implementation uses only a subset of possible blobs (e.g. 64 bit numbers), as explained in <<field-types>>.
 
-The system keeps `CanId` and `UserId` disjoint.
+The system keeps `CanisterId` and `UserId` disjoint. An `EntityId` referes to either of the two (or further entities).
 
 Not all blobs are valid identifiers, but this specification is abstract in the precise form of syntactic validation. We merely assume a function that checks validity:
 ....
 is_valid_id : Blob -> Bool
 ....
+
+Method names can be arbitrary pieces of text:
+....
+MethodName = Text
+....
+
 
 
 [#abstract-canisters]
@@ -923,16 +932,21 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 ....
 WasmState = (abstract)
 
+Arg = {
+  data : Blob
+  caller: EntityId
+}
+
 RejectCode = Nat
 Response = Reply Blob | Reject (RejectCode, Text)
 MethodCall = {
-  callee : CanId;
+  callee : CanisterId;
   method_name: MethodName;
   arg: Blob;
   callback: Response -> UpdateFunc;
 }
 
-InitFunc = (CanId, Blob) -> Trap | Return WasmState
+InitFunc = (CanisterId, Blob) -> Trap | Return WasmState
 UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
@@ -943,14 +957,14 @@ QueryFunc = WasmState -> Trap | Return Response
 
 CanisterModule = {
   init : InitFunc
-  update_methods : MethodName ↦ (Blob -> UpdateFunc)
-  query_methods : MethodName ↦ (Blob -> QueryFunc)
+  update_methods : MethodName ↦ (Arg -> UpdateFunc)
+  query_methods : MethodName ↦ (Arg -> QueryFunc)
 }
 ....
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
-The `CanId` parameter of the `InitFunc` is merely passed through to the canister, via the `canister.self` system call.
+The `CanisterId` parameter of the `InitFunc` is merely passed through to the canister, via the `canister.self` system call.
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
 
@@ -962,8 +976,8 @@ To ensure that only one response is generated, and also to detect when no respon
 
 ....
 CallCtxt = {
-  canister : CanId;
-  caller : CallOrigin;
+  canister : CanisterId;
+  origin : CallOrigin;
   replied : bool;
 }
 CallId = (abstract)
@@ -985,18 +999,19 @@ Calls into and within the Internet Computer are implemented as messages passed b
 
 Therefore, a message can have different shapes:
 ....
-Queue = Unordered | Queue { from : CanId; to : CanId }
+Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
 Message
   = CallMessage {
-      caller : CallOrigin;
-      callee : CanId;
+      origin : CallOrigin;
+      caller : EntityId;
+      callee : CanisterId;
       method_name : Text;
-      arg : Blob;
+      data : Blob;
       queue : Queue;
     }
   | FuncMessage {
       call_context : CallId;
-      receiver : CanId;
+      receiver : CanisterId;
       func : UpdateFunc;
       queue : Queue;
     }
@@ -1038,18 +1053,18 @@ Request
     sender : UserId;
     sender_pubkey : PublicKey;
     sender_sig : Signature;
-    canister_id :  CanId;
+    canister_id :  CanisterId;
     module : CanisterModule;
-    arg : Blob;
+    data : Blob;
   }
   | CanisterUpdateCall = {
     nonce : Blob;
     sender : UserId;
     sender_pubkey : PublicKey;
     sender_sig : Signature;
-    callee : CanId;
+    callee : CanisterId;
     method_name : Text;
-    arg : Blob;
+    data : Blob;
   }
 ....
 
@@ -1066,12 +1081,19 @@ These are the synchronous read messages:
 ....
 APIReadRequest
   = ReadStatus = {
-    request_id : Request
+    nonce : Blob;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    request_id : Request;
   }
   | CanisterQuery = {
-    callee : CanId;
+    nonce : Blob;
+    sender : UserId;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    callee : CanisterId;
     method_name : Text;
-    arg : Blob;
+    data : Blob;
   }
 ....
 
@@ -1099,8 +1121,8 @@ Finally, we can describe the state of the Internet Computer as a record having t
 S = {
   requests : Request ↦ RequestStatus ;
   users : UserId ↦ UserData;
-  canisters : CanId ↦ CanState;
-  admins : CanId ↦ Set UserId;
+  canisters : CanisterId ↦ CanState;
+  admins : CanisterId ↦ Set UserId;
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
 }
@@ -1149,16 +1171,16 @@ This may only happen if the following validation steps pass:
 
 More validation (e.g. authorization) steps may be added here.
 
-Submitted request:: `M`
+Submitted request:: `R`
 Conditions::
 ....
-    M.sender_pubkey ∈ S.users[M.sender].public_keys
-    verify_signature M.sender_pubkey M.sender_sig (request_id_of M) = true
+    R.sender_pubkey ∈ S.users[R.sender].public_keys
+    verify_signature R.sender_pubkey R.sender_sig (request_id_of(R)) = true
 ....
 State after::
 ....
 S with
-    requests[M] = Received
+    requests[R] = Received
 ....
 
 NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
@@ -1172,13 +1194,13 @@ The system may reject an received message for internal reasons (high load, low r
 
 Conditions::
 ....
-    S.requests[M] = Received
+    S.requests[R] = Received
     Code = SYS_FATAL or Code = SYS_TRANSIENT
 ....
 State after::
 ....
 S with
-    requests[M] = Rejected (Code, Msg)
+    requests[R] = Rejected (Code, Msg)
 ....
 
 
@@ -1208,14 +1230,14 @@ A Canister registration request has the effect of allocating a fresh canister id
 Conditions::
 ....
     S.requests[RegisterCanister M] = Received
-    is_valid_id CanId = true
-    CanId ∉ (dom S.users ∪ dom S.canisters)
+    is_valid_id CanisterId = true
+    CanisterId ∉ (dom S.users ∪ dom S.canisters)
 ....
 State after::
 ....
 S with
-    requests[RegisterCanister M] = Completed { result = { canister_id = CanId } }
-    canisters[CanId] = EmptyCanister
+    requests[RegisterCanister M] = Completed { result = { canister_id = CanisterId } }
+    canisters[CanisterId] = EmptyCanister
 ....
 
 ==== Canister code installation
@@ -1241,7 +1263,7 @@ S with
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
-The `request` field of the `FromUser` caller establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
+The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
 
@@ -1255,7 +1277,8 @@ S with
     requests[CanisterUpdateCall M] = Processing
     messages =
       CallMessage {
-        caller = FromUser { request = CanisterUpdateCall M };
+        origin = FromUser { request = CanisterUpdateCall M };
+        caller = M.sender;
         callee = M.callee;
         method_name = M.method_name;
         arg = M.arg;
@@ -1278,6 +1301,10 @@ Conditions::
         then M.update_methods[CM.method_name]
         else query_to_update_func (M.query_methods[CM.method_name])
     Ctxt_id ∉ dom S.call_contexts
+    Arg = {
+      data = CM.data;
+      caller = CM.caller
+    }
 ....
 State after::
 ....
@@ -1287,7 +1314,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id;
         receiver = CM.callee;
-        func = F (CM.arg)
+        func = F (Arg);
         queue = CM.queue;
       } ·
       Younger_messages
@@ -1301,8 +1328,8 @@ S with
 The function `query_to_update_func` simply turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
 ....
 query_to_update_func f =
-  λ blob → λ wasm_state →
-    match f(blob)(wasm_state) with
+  λ arg → λ wasm_state →
+    match f(arg)(wasm_state) with
       Trap → Trap
       Return res → Return {
         new_state = wasm_state;
@@ -1336,10 +1363,11 @@ S with
       Older_messages ·
       Younger_messages ·
       [ CallMessage {
-          caller = FromCanister {
+          origin = FromCanister {
             call_context = M.call_context;
             callback = call.callback
           };
+          caller = C.callee;
           callee = call.callee;
           method_name = call.method_name;
           arg = call.arg;
@@ -1482,11 +1510,14 @@ The user can query the status of a request. The type of `result`, given as `Valu
 
 NOTE: There is a phase where a request was issued by the client, but not received yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
 
-Read request:: ReadStatus { request_id = MI }
+Submitted request:: `R`
 Conditions::
 ....
-   request_id_of(M) = MI
+   R = ReadStatus RS
+   request_id_of(M) = RS.request_id_of
    S.requests[M] = MS
+   Q.sender_pubkey ∈ S.users[M.sender].public_keys
+   verify_signature RS.sender_pubkey RS.sender_sig (request_id_of(R)) = true
 ....
 Read response::
 A record with
@@ -1499,25 +1530,30 @@ A record with
 
 Canister query calls can be executed directly.
 
-Read request:: CanisterQuery Q
+Submitted request:: `R`
 Conditions::
 ....
+  R = CanisterQuery Q
+  Q.sender_pubkey ∈ S.users[Q.sender].public_keys
+  verify_signature Q.sender_pubkey Q.sender_sig (request_id_of(R)) = true
   S.canisters[Q.callee] ≠ EmptyCanister
   C = S.canisters[Q.callee]
   F = C.module.query_methods[Q.method_name]
+  Arg = { data = Q.arg; caller = Q.sender }
+
 ....
 Read response::
-* If `F(Q.arg) = Trap` then
+* If `F(Arg) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Q.arg) = Return (Reject (code, msg))` then
+* Else if `F(Arg) = Return (Reject (code, msg))` then
 +
 ....
 {status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
-* Else if `F(Q.arg) = Return (Reply R)` then
+* Else if `F(Arg) = Return (Reply R)` then
 +
 ....
 {status: success; result: <R> }
@@ -1549,12 +1585,13 @@ We model `mem` as an array of bytes, and `table` as an array of execution functi
 We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
 ....
 Params = {
-  arg : NoArg | Blob;
+  data : NoData | Blob;
+  caller : NoCaller | EntityId;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
 }
 PartialCall = {
-  callee : CanId;
+  callee : CanisterId;
   method : MethodName;
   arg : Blob;
   on_reply : StillMissing;
@@ -1606,18 +1643,18 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-init = λ (self_id, blob) →
+init = λ (self_id, caller_id, blob) →
   Return { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
 +
 ....
-init = λ (self_id, blob) →
+init = λ (self_id, caller_id, blob) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
       api_nonce = fresh_nonce();
-      params = { arg = blog; reject_code = 0; reject_message ""}
+      params = { data = blob; caller = caller_id; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1630,11 +1667,11 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ blob → λ wasm_state →
+update_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
-      params = { arg = blog; reject_code = 0; reject_message = "" }
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = "" }
     }
   try func<es>(es.api_nonce) with Trap then Trap
   Return {
@@ -1647,11 +1684,11 @@ update_methods[method] = λ blob → λ wasm_state →
 * The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_query <method>`, and has value
 +
 ....
-query_methods[method] = λ blob → λ wasm_state →
+query_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       api_nonce = fresh_nonce();
-      params = { arg = blog; reject_code = 0; reject_message ""}
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
     }
   try func<es>(es.api_nonce) with Trap then Trap
   if es.performed_calls ≠ () then Trap
@@ -1670,8 +1707,8 @@ The System API defines various WebAssembly reference types (`api_nonce`, `canist
 ....
 type anyref
   = APIRef (abstract)
-  | CanisterRef CanId
-  | MethodRef (CanId, MethodName)
+  | IdRef EntityId
+  | MethodRef (CanisterId, MethodName)
   | CallRef Nat
 ....
 
@@ -1684,15 +1721,20 @@ Upon _instantiation_ of the WebAssembly module, we can provide the following exe
 ....
 ic.msg_arg_data_size<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if es.params.arg = NoArg then Trap
+  if es.params.data = NoData then Trap
   return |es.params.arg|
 
 ic.msg_arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  if es.params.arg = NoArg then Trap
+  if es.params.data = NoData then Trap
   if offset+length > |es.params.arg| then Trap
   if dst+length > |es.wasm_state.store.mem| then Trap
   es.wasm_state.store.mem[dst..dst+length] := es.params.arg[offset..offset+length]
+
+ic.msg_caller(api_nonce : anyref) =
+  if api_nonce ≠ APIRef es.api_nonce then Trap
+  if es.params.caller = NoCaller then Trap
+  return (IdRef es.params.caller)
 
 ic.msg_reject_code<es>(api_nonce : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
@@ -1741,22 +1783,22 @@ ic.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
   canister_id = es.wasm_state.store.mem[src..src+len]
   if not is_valid_id(canister_id) then Trap
 
-  return (CanisterRef canister_id)
+  return (IdRef canister_id)
 
 ic.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  let CanisterRef canister_id = canister_ref else Trap
+  let IdRef canister_id = canister_ref else Trap
   return |canister_id|
 
 ic.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  let CanisterRef canister_id = canister_ref else Trap
+  let IdRef canister_id = canister_ref else Trap
   if dst+|canister_id| > |es.wasm_state.store.mem| then Trap
   es.wasm_state.store.mem[dst..dst+|canister_id| := canister_id
 
 ic.canister_self<es>(api_nonce : anyref) : anyref =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  return (CanisterRef es.wasm_state.self_id)
+  return (IdRef es.wasm_state.self_id)
 
 ic.method_public<es>(
   api_nonce    : anyref,
@@ -1765,7 +1807,7 @@ ic.method_public<es>(
   name_len     : i32,
 ) : ( anyref ) =
   if api_nonce ≠ APIRef es.api_nonce then Trap
-  let CanisterRef callee = canister_ref else Trap
+  let IdRef callee = canister_ref else Trap
   if name_src+name_len > |es.wasm_state.store.mem| then Trap
 
   return (MethodRef callee es.wasm_state.store.mem[name_src..name_src+name_len])
@@ -1828,6 +1870,21 @@ ic.call_perform<es>(callref : anyref) =
 
   es.calls[callidx].performed := True
 
+  let build_callback (params, func, env) =
+    λ (self_id, wasm_state) →
+      let es' = ref {empty_execution_state with
+          wasm_state = wasm_state;
+          api_nonce = fresh_nonce();
+          self_id = self_id;
+          params = params
+        }
+      try func<es>(es'.api_nonce, env) with Trap then Trap
+      Return {
+        new_state = es'.wasm_state;
+        new_calls = es'.performed_calls;
+        response = es'.response;
+      }
+
   if arbitrary()
   then
     return 1
@@ -1839,14 +1896,12 @@ ic.call_perform<es>(callref : anyref) =
         method_name = pc.method_name;
         arg = pc.arg;
         callback = λ response → match response with
-          Reply blob → mkWasmFunc
-            ( { arg = blob; reject_code = 0 }
-            , λ<es'>(api') → pc.on_reply<es'>(api', pc.onreply_env)
-            )
-          Reject (reject_code, _message) → mkWasmFunc
-            ( { arg = NoArg; reject_code = reject_code }
-            , λ<es>(api') → pc.on_reject<es'>(api, pc.onreject_env)
-            )
+          Reply blob → build_callback
+              ( { data = blob; caller = NoCaller; reject_code = 0 }
+              , pc.on_reply , pc.on_reply_env )
+          Reject (reject_code, _message) → build_callback
+              ( { data = NoData; caller = NoCaller; reject_code = reject_code }
+              , pc.on_reject , pc.on_reject_env )
       }
     return 0
 
