@@ -972,13 +972,13 @@ The concrete mapping of this abstract `CanisterModule` to actual WebAssembly con
 
 The Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
 
-To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `replied` field is set to `true` once the call has received a response, further attempts to send a response fail.
+To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `responded` field is set to `true` once the call has received a response, further attempts to send a response fail.
 
 ....
 CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
-  replied : bool;
+  responded : bool;
 }
 CallId = (abstract)
 CallOrigin
@@ -1321,7 +1321,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = CM.callee;
       caller = CM.caller;
-      replied = false;
+      responded = false;
     }
 ....
 
@@ -1353,7 +1353,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[C.callee] ≠ EmptyCanister
     M.func(S.canisters[M.receiver].wasm_state) = Return res
-    (res.response = NoResponse) or (S.call_contexts[M.call_context].replied = false)
+    (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
 ....
 State after::
 ....
@@ -1381,7 +1381,7 @@ S with
       | if res.response ≠ NoResponse ]
 
      // only if res.response ≠ NoResponse:
-     call_contexts[M.call_context].replied = true
+     call_contexts[M.call_context].responded = true
 ....
 
 ==== Message execution (trapping)
@@ -1410,7 +1410,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     S.canisters[M.callee] ≠ EmptyCanister
     M.func(S.canisters[M.receiver].wasm_state) = Return res
-    S.call_contexts[M.call_context].replied = true
+    S.call_contexts[M.call_context].responded = true
     res ≠ NoResponse
 ....
 State after::
@@ -1424,16 +1424,16 @@ If there is no call, downstream calling context or response that could possibly 
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].replied = false
+    S.call_contexts[Ctxt_id].responded = false
     ∀ CallMessage msg ∈ S.messages. msg.call_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        (S.call_contexts[ctxt_ids].replied = false || S.response[ctxt_ids] exists)
+        (S.call_contexts[ctxt_ids].responded = false || S.response[ctxt_ids] exists)
         ==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
 S with
-    call_contexts[Ctxt_id].replied = true
+    call_contexts[Ctxt_id].responded = true
     messages =
       S.messages ·
       ResponseMessage {
