@@ -704,7 +704,7 @@ Furthermore, a canister can learn about its own identity:
 [#system-api-call]
 === Inter-canister method calls
 
-When handling a call, a canister can do further calls to another canister. Performing a call is a multi-step process:
+When handling an update call (or a callback), a canister can do further calls to another canister. Performing a call is a multi-step process:
 
 1. A canister/method-name pair is turned into an opaque `methodref`.
 2. A new call can be created from such a `methodref`, represented by a `callref`.
@@ -717,7 +717,7 @@ The `callref` reference is only valid between `ic.call_create` and `ic.call_perf
 
 This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
 
-This API is _not_ available from the canister initialization function, nor from the handler of an _update_ method.
+This API is _not_ available from the canister initialization function, nor from the handler of an _query_ method.
 
 * {blank}
 +
@@ -737,7 +737,7 @@ Creates a new `methodref` from a canister reference and the name of a public met
 Begins the assembly of a new call, to the given method.
 Returns the `callref` that can be filled further on.
 +
-This system call traps if it is calling during the handling of a <<api-query,query call>>.
+This system call traps if it is called from `canister_init` or during the handling of a <<api-query,query call>>.
 * {blank}
 +
   ic.call_arg_data_append : (
