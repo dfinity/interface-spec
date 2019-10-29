@@ -23,17 +23,17 @@ Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen
 
 === Open questions and missing bits
 
-As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.  (Items marked [MM] are things Mack has committed to take a cut at clarifying functional requirements for by August 19.)
+As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.
 
 * User IDs: Same question. Do these share the same namespace?
 * Missing: Methods without responses/fire-and-forget calls
 * To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API requests.
 * Missing: Specifying when responses are deleted.
 * Missing: Canister upgrades.
-* Missing: Payment and accounts [MM]
-* Missing: Gas accounting [MM or Dom]
-* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests) [MM]
-* Missing: Time (idea: separate per-canister time, nondeterministic time step transition) [MM]
+* Missing: Payment and accounts
+* Missing: Gas accounting
+* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests)
+* Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
 * Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
 * Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
 * Missing: Reads may specify a specific (future or past) state
