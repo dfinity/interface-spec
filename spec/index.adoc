@@ -442,8 +442,8 @@ More precisely:
  * Method calls between any _two_ canisters are delivered in order, as if they
    were communicating over a single simple FIFO queue.
  * If a WebAssembly function, within a single invocation, makes multiple calls
-   to the same canister, they are queued in the order of invocations to `ic.call_perform`.
- * Responses (including replies with `ic.msg_reply`, explicit rejects with `ic.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
+   to the same canister, they are queued in the order of invocations to `ic0.call_simple`.
+ * Responses (including replies with `ic0.msg_reply`, explicit rejects with `ic0.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
  * There is no particular order guarantee for ingress messages submitted via
    the HTTP interface.
 
@@ -572,6 +572,9 @@ WARNING: This is a scaffolding spec, close to the current implementation. It wil
 
 The System API is the interface between the running canister and the Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
 
+We want to leverage advanced WebAssembly features, such as WebAssembly host references. But as they are not yet supported by all tools involved, this section describes an initial System API that does not rely on host references. To emphasize that this is just a preliminary interface, we group the system methods under the module name `ic0`, planning to use `ic` for the real deal.
+In section [#host-references], we outline some of the proposed uses of WebAssembly host references.
+
 [#system-api-module]
 === WebAssembly module requirements
 
@@ -580,63 +583,60 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
 * If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import functions listed below, at the type given below.
-* It may have a `(start)` function. (Note that by construction, system calls that require a valid `api_nonce` will trap when called from `(start)`.)
-* If it exports a function called `canister_init`, the function must have type `+(api_nonce : anyref) -> ()+`.
-* If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+(api_nonce : anyref) -> ()+`.
+* It may have a `(start)` function.
+* If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
+* If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This may be allowed in the future.)
 * No floating point local or global variables are used in the module. (This may be allowed in the future.)
-
-NOTE: This document assumes that WebAssembly host references can be used (e.g. `anyref`). Until this is so, every `anyref` is replaced with an `i64` that should be treated as opaque by the WebAssembly code.
 
 === Interpretation of numbers
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array lengths), they are to be interpreted as unsigned.
 
-=== The API nonce
-
-A design goal of the System API is that the canister can restrict which parts of its code can use it. Therefore, all functions exported by the canister have an `api_nonce` parameter, and all invocations of system functions require such a parameter. Because this parameter is a WebAssembly host reference (type `anyref`), it cannot be forged.
-
 [#system-api-requests]
 === Public methods
 
-To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+(api_nonce : anyref) -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
+To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
 
 NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
 
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand.
 In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
-* `+ic.msg_arg_data_size : (api_nonce : anyref) -> i32+`
+* `+ic0.msg_arg_data_size : () -> i32+`
 +
 Size, in bytes, of the argument data.
 +
 This traps if there is no argument data is available (e.g. in a reply callback).
 
-* `+ic.msg_arg_data_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
+* `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
 +
 This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
 
-* `+ic.msg_caller : (api_nonce : anyref) -> (id : anyref)+`
+* {blank}
 +
-The identity of the caller, which may be a canister id or a user id. See <<system-api-canister-id>> for more details on ids.
+  ic0.msg_caller_size : () -> (i32)
+  ic0.msg_caller_copy : (dst : i32, offset: i32, length : i32) -> ()
++
+The identity of the caller, which may be a canister id or a user id.
 +
 This function is available in the `canister_init` method and any exported method, but it traps in a reply or reject callback.
 
 In a reject callback, no argument is available, but the reject code can be queried:
 
-* `+ic.msg_reject_code : (api_nonce : anyref) -> i32+`
+* `+ic0.msg_reject_code : () -> i32+`
 +
 Returns the reject code, if the current function is invoked as a reject callback.
 +
 It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
 +
-* `+ic.msg_reject_msg_len : (api_nonce : anyref) -> i32+`
+* `+ic0.msg_reject_msg_len : () -> i32+`
 +
 Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
-* `+ic.msg_reject_msg_copy : (api_nonce : anyref, dst : i32, offset : i32, length : i32) -> ()+`
+* `+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, length : i32) -> ()+`
 +
 Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
 +
@@ -645,7 +645,7 @@ This traps if `offset+length` is greater than the size of the reject message, or
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
-* `+ic.msg_reply_data_append : (api_nonce : anyref, src : i32, length : i32) -> ()+`
+* `+ic0.msg_reply_data_append : (src : i32, length : i32) -> ()+`
 +
 Copies the data referred to by `src`/`length` out of the canister and appends it to the (initially empty) data reply.
 +
@@ -653,21 +653,21 @@ NOTE: This can be invoked multiple times to build up the argument with data from
 +
 This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
 
-* `+ic.msg_reply : (api_nonce : anyref) -> ()+`
+* `+ic0.msg_reply : () -> ()+`
 +
-Replies to the sender with the data assembled using `ic.msg_reply_data_append`.
+Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
-* `+ic.msg_reject : (api_nonce : anyref, src : i32, length : i32) -> ()+`
+* `+ic0.msg_reject : (src : i32, length : i32) -> ()+`
 +
 Rejects the call. The data referred to by `src`/`length` is used for the diagnostic message.
 +
 This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`length` is not valid UTF8.
 +
-Possible reply data assembled using `ic.msg_reply_data_append` is discarded.
+Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
 
-If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic.msg_reply`, `ic.msg_reject`, `ic.call_invoke`), are discarded.
+If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded.
 
 === System methods
 
@@ -676,138 +676,61 @@ A canister may export a system method. In contrast to public methods, system met
 [#system-api-init]
 === System method: canister_init
 
-If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic.msg_arg_data_size/copy`.
+If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
 
-The following system calls will trap when called during the execution of `canister_init`: `ic.msg_reply`, `ic.msg_reply_data_append`, `ic.msg_reject`, `ic.call_create`.
+The following system calls will trap when called during the execution of `canister_init`: `ic0.msg_reply`, `ic0.msg_reply_data_append`, `ic0.msg_reject`, `ic0.call_simple`.
 
 The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
-[#system-api-canister-id]
-=== Resolving entity ids
+[#system-api-canister-self]
+=== Self-identification
 
-To future-proof the System API, references to canisters (and users) are represented as abstract WebAssembly references (`anyref`). We provide system functions to convert between the abstract references (the `anyref`) and their transparent public id (the `blob`, represented by a pointer/length pair).
+A canister can learn about its own identity:
 
-* `+ic.id_valid : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> i32+`
-* `+ic.id_lookup : (api_nonce : anyref, canister_id_src : i32, canister_id_len : i32) -> (canister_ref : anyref)+`
-* `+ic.id_len : (api_nonce : anyref, canister_ref : anyref) -> i32+`
-* `+ic.id_copy : (api_nonce : anyref, canister_ref : anyref, dst: i32) -> ()+`
-
-The `ic.id_valid` function returns `1` if the id is syntactically valid (e.g.: exactly 8 bytes long if we are using 64 bit canister ids) and `0` otherwise. It does not check whether there exists an entity with that id (as that might not be locally possible)
-
-The `ic.id_lookup` function traps if the the canister id is not valid. As usually, all these function trap if they would read or write canister memory out of bounds.
-
-Furthermore, a canister can learn about its own identity:
-
- * `+ic.canister_self : (api_nonce : anyref) -> (canister_ref : anyref)+`
+* {blank}
++
+  ic0.canister_self_len : () -> (i32)
+  ic0.canister_self_copy: (dst : i32, offset : i32, length : i32) -> ()+
++
+These functions allow the canister to query its own canister id (as a blob). As usual, `_len` returns the length in bytes and `_copy` can be used to copy bytes from the blob into the Wasm heap.
 
 
 [#system-api-call]
 === Inter-canister method calls
 
-When handling an update call (or a callback), a canister can do further calls to another canister. Performing a call is a multi-step process:
-
-1. A canister/method-name pair is turned into an opaque `methodref`.
-2. A new call can be created from such a `methodref`, represented by a `callref`.
-3. A number of functions can add arguments (data, payments, etc.) to the call.
-4. When everything is setup, the canister tells the system to perform the call.
-
-The `methodref` can be used multiple times, it just represents the canister/method-name pair.
-
-The `callref` reference is only valid between `ic.call_create` and `ic.call_perform`, and only within a single WebAssembly function invocation; it cannot be stored or forwarded.
-
-This design is extensible and forward compatible to new call destinations (e.g. new ways to obtain a `methodref` besides just a public canister/method pair), new form of arguments (multiple payments, references) and other settings (gas, expiry times etc.)
-
-This API is _not_ available from the canister initialization function, nor from the handler of an _query_ method.
+When handling an update call (or a callback), a canister can do further calls to another canister.
 
 * {blank}
 +
-  ic.method_public : (
-    api_nonce : anyref,
-    callee    : anyref, // a canister reference
-    name_src  : i32,    // a pointer to and the length of the
-    name_len  : i32,    //   destination’s unmangled method name
-  ) -> ( methodref : anyref )
-+
-Creates a new `methodref` from a canister reference and the name of a public method. This function always succeeds. For example, no checking is done if the method actually exists.
-
-* {blank}
-+
-  ic.call_create : ( methodref : anyref ) -> ( callref : anyref )
-+
-Begins the assembly of a new call, to the given method.
-Returns the `callref` that can be filled further on.
-+
-This system call traps if it is called from `canister_init` or during the handling of a <<api-query,query call>>.
-* {blank}
-+
-  ic.call_arg_data_append : (
-    callref : anyref  // the call to extend
-    src     : i32,    // a pointer to and the length of the
-    len     : i32,    //   argument to pass to the method
-  ) -> ()
-+
-Copies the data referred to by `src`/`len` out of the canister and appends it to the (initially empty) data argument of the call.
-+
-NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
-+
-This system call traps if `src+len` exceeds the size of the WebAssembly memory.
-* {blank}
-+
-  ic.call_on_reply : (
-    callref : anyref  // the call to extend
-    fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
-    env     : i32,    // an environment to give back to fun
-  ) -> ()
-+
-The system records the current function table entry at the index `fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic.msg_arg_data_size`/`ic.msg_arg_data_copy`.
-+
-There must be exactly one invocation of `ic.call_on_reply` for each `callref`. (Omitting `ic.call_on_reply` may be allowed later to indicate that the sending canister does not care about receiving the reply.)
-* {blank}
-+
-  ic.call_on_reject : (
-    callref : anyref  // the call to extend
-    fun     : i32,    // funtab entry of type (api : anyref, env : i32) -> ()
-    env     : i32,    // an environment to give back to fun
-  ) -> ()
-+
-The system records the current function table entry at the index `fun`. If the method call fails, the noted function is executed.
-+
-There must be exactly one invocation of `ic.call_on_reject` for each `callref`. (Omitting `ic.call_on_reject` may be allowed later to indicate that the sending canister wants to ignore the response, or pass it on to its own reject handler.)
-
-* {blank}
-+
-  ic.call_perform : ( callref : anyref ) -> ( err_code : i32 )
-+
-Indicate that the call is ready to be performed. The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
-+
-After `ic.call_perform`, the `callref` must not be used any more. Invoking any system function with that callref will trap.
-+
-If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
-+
-If the system returns a non-zero value, the call cannot (and will not be) performed.
-+
-If a call is created, but not performed by the time the WebAssembly function ends, it is discarded.
-
-
-* {blank}
-+
-  ic.call_simple : (
-    api_nonce  : anyref,
-    callee     : anyref,
+  ic0.call_simple : (
+    callee_src : i32,
+    callee_len : i32,
     name_src   : i32,
     name_len   : i32,
     reply_fun  : i32,
     reply_env  : i32,
     reject_fun : i32,
     reject_env : i32,
-    src        : i32,
-    len        : i32
+    data_src   : i32,
+    data_len   : i32
   ) -> ( err_code : i32 )
 +
-Primariliy as a scaffolding mechanism, the combination of `ic.method_public`, `ic.call_create`, `ic.call_on_reply`, `ic.call_on_reject`, `ic.call_arg_data_append` and `ic.call_perform` can be performed using a single system function call.
-
-NOTE: The `ic.call_`-prefixed system functions do not require an 'api_nonce', only the construction of the `methodref` passed to `ic.call_create` does.
-This API design supports delegating the initialization of a given `callref` to less trusted code, without granting that code full access to the API via an `api_nonce`.
+This performs a function call to the canister specified by `callee_src/_len`, calling the method specified by `name_src/_len`, sending the data specified by `name_src/len`.
++
+The system records the current function table entry at the index `reply_fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic0.msg_arg_data_size`/`ic0.msg_arg_data_copy`.
++
+The system also records the current function table entry at the index `reject_fun`. If the method call fails, or the other canister explicitly rejects the call, the noted function is executed.
++
+These callback functions need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
++
+The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
++
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
++
+If the system returns a non-zero value, the call cannot (and will not be) performed.
++
+This system call traps if any of the `*_src+*_len` exceed the size of the WebAssembly memory.
+It also traps if it is called during `canister_init` or during the handling of a <<api-query,query call>>.
 
 [#system-api-stable-storage]
 === Stable storage
@@ -818,13 +741,13 @@ The stable memory is initially empty.
 
 * {blank}
 +
-  ic.stable_size(api_nonce : anyref) -> (page_count : i32)
+  ic0.stable_size() -> (page_count : i32)
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 65Ki bytes.)
 
 * {blank}
 +
-  ic.stable_grow(api_nonce : anyref, new_pages : i32) -> (old_page_count : i32)
+  ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 
@@ -832,7 +755,7 @@ If successful, returns the _previous_ size of the memory (in pages). Otherwise, 
 
 * {blank}
 +
-  ic.stable_write(api_nonce : anyref, offset : i32, src : i32, len : i32) -> ()
+  ic0.stable_write(offset : i32, src : i32, len : i32) -> ()
 +
 copies the data referred to by `src`/`len` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 
@@ -840,7 +763,7 @@ This system call traps if `src+len` exceeds the size of the WebAssembly memory o
 
 * {blank}
 +
-  ic.stable_read(api_nonce : anyref, dst : i32, offset : i32, len : i32) > ()
+  ic0.stable_read(dst : i32, offset : i32, len : i32) > ()
 +
 copies the data referred to by `offset`/`len` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 
@@ -850,9 +773,7 @@ This system call traps if `dst+len` exceeds the size of the WebAssembly memory o
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
 
-NOTE: This system call is intentionally not guarded by an `api_nonce`, so that one can do Printf-like debugging of code that otherwise is not allowed to issue system calls without having to refactor the code first.
-
-* `+ic.debug_print : (src : i32, len : i32) -> ()+`
+* `+ic0.debug_print : (src : i32, len : i32) -> ()+`
 +
 When executing in an environment that supports debugging, this copies out the data specified by `src` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 +
@@ -862,12 +783,22 @@ NOTE: We may at some point require modules deployed to the real network to not e
 
 Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
 
-* `+ic.trap : (src : i32, len : i32) -> ()+`
+* `+ic0.trap : (src : i32, len : i32) -> ()+`
 +
 This function always traps.
 +
 The environment may copy out the data specified by `src` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 
+[#host-references]
+=== Outlook: Using Host References
+
+The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
+
+1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
+2. The use of references, instead of binary blobs, to address entities (users, canisters), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of entity ids and references.
+3. In addition to the monolithic `ic0.call_simple`, a compositional builder interface to create calls is provided.
+
+A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
 
 [#public-spec]
 == Abstract public behavior
@@ -1590,30 +1521,18 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
 }
-PartialCall = {
-  callee : CanisterId;
-  method : MethodName;
-  arg : Blob;
-  on_reply : StillMissing;
-  on_reply_env : i32;
-  on_reject : StillMissing;
-  on_reject_env : i32;
-  performed : Bool;
-}
 ExecutionState = {
   wasm_state : WasmState;
-  api_nonce : (abstract);
   params : Params;
   response : NoResponse | Response;
   reply_params : { arg : Blob };
-  calls : List PartialCall;
-  performed_calls : List Call
+  calls : List Call;
 }
 
 ....
 
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
-Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(api_nonce)` for the invocation of a WebAssembly function with type `+(api_nonce : anyref) -> ()+`).  The lifetime of the `ExecutionState` data structure, and the `api_nonce`, is that one invocation of such a function.
+Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that one invocation of such a function.
 
 WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
 
@@ -1628,12 +1547,10 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 ....
 empty_execution_state = {
   wasm_state = (undefined);
-  api_nonce = (undefined);
   params = (undefined);
   response = NoResponse;
   reply_params : { arg = "" };
   calls : [];
-  performed_calls : [];
 }
 ....
 
@@ -1653,10 +1570,9 @@ Otherwise, if the WebAssembly module exports a function `f` under the name `cani
 init = λ (self_id, caller_id, blob) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
-      api_nonce = fresh_nonce();
       params = { data = blob; caller = caller_id; reject_code = 0; reject_message ""}
     }
-  try func<es>(es.api_nonce) with Trap then Trap
+  try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
   Return es.wasm_state
@@ -1670,13 +1586,12 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 update_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      api_nonce = fresh_nonce();
       params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = "" }
     }
-  try func<es>(es.api_nonce) with Trap then Trap
+  try func<es>() with Trap then Trap
   Return {
     new_state = es.wasm_state;
-    new_calls = es.performed_calls;
+    new_calls = es.calls;
     response = es.response;
   }
 ....
@@ -1687,198 +1602,114 @@ update_methods[method] = λ arg → λ wasm_state →
 query_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      api_nonce = fresh_nonce();
       params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
     }
-  try func<es>(es.api_nonce) with Trap then Trap
-  if es.performed_calls ≠ () then Trap
+  try func<es>() with Trap then Trap
+  if es.calls ≠ () then Trap
   if es.response = NoResponse then Trap
   Return es.response;
 ....
 +
-This formulation checks afterwards that the system calls `call.perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
+This formulation checks afterwards that the system calls `ic0.calls_simple` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly) modified `es.wasm_state` is discarded.
 
 
-==== Host references
+==== Helper functions
 
-The System API defines various WebAssembly reference types (`api_nonce`, `canisterref`, `methodref`, `callref`), all passed as a WebAssembly `anyref`. These are opaque to the WebAssembly code, but transparent to our System API. So we model a value of type `anyref` as follows:
-....
-type anyref
-  = APIRef (abstract)
-  | IdRef EntityId
-  | MethodRef (CanisterId, MethodName)
-  | CallRef Nat
-....
+In the following section, we use the these helper functions
 
-The syntax `let MethodName (c, m) = ref else Trap` indicates that a system functions extracts the values `c` and `m` from a `methodref`, trapping if the reference is not actually a `methodref`. In the future, with the _type import_ WebAssembly proposal, module validation will ensure that these different variants of references are properly distinguished by type.
+copy_to_canister<es>(dst : i32, offset : i32, length : i32, data : blob) =
+  if offset+length > |data| then Trap
+  if dst+length > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+length] := data[offset..offset+length]
+
+copy_from_canister<es>(src : i32, length : i32) blob =
+  if src+length > |es.wasm_state.store.mem| then Trap
+  return es.wasm_state.store.mem[src..src+length]
 
 ==== System imports
 
 Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
 
 ....
-ic.msg_arg_data_size<es>(api_nonce : anyref) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_arg_data_size<es>() : i32 =
   if es.params.data = NoData then Trap
   return |es.params.arg|
 
-ic.msg_arg_data_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, length:i32) =
   if es.params.data = NoData then Trap
-  if offset+length > |es.params.arg| then Trap
-  if dst+length > |es.wasm_state.store.mem| then Trap
-  es.wasm_state.store.mem[dst..dst+length] := es.params.arg[offset..offset+length]
+  copy_to_canister<es>(dst, offset, length, es.param.arg)
 
-ic.msg_caller(api_nonce : anyref) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_caller_size() : i32 =
   if es.params.caller = NoCaller then Trap
-  return (IdRef es.params.caller)
+  return |es.params.caller|
 
-ic.msg_reject_code<es>(api_nonce : anyref) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_caller_copy(dst:i32, offset:i32, length:i32) : i32 =
+  if es.params.caller = NoCaller then Trap
+  copy_to_canister<es>(dst, offset, length, es.params.caller)
+
+ic0.msg_reject_code<es>() : i32 =
   es.params.reject_code
 
-ic.msg_reject_msg_len<es>(api_nonce : anyref) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_reject_msg_len<es>() : i32 =
   if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
-ic.msg_reject_msg_copy<es>(api_nonce : anyref, dst:i32, offset:i32, length:i32) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, length:i32) : i32 =
   if es.reject_code = 0 then Trap
-  if offset+length > |es.params.reject_msg| then Trap
-  if dst+length > |es.wasm_state.store.mem| then Trap
-  es.wasm_state.store.mem[dst..dst+length] := es.params.reject_msg[offset..offset+length]
+  copy_to_canister<es>(dst, offset, length, es.params.reject_msg)
 
-ic.msg_reply_data_append<es>(api_nonce : anyref, src : i32, length : i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_reply_data_append<es>(src : i32, length : i32) =
   if es.response ≠ NoResponse then Trap
-  if src+length > |es.wasm_state.store.mem| then Trap
-  es.reply_params.arg := es.reply_params.arg · es.wasm_state.store.mem[src..src+len];
+  es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, length)
 
-ic.msg_reply<es>(api_nonce : anyref) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_reply<es>() =
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
-ic.msg_reject<es>(api_nonce : anyref, src : i32, length : i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.msg_reject<es>(src : i32, length : i32) =
   if es.response ≠ NoResponse then Trap
-  if src+length > |es.wasm_state.store.mem| then Trap
-  es.response := Reject (CANISTER_REJECT, es.wasm_state.store.mem[src..src+len])
+  es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, length))
 
-ic.id_valid<es>(api_nonce : anyref, src : i32, len : i32) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  if src+len > |es.wasm_state.store.mem| then Trap
+ic0.canister_self_len<es>() : i32 =
+  return |es.wasm_state.self_id|
 
-  if is_valid_id(es.wasm_state.store.mem[src..src+len])
-  then return 1
-  then return 0
+ic0.canister_self_copy(dst:i32, offset:i32, length:i32)  =
+  copy_to_canister<es>(dst, offset, length, es.wasm_state.self_id)
 
-ic.id_lookup<es>(api_nonce : anyref, src : i32, len : i32) : anyref =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  if src+len > |es.wasm_state.store.mem| then Trap
-  canister_id = es.wasm_state.store.mem[src..src+len]
-  if not is_valid_id(canister_id) then Trap
+ic0.call_simple<es>(
+    callee_src : i32,
+    callee_len : i32,
+    name_src   : i32,
+    name_len   : i32,
+    reply_fun  : i32,
+    reply_env  : i32,
+    reject_fun : i32,
+    reject_env : i32,
+    data_src   : i32,
+    data_len   : i32) =
 
-  return (IdRef canister_id)
+  callee := copy_from_canister<es>(callee_src, callee_len);
+  method_name := copy_from_canister<es>(name_src, name_len);
+  arg := copy_from_canister<es>(data_src, data_len);
 
-ic.id_len<es>(api_nonce : anyref, canister_ref : anyref) : i32 =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  let IdRef canister_id = canister_ref else Trap
-  return |canister_id|
+  if reply_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
+  on_reply := es.wasm_state.store.table[reply_fun]
 
-ic.id_copy<es>(api_nonce : anyref, canister_ref : anyref, dst: i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  let IdRef canister_id = canister_ref else Trap
-  if dst+|canister_id| > |es.wasm_state.store.mem| then Trap
-  es.wasm_state.store.mem[dst..dst+|canister_id| := canister_id
-
-ic.canister_self<es>(api_nonce : anyref) : anyref =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  return (IdRef es.wasm_state.self_id)
-
-ic.method_public<es>(
-  api_nonce    : anyref,
-  canister_ref : anyref,
-  name_src     : i32,
-  name_len     : i32,
-) : ( anyref ) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-  let IdRef callee = canister_ref else Trap
-  if name_src+name_len > |es.wasm_state.store.mem| then Trap
-
-  return (MethodRef callee es.wasm_state.store.mem[name_src..name_src+name_len])
-
-ic.call_create<es>(
-  method_ref   : anyref,
-) : ( anyref ) =
-  let MethodRef callee method_name = method_ref else Trap
-
-  callref := |es.calls|
-  es.calls := es.calls ·
-   {
-      callee = callee;
-      method_name = method_name;
-      arg = "";
-      on_reply = StillMissing;
-      on_reply_env = 0;
-      on_reject = StillMissing;
-      on_reject_env = 0;
-      performed = False;
-    }
-  return callref
-
-ic.call_arg_data_append<es>(callref : anyref, src : i32, len : i32) =
-  let CallRef callidx = callref else Trap
-  if callidx >= |es.calls| then Trap
-  if es.calls[callidx].performed then Trap
-  if src+len > |es.wasm_state.store.mem| then Trap
-
-  es.calls[callidx].arg := es.calls[callidx].arg · es.wasm_state.store.mem[src..src+len];
-
-ic.call_on_reply<es>(callref : anyref, fun : i32, env : i32) =
-  let CallRef callidx = callref else Trap
-  if callidx >= |es.calls| then Trap
-  if es.calls[callidx].performed then Trap
-  if fun > |es.wasm_state.store.table| then Trap
-  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
-  if es.calls[callidx].on_reply ≠ StillMissing then Trap
-
-  es.calls[callidx].on_reply := es.wasm_state.store.table[fun]
-  es.calls[callidx].on_reply_env := env
-
-ic.call_on_reject<es>(callref : anyref, fun : i32, env : i32) =
-  let CallRef callidx = callref else Trap
-  if callidx >= |es.calls| then Trap
-  if es.calls[callidx].performed then Trap
-  if fun > |es.wasm_state.store.table| then Trap
-  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
-  if es.calls[callidx].on_reject ≠ StillMissing then Trap
-
-  es.calls[callidx].on_reject := es.wasm_state.store.table[fun]
-  es.calls[callidx].on_reject_env := env
-
-ic.call_perform<es>(callref : anyref) =
-  let CallRef callidx = callref else Trap
-  if callidx >= |es.calls| then Trap
-  if es.calls[callidx].performed then Trap
-  if es.calls[callidx].on_reply = StillMissing then Trap
-  if es.calls[callidx].on_reject = StillMissing then Trap
-
-  es.calls[callidx].performed := True
+  if reject_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
+  on_reject := es.wasm_state.store.table[reject_fun]
 
   let build_callback (params, func, env) =
     λ (self_id, wasm_state) →
       let es' = ref {empty_execution_state with
           wasm_state = wasm_state;
-          api_nonce = fresh_nonce();
           self_id = self_id;
           params = params
         }
-      try func<es>(es'.api_nonce, env) with Trap then Trap
+      try func<es>(env) with Trap then Trap
       Return {
         new_state = es'.wasm_state;
         new_calls = es'.performed_calls;
@@ -1889,51 +1720,25 @@ ic.call_perform<es>(callref : anyref) =
   then
     return 1
   or
-    pc := es.calls[callidx]
-    es.performed_calls := es.performed_calls ·
+    es.calls := es.calls ·
       {
-        callee = pc.callee;
-        method_name = pc.method_name;
-        arg = pc.arg;
+        callee = callee;
+        method_name = method_name;
+        arg = arg;
         callback = λ response → match response with
           Reply blob → build_callback
               ( { data = blob; caller = NoCaller; reject_code = 0 }
-              , pc.on_reply , pc.on_reply_env )
+              , on_reply , reply_env )
           Reject (reject_code, _message) → build_callback
               ( { data = NoData; caller = NoCaller; reject_code = reject_code }
-              , pc.on_reject , pc.on_reject_env )
+              , on_reject , eject_env )
       }
     return 0
 
-ic.call_simple<es>(
-    api_nonce  : anyref,
-    callee     : anyref,
-    name_src   : i32,
-    name_len   : i32,
-    reply_fun  : i32,
-    reply_env  : i32,
-    reject_fun : i32,
-    reject_env : i32,
-    src        : i32,
-    len        : i32)
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-
-  methref := ic.method_public(api_nonce, callee, name_src, name_len)
-  callref := ic.call_create(methref)
-  ic.call_on_reply(callref, reply_fun, reply_env)
-  ic.call_on_reject(callref, reject_fun, reject_env)
-  ic.call_arg_data_append(callref, src, len)
-  status := ic.call_perform(callref)
-  return status
-
-ic.stable_size<es>(api_nonce : anyref) -> (page_count : i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-
+ic0.stable_size<es>() -> (page_count : i32) =
   return |es.wasm_state.stable_mem| / 64k
 
-ic.stable_grow<es>(api_nonce : anyref, new_pages : i32) -> (old_page_count : i32) =
-  if api_nonce ≠ APIRef es.api_nonce then Trap
-
+ic0.stable_grow<es>(new_pages : i32) -> (old_page_count : i32) =
   if arbitrary()
   then return -1
   else
@@ -1942,24 +1747,22 @@ ic.stable_grow<es>(api_nonce : anyref, new_pages : i32) -> (old_page_count : i32
       es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
     return old_size
 
-ic.stable_write<es>(api_nonce : anyref, offset : i32, src : i32, len : i32) -> ()
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.stable_write<es>(offset : i32, src : i32, len : i32) -> ()
   if src+len > |es.wasm_state.store.mem| then Trap
   if offset+len > |es.wasm_state.stable_mem| then Trap
 
-  es.wasm_state.stable_mem[offset..offset+len] :=  es.wasm_state.store.mem[src..src+len]
+  es.wasm_state.stable_mem[offset..offset+len] := es.wasm_state.store.mem[src..src+len]
 
-ic.stable_read<es>(api_nonce : anyref, dst : i32, offset : i32, len : i32) > ()
-  if api_nonce ≠ APIRef es.api_nonce then Trap
+ic0.stable_read<es>(dst : i32, offset : i32, len : i32) > ()
   if offset+len > |es.wasm_state.stable_mem| then Trap
   if dst+len > |es.wasm_state.store.mem| then Trap
 
-  es.wasm_state.store.mem[offset..offset+len] :=  es.wasm_state.stable.mem[src..src+len]
+  es.wasm_state.store.mem[offset..offset+len] := es.wasm_state.stable.mem[src..src+len]
 
-ic.debug_print<es>(src : i32, len : i32) =
+ic0.debug_print<es>(src : i32, len : i32) =
   return
 
-ic.trap<es>(src : i32, len : i32) =
+ic0.trap<es>(src : i32, len : i32) =
   Trap
 ....
 
