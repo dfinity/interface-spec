@@ -17,7 +17,7 @@ It will be everyone’s shared responsibility to keep this document accurate, bu
 
 === Status
 
-The documents is currently constantly moving, at a pointer somewhere in the triangle between what is implemented, what is being designed and what is being approved, in a best-effort way.
+The document is currently constantly moving, at a pointer somewhere in the triangle between what is implemented, what is being designed and what is being approved, in a best-effort way.
 
 Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
 
@@ -99,7 +99,7 @@ The public entry points of canisters are called _methods_. Methods can be declar
 
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
-Inter-canister calls do not distinguish between update and query calls. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
+Inter-canister calls do not distinguish between update and query methods. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
@@ -425,7 +425,7 @@ Rejection codes are member of the following enumeration:
 * `CANISTER_REJECT` (4): Explicit reject by the canister.
 * `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
-The symbolic names of this enumeration is used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
+The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 //end::reject-codes[]
@@ -492,7 +492,7 @@ NOTE: Should we add features that _change the state_ but are node-specific (e.g.
 For all endpoints, the client performs a POST HTTPS request with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
 * The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body; the user can ues separate `request_status` requests (see <<api-status>>) to determine the response.
-* The `/api/v2/read` endpoint accepts the _synchronous__ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
+* The `/api/v1/read` endpoint accepts the _synchronous__ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
 In both cases case, the usual HTTP errors (e.g. 503) may occur.
 
@@ -723,7 +723,7 @@ The system also records the current function table entry at the index `reject_fu
 +
 These callback functions need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
 +
-The system queues the call message to the given destination, but does not actually act on in until the current WebAssembly function returns without trapping.
+The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
 +
 If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
 +
@@ -803,7 +803,7 @@ A canister may only use the old _or_ the new interface; the system detects which
 [#public-spec]
 == Abstract public behavior
 
-The sections above describe the interface, i.e. outer edges of the Internet Computer, but gives only intuitive and rather vague information about what these interfaces actually do.
+The sections above describe the interface, i.e. outer edges of the Internet Computer, but give only intuitive and rather vague information about what these interfaces actually do.
 
 This section aims to address that question with great precision, by describing the _abstract state_ of the whole Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
 
