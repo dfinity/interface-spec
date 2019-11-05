@@ -962,8 +962,6 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API requests passed to `/api/v1/read`, which are only ephemeral.
 
-The `sender` field is always the id of the user who submits the message, and is authenticated (once we have defined signatures).
-
 ....
 Request
   = RegisterCanister = {
