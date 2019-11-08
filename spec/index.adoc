@@ -428,6 +428,9 @@ Rejection codes are member of the following enumeration:
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
+
+When canisters explicitly reject a message (see <<system-api-requests>>), they can specify the reject message, but _not_ the reject code; it is always `CANISTER_REJECT`. In this sense, the reject code is trustworthy: If the system resonds with a `SYS_FATAL` reject, then it really was the system issuing this reject.
+
 //end::reject-codes[]
 
 
@@ -664,6 +667,8 @@ This function can be called at most once (a second call will trap), and must be 
 Rejects the call. The data referred to by `src`/`length` is used for the diagnostic message.
 +
 This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`length` is not valid UTF8.
++
+The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
 
