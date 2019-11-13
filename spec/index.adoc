@@ -887,7 +887,7 @@ MethodCall = {
   callback: Response -> UpdateFunc;
 }
 
-InitFunc = (CanisterId, Blob) -> Trap | Return WasmState
+InitFunc = (CanisterId, Arg) -> Trap | Return WasmState
 UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
@@ -1190,7 +1190,11 @@ Conditions::
     S.requests[InstallCode M] = Received
     S.canisters[M.canister_id] = EmptyCanister
     M.sender ∈ S.admins[M.canister_id]
-    M.module.init (M.arg) =
+    Arg = {
+      data = M.data;
+      caller = M.caller
+    }
+    M.module.init (Arg) =
       Return { new_state = New_state; new_calls = (); response = NoResponse }
 ....
 State after::
@@ -1570,17 +1574,17 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-init = λ (self_id, caller_id, blob) →
+init = λ (self_id, arg) →
   Return { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
 +
 ....
-init = λ (self_id, caller_id, blob) →
+init = λ (self_id, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
-      params = { data = blob; caller = caller_id; reject_code = 0; reject_message ""}
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
