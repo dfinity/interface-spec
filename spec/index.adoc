@@ -223,6 +223,7 @@ The fields are typed and can have one of these types:
 * `nat`: A (possibly unbounded) natural number
 * `text`: Human readable text (e.g. sequence of Unicode codepoints)
 * `blob`: Arbitrary binary data
+* `float`: A floating point number
 
 For readablity, we use the following type synonyms:
 ....
@@ -291,6 +292,7 @@ Request fields::
 * `canister_id` (`CanisterId`): The id of the canister to install code for.
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
+* `compute_allocation` (`float`, optional): The inital allocation requested
 Reply fields::
 * None
 
@@ -301,6 +303,8 @@ This will instantiate the canister module and invoke its `canister_init` system 
 If the canister does not have a `canister_init` system method, then `arg` is ignored.
 
 This is atomic: If the response to this request is a `reject`, then this request had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
+
+The optional field `compute_allocation`, if present, must be a number between 0 and 1, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a fraction of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0.
 
 NOTE: This assumes that a canister module fits into a single request. If this assumption turns out to be false, we will provide a more elaborate multi-step interface for code installation. But even then, this simple, atomic way is worth keeping (less error conditions), so we are forward-compatible.
 
@@ -514,6 +518,7 @@ followed by a data item with major type 5 (“Map of pairs of data items”), fo
 
 * Strings: Major type 3 (“Text string”).
 * Blobs: Major type 2 (“Byte string”)
+* Float: Major type 7 minor type 27 (“IEEE 754 double-precision float”)
 * Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
 * Nested records: Major type 5 followed by string keys.
 
@@ -1177,6 +1182,8 @@ S with
 ==== Canister code installation
 
 Only an admin of the given canister can install new code. This turns an empty canister into a running canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+
+The `compute_allocation` is ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
 Conditions::
 ....
