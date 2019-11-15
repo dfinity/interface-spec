@@ -545,8 +545,8 @@ The `sender_pubkey` and `sender_sig` fields do _not_ contribute to the calculati
 
 The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
 
- * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of length 32.
- * Request fields that indicate signatures (`sender_sig`) are binary blobs of length 64.
+ * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
+ * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
 
 The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
@@ -600,7 +600,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 === Interpretation of numbers
 
-WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array lengths), they are to be interpreted as unsigned.
+WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
 [#system-api-requests]
 === Public methods
@@ -618,16 +618,16 @@ Size, in bytes, of the argument data.
 +
 This traps if there is no argument data is available (e.g. in a reply callback).
 
-* `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, length : i32) -> ()+`
+* `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()+`
 +
-Copies `length` bytes from `msg_arg[offset..offset+length]` to `memory[dst..dst+length]`, i.e., from the argument data into the Wasm memory.
+Copies `size` bytes from `msg_arg[offset..offset+size]` to `memory[dst..dst+size]`, i.e., from the argument data into the Wasm memory.
 +
-This traps if `offset+length` is greater than the size of the argument data, or if `dst+length` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
+This traps if `offset+size` is greater than the size of the argument data, or if `dst+size` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
 
 * {blank}
 +
   ic0.msg_caller_size : () -> (i32)
-  ic0.msg_caller_copy : (dst : i32, offset: i32, length : i32) -> ()
+  ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
 +
 The identity of the caller, which may be a canister id or a user id.
 +
@@ -641,25 +641,25 @@ Returns the reject code, if the current function is invoked as a reject callback
 +
 It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
 +
-* `+ic0.msg_reject_msg_len : () -> i32+`
+* `+ic0.msg_reject_msg_size : () -> i32+`
 +
-Returns the length of the reject message, in bytes. Traps if this is not invoked from a reject callback.
-* `+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, length : i32) -> ()+`
+Returns the size of the reject message, in bytes. Traps if this is not invoked from a reject callback.
+* `+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()+`
 +
-Copies `length` bytes from `reject_msg[offset..offset+length]` to `memory[dst..dst+length]`.
+Copies `size` bytes from `reject_msg[offset..offset+size]` to `memory[dst..dst+size]`.
 +
-This traps if `offset+length` is greater than the size of the reject message, or if `dst+length` exceeds the size of the Wasm memory, or if not called from inside a reject callback.
+This traps if `offset+size` is greater than the size of the reject message, or if `dst+size` exceeds the size of the Wasm memory, or if not called from inside a reject callback.
 
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
-* `+ic0.msg_reply_data_append : (src : i32, length : i32) -> ()+`
+* `+ic0.msg_reply_data_append : (src : i32, size : i32) -> ()+`
 +
-Copies the data referred to by `src`/`length` out of the canister and appends it to the (initially empty) data reply.
+Copies the data referred to by `src`/`size` out of the canister and appends it to the (initially empty) data reply.
 +
 NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
 
 * `+ic0.msg_reply : () -> ()+`
 +
@@ -667,11 +667,11 @@ Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 
-* `+ic0.msg_reject : (src : i32, length : i32) -> ()+`
+* `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
 +
-Rejects the call. The data referred to by `src`/`length` is used for the diagnostic message.
+Rejects the call. The data referred to by `src`/`size` is used for the diagnostic message.
 +
-This system call traps if `src+len` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`length` is not valid UTF8.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`size` is not valid UTF8.
 +
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
@@ -699,10 +699,10 @@ A canister can learn about its own identity:
 
 * {blank}
 +
-  ic0.canister_self_len : () -> (i32)
-  ic0.canister_self_copy: (dst : i32, offset : i32, length : i32) -> ()+
+  ic0.canister_self_size : () -> (i32)
+  ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()+
 +
-These functions allow the canister to query its own canister id (as a blob). As usual, `_len` returns the length in bytes and `_copy` can be used to copy bytes from the blob into the Wasm heap.
+These functions allow the canister to query its own canister id (as a blob). As usual, `_size` returns the size in bytes and `_copy` can be used to copy bytes from the blob into the Wasm heap.
 
 
 [#system-api-call]
@@ -713,19 +713,19 @@ When handling an update call (or a callback), a canister can do further calls to
 * {blank}
 +
   ic0.call_simple : (
-    callee_src : i32,
-    callee_len : i32,
-    name_src   : i32,
-    name_len   : i32,
-    reply_fun  : i32,
-    reply_env  : i32,
-    reject_fun : i32,
-    reject_env : i32,
-    data_src   : i32,
-    data_len   : i32
+    callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32
   ) -> ( err_code : i32 )
 +
-This performs a function call to the canister specified by `callee_src/_len`, calling the method specified by `name_src/_len`, sending the data specified by `name_src/len`.
+This performs a function call to the canister specified by `callee_src/_size`, calling the method specified by `name_src/_size`, sending the data specified by `data_src/_size`.
 +
 The system records the current function table entry at the index `reply_fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic0.msg_arg_data_size`/`ic0.msg_arg_data_copy`.
 +
@@ -739,7 +739,7 @@ If the system returns `0` as the `err_code`, the system was able to enqueue the 
 +
 If the system returns a non-zero value, the call cannot (and will not be) performed.
 +
-This system call traps if any of the `*_src+*_len` exceed the size of the WebAssembly memory.
+This system call traps if any of the `*_src+*_size` exceed the size of the WebAssembly memory.
 It also traps if it is called during `canister_init` or during the handling of a <<api-query,query call>>.
 
 [#system-api-stable-storage]
@@ -765,39 +765,39 @@ If successful, returns the _previous_ size of the memory (in pages). Otherwise, 
 
 * {blank}
 +
-  ic0.stable_write(offset : i32, src : i32, len : i32) -> ()
+  ic0.stable_write(offset : i32, src : i32, size : i32) -> ()
 +
-copies the data referred to by `src`/`len` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
+copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 
-This system call traps if `src+len` exceeds the size of the WebAssembly memory or `offset+len` exceeds the size of the stable memory.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
 * {blank}
 +
-  ic0.stable_read(dst : i32, offset : i32, len : i32) > ()
+  ic0.stable_read(dst : i32, offset : i32, size : i32) > ()
 +
-copies the data referred to by `offset`/`len` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
+copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 
-This system call traps if `dst+len` exceeds the size of the WebAssembly memory or `offset+len` exceeds the size of the stable memory.
+This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
 === Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
 
-* `+ic0.debug_print : (src : i32, len : i32) -> ()+`
+* `+ic0.debug_print : (src : i32, size : i32) -> ()+`
 +
-When executing in an environment that supports debugging, this copies out the data specified by `src` and `len`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+When executing in an environment that supports debugging, this copies out the data specified by `src` and `size`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 +
-Semantically, this function is always a no-op, and never traps, even if the `src+len` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
+Semantically, this function is always a no-op, and never traps, even if the `src+size` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
 
 NOTE: We may at some point require modules deployed to the real network to not even import this function.
 
 Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
 
-* `+ic0.trap : (src : i32, len : i32) -> ()+`
+* `+ic0.trap : (src : i32, size : i32) -> ()+`
 +
 This function always traps.
 +
-The environment may copy out the data specified by `src` and `len`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+The environment may copy out the data specified by `src` and `size`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
 
 [#host-references]
 === Outlook: Using Host References
@@ -1633,14 +1633,14 @@ By construction, the (possibly) modified `es.wasm_state` is discarded.
 
 In the following section, we use the these helper functions
 
-copy_to_canister<es>(dst : i32, offset : i32, length : i32, data : blob) =
-  if offset+length > |data| then Trap
-  if dst+length > |es.wasm_state.store.mem| then Trap
-  es.wasm_state.store.mem[dst..dst+length] := data[offset..offset+length]
+copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
+  if offset+size > |data| then Trap
+  if dst+size > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+size] := data[offset..offset+size]
 
-copy_from_canister<es>(src : i32, length : i32) blob =
-  if src+length > |es.wasm_state.store.mem| then Trap
-  return es.wasm_state.store.mem[src..src+length]
+copy_from_canister<es>(src : i32, size : i32) blob =
+  if src+size > |es.wasm_state.store.mem| then Trap
+  return es.wasm_state.store.mem[src..src+size]
 
 ==== System imports
 
@@ -1651,62 +1651,62 @@ ic0.msg_arg_data_size<es>() : i32 =
   if es.params.data = NoData then Trap
   return |es.params.arg|
 
-ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, length:i32) =
+ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
   if es.params.data = NoData then Trap
-  copy_to_canister<es>(dst, offset, length, es.param.arg)
+  copy_to_canister<es>(dst, offset, size, es.param.arg)
 
 ic0.msg_caller_size() : i32 =
   if es.params.caller = NoCaller then Trap
   return |es.params.caller|
 
-ic0.msg_caller_copy(dst:i32, offset:i32, length:i32) : i32 =
+ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
   if es.params.caller = NoCaller then Trap
-  copy_to_canister<es>(dst, offset, length, es.params.caller)
+  copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
   es.params.reject_code
 
-ic0.msg_reject_msg_len<es>() : i32 =
+ic0.msg_reject_msg_size<es>() : i32 =
   if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
-ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, length:i32) : i32 =
+ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
   if es.reject_code = 0 then Trap
-  copy_to_canister<es>(dst, offset, length, es.params.reject_msg)
+  copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
-ic0.msg_reply_data_append<es>(src : i32, length : i32) =
+ic0.msg_reply_data_append<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
-  es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, length)
+  es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
 ic0.msg_reply<es>() =
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
-ic0.msg_reject<es>(src : i32, length : i32) =
+ic0.msg_reject<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
-  es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, length))
+  es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
 
-ic0.canister_self_len<es>() : i32 =
+ic0.canister_self_size<es>() : i32 =
   return |es.wasm_state.self_id|
 
-ic0.canister_self_copy(dst:i32, offset:i32, length:i32)  =
-  copy_to_canister<es>(dst, offset, length, es.wasm_state.self_id)
+ic0.canister_self_copy(dst:i32, offset:i32, size:i32)  =
+  copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.call_simple<es>(
-    callee_src : i32,
-    callee_len : i32,
-    name_src   : i32,
-    name_len   : i32,
-    reply_fun  : i32,
-    reply_env  : i32,
-    reject_fun : i32,
-    reject_env : i32,
-    data_src   : i32,
-    data_len   : i32) =
+    callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32) =
 
-  callee := copy_from_canister<es>(callee_src, callee_len);
-  method_name := copy_from_canister<es>(name_src, name_len);
-  arg := copy_from_canister<es>(data_src, data_len);
+  callee := copy_from_canister<es>(callee_src, callee_size);
+  method_name := copy_from_canister<es>(name_src, name_size);
+  arg := copy_from_canister<es>(data_src, data_size);
 
   if reply_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
@@ -1761,22 +1761,22 @@ ic0.stable_grow<es>(new_pages : i32) -> (old_page_count : i32) =
       es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
     return old_size
 
-ic0.stable_write<es>(offset : i32, src : i32, len : i32) -> ()
-  if src+len > |es.wasm_state.store.mem| then Trap
-  if offset+len > |es.wasm_state.stable_mem| then Trap
+ic0.stable_write<es>(offset : i32, src : i32, size : i32) -> ()
+  if src+size > |es.wasm_state.store.mem| then Trap
+  if offset+size > |es.wasm_state.stable_mem| then Trap
 
-  es.wasm_state.stable_mem[offset..offset+len] := es.wasm_state.store.mem[src..src+len]
+  es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
-ic0.stable_read<es>(dst : i32, offset : i32, len : i32) > ()
-  if offset+len > |es.wasm_state.stable_mem| then Trap
-  if dst+len > |es.wasm_state.store.mem| then Trap
+ic0.stable_read<es>(dst : i32, offset : i32, size : i32) > ()
+  if offset+size > |es.wasm_state.stable_mem| then Trap
+  if dst+size > |es.wasm_state.store.mem| then Trap
 
-  es.wasm_state.store.mem[offset..offset+len] := es.wasm_state.stable.mem[src..src+len]
+  es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
-ic0.debug_print<es>(src : i32, len : i32) =
+ic0.debug_print<es>(src : i32, size : i32) =
   return
 
-ic0.trap<es>(src : i32, len : i32) =
+ic0.trap<es>(src : i32, size : i32) =
   Trap
 ....
 
