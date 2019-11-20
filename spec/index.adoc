@@ -1,5 +1,4 @@
 = Public specification of the Internet Computer
-Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -7,40 +6,15 @@ Joachim Breitner <joachim@dfinity.org>
 
 == Preamble
 
-This document is work in progress, initially authored by mailto:joachim@dfinity.org[Joachim]. The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of the Internet Computer in a hopefully concrete way. It could also be a document that we can publish to users of the Internet Computer.
+The `master` version of this document describes the public interface of the Internet Computer. It is the authoritative source for interface details (request and function names, parameters, encodings). It could also be a document that we can publish to users of the Internet Computer.
 
-Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated.
-
-=== Contact
-
-It will be everyone’s shared responsibility to keep this document accurate, but the editor’s responsibility to keep it focused and consistent. If you have additions or corrections, either talk to Joachim in whatever form you prefer, or propose changes to the document directly (but be prepared for editorial rewrites of your text).
+Versions of this document on branches can serve to explore, outline and design publicly exposed features of the Internet Computer in a concrete way. Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated.
 
 === Status
 
-The document is currently constantly moving, at a pointer somewhere in the triangle between what is implemented, what is being designed and what is being approved, in a best-effort way.
+The version of this document on `master` indicates what the official Internet Computer “client” implements, or plans to implement within the near future (days or weeks).
 
-Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
-
-=== Open questions and missing bits
-
-As we are fleshing out this document, we get comments that we cannot immediately resolve. In order to not drop them, and make it clear to readers which parts are not done yet, we are briefly collecting them here.
-
-* User IDs: Same question. Do these share the same namespace?
-* Missing: Methods without responses/fire-and-forget calls
-* To be changed: The System API for calls should be replaced with a more general API that allows canisters to submit API requests.
-* Missing: Specifying when responses are deleted.
-* Missing: Canister upgrades.
-* Missing: Payment and accounts
-* Missing: Gas accounting
-* Missing: Subnet ids (e.g. modeling multiple HTTP endpoints, multiple accounts, locality requirements of requests)
-* Missing: Time (idea: separate per-canister time, nondeterministic time step transition)
-* Missing: Canister likely need some kind of file store (for IDL specs, static assets, incremental canister module uploads)
-* Missing: Storing and retrieving static data (e.g. the Wasm module itself, its IDL spec, HTML assets)
-* Missing: Reads may specify a specific (future or past) state
-* Missing (optional): References in call arguments and responses? Which references are supported? Can we have `funcrefs`?
-* Missing (optional): Certified variables (globals pointing to memory? specially marked read-only methods?)
-* Missing (optional): Programmatic canister creation
-* Missing (optional): Incremental canister upload for big canister modules.
+It does not contain features that are expected to be added later, eventually or even maybe. Such features are designed and stored away on separate branches and PRs (often “Draft PRs”). See the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document to get an overview of ongoing discussions.
 
 == Introduction
 
@@ -51,7 +25,7 @@ Welcome to the Internet Computer! We speak of “the” Internet Computer, becau
 This documents describes this external view of the Internet Computer:
 Which interfaces it provides to application developers and users, and what will happen when you use these interfaces.
 
-WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the Motoko programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient. As an end-user, you might want to start with #TODO#.
+WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the Motoko programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient.
 
 If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of the Internet Computer, please consult the link:../index{outfilesuffix}[Component Interface Specifications].
 
@@ -62,7 +36,7 @@ This implies that this document does not speak of the interface of the Internet 
 
 === Overview of the Internet Computer
 
-If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the Motoko language and the SDK (#TODO: Link to SDK docs#), which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
 
 Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to interact with the canister according to the <<system-api,System API>>.
 
