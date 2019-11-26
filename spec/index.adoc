@@ -690,7 +690,7 @@ A canister can learn about its own identity:
 * {blank}
 +
   ic0.canister_self_size : () -> (i32)
-  ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()+
+  ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()
 +
 These functions allow the canister to query its own canister id (as a blob). As usual, `_size` returns the size in bytes and `_copy` can be used to copy bytes from the blob into the Wasm heap.
 
