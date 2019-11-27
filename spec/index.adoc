@@ -606,7 +606,7 @@ In the reply callback for a further <<system-api-call,method call>>, the argumen
 +
 Size, in bytes, of the argument data.
 +
-This traps if there is no argument data is available (e.g. in a reply callback).
+This traps if no argument data is available (e.g. in a reply callback).
 
 * `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()+`
 +
