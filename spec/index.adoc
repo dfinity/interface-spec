@@ -130,7 +130,7 @@ To turn a blob into the recognizable text format,
 3. Prepend `ic:`
 
 [TIP]
-The canister with id `0xABCDE01` (which happens to be the little-endian 64 bit encoding of the number 1) becomes `ic:ABCDE01A7` ([online calculator](https://crccalc.com/?crc=ABCDE01&method=crc8&datatype=hex&outtype=hex)).
+The canister with id `0xABCDE01` becomes `ic:ABCDE01A7` (https://crccalc.com/?crc=ABCDE01&method=crc8&datatype=hex&outtype=hex[online calculator]).
 
 
 [#http-interface]
