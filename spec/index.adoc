@@ -1,4 +1,5 @@
 = Public specification of the Internet Computer
+Joachim Breitner <joachim@dfinity.org>
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -6,15 +7,37 @@
 
 == Preamble
 
-The `master` version of this document describes the public interface of the Internet Computer. It is the authoritative source for interface details (request and function names, parameters, encodings). It could also be a document that we can publish to users of the Internet Computer.
+This document describes the public interface of the Internet Computer. It is the authoritative source for interface details (request and function names, parameters, encodings). The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of the Internet Computer in a hopefully concrete way. It could also be a document that we can publish to users of the Internet Computer.
 
-Versions of this document on branches can serve to explore, outline and design publicly exposed features of the Internet Computer in a concrete way. Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated.
+Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated or don’t go well together. But as it intentionally does not address _how_ to implement this behaviour, it cannot be used as an implementation spec.
 
 === Status
 
-The version of this document on `master` indicates what the official Internet Computer “client” implements, or plans to implement within the near future (days or weeks).
+The `master` version of this document corresponds to _approved_ designs. It does, however, _not_ indicate any kind of implementation plan, and must not be used as an implementation specification. It may contain features that are not yet implemented, the implementation plans are made elsewhere.
 
-It does not contain features that are expected to be added later, eventually or even maybe. Such features are designed and stored away on separate branches and PRs (often “Draft PRs”). See the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document to get an overview of ongoing discussions.
+Aspects of this document not implemented in the master version of the official client are labeled as such, using the “warning” admonition.
+
+Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
+
+=== Process
+
+This document is maintained by its editors (currently Joachim, Jens, Björn). The editors drive its evolution, make sure the right process is followed and try to keep tabs on relevant design discussions happening. Nevertheless, everyone is invited to contribute.
+
+A proposed change of this document should take the form of a Pull Request on GitHub, be titled “Public Spec: _title_”, and its description should answer the following questions:
+
+ 1. How is this change mandated by the design: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
+ 2. Which parties (Client, Languages, SDK, Research) are affected by this change, and why?
+
+Such a change can be merged if
+
+ 1. The design slides mentioned above are actually approved.
+ 2. A lead or representative of each involved party approves the change.
+
+An Editor, who did not initiate the change, should check these requirements.
+
+Purely editorial changes can be merged by the editors directly. Generally, these merges should be “squash merges”.
+
+Draft PRs can be used for experimentation and exploration without any process requirement.
 
 == Introduction
 
