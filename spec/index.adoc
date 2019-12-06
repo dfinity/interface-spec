@@ -15,7 +15,7 @@ Because of its focus on the externally visible behavior of the Internet Computer
 
 The `master` version of this document corresponds to _approved_ designs. It does, however, _not_ indicate any kind of implementation plan, and must not be used as an implementation specification. It may contain features that are not yet implemented, the implementation plans are made elsewhere.
 
-Aspects of this document not implemented in the master version of the official client are labeled as such, using the “warning” admonition.
+Aspects of this document not implemented in the master version of the official internet computer are labeled as such, using the “warning” admonition.
 
 Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
 
@@ -90,7 +90,9 @@ Sections “<<http-interface>>” and “<<system-api>>” describe these interf
 
 === Nomenclature
 
-To get some consistency in this document, we try to use the following terms around method calls and messaging:
+To get some consistency in this document, we try to use the following terms with precision:
+
+We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code acting on behalf of a (human) user.
 
 The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved) or _query methods_ (state mutation is discarded, no further calls can be made).
 
@@ -112,6 +114,8 @@ Principal ids, like canister ids and user ids, are – as far as most uses of th
 
 [#id-classes]
 === Special forms of IDs
+
+WARNING: These ids forms are not yet implemented.
 
 There are three classes of ids:
 
@@ -140,9 +144,10 @@ The hash function `H(…)` here is SHA-256. Thus self-authenticating ids are alw
 When the system creates a _fresh_ id, it never uses a self-authenticating or derived id.
 
 
-
 [#textual-ids]
 === Textual representation of principal ids
+
+NOTE: This textual representation does not actually show up in the interface (which always deals with blobs), so it is merely a recommended convention.
 
 We specify a _canonical textual format_ that is recommended whenever principal ids need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
 
@@ -213,11 +218,11 @@ certified <|-- status
 [#async-requests]
 ==== Asynchronous requests
 
-Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the client talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
-1. A client submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
+1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
 2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing (or it expires). From now on, the client can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
+3. At some point, the system may accept the request for processing (or it expires). From now on, the user can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
 4. Once it is clear that the request will be acted upon, the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
 5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
 6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
@@ -253,11 +258,11 @@ The crucial property of the `Processing` state is _the initial effect of the req
 
 A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
 
-When asking the system about the state or response of a request, the client uses a request id (see <<api-request-id>>).
+When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
 
 ==== Synchronous requests
 
-Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the client that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
+Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
@@ -274,7 +279,7 @@ The following API endpoints are provided:
 
 NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
-For all endpoints, the client performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
+For all endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
 * The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-status>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
@@ -293,7 +298,6 @@ The system supports a number of requests, represented as records, i.e. fields wi
 
 The fields are typed and can have one of these types:
 
-* `u64`: A 64 bit number
 * `nat`: A (possibly unbounded) natural number
 * `text`: Human readable text (e.g. sequence of Unicode codepoints)
 * `blob`: Arbitrary binary data
@@ -305,7 +309,7 @@ type CanisterId = PrincipalId
 type UserId = PrincipalId
 ....
 
-NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure (e.g. “exactly 64 bits long”). But it is possible that any concrete choice will have to be revised or extended later. In order to not break existing code (especially existing canister), the interface uses arbitrary blobs here.
+NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure (e.g. “exactly 64 bits long”, or “size of a hash”). But it is possible that any concrete choice will have to be revised or extended later. In order to not break existing code (especially existing canister), the interface uses arbitrary blobs here.
 
 === Common fields
 
@@ -317,12 +321,14 @@ The following fields is common among all requests:
 [#authentication]
 === Authentication
 
+WARNING: Signatures are not yet in any way looked at by the Internet Computer.
+
 All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
 
 * `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`): Signature to authenticate this request.
 * `expiry`: time(?) until the request must be executed or dropped #TODO: details#.
-* `nonce` (`blob`, optional): Arbitrary client-provided data, typically randomly generated. This can be used by the client to create distinct requests with otherwise identical fields.
+* `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
@@ -347,6 +353,8 @@ The following subsections list all supported requests, including their classific
 [#api-create-canister]
 ==== Canister creation
 
+WARNING: This request type is currently accepted, but ignored.
+
 Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
 If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
@@ -367,6 +375,8 @@ NOTE: This request may later contain specifications of particular features neede
 
 [#api-install-code]
 ==== Canister code installation
+
+WARNING: In the current implementation, this also creates a canister with the given id; anybody can create any canister. No list of admins or controllers is maintained.
 
 After an empty canister has been created via <<api-create-canister>>, the admin can install the first code:
 
@@ -431,7 +441,7 @@ The status `pending` is used for requests that have successfully entered the sys
 
 WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request as pending.
 
-NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that clients have a chance to fetch it. The precise policy is not yet defined.
+NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
 
 [#api-query]
 ==== Canister query call
@@ -572,11 +582,11 @@ As long as you talk to one (honest) node only, the observed behavior is nicely s
 
 If you then (quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
-A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the client might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
+A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
 
 Both problems can be solved if read requests can specify the desired state to query, either at-least-this-state (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
 
-NOTE: Even without this feature, applications can work around these problems. For the first problem, the query result could be such that the client can tell if the query has been received or not. For the second problem, if replies are monotonic in some sense the client can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the client can get assurance in those events returned by many nodes).
+NOTE: Even without this feature, applications can work around these problems. For the first problem, the query result could be such that the user can tell if the query has been received or not. For the second problem, if replies are monotonic in some sense the user can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the user can get assurance in those events returned by many nodes).
 
 
 
@@ -679,6 +689,8 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory,
 Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
++
+WARNING: Currently, there is a `+msg.reply : (i32, i32) -> ()+` intead of the two `ic0.msg_repl_*` calls.
 
 * `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
 +
@@ -758,6 +770,8 @@ It also traps if it is called during `canister_init` or during the handling of a
 [#system-api-stable-storage]
 === Stable storage
 
+WARNING: This is not implemented yet.
+
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this _stable memory_ is to provide space to store data beyond upgrades.  The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
 The stable memory is initially empty.
@@ -793,6 +807,8 @@ copies the data referred to by `offset`/`size` out of the stable memory and repl
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
 === Debugging aids
+
+WARNING: These are currently named `debug.print` and `ic.trap`.
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
 
@@ -1456,7 +1472,7 @@ S with
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
 
-NOTE: There is a phase where a request was issued by the client, but not received yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
+NOTE: There is a phase where a request was issued by the user, but not received yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
 
 Submitted request:: `R`
 Conditions::
