@@ -689,8 +689,6 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory,
 Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
-+
-WARNING: Currently, there is a `+msg.reply : (i32, i32) -> ()+` intead of the two `ic0.msg_repl_*` calls.
 
 * `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
 +
@@ -807,8 +805,6 @@ copies the data referred to by `offset`/`size` out of the stable memory and repl
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
 === Debugging aids
-
-WARNING: These are currently named `debug.print` and `ic.trap`.
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
 
