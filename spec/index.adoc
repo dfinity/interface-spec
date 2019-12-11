@@ -658,6 +658,52 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
+=== Overview of imports
+
+The following sections describe various system imports, which we summarize here.
+
+....
+ic0.msg_arg_data_size : () -> i32                                      // I U Q Ry
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()    // I U Q Ry
+ic0.msg_caller_size : () -> (i32)                                      // I U Q
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()       // I U Q
+ic0.msg_reject_code : () -> i32                                        // Ry Rt
+ic0.msg_reject_msg_size : () -> i32                                    // Rt
+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()  // Rt
+ic0.msg_reply_data_append : (src : i32, size : i32) -> ()              // U Q Ry Rt
+ic0.msg_reply : () -> ()                                               // U Q Ry Rt
+ic0.msg_reject : (src : i32, size : i32) -> ()                         // U Q Ry Rt
+ic0.canister_self_size : () -> (i32)                                   // *
+ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()    // *
+ic0.call_simple                                                        // U Ry Rt
+  ( callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32
+  ) -> ( err_code : i32 )
+ic0.stable_size() -> (page_count : i32)                                // *
+ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)             // *
+ic0.stable_write(offset : i32, src : i32, size : i32) -> ()            // *
+ic0.stable_read(dst : i32, offset : i32, size : i32) > ()              // *
+ic0.debug_print : (src : i32, size : i32) -> ()                        // *
+ic0.trap : (src : i32, size : i32) -> ()                               // *
+....
+
+The comment after each functions lists from where these functions may be invoked:
+* `I`: from `canister_init`
+* `U`: from `canister_update …`
+* `Q`: from `canister_query …`
+* `Ry`: from a reply callback
+* `Rt`: from a reject callback
+* `*`: from anywhere (excluding the `(start)` module initialization function)
+If the canister invokes a system imports from somewhere else, it will trap.
+
 [#system-api-requests]
 === Public methods
 
@@ -671,14 +717,12 @@ In the reply callback for a further <<system-api-call,method call>>, the argumen
 * `+ic0.msg_arg_data_size : () -> i32+`
 +
 Size, in bytes, of the argument data.
-+
-This traps if no argument data is available (e.g. in a reply callback).
 
 * `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()+`
 +
 Copies `size` bytes from `msg_arg[offset..offset+size]` to `memory[dst..dst+size]`, i.e., from the argument data into the Wasm memory.
 +
-This traps if `offset+size` is greater than the size of the argument data, or if `dst+size` exceeds the size of the Wasm memory, or if called from inside a reject callback (see below).
+This traps if `offset+size` is greater than the size of the argument data, or if `dst+size` exceeds the size of the Wasm memory.
 
 * {blank}
 +
@@ -686,10 +730,6 @@ This traps if `offset+size` is greater than the size of the argument data, or if
   ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
 +
 The identity of the caller, which may be a canister id or a user id.
-+
-This function is available in the `canister_init` method and any exported method, but it traps in a reply or reject callback.
-
-In a reject callback, no argument is available, but the reject code can be queried:
 
 * `+ic0.msg_reject_code : () -> i32+`
 +
@@ -699,12 +739,12 @@ It returns the special “no error” code `0` if the callback is _not_ invoked 
 +
 * `+ic0.msg_reject_msg_size : () -> i32+`
 +
-Returns the size of the reject message, in bytes. Traps if this is not invoked from a reject callback.
+Returns the size of the reject message, in bytes.
 * `+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()+`
 +
 Copies `size` bytes from `reject_msg[offset..offset+size]` to `memory[dst..dst+size]`.
 +
-This traps if `offset+size` is greater than the size of the reject message, or if `dst+size` exceeds the size of the Wasm memory, or if not called from inside a reject callback.
+This traps if `offset+size` is greater than the size of the reject message, or if `dst+size` exceeds the size of the Wasm memory.
 
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
@@ -743,8 +783,6 @@ A canister may export a system method. In contrast to public methods, system met
 === System method: canister_init
 
 If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
-
-The following system calls will trap when called during the execution of `canister_init`: `ic0.msg_reply`, `ic0.msg_reply_data_append`, `ic0.msg_reject`, `ic0.call_simple`.
 
 The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
@@ -796,7 +834,6 @@ If the system returns `0` as the `err_code`, the system was able to enqueue the 
 If the system returns a non-zero value, the call cannot (and will not be) performed.
 +
 This system call traps if any of the `*_src+*_size` exceed the size of the WebAssembly memory.
-It also traps if it is called during `canister_init` or during the handling of a <<api-query,query call>>.
 
 [#system-api-stable-storage]
 === Stable storage
