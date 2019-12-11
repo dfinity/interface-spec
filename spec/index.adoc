@@ -461,6 +461,39 @@ Response fields::
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
 
+[#api-asset-store]
+==== Asset storage
+
+The static assets (including, per convention, the canisters interface description) can be stored using a asynchronous request. Exiting assets of the given name are overwritten.
+
+Synchronicity:: asynchronous
+Request type:: `store_asset`
+Request fields::
+* `canister_id` (`CanisterId`): The id of the canister to query.
+* `name` (`text`): Name of the asset to store
+* `data` (`blob`): The content of the asset to store
+Reply fields::
+* None
+
+[#api-asset-retrieve]
+==== Asset retrieval
+
+WARNING: In the current implementation, anybody can call this request, as no list of admins or controllers is maintained. Eventually, only canister controllers should be allowed to store assets.
+
+The static assets, as stored using the `store_asset` request can be fetched using a read request.
+
+Synchronicity:: synchronous
+Request type:: `retrieve_asset`
+Request fields::
+* `canister_id` (`CanisterId`): The id of the canister to query.
+* `name` (`text`): Name (filename) of the asset to retrieve
+Response fields::
+* `status` (`text`): One of `replied` or `rejected`
+* `reply`: If the status is `replied`, then this member contains the asset (as a blob).
+* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
+* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
+
+
 //tag::request-id[]
 [#api-request-id]
 === Request ids
@@ -1041,6 +1074,11 @@ Request
     method_name : Text;
     data : Blob;
   }
+  | StoreAsset = {
+    canister : CanId;
+    name : Text;
+    data : Blob;
+  }
 ....
 
 The evolution of an `Request` goes through these states, as explained in <<async-requests>>:
@@ -1069,6 +1107,10 @@ APIReadRequest
     callee : CanisterId;
     method_name : Text;
     data : Blob;
+  }
+  | RetrieveAssetQuery = {
+    canister : CanId;
+    name : Text;
   }
 ....
 
@@ -1103,6 +1145,7 @@ S = {
 CanState = EmptyCanister | {
   wasm_state : WasmState;
   module : CanisterModule;
+  assets : String ↦ Blob;
 }
 ....
 
@@ -1216,7 +1259,11 @@ State after::
 ....
 S with
     requests[InstallCode M] = Completed { result = { } }
-    canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
+    canisters[M.canister_id] = {
+      wasm_state = New_state;
+      module = M.module;
+      assets = empty;
+    }
 ....
 
 ==== Initiating canister calls
@@ -1481,7 +1528,7 @@ Conditions::
 ....
 Read response::
 A record with
-* `{status: accpeted}` if `MS = Received`
+* `{status: received}` if `MS = Received`
 * `{status: processing}` if `MS = Processing`
 * `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Rejected (code, msg)`
 * `{status: completed; result : <result>}` if `MS = Completed { result = result }`
@@ -1498,6 +1545,7 @@ Conditions::
   verify_signature Q.sender_pubkey Q.sender_sig (request_id_of(R)) = true
   S.canisters[Q.callee] ≠ EmptyCanister
   C = S.canisters[Q.callee]
+  C ≠ EmptyCanister
   F = C.module.query_methods[Q.method_name]
   Arg = { data = Q.arg; caller = Q.sender }
 
@@ -1516,9 +1564,43 @@ Read response::
 * Else if `F(Arg) = Return (Reply R)` then
 +
 ....
-{status: success; result: <R> }
+{status: replied; reply: <R> }
 ....
 
+==== Storing assets
+
+Only an admin of the given canister can store assets. Existing assets are simply overriden.
+
+Conditions::
+....
+    S.requests[StoreAsset SA] = Received
+    C = S.canisters[SA.canister]
+    C ≠ EmptyCanister
+    M.sender ∈ S.admins[SA.canister]
+....
+State after::
+....
+S with
+    canisters[SA.canister_id].assets[SA.name] = SA.data
+....
+
+==== Read: retrieving assets
+
+A canister’s assets can be fetched.
+
+Read request:: RetrieveAssetQuery Q
+Conditions::
+....
+  C = S.canisters[Q.canister]
+  C ≠ EmptyCanister
+  F = C.assets[Q.name]
+....
+Read response::
+* {blank}
++
+....
+{status: replied; reply: F }
+....
 
 [#concrete-canisters]
 === Abstract Canisters to System API
