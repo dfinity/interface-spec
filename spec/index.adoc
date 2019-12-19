@@ -658,6 +658,44 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
+=== Entry points
+
+The canister provides entry points which are invoked by the system under various circumstances:
+
+* The canister may export a function named `canister_init` and type `+() -> ()+`.
+* The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
+* The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
+
+If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded.
+
+
+[#system-api-init]
+==== Canister initializaion
+
+If `canister_init` is present, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
++
+The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
+
+
+[#system-api-requests]
+==== Public methods
+
+To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
+
+NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
+
+The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
+
+Eventually, a method will want to send a response, using `ic0.reply` or `ic0.reject`
+
+==== Callbacks
+
+Callbacks are addressed by their table index (as a proxy for a Wasm `funcref).
+
+In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call. In reject callbacks, no argument is available.
+
+
 === Overview of imports
 
 The following sections describe various system imports, which we summarize here.
@@ -696,23 +734,19 @@ ic0.trap : (src : i32, size : i32) -> ()                               // *
 ....
 
 The comment after each functions lists from where these functions may be invoked:
+
 * `I`: from `canister_init`
 * `U`: from `canister_update …`
 * `Q`: from `canister_query …`
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
 * `*`: from anywhere (excluding the `(start)` module initialization function)
+
 If the canister invokes a system imports from somewhere else, it will trap.
 
-[#system-api-requests]
-=== Public methods
+=== Method arguments
 
-To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
-
-NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
-
-The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand.
-In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call; in reject callbacks, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
+The canister can access an argument. For `canister_init` and method entrypoints, the argument is the argument of the call; in a reply callback, it refers to the received reply; in a reject callback, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
 * `+ic0.msg_arg_data_size : () -> i32+`
 +
@@ -746,6 +780,7 @@ Copies `size` bytes from `reject_msg[offset..offset+size]` to `memory[dst..dst+s
 +
 This traps if `offset+size` is greater than the size of the reject message, or if `dst+size` exceeds the size of the Wasm memory.
 
+=== Responding
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
@@ -772,19 +807,6 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory,
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
-
-If the execution of the function traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded.
-
-=== System methods
-
-A canister may export a system method. In contrast to public methods, system methods can only be invoked by the system in special situations (initialization, upgrade). They are exported with an unmangled name (i.e. `canister_init`, not `canister_update init`), and it is allowed to have both a system method and public method of the same name. Otherwise, they use the same mechanism for parameter passing and API access.
-
-[#system-api-init]
-=== System method: canister_init
-
-If the canister exports a system method called `canister_init`, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
-
-The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
 
 [#system-api-canister-self]
 === Self-identification
