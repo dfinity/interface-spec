@@ -153,12 +153,12 @@ We specify a _canonical textual format_ that is recommended whenever principal i
 
 To turn a blob into the recognizable text format,
 
-1. Append a one byte checksum, calculated using CRC-8 with polynomial 0x07.
-2. Convert into hexadecimal form, with capital letters
-3. Prepend `ic:`
+1. Append a one byte checksum, calculated using CRC-8 with polynomial 0x07 (MSB-first code).
+2. Convert into hexadecimal form, with capital letters.
+3. Prepend `ic:`.
 
 [TIP]
-The canister with id `0xABCDE01` becomes `ic:ABCDE01A7` (https://crccalc.com/?crc=ABCDE01&method=crc8&datatype=hex&outtype=hex[online calculator]).
+The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=ABCDE01&method=crc8&datatype=hex&outtype=hex[online calculator]).
 
 
 [#http-interface]
