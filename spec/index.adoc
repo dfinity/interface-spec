@@ -158,7 +158,7 @@ To turn a blob into the recognizable text format,
 3. Prepend `ic:`.
 
 [TIP]
-The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=ABCDE01&method=crc8&datatype=hex&outtype=hex[online calculator]).
+The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=ABCD01&method=crc8&datatype=hex&outtype=hex[online calculator]).
 
 
 [#http-interface]
