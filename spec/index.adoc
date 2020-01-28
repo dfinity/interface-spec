@@ -353,7 +353,7 @@ The following subsections list all supported requests, including their classific
 [#api-create-canister]
 ==== Canister creation
 
-WARNING: This request type is currently accepted, but ignored.
+WARNING: This request type is currently not accepted.
 
 Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
