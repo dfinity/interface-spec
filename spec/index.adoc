@@ -26,7 +26,7 @@ This document is maintained by its editors (currently Joachim, Jens, Björn). Th
 A proposed change of this document should take the form of a Pull Request on GitHub, be titled “Public Spec: _title_”, and its description should answer the following questions:
 
  1. How is this change mandated by the design: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
- 2. Which parties (Client, Languages, SDK, Research) are affected by this change, and why?
+ 2. Which parties (Replica, Languages, SDK, Research) are affected by this change, and why?
 
 Such a change can be merged if
 
