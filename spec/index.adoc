@@ -336,10 +336,14 @@ A public key can authenticate a principal id if the latter is a self-authenticat
 
 The `sender_pubkey` and `sender_sig` fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant. The `expiry` and `nonce` fields do.
 
+
 The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
 
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
+
+WARNING: Signature scheme may still change, or multiple schemes may be
+supported; ongoing discussion involving Björn and others.
 
 The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
