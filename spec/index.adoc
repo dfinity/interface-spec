@@ -665,7 +665,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 ==== Callbacks
 
-Callbacks are addressed by their table index (as a proxy for a Wasm `funcref).
+Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
 
 In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call. In reject callbacks, no argument is available.
 
@@ -737,7 +737,7 @@ This traps if `offset+size` is greater than the size of the argument data, or if
   ic0.msg_caller_size : () -> (i32)
   ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
 +
-The identity of the caller, which may be a canister id or a user id.
+The identity of the caller, which may be a canister id or a user id. During canister installation, this is the id of the user or canister requesting the installation.
 
 * `+ic0.msg_reject_code : () -> i32+`
 +
@@ -1275,8 +1275,7 @@ Conditions::
       data = M.data;
       caller = M.caller
     }
-    M.module.init (Arg) =
-      Return { new_state = New_state; new_calls = (); response = NoResponse }
+    M.module.init(M.canister_id, Arg) = Return New_state
 ....
 State after::
 ....
@@ -1656,7 +1655,7 @@ If the WebAssembly module does not export a function called under the name `cani
 +
 ....
 init = λ (self_id, arg) →
-  Return { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
+  Return { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
@@ -1664,7 +1663,7 @@ Otherwise, if the WebAssembly module exports a function `f` under the name `cani
 ....
 init = λ (self_id, arg) →
   let es = ref {empty_execution_state with
-      wasm_state = { store = initial_wasm_state; self_id = self_id; stable_mem = "" }
+      wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
       params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
     }
   try func<es>() with Trap then Trap
