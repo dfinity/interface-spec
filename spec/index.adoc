@@ -489,6 +489,8 @@ The following encodings of field values are used
 
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
 * Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as they are.
+* Nat fields (`compute_allocation`) are hashed using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+  For example, `0` should be hashed as a single zero byte `[0x00]` and `624485` should be hashed as byte sequence `[0xE5, 0x8E, 0x26]`.
 //end::request-id[]
 
 [TIP]
