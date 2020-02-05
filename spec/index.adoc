@@ -325,16 +325,21 @@ WARNING: Signatures are not yet in any way looked at by the Internet Computer.
 
 All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
 
-* `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
-* `sender_sig` (`blob`): Signature to authenticate this request.
 * `expiry`: time(?) until the request must be executed or dropped #TODO: details#.
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
+
+
+Furthermore, the requests records are wrapped in a envelope record with these fields:
+
+* `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_sig` (`blob`): Signature to authenticate this request.
+* `content` (`record`): the actual request content
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
 A public key can authenticate a principal id if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
 
-The `sender_pubkey` and `sender_sig` fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant. The `expiry` and `nonce` fields do.
+The envleope fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant. The `expiry` and `nonce` fields do.
 
 
 The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
@@ -469,14 +474,13 @@ Response fields::
 [#api-request-id]
 === Request ids
 
-When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request, as described here. The hash operation is always SHA-256.
+When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request's `content`, as described here. The hash operation is always SHA-256.
 
 1. Treat the request type as the value of a text field named `request_type`.
-2. Remove the fields that are only used for authentication: `sender_pubkey`, `sender_sig`.
-3. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
+2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
    * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
-4. Sort these by the hash of the field name.
-5. Concatenate these hashes, and hash the result.
+3. Sort these by the hash of the field name.
+4. Concatenate these hashes, and hash the result.
 
 The resulting hash of 256bits (32 bytes) is the id of the request.
 
@@ -550,18 +554,42 @@ When canisters explicitly reject a message (see <<system-api-requests>>), they c
 
 Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
 
-Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]),
-followed by a data item with major type 5 (“Map of pairs of data items”), followed by the the fields of the record. The keys are encoded with major type 3 (“Text string”). The values are one of these major types (with more to be added as needed):
+Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an record.
+
+Requests consist of an envelope record with keys `sender_sig` (a blob), `sender_pubkey` (a blob) and `content` (a record). The first two are metadata that are used for request authentication, while the last one is the actual content of the request.
+
+The following encodings are used:
 
 * Strings: Major type 3 (“Text string”).
-* Blobs: Major type 2 (“Byte string”)
+* Blobs: Major type 2 (“Byte string”).
 * Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
-* Nested records: Major type 5 followed by string keys.
+* Records: Major type 5 (“Map of pairs of data items”), followed by the fields, where keys are encoded with major type 3 (“Text string”).
 
-As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols” of the CBOR spec], we clarify that:
+As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
 
 * Floating-point numbers may not be used to encode integers.
 * Duplicate keys are prohibited in CBOR maps.
+
+[TIP]
+====
+A typical request would be (written in https://tools.ietf.org/html/rfc7049#section-6[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
+....
+55799({
+  "sender_sig": h'DEADBEEF',
+  "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde',
+  "content": {
+    "request_type": "install_code",
+    "canister_id": h'ABCD01',
+    "module": h'0061736d01000000',
+    "arg": h''
+  }
+})
+....
+
+====
+
+WARNING: Currently, the replica does not look inside the `content` field, but expects its fields content at the top level CBOR map.
+
 // end::cbor-encoding[]
 
 === Ordering guarantees
