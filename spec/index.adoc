@@ -164,7 +164,7 @@ The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=
 [#http-interface]
 == HTTPS Interface
 
-The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes two endpoints to handle the requests.
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes two endpoints to handle the requests, plus one for diagnostics.
 
 === Submitting vs. reading requests
 
@@ -266,8 +266,9 @@ Other interactions do not change the state of the system, but only _read_ from i
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
+
 [#api-endpoints]
-==== Endpoints
+==== Request Endpoints
 
 NOTE: This document does not yet explain how to find the location and port of a running Internet Computer Node, nor how to find out which node(s) to talk to for a given canister.
 
@@ -279,9 +280,9 @@ The following API endpoints are provided:
 
 NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
-For all endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
+For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-status>>) to determine the response.
+* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
 In both cases case, the usual HTTP errors (e.g. 503) may occur.
@@ -433,7 +434,7 @@ This request type can _also_ be used to call a query method. A user may choose t
 
 NOTE: Other arguments besides data (e.g. payments) will be represented in further fields next to `arg`.
 
-[#api-status]
+[#api-request-status]
 ==== Request status
 
 Synchronicity:: synchronous
@@ -474,7 +475,7 @@ Response fields::
 [#api-request-id]
 === Request ids
 
-When querying the status of a request (see <<api-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request's `content`, as described here. The hash operation is always SHA-256.
+When querying the status of a request (see <<api-request-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request's `content`, as described here. The hash operation is always SHA-256.
 
 1. Treat the request type as the value of a text field named `request_type`.
 2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
@@ -547,6 +548,25 @@ The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 When canisters explicitly reject a message (see <<system-api-requests>>), they can specify the reject message, but _not_ the reject code; it is always `CANISTER_REJECT`. In this sense, the reject code is trustworthy: If the system resonds with a `SYS_FATAL` reject, then it really was the system issuing this reject.
 
 //end::reject-codes[]
+
+[#api-status]
+=== Status endpoint
+
+Additionally, the Internet Computer provides an API endpoint to obtain various status fields at
+....
+/api/v1/status
+....
+
+For this endpoint, the user performs a GET request, and receives a CBOR value with the following fields. The Internet Computer may include additional implementation-specific fields.
+
+* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the internet computer aims to support. Until this document is versioned and the implemnetation is in sync with a released version, the string `unversioned` should be used instead.
+* `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
+* `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
+* `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
+
+See <<api-cbor>> for details on the precise CBOR encoding of this object.
+
+NOTE: Future additions may include the version of public spec supported (once the public spec itself is versioned), local time, geographic location, and other useful implementation-specific information such as blockheight. This data is not authenticated yet, but may be signed by the node.
 
 // tag::cbor-encoding[]
 [#api-cbor]
