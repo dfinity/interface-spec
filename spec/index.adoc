@@ -861,8 +861,8 @@ If the system returns a non-zero value, the call cannot (and will not be) perfor
 +
 This system call traps if any of the `*_src+*_size` exceed the size of the WebAssembly memory.
 
-[#system-api-stable-storage]
-=== Stable storage
+[#system-api-stable-memory]
+=== Stable memory
 
 WARNING: This is not implemented yet.
 
