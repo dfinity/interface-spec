@@ -397,7 +397,7 @@ Request fields::
 * `canister_id` (`CanisterId`): The id of the canister to install code for.
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
-* `compute_allocation` (`nat`, optional): The inital allocation requested, in percent.
+* `compute_allocation` (`nat`, optional): The initial allocation requested, in percent.
 Reply fields::
 * None
 
