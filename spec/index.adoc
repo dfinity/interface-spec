@@ -753,8 +753,8 @@ ic0.stable_size() -> (page_count : i32)                                // *
 ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)             // *
 ic0.stable_write(offset : i32, src : i32, size : i32) -> ()            // *
 ic0.stable_read(dst : i32, offset : i32, size : i32) > ()              // *
-ic0.debug_print : (src : i32, size : i32) -> ()                        // *
-ic0.trap : (src : i32, size : i32) -> ()                               // *
+ic0.debug_print : (src : i32, size : i32) -> ()                        // * s
+ic0.trap : (src : i32, size : i32) -> ()                               // * s
 ....
 
 The comment after each functions lists from where these functions may be invoked:
@@ -764,7 +764,8 @@ The comment after each functions lists from where these functions may be invoked
 * `Q`: from `canister_query …`
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
-* `*`: from anywhere (excluding the `(start)` module initialization function)
+* `s`: the `(start)` module initialization function
+* `*` = `I U Q Ry Rt` (NB: Not `(start)`)
 
 If the canister invokes a system imports from somewhere else, it will trap.
 
