@@ -1,0 +1,1927 @@
+= Public specification of the Internet Computer
+Joachim Breitner <joachim@dfinity.org>
+:toc2:
+:toclevels: 3
+:stem: latexmath
+:icons: font
+
+== Preamble
+
+This document describes the public interface of the Internet Computer. It is the authoritative source for interface details (request and function names, parameters, encodings). The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of the Internet Computer in a hopefully concrete way. It could also be a document that we can publish to users of the Internet Computer.
+
+Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated or don’t go well together. But as it intentionally does not address _how_ to implement this behaviour, it cannot be used as an implementation spec.
+
+=== Status
+
+The `master` version of this document corresponds to _approved_ designs. It does, however, _not_ indicate any kind of implementation plan, and must not be used as an implementation specification. It may contain features that are not yet implemented, the implementation plans are made elsewhere.
+
+Aspects of this document not implemented in the master version of the official internet computer are labeled as such, using the “warning” admonition.
+
+Please skim the https://github.com/dfinity-lab/dfinity/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
+
+=== Process
+
+This document is maintained by its editors (currently Joachim, Jens, Björn). The editors drive its evolution, make sure the right process is followed and try to keep tabs on relevant design discussions happening. Nevertheless, everyone is invited to contribute.
+
+A proposed change of this document should take the form of a Pull Request on GitHub, be titled “Public Spec: _title_”, and its description should answer the following questions:
+
+ 1. How is this change mandated by the design: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
+ 2. Which parties (Replica, Languages, SDK, Research) are affected by this change, and why?
+
+Such a change can be merged if
+
+ 1. The design slides mentioned above are actually approved.
+ 2. A lead or representative of each involved party approves the change.
+
+An Editor, who did not initiate the change, should check these requirements.
+
+Purely editorial changes can be merged by the editors directly. Generally, these merges should be “squash merges”.
+
+Draft PRs can be used for experimentation and exploration without any process requirement.
+
+== Introduction
+
+Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the Internet Computer to run their applications and those who use these applications.
+
+=== Scope of this document
+
+This documents describes this external view of the Internet Computer:
+Which interfaces it provides to application developers and users, and what will happen when you use these interfaces.
+
+WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the Motoko programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient.
+
+If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of the Internet Computer, please consult the link:../index{outfilesuffix}[Component Interface Specifications].
+
+This document tries to be implementation agnostic: If we decide to re-do the implementation of the Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
+
+This implies that this document does not speak of the interface of the Internet Computer towards its engineers and administrators, as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
+
+
+=== Overview of the Internet Computer
+
+If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format,how a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+
+Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to interact with the canister according to the <<system-api,System API>>.
+
+The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of a canister.
+
+.A typical use of the Internet Computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
+[plantuml]
+....
+actor Developer
+actor User
+participant "Internet Computer" as IC
+participant "Canister 1" as Can1
+Developer -> IC : /submit create canister
+create Can1
+IC -> Can1 : create
+Developer <-- IC : canister-id=1
+Developer -> IC : /submit install module
+IC -> Can1 : initialize
+|||
+User -> IC : /submit call “hello”
+IC -> Can1 : hello
+return "Hello world!"
+User <-- IC : "Hello World!"
+....
+
+Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with high precision.
+
+
+=== Nomenclature
+
+To get some consistency in this document, we try to use the following terms with precision:
+
+We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code acting on behalf of a (human) user.
+
+The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved) or _query methods_ (state mutation is discarded, no further calls can be made).
+
+Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
+
+Inter-canister calls do not distinguish between update and query methods. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
+
+Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
+
+WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
+
+External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
+
+Canisters, users, etc. are _principals_, and are identified by an _id_.
+
+== Principal IDs
+
+Principal ids, like canister ids and user ids, are – as far as most uses of the system is concerend – binary blobs. There is, however, some structure to them to encode specific authentication and authorization behavior.
+
+[#id-classes]
+=== Special forms of IDs
+
+WARNING: These ids forms are not yet implemented.
+
+There are three classes of ids:
+
+1. _Opaque ids_.
++
+These are always generated by the system and have no structure of interest outside the system.
++
+NOTE: Typically, these end with the byte `0x01`, but users of the IC should not need to care about that.
+
+2. _Self-authenticating ids_.
++
+These have the form `H(public_key) · 0x02`.
++
+An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
++
+NOTE: In the future the system may gain the ability to change the authentication rules for self-authenticating ids, e.g. revoke the original key and configure another one.
+
+3. _Derived ids_
++
+These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03`.
++
+These ids are treated specially when an id needs to be registered. In such a request, the caller (an user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id. See for example <<api-create-canister>>.
+
+The hash function `H(…)` here is SHA-256. Thus self-authenticating ids are always 33 bytes long, derived ids are always 41 bytes long.
+
+When the system creates a _fresh_ id, it never uses a self-authenticating or derived id.
+
+
+[#textual-ids]
+=== Textual representation of principal ids
+
+NOTE: This textual representation does not actually show up in the interface (which always deals with blobs), so it is merely a recommended convention.
+
+We specify a _canonical textual format_ that is recommended whenever principal ids need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
+
+To turn a blob into the recognizable text format,
+
+1. Append a one byte checksum, calculated using CRC-8 with polynomial 0x07 (MSB-first code).
+2. Convert into hexadecimal form, with capital letters.
+3. Prepend `ic:`.
+
+[TIP]
+The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=ABCD01&method=crc8&datatype=hex&outtype=hex[online calculator]).
+
+
+[#http-interface]
+== HTTPS Interface
+
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes two endpoints to handle the requests, plus one for diagnostics.
+
+=== Submitting vs. reading requests
+
+.The classification of requests, with example request types.
+[plantuml]
+....
+object "API Requests" as request
+
+together {
+object "Async" as async {
+{field} May change system state
+{field} Response via status polling
+}
+
+object "Sync" as sync {
+{field} Cannot change state
+{field} Immediate response
+}
+}
+
+object "Certified" as certified {
+provided by the “system”
+}
+object "Uncertified" as uncertified {
+provided by the “node”
+}
+
+together {
+ object "Canister installation" as install
+ object "Canister update call" as call
+ object "Canister query call" as query
+ object "Read request status" as status
+ object "Read account balance" as balance
+}
+
+request <|-- async
+request <|-- sync
+sync <|-- certified
+sync <|-- uncertified
+
+async <|-- install
+async <|-- call
+
+uncertified <|-- query
+certified <|-- balance
+certified <|-- status
+....
+
+
+
+[#async-requests]
+==== Asynchronous requests
+
+Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+
+1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
+2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
+3. At some point, the system may accept the request for processing (or it expires). From now on, the user can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
+4. Once it is clear that the request will be acted upon, the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
+5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
+6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
+7. At the end, the system forgets about the request and its response.
+
+
+Thie yields the following interaction diagram:
+
+[plantuml]
+....
+(*) --> "User creates request" #DDDDDD
+   --> "Submitted to node" #DDDDDD
+   --> "Received"
+   --> "Processing"
+if "" as X then
+  --> "Replied"
+  --> "Cleaned" #DDDDDD
+  else
+  --> "Rejected (canister)"
+  --> "Cleaned" #DDDDDD
+
+  "X"        --> "Rejected (system)"
+  "Received" --> "Rejected (system)"
+             --> "Cleaned" #DDDDDD
+endif
+....
+
+Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages have an expiry date, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
+
+The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+
+The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the use sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+
+A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+
+When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
+
+==== Synchronous requests
+
+Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
+
+We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
+
+
+[#api-endpoints]
+==== Request Endpoints
+
+NOTE: This document does not yet explain how to find the location and port of a running Internet Computer Node, nor how to find out which node(s) to talk to for a given canister.
+
+The following API endpoints are provided:
+....
+/api/v1/submit
+/api/v1/read
+....
+
+NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
+
+For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
+
+* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
+* The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
+
+In both cases case, the usual HTTP errors (e.g. 503) may occur.
+
+NOTE: For some types of synchronous requests (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
+
+NOTE: Some or all calls to `/api/v1/read` might have to be paid for using a micro payment scheme (e.g. state-channel) that is to be specified.
+
+
+[#field-types]
+=== Field types
+
+The system supports a number of requests, represented as records, i.e. fields with names and values.
+
+The fields are typed and can have one of these types:
+
+* `nat`: A (possibly unbounded) natural number
+* `text`: Human readable text (e.g. sequence of Unicode codepoints)
+* `blob`: Arbitrary binary data
+
+For readablity, we use the following type synonyms:
+....
+type PrincipalId = blob
+type CanisterId = PrincipalId
+type UserId = PrincipalId
+....
+
+NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure (e.g. “exactly 64 bits long”, or “size of a hash”). But it is possible that any concrete choice will have to be revised or extended later. In order to not break existing code (especially existing canister), the interface uses arbitrary blobs here.
+
+=== Common fields
+
+The following fields is common among all requests:
+
+* `request_type` (`text`): Indicates the type of request, and is one of the values specified in <<request-types>>.
+* The fields `sender_pubkey`, `sender_sig`, `expiry`, `nonce`, as specified in <<authentication>>.
+
+[#authentication]
+=== Authentication
+
+WARNING: Signatures are not yet in any way looked at by the Internet Computer.
+
+All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
+
+* `expiry`: time(?) until the request must be executed or dropped #TODO: details#.
+* `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
+
+
+Furthermore, the requests records are wrapped in a envelope record with these fields:
+
+* `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_sig` (`blob`): Signature to authenticate this request.
+* `content` (`record`): the actual request content
+
+For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
+
+A public key can authenticate a principal id if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+
+The envleope fields do _not_ contribute to the calculation of the `request_id` (see <<api-request-id>>), because the signature is based on the `request_id`, and because the signatures are not semantically relevant. The `expiry` and `nonce` fields do.
+
+
+The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
+
+ * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
+ * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
+
+WARNING: Signature scheme may still change, or multiple schemes may be
+supported; ongoing discussion involving Björn and others.
+
+The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
+
+NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various request types.
+
+[#request-types]
+=== Request types
+
+The following subsections list all supported requests, including their classification (synchronous vs. asynchronous), their request type, the set of fields of the request record and of the reply object and a description of their pupose.
+
+[#api-create-canister]
+==== Canister creation
+
+WARNING: This request type is currently not accepted.
+
+Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
+
+If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
+
+A canister has a list of _admin users_; initially, the user who has registered the canister is the only admin user.
+
+Synchronicity:: asynchronous
+Request type:: `create_canister`
+Request fields::
+* `sender` (`PrincipalId`): The user who issued the request.
+* `desired_id` (`PrincipalId`, optional): The id the system should use for the canister
+Reply fields::
+* `canister_id` (`CanisterId`): The canister id of the just created canister.
+
+Until code is installed, the canister behaves like one with no public methods.
+
+NOTE: This request may later contain specifications of particular features needed from the hosting subnet
+
+[#api-install-code]
+==== Canister code installation
+
+WARNING: In the current implementation, this also creates a canister with the given id; anybody can create any canister. No list of admins or controllers is maintained.
+
+After an empty canister has been created via <<api-create-canister>>, the admin can install the first code:
+
+Synchronicity:: asynchronous
+Request type:: `install_code`
+Request fields::
+* `sender` (`PrincipalId`): The user who issued the request.
+* `canister_id` (`CanisterId`): The id of the canister to install code for.
+* `module` (`blob`): A <<canister-module-format,canister module>>
+* `arg` (`blob`): Initialization arguments
+* `compute_allocation` (`nat`, optional): The initial allocation requested, in percent.
+Reply fields::
+* None
+
+Only a user who is an _admin user_ for the canister can install code.
+
+This will instantiate the canister module and invoke its `canister_init` system method, as explained in Section “<<system-api-init>>”, passing the `arg` to the canister.
+
+If the canister does not have a `canister_init` system method, then `arg` is ignored.
+
+This is atomic: If the response to this request is a `reject`, then this request had no effect. It is an error to invoke `install_code` on a canister again after a previous code installation has succeeded; canister upgrades are handled separately. (This may be relaxed later, in particular if we switch to a non-serializing approach to persistent storage.)
+
+The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a percentage of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0.
+
+NOTE: This assumes that a canister module fits into a single request. If this assumption turns out to be false, we will provide a more elaborate multi-step interface for code installation. But even then, this simple, atomic way is worth keeping (less error conditions), so we are forward-compatible.
+
+NOTE: Upgrading (i.e. deploying code while preserving state) is a separate request type, not yet described here.
+
+NOTE: Undecided: Should this request also be used to re-install  canister code (i.e. replace the code _without_ preserving the state)? If so, should that intention be made explicit via some field `replace: true` or such?
+
+[#api-update]
+==== Canister update call
+
+Synchronicity:: asynchronous
+Request type:: `call`
+Request fields::
+* `sender` (`PrincipalId`): The user who issued the request.
+* `canister_id` (`CanisterId`): The id of the canister to call.
+* `method_name` (`text`): Name of the canister method to call
+* `arg` (`blob`): Argument to pass to the canister method
+Reply fields::
+* `arg` (`blob`): The blob representing the data replied by the canister.
+
+This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
+
+NOTE: Other arguments besides data (e.g. payments) will be represented in further fields next to `arg`.
+
+[#api-request-status]
+==== Request status
+
+Synchronicity:: synchronous
+Request type:: `request_status`
+Request fields::
+* `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
+Response fields::
+* `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`
+* `reply`: If the status is `replied`, then this member contains the request-type specific reply object (see the specification for the individual request types for which fields exist).
+* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
+* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
+
+The status `pending` is used for requests that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
+
+WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request as pending.
+
+NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
+
+[#api-query]
+==== Canister query call
+
+Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
+
+Synchronicity:: synchronous
+Request type:: `query`
+Request fields::
+* `sender` (`PrincipalId`): The user who issued the request.
+* `canister_id` (`CanisterId`): The id of the canister to query.
+* `method_name` (`text`): Name of the canister query method to call
+* `arg` (`blob`): Argument to pass to the canister method
+Response fields::
+* `status` (`text`): One of `replied` or `rejected`
+* `reply`: If the status is `replied`, then this member contains the call reply, just as specified in <<api-update>>.
+* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
+* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
+
+//tag::request-id[]
+[#api-request-id]
+=== Request ids
+
+When querying the status of a request (see <<api-request-status>>), the user identifies the request using a _request id_. The request id is a simple “object hash” of the request's `content`, as described here. The hash operation is always SHA-256.
+
+1. Treat the request type as the value of a text field named `request_type`.
+2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
+   * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
+3. Sort these by the hash of the field name.
+4. Concatenate these hashes, and hash the result.
+
+The resulting hash of 256bits (32 bytes) is the id of the request.
+
+NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
+
+NOTE: The recommended textual representation of a request id is a hexadecimal string with capital letters prefixed with '0x'.
+E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F`.
+
+The following encodings of field values are used
+
+* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+* Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as they are.
+* Nat fields (`compute_allocation`) are hashed using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+  For example, `0` should be hashed as a single zero byte `[0x00]` and `624485` should be hashed as byte sequence `[0xE5, 0x8E, 0x26]`.
+//end::request-id[]
+
+[TIP]
+====
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
+
+[source,,options="nowrap"]
+----
+request_id_of({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
+ = H(concat (sort
+   [ H("request_type") · H("call")
+   , H("canister_id") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
+   , H("method_name") · H("hello")
+   , H("arg") · H("DIDL\x00\xFD*")
+   ]))
+ = H(concat (sort
+   [ 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 0a3eb2ba16702a387e6321066dd952db7a31f9b5cc92981e0a92dd56802d3df9 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
+   , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
+   ]))
+ = H(concat
+   [ 0a3eb2ba16702a387e6321066dd952db7a31f9b5cc92981e0a92dd56802d3df9 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
+   , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+   , 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
+   ])
+ = 8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b
+----
+====
+
+//tag::reject-codes[]
+[#reject-codes]
+=== Reject codes
+
+An API request or inter-canister call that is pending in the system will eventually result in either a _reply_ (indicating success, and carrying data) or a _reject_ (indicating an error of some sorts). A reject contains a _rejection code_ that classifies the error and a (hopefully) helpful error message string.
+
+Rejection codes are member of the following enumeration:
+
+* `SYS_FATAL` (1):  Fatal system error, retry unlikely to be useful.
+* `SYS_TRANSIENT` (2): Transient system error, retry might be possible.
+* `DESTINATION_INVALID` (3): Invalid destination (e.g. canister/account does not exist)
+* `CANISTER_REJECT` (4): Explicit reject by the canister.
+* `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
+
+The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
+
+The error message is guaranteed to be a string, i.e. not arbitrary binary data.
+
+When canisters explicitly reject a message (see <<system-api-requests>>), they can specify the reject message, but _not_ the reject code; it is always `CANISTER_REJECT`. In this sense, the reject code is trustworthy: If the system resonds with a `SYS_FATAL` reject, then it really was the system issuing this reject.
+
+//end::reject-codes[]
+
+[#api-status]
+=== Status endpoint
+
+Additionally, the Internet Computer provides an API endpoint to obtain various status fields at
+....
+/api/v1/status
+....
+
+For this endpoint, the user performs a GET request, and receives a CBOR value with the following fields. The Internet Computer may include additional implementation-specific fields.
+
+* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the internet computer aims to support. Until this document is versioned and the implemnetation is in sync with a released version, the string `unversioned` should be used instead.
+* `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
+* `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
+* `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
+
+See <<api-cbor>> for details on the precise CBOR encoding of this object.
+
+NOTE: Future additions may include the version of public spec supported (once the public spec itself is versioned), local time, geographic location, and other useful implementation-specific information such as blockheight. This data is not authenticated yet, but may be signed by the node.
+
+// tag::cbor-encoding[]
+[#api-cbor]
+=== CBOR encoding of requests and responses
+
+Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
+
+Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an record.
+
+Requests consist of an envelope record with keys `sender_sig` (a blob), `sender_pubkey` (a blob) and `content` (a record). The first two are metadata that are used for request authentication, while the last one is the actual content of the request.
+
+The following encodings are used:
+
+* Strings: Major type 3 (“Text string”).
+* Blobs: Major type 2 (“Byte string”).
+* Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
+* Records: Major type 5 (“Map of pairs of data items”), followed by the fields, where keys are encoded with major type 3 (“Text string”).
+
+As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
+
+* Floating-point numbers may not be used to encode integers.
+* Duplicate keys are prohibited in CBOR maps.
+
+[TIP]
+====
+A typical request would be (written in https://tools.ietf.org/html/rfc7049#section-6[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
+....
+55799({
+  "sender_sig": h'DEADBEEF',
+  "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde',
+  "content": {
+    "request_type": "install_code",
+    "canister_id": h'ABCD01',
+    "module": h'0061736d01000000',
+    "arg": h''
+  }
+})
+....
+
+====
+
+WARNING: Currently, the replica does not look inside the `content` field, but expects its fields content at the top level CBOR map.
+
+// end::cbor-encoding[]
+
+=== Ordering guarantees
+
+In order to allow for a distributed implementation of the Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
+
+The  guarantee we do give is that function calls between two canisters are executed in order, so that a canister that requires in-order execution need not wait for the response from an earlier message to a canister before sending a later message to that same canister.
+
+More precisely:
+
+ * Method calls between any _two_ canisters are delivered in order, as if they
+   were communicating over a single simple FIFO queue.
+ * If a WebAssembly function, within a single invocation, makes multiple calls
+   to the same canister, they are queued in the order of invocations to `ic0.call_simple`.
+ * Responses (including replies with `ic0.msg_reply`, explicit rejects with `ic0.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
+ * There is no particular order guarantee for ingress messages submitted via
+   the HTTP interface.
+
+WARNING: There is a currently a discrepancy between the
+link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ to be ordered) and a later design document calling for all _calls_ to be ordered; this may need resolving.
+
+=== Synchronicity across nodes
+
+This documents describes the Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
+
+As long as you talk to one (honest) node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call to a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a query call to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
+
+If you then (quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
+
+A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
+
+Both problems can be solved if read requests can specify the desired state to query, either at-least-this-state (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
+
+NOTE: Even without this feature, applications can work around these problems. For the first problem, the query result could be such that the user can tell if the query has been received or not. For the second problem, if replies are monotonic in some sense the user can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the user can get assurance in those events returned by many nodes).
+
+
+
+[#canister-module-format]
+== Canister module format
+
+A canister module is simply a https://webassembly.github.io/spec/core/index.html[WebAssembly module] in binary format (typically `.wasm`).
+
+WARNING: This is a scaffolding spec, close to the current implementation. It will need refinement for features like initialization parameters, dynamically linked libraries. We probably want to go for some zip-file-with-metadata approach.
+
+
+[#system-api]
+== Canister interface (System API)
+
+The System API is the interface between the running canister and the Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
+
+We want to leverage advanced WebAssembly features, such as WebAssembly host references. But as they are not yet supported by all tools involved, this section describes an initial System API that does not rely on host references. To emphasize that this is just a preliminary interface, we group the system methods under the module name `ic0`, planning to use `ic` for the real deal.
+In section [#host-references], we outline some of the proposed uses of WebAssembly host references.
+
+[#system-api-module]
+=== WebAssembly module requirements
+
+In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
+
+* If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
+* If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
+* It may only import functions listed below, at the type given below.
+* It may have a `(start)` function.
+* If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
+* If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
+* It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
+* No floating point instructions are used in the module. (This may be allowed in the future.)
+* No floating point local or global variables are used in the module. (This may be allowed in the future.)
+
+=== Interpretation of numbers
+
+WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
+
+=== Entry points
+
+The canister provides entry points which are invoked by the system under various circumstances:
+
+* The canister may export a function named `canister_init` and type `+() -> ()+`.
+* The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
+* The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
+
+If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded.
+
+
+[#system-api-init]
+==== Canister initializaion
+
+If `canister_init` is present, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
++
+The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is deleted.
+
+
+[#system-api-requests]
+==== Public methods
+
+To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
+
+NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
+
+The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
+
+Eventually, a method will want to send a response, using `ic0.reply` or `ic0.reject`
+
+==== Callbacks
+
+Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
+
+In the reply callback for a further <<system-api-call,method call>>, the argument refers to the response of that call. In reject callbacks, no argument is available.
+
+
+=== Overview of imports
+
+The following sections describe various system imports, which we summarize here.
+
+....
+ic0.msg_arg_data_size : () -> i32                                      // I U Q Ry
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()    // I U Q Ry
+ic0.msg_caller_size : () -> (i32)                                      // I U Q
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()       // I U Q
+ic0.msg_reject_code : () -> i32                                        // Ry Rt
+ic0.msg_reject_msg_size : () -> i32                                    // Rt
+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()  // Rt
+ic0.msg_reply_data_append : (src : i32, size : i32) -> ()              // U Q Ry Rt
+ic0.msg_reply : () -> ()                                               // U Q Ry Rt
+ic0.msg_reject : (src : i32, size : i32) -> ()                         // U Q Ry Rt
+ic0.canister_self_size : () -> (i32)                                   // *
+ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()    // *
+ic0.call_simple                                                        // U Ry Rt
+  ( callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32
+  ) -> ( err_code : i32 )
+ic0.stable_size() -> (page_count : i32)                                // *
+ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)             // *
+ic0.stable_write(offset : i32, src : i32, size : i32) -> ()            // *
+ic0.stable_read(dst : i32, offset : i32, size : i32) > ()              // *
+ic0.debug_print : (src : i32, size : i32) -> ()                        // * s
+ic0.trap : (src : i32, size : i32) -> ()                               // * s
+....
+
+The comment after each functions lists from where these functions may be invoked:
+
+* `I`: from `canister_init`
+* `U`: from `canister_update …`
+* `Q`: from `canister_query …`
+* `Ry`: from a reply callback
+* `Rt`: from a reject callback
+* `s`: the `(start)` module initialization function
+* `*` = `I U Q Ry Rt` (NB: Not `(start)`)
+
+If the canister invokes a system imports from somewhere else, it will trap.
+
+=== Method arguments
+
+The canister can access an argument. For `canister_init` and method entrypoints, the argument is the argument of the call; in a reply callback, it refers to the received reply; in a reject callback, no argument is available. In other words, the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
+
+* `+ic0.msg_arg_data_size : () -> i32+`
++
+Size, in bytes, of the argument data.
+
+* `+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()+`
++
+Copies `size` bytes from `msg_arg[offset..offset+size]` to `memory[dst..dst+size]`, i.e., from the argument data into the Wasm memory.
++
+This traps if `offset+size` is greater than the size of the argument data, or if `dst+size` exceeds the size of the Wasm memory.
+
+* {blank}
++
+  ic0.msg_caller_size : () -> (i32)
+  ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
++
+The identity of the caller, which may be a canister id or a user id. During canister installation, this is the id of the user or canister requesting the installation.
+
+* `+ic0.msg_reject_code : () -> i32+`
++
+Returns the reject code, if the current function is invoked as a reject callback.
++
+It returns the special “no error” code `0` if the callback is _not_ invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
++
+* `+ic0.msg_reject_msg_size : () -> i32+`
++
+Returns the size of the reject message, in bytes.
+* `+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()+`
++
+Copies `size` bytes from `reject_msg[offset..offset+size]` to `memory[dst..dst+size]`.
++
+This traps if `offset+size` is greater than the size of the reject message, or if `dst+size` exceeds the size of the Wasm memory.
+
+=== Responding
+
+Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
+
+* `+ic0.msg_reply_data_append : (src : i32, size : i32) -> ()+`
++
+Copies the data referred to by `src`/`size` out of the canister and appends it to the (initially empty) data reply.
++
+NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
++
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to.
+
+* `+ic0.msg_reply : () -> ()+`
++
+Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
++
+This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
+
+* `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
++
+Rejects the call. The data referred to by `src`/`size` is used for the diagnostic message.
++
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`size` is not valid UTF8.
++
+The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
++
+Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
+
+[#system-api-canister-self]
+=== Self-identification
+
+A canister can learn about its own identity:
+
+* {blank}
++
+  ic0.canister_self_size : () -> (i32)
+  ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()
++
+These functions allow the canister to query its own canister id (as a blob). As usual, `_size` returns the size in bytes and `_copy` can be used to copy bytes from the blob into the Wasm heap.
+
+
+[#system-api-call]
+=== Inter-canister method calls
+
+When handling an update call (or a callback), a canister can do further calls to another canister.
+
+* {blank}
++
+  ic0.call_simple : (
+    callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32
+  ) -> ( err_code : i32 )
++
+This performs a function call to the canister specified by `callee_src/_size`, calling the method specified by `name_src/_size`, sending the data specified by `data_src/_size`.
++
+The system records the current function table entry at the index `reply_fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic0.msg_arg_data_size`/`ic0.msg_arg_data_copy`.
++
+The system also records the current function table entry at the index `reject_fun`. If the method call fails, or the other canister explicitly rejects the call, the noted function is executed.
++
+These callback functions need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
++
+The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
++
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
++
+If the system returns a non-zero value, the call cannot (and will not be) performed.
++
+This system call traps if any of the `*_src+*_size` exceed the size of the WebAssembly memory.
+
+[#system-api-stable-memory]
+=== Stable memory
+
+WARNING: This is not implemented yet.
+
+Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this _stable memory_ is to provide space to store data beyond upgrades.  The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
+
+The stable memory is initially empty.
+
+* {blank}
++
+  ic0.stable_size() -> (page_count : i32)
++
+returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 65Ki bytes.)
+
+* {blank}
++
+  ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)
++
+tries to grow the memory by `new_pages` many pages containing zeroes.
+
+If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
+
+* {blank}
++
+  ic0.stable_write(offset : i32, src : i32, size : i32) -> ()
++
+copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
+
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
+
+* {blank}
++
+  ic0.stable_read(dst : i32, offset : i32, size : i32) > ()
++
+copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
+
+This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
+
+=== Debugging aids
+
+During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
+
+* `+ic0.debug_print : (src : i32, size : i32) -> ()+`
++
+When executing in an environment that supports debugging, this copies out the data specified by `src` and `size`, and logs, prints or stores it in an environment-appropriate way. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
++
+Semantically, this function is always a no-op, and never traps, even if the `src+size` exceeds the size of the memory, or if this function is executed from `(start)`. If the environment cannot perform the print, it just skips it.
+
+NOTE: We may at some point require modules deployed to the real network to not even import this function.
+
+Similarly, the system allows the canister to effectively trap, but give some indication about why it trapped:
+
+* `+ic0.trap : (src : i32, size : i32) -> ()+`
++
+This function always traps.
++
+The environment may copy out the data specified by `src` and `size`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form).
+
+[#host-references]
+=== Outlook: Using Host References
+
+The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
+
+1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
+2. The use of references, instead of binary blobs, to address principals (users, canisters), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principal ids and references.
+3. In addition to the monolithic `ic0.call_simple`, a compositional builder interface to create calls is provided.
+
+A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
+
+[#public-spec]
+== Abstract public behavior
+
+The sections above describe the interface, i.e. outer edges of the Internet Computer, but give only intuitive and rather vague information about what these interfaces actually do.
+
+This section aims to address that question with great precision, by describing the _abstract state_ of the whole Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
+
+The design of this abstract specification (e.g. how and where pending messages are stored) are _not_ to be understood to in any way prescribe a concrete implementation or software architecture. The goals here are formal precision and clarity, but not implementability, so this can lead to different ways of phrasing.
+
+=== Notation
+
+We specify the behavior of the system using pseudo-code.
+
+The manipulated values are primitive values (numbers, text, binary blobs), aggregate values (lists, unordered lists a.k.a. bags, partial maps, records with fixed fields, named constructors) and functions.
+
+We use an concatenation operator `·` with various types: to extend sets and maps, or to concatenate lists with lists or lists with elements.
+
+The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`). Partial maps are written as  `Key ↦ Value` and the function type as `Argument -> Result`.
+
+NOTE: All values are immutable! State change is specified by describing the new state, not by changing existing state.
+
+Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To create a new record from an existing record `R` with some fields changed, the syntax `R where field = new_value` is used. This syntax can also be used to create new records with some deeply nested field changed: `R where some_map[key].field = new_value`.
+
+In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be followed for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
+
+For example, the condition `S.messages = Older_messages · M · Younger_messages` says that `M` is some message in field `messages` of the record `S`, and that `Younger_messages` and `Older_messages` are the other messages in the system. If the “state after” specifies `S with messages = Older_messages · Younger_messages`, then the message `M` is removed from the state.
+
+=== Abstract state
+
+In this specification, we describe the Internet Computer as a state machine. In particular, there is a single piece of data that describes the complete state of the system (called `S` below).
+
+Of course, this is a huge simplification: The real Internet Computer is distributed and has a multi-component architecture, and the state is spread over many different components, some physically separated. But this simplification allows us to have a concise description of the system, and to easily make global decisions (such as, “is there any pending message”), without having to specify the bookkeeping that allows such global decision.
+
+==== Identifiers
+
+Principal ids (canister ids and user ids) are blobs, but some of them have special form, as explained in <<id-classes>>.
+....
+type PrincipalId = Blob
+....
+
+The predicate
+....
+is_opaque_id : PrincipalId -> Bool
+....
+characterizes all system-assigned blobs.
+
+The function
+....
+is_self_authenticating_id : PublicKey -> PrincipalId -> Bool
+is_self_authenticating_id pk id = id == H(pk) · 0x02
+....
+characterizes the self-authenting ids.
+
+The function
+....
+is_derived_id : PublicKey -> PrincipalId -> Bool
+is_derived_id pk id = ∃n. |n| == 8 ∧ id == H(ok) · n · 0x03
+....
+characterizes the derived ids.
+
+These three predicates are mutually disjoint.
+
+
+Method names can be arbitrary pieces of text:
+....
+MethodName = Text
+....
+
+
+[#abstract-canisters]
+==== Abstract canisters
+
+The <<system-api,WebAssembly System API>> is relatively low-level, and some of its details (e.g. that the argument data is queried using separate calls, and that closures are represented by a function pointer and a number, that method names need to be mangled) would clutter this section. Therefore, we abstract over the WebAssembly details as follows:
+
+* The state of a WebAssembly module (memory, tables, globals) is hidden behind an abstract `WasmState`.
+
+* A canister module `CanisterModule` consists of an initial state, and a (pure) function that models function invocation. It either indicates that the canister function traps, or returns a new state together with a description of the invoked asynchronous System API calls.
++
+....
+WasmState = (abstract)
+
+Arg = {
+  data : Blob
+  caller: PrincipalId
+}
+
+RejectCode = Nat
+Response = Reply Blob | Reject (RejectCode, Text)
+MethodCall = {
+  callee : CanisterId;
+  method_name: MethodName;
+  arg: Blob;
+  callback: Response -> UpdateFunc;
+}
+
+InitFunc = (CanisterId, Arg) -> Trap | Return WasmState
+UpdateFunc = WasmState -> Trap | Return {
+  new_state : WasmState;
+  new_calls : List MethodCall;
+  response : NoResponse | Response;
+}
+QueryFunc = WasmState -> Trap | Return Response
+
+
+CanisterModule = {
+  init : InitFunc
+  update_methods : MethodName ↦ (Arg -> UpdateFunc)
+  query_methods : MethodName ↦ (Arg -> QueryFunc)
+}
+....
+
+This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
+
+The `CanisterId` parameter of the `InitFunc` is merely passed through to the canister, via the `canister.self` system call.
+
+The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
+
+==== Call contexts
+
+The Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
+
+To ensure that only one response is generated, and also to detect when no response can be generated any more, we maintain a _call context_. The `responded` field is set to `true` once the call has received a response, further attempts to send a response fail.
+
+....
+CallCtxt = {
+  canister : CanisterId;
+  origin : CallOrigin;
+  responded : bool;
+}
+CallId = (abstract)
+CallOrigin
+  = FromUser {
+      request : Request;
+    }
+  | FromCanister {
+      calling_context : CallId;
+      callback: Response -> WasmFunc
+    }
+....
+
+In this abstract description, call contexts are never garbage collected, even if nothing references them any more; an implementation can do that.
+
+==== Calls and Messages
+
+Calls into and within the Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
+
+Therefore, a message can have different shapes:
+....
+Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
+Message
+  = CallMessage {
+      origin : CallOrigin;
+      caller : PrincipalId;
+      callee : CanisterId;
+      method_name : Text;
+      data : Blob;
+      queue : Queue;
+    }
+  | FuncMessage {
+      call_context : CallId;
+      receiver : CanisterId;
+      func : UpdateFunc;
+      queue : Queue;
+    }
+  | ResponseMessage {
+      call_context : CallId;
+      response : Response;
+    }
+....
+
+The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and not otherwise interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
+
+Although the `func` field of `FuncMessage` has type `UpdateFunc`, it could also be a query call. We will see below that an `QueryFunc` can be modeled as an `UpdateFunc`.
+
+A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document chooses this approach for a simpler and more concise system state.
+
+==== API requests
+
+We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API requests passed to `/api/v1/read`, which are only ephemeral.
+
+....
+Request
+  = CreateCanister = {
+    nonce : Blob;
+    sender : UserId;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+  }
+  | InstallCode = {
+    nonce : Blob;
+    sender : UserId;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    canister_id :  CanisterId;
+    module : CanisterModule;
+    data : Blob;
+  }
+  | CanisterUpdateCall = {
+    nonce : Blob;
+    sender : UserId;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    callee : CanisterId;
+    method_name : Text;
+    data : Blob;
+  }
+....
+
+The evolution of an `Request` goes through these states, as explained in <<async-requests>>:
+....
+RequestStatus
+  = Received
+  | Processing
+  | Rejected (RejectCode, Text)
+  | Completed { result : Value }
+....
+
+These are the synchronous read messages:
+....
+APIReadRequest
+  = ReadStatus = {
+    nonce : Blob;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    request_id : Request;
+  }
+  | CanisterQuery = {
+    nonce : Blob;
+    sender : UserId;
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+    callee : CanisterId;
+    method_name : Text;
+    data : Blob;
+  }
+....
+
+A `ReadStatus` refers to a request by way of a _request id_, which is a hash of the request content:
+....
+Request = Blob
+request_id_of : Request -> Request
+....
+
+The precise algorithm to calculate this request id is specified in <<api-request-id>>.
+
+
+For the signatures in an `Request`, we assume that the following function implements https://ed25519.cr.yp.to/index.html[*Ed25519*].
+....
+PublicKey = Blob
+Signature = Blob
+verify_signature : PublicKey -> Signature -> Blob -> Bool
+....
+
+==== The system state
+
+Finally, we can describe the state of the Internet Computer as a record having the following fields:
+
+....
+S = {
+  requests : Request ↦ RequestStatus ;
+  canisters : CanisterId ↦ CanState;
+  admins : CanisterId ↦ Set UserId;
+  call_contexts : CallId ↦ CallCtxt;
+  messages : List Message; // ordered!
+}
+CanState = EmptyCanister | {
+  wasm_state : WasmState;
+  module : CanisterModule;
+}
+....
+
+==== Initial state
+
+The initial state of the system is
+....
+{
+  requests = ();
+  canisters = ();
+  admins = ();
+  call_contexts = ();
+  messages = ();
+}
+....
+using `()` to denote the empty map or bag.
+
+=== State transitions
+
+Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
+
+ * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be considered received.
+ * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
+ * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
+
+The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust our team to make sensible decisions there.
+
+==== API Request submission
+
+After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Received` state.
+
+This may only happen if the following validation steps pass:
+
+ * The signature on the request is valid.
+ * The key used to sign the request matches the public key encoded in the
+   user's self-authenticating id.
+
+More validation (e.g. authorization) steps may be added here.
+
+Submitted request:: `R`
+Conditions::
+....
+    is_self_authenticating_id R.sender_pubkey R.sender
+    verify_signature R.sender_pubkey R.sender_sig (request_id_of(R)) = true
+....
+State after::
+....
+S with
+    requests[R] = Received
+....
+
+NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
+
+NOTE: Due to this check, the `sender` field of any request in the system state is authenticated, so an implementation may actually drop the `sender_sig` field at this point.
+
+==== Request rejection
+
+The system may reject an received message for internal reasons (high load, low resources). The precise conditions are not specified here, but the reject code must indicate this to be a system error.
+
+
+Conditions::
+....
+    S.requests[R] = Received
+    Code = SYS_FATAL or Code = SYS_TRANSIENT
+....
+State after::
+....
+S with
+    requests[R] = Rejected (Code, Msg)
+....
+
+==== Canister creation
+
+If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
+
+Conditions::
+....
+    S.requests[CreateCanister M] = Received
+    match M.desired_id with
+	CanisterId -> is_derived_id M.sender CanisterId
+	None -> is_opaque_id CanisterId = true
+    CanisterId ∉ dom S.canisters
+....
+State after::
+....
+S with
+    requests[CreateCanister M] = Completed { result = { canister_id = CanisterId } }
+    canisters[CanisterId] = EmptyCanister
+....
+
+
+==== Canister code installation
+
+Only an admin of the given canister can install new code. This turns an empty canister into a running canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+
+The `compute_allocation` is ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+
+Conditions::
+....
+    S.requests[InstallCode M] = Received
+    S.canisters[M.canister_id] = EmptyCanister
+    M.sender ∈ S.admins[M.canister_id]
+    Arg = {
+      data = M.data;
+      caller = M.caller
+    }
+    M.module.init(M.canister_id, Arg) = Return New_state
+....
+State after::
+....
+S with
+    requests[InstallCode M] = Completed { result = { } }
+    canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
+....
+
+==== Initiating canister calls
+
+A first step in processing a canister update call is to create a `CallMessage` in the message queue.
+
+The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
+
+We do not make any guarantees about the order of incoming messages.
+
+Conditions::
+....
+    S.requests[CanisterUpdateCall M] = Received
+....
+State after::
+....
+S with
+    requests[CanisterUpdateCall M] = Processing
+    messages =
+      CallMessage {
+        origin = FromUser { request = CanisterUpdateCall M };
+        caller = M.sender;
+        callee = M.callee;
+        method_name = M.method_name;
+        arg = M.arg;
+        queue = Unordered;
+      } · S.messages
+....
+
+==== Call context creation
+
+Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
+
+The position of the message in the queue is unchanged.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage CM · Younger_messages
+    S.canisters[CM.callee] ≠ EmptyCanister
+    M = S.canisters[CM.callee].module
+    F = if M.method_name ∈ M.update_methods
+        then M.update_methods[CM.method_name]
+        else query_to_update_func (M.query_methods[CM.method_name])
+    Ctxt_id ∉ dom S.call_contexts
+    Arg = {
+      data = CM.data;
+      caller = CM.caller
+    }
+....
+State after::
+....
+S with
+    messages =
+      Older_messages ·
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = CM.callee;
+        func = F (Arg);
+        queue = CM.queue;
+      } ·
+      Younger_messages
+    call_contexts[Ctxt_id] = {
+      canister = CM.callee;
+      caller = CM.caller;
+      responded = false;
+    }
+....
+
+The function `query_to_update_func` simply turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
+....
+query_to_update_func f =
+  λ arg → λ wasm_state →
+    match f(arg)(wasm_state) with
+      Trap → Trap
+      Return res → Return {
+        new_state = wasm_state;
+        new_calls = [];
+        response = res;
+      }
+....
+Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
+
+==== Message execution (non-trapping)
+
+We can execute any message that is at the head of its queue, i.e. there is no
+older message with the same abstract `queue` field.
+The actual message execution, if successful, may enqueue further messages and
+-- if the function returns a response -- record this response.
+The new call and response messages are enqueued at the end.
+
+Conditions::
+....
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    S.canisters[C.callee] ≠ EmptyCanister
+    M.func(S.canisters[M.receiver].wasm_state) = Return res
+    (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
+....
+State after::
+....
+S with
+    canisters[M.receiver].wasm_state = res.new_state;
+    messages =
+      Older_messages ·
+      Younger_messages ·
+      [ CallMessage {
+          origin = FromCanister {
+            call_context = M.call_context;
+            callback = call.callback
+          };
+          caller = C.callee;
+          callee = call.callee;
+          method_name = call.method_name;
+          arg = call.arg;
+          queue = Queue { from = M.receiver; to = call.callee };
+        }
+      | for call ∈ res.new_calls ] ·
+      [ ResponseMessage {
+          call_context = M.call_context;
+          response = res.response;
+        }
+      | if res.response ≠ NoResponse ]
+
+     // only if res.response ≠ NoResponse:
+     call_contexts[M.call_context].responded = true
+....
+
+==== Message execution (trapping)
+
+If a message traps, it gets dropped. No response is generated (some other message may still fulfill this calling context).
+
+Conditions::
+....
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    S.canisters[M.callee] ≠ EmptyCanister
+    M.func(S.canisters[M.receiver].wasm_state) = Trap
+....
+State after::
+....
+S with messages = Older_messages · Younger_messages
+....
+
+==== Message execution (double response)
+
+If a message tries to respond when its calling context has already be responded to, then we treat it like a trapping message.
+
+Conditions::
+....
+    S.messages = Older_messages · FuncMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    S.canisters[M.callee] ≠ EmptyCanister
+    M.func(S.canisters[M.receiver].wasm_state) = Return res
+    S.call_contexts[M.call_context].responded = true
+    res ≠ NoResponse
+....
+State after::
+....
+S with messages = Older_messages · Younger_messages
+....
+
+==== Call context starvation
+
+If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
+
+Conditions::
+....
+    S.call_contexts[Ctxt_id].responded = false
+    ∀ CallMessage msg ∈ S.messages. msg.call_context ≠ Ctxt_id
+    ∀ ctxt_ids.
+        (S.call_contexts[ctxt_ids].responded = false || S.response[ctxt_ids] exists)
+        ==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
+....
+State after::
+....
+S with
+    call_contexts[Ctxt_id].responded = true
+    messages =
+      S.messages ·
+      ResponseMessage {
+        call_context = Ctxt_id;
+        response = Reject (CANISTER_ERROR, "starvation");
+      }
+....
+
+==== Callback invocation
+
+When an inter-canister call has been responded to, we can queue the call to the callback.
+
+Conditions::
+....
+    S.messages = Older_messages · ResponseMessage RM · Younger_messages
+    S.call_contexts[RM.call_context].origin =
+      FromCanister {
+        call_context = Ctxt_id2
+        callback = F
+      }
+....
+State after::
+....
+S with
+    messages =
+      Older_messages ·
+      FuncMessage {
+        call_context = Ctxt_id2
+        receiver = S.call_contexts[RM.call_context].canister
+        func = F (RM.response)
+        queue = Unordered
+      } ·
+      Younger_messages
+....
+
+
+==== Respond to user request
+
+When an ingress method call has been responded to, we can record the response in the list of queries.
+
+Conditions::
+....
+    S.requests[M] = Processing
+    S.messages = Older_messages · ResponseMessage RM · Younger_messages
+    S.call_contexts[RM.call_context].origin = FromUser { request = M }
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages
+    requests[M] =
+      | Completed { result = R } if response = Reply R
+      | Rejected R               if response = Reject R
+....
+
+==== Request clean up
+
+At some point, a request will be removed from memory of the system. This must happen no earlier than the expiry time set in the request, and late enough so that the user had a fair chance of retrieving the response. Details are yet to be determined.
+
+Conditions::
+....
+    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _)
+....
+State after::
+....
+S with
+    requests[M] = (deleted)
+....
+
+
+==== Read: Status
+
+The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
+
+NOTE: There is a phase where a request was issued by the user, but not received yet by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending, as seen in the following rules.
+
+Submitted request:: `R`
+Conditions::
+....
+   R = ReadStatus RS
+   request_id_of(M) = RS.request_id_of
+   S.requests[M] = MS
+   is_self_authenticating_id RS.sender_pubkey M.sender
+   verify_signature RS.sender_pubkey RS.sender_sig (request_id_of(R)) = true
+....
+Read response::
+A record with
+* `{status: accpeted}` if `MS = Received`
+* `{status: processing}` if `MS = Processing`
+* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `MS = Rejected (code, msg)`
+* `{status: completed; result : <result>}` if `MS = Completed { result = result }`
+
+==== Read: query call
+
+Canister query calls can be executed directly.
+
+Submitted request:: `R`
+Conditions::
+....
+  R = CanisterQuery Q
+  is_self_authenticating_id Q.sender_pubkey Q.sender
+  verify_signature Q.sender_pubkey Q.sender_sig (request_id_of(R)) = true
+  S.canisters[Q.callee] ≠ EmptyCanister
+  C = S.canisters[Q.callee]
+  F = C.module.query_methods[Q.method_name]
+  Arg = { data = Q.arg; caller = Q.sender }
+
+....
+Read response::
+* If `F(Arg) = Trap` then
++
+....
+{status: failed; error: "Query execution trapped"}
+....
+* Else if `F(Arg) = Return (Reject (code, msg))` then
++
+....
+{status: rejected; reject_code: <code>: reject_message: <msg>}
+....
+* Else if `F(Arg) = Return (Reply R)` then
++
+....
+{status: success; result: <R> }
+....
+
+
+[#concrete-canisters]
+=== Abstract Canisters to System API
+
+In Section <<abstract-canisters>> we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the Internet Computer from WebAssembly details. In this section, we will fill the gap and explain how the abstract canister interface maps to the <<system-api,concrete System API>> and the WebAssembly concepts as defined in the https://webassembly.github.io/spec/core/index.html[WebAssembly specification].
+
+==== The concrete `WasmState`
+
+The abstract `WasmState` above models the WebAssembly _store_ `S`, which encompasses the functions, tables, memories and globals of the WebAssembly program, plus additional data maintained by the system, such as the stable memory:
+....
+WasmState = {
+  store : S; // a store as per WebAssembly spec
+  self_id : CanId;
+  stable_mem : Blob
+}
+....
+
+As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (resp. table) will trap if the module does not import the memory (resp. table).
+
+We model `mem` as an array of bytes, and `table` as an array of execution functions.
+
+==== The execution state
+
+We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
+....
+Params = {
+  data : NoData | Blob;
+  caller : NoCaller | PrincipalId;
+  reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
+  reject_message : Text;
+}
+ExecutionState = {
+  wasm_state : WasmState;
+  params : Params;
+  response : NoResponse | Response;
+  reply_params : { arg : Blob };
+  calls : List Call;
+}
+
+....
+
+This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
+Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that one invocation of such a function.
+
+WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function. The current specification does not do that, because every canister gets instantiated exactly once. Once we add upgrading to this document this needs to be checked.
+
+==== The concrete `CanisterModule`
+
+Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
+
+* For more convenience when creating a new `ExecutionState`, we define the following partial record:
++
+....
+empty_execution_state = {
+  wasm_state = (undefined);
+  params = (undefined);
+  response = NoResponse;
+  reply_params : { arg = "" };
+  calls : [];
+}
+....
+
+
+* The `init` field of the `CanisterModule` is defined as follows:
++
+If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
++
+....
+init = λ (self_id, arg) →
+  Return { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
+....
++
+Otherwise, if the WebAssembly module exports a function `f` under the name `canister_init`, it is
++
+....
+init = λ (self_id, arg) →
+  let es = ref {empty_execution_state with
+      wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
+    }
+  try func<es>() with Trap then Trap
+  if es.performed_calls ≠ [] then Trap
+  if es.response ≠ NoResponse then Trap
+  Return es.wasm_state
+....
++
+This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap already when these system calls are invoked.
+
+* The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_update <method>`, and has value
++
+....
+update_methods[method] = λ arg → λ wasm_state →
+  let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = "" }
+    }
+  try func<es>() with Trap then Trap
+  Return {
+    new_state = es.wasm_state;
+    new_calls = es.calls;
+    response = es.response;
+  }
+....
+
+* The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_query <method>`, and has value
++
+....
+query_methods[method] = λ arg → λ wasm_state →
+  let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
+    }
+  try func<es>() with Trap then Trap
+  if es.calls ≠ () then Trap
+  if es.response = NoResponse then Trap
+  Return es.response;
+....
++
+This formulation checks afterwards that the system calls `ic0.calls_simple` was not invoked; an implementation can of course trap already when these system calls have been invoked.
++
+By construction, the (possibly) modified `es.wasm_state` is discarded.
+
+
+==== Helper functions
+
+In the following section, we use the these helper functions
+
+copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
+  if offset+size > |data| then Trap
+  if dst+size > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+size] := data[offset..offset+size]
+
+copy_from_canister<es>(src : i32, size : i32) blob =
+  if src+size > |es.wasm_state.store.mem| then Trap
+  return es.wasm_state.store.mem[src..src+size]
+
+==== System imports
+
+Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
+
+....
+ic0.msg_arg_data_size<es>() : i32 =
+  if es.params.data = NoData then Trap
+  return |es.params.arg|
+
+ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
+  if es.params.data = NoData then Trap
+  copy_to_canister<es>(dst, offset, size, es.param.arg)
+
+ic0.msg_caller_size() : i32 =
+  if es.params.caller = NoCaller then Trap
+  return |es.params.caller|
+
+ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
+  if es.params.caller = NoCaller then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.caller)
+
+ic0.msg_reject_code<es>() : i32 =
+  es.params.reject_code
+
+ic0.msg_reject_msg_size<es>() : i32 =
+  if es.reject_code = 0 then Trap
+  return |es.params.reject_msg|
+
+ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+  if es.reject_code = 0 then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
+
+ic0.msg_reply_data_append<es>(src : i32, size : i32) =
+  if es.response ≠ NoResponse then Trap
+  es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
+
+ic0.msg_reply<es>() =
+  if es.response ≠ NoResponse then Trap
+  es.response := Reply (es.reply_params.arg)
+
+ic0.msg_reject<es>(src : i32, size : i32) =
+  if es.response ≠ NoResponse then Trap
+  es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
+
+ic0.canister_self_size<es>() : i32 =
+  return |es.wasm_state.self_id|
+
+ic0.canister_self_copy(dst:i32, offset:i32, size:i32)  =
+  copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
+
+ic0.call_simple<es>(
+    callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    data_src    : i32,
+    data_size   : i32) =
+
+  callee := copy_from_canister<es>(callee_src, callee_size);
+  method_name := copy_from_canister<es>(name_src, name_size);
+  arg := copy_from_canister<es>(data_src, data_size);
+
+  if reply_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
+  on_reply := es.wasm_state.store.table[reply_fun]
+
+  if reject_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
+  on_reject := es.wasm_state.store.table[reject_fun]
+
+  let build_callback (params, func, env) =
+    λ (self_id, wasm_state) →
+      let es' = ref {empty_execution_state with
+          wasm_state = wasm_state;
+          self_id = self_id;
+          params = params
+        }
+      try func<es>(env) with Trap then Trap
+      Return {
+        new_state = es'.wasm_state;
+        new_calls = es'.performed_calls;
+        response = es'.response;
+      }
+
+  if arbitrary()
+  then
+    return 1
+  or
+    es.calls := es.calls ·
+      {
+        callee = callee;
+        method_name = method_name;
+        arg = arg;
+        callback = λ response → match response with
+          Reply blob → build_callback
+              ( { data = blob; caller = NoCaller; reject_code = 0 }
+              , on_reply , reply_env )
+          Reject (reject_code, _message) → build_callback
+              ( { data = NoData; caller = NoCaller; reject_code = reject_code }
+              , on_reject , eject_env )
+      }
+    return 0
+
+ic0.stable_size<es>() -> (page_count : i32) =
+  return |es.wasm_state.stable_mem| / 64k
+
+ic0.stable_grow<es>(new_pages : i32) -> (old_page_count : i32) =
+  if arbitrary()
+  then return -1
+  else
+    old_size := |es.wasm_state.stable_mem| / 64k
+    es.wasm_state.stable_mem :=
+      es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
+    return old_size
+
+ic0.stable_write<es>(offset : i32, src : i32, size : i32) -> ()
+  if src+size > |es.wasm_state.store.mem| then Trap
+  if offset+size > |es.wasm_state.stable_mem| then Trap
+
+  es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
+
+ic0.stable_read<es>(dst : i32, offset : i32, size : i32) > ()
+  if offset+size > |es.wasm_state.stable_mem| then Trap
+  if dst+size > |es.wasm_state.store.mem| then Trap
+
+  es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
+
+ic0.debug_print<es>(src : i32, size : i32) =
+  return
+
+ic0.trap<es>(src : i32, size : i32) =
+  Trap
+....
+
+
+== Discussion and comments
+
+=== User and user key management
+
+We have left it up to the state transition (admin) to assign UserId to public keys. In principle a UserId can be associated with several public keys. A public key on the other hand can map to at most one user. A simpler setting would be a bijection between keys and users, or even to have no user ids at all and just refer to public keys.
+
+Currently the life cycle of a public key is existence or non-existence. A more fine-grained life cycle would be: pre-activation, active, suspended, revoked, deleted. Keys may also have usage constraints e.g. a user may want to have a not-so-secure key with a daily spending cap and very-secure key for high value transactions. And keys may come with activation/expiration times.
+
+It is open whether UserId's are deleted if they have no associated public keys. If they are, there might be overlaps in UserId's over time. This could be avoided by guaranteeing a UserId is only used once, e.g., by incremental numbering (or something else to avoid races for special numbers) or using large random numbers.
+
+As with keys, user ids and user accounts will also be subject to management. Their statuses can be: pre-activation, active, suspended, blacklisted, deleted. There may be usage constraints associated with them, and they may hold public information about a user, e.g., name.
+
+In the future we want explicit interfaces over which a user registers a public key and manage their accounts. One could imagine the user creating an ingress message with new public key, optional existing user id, registration evidence (e.g. signature by existing public key or evidence of PKI certificate), user info (e.g. name or KYC), and signature on everything. Similarly, we would need methods for other types of key management and user management.
