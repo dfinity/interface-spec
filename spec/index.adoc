@@ -50,7 +50,7 @@ Which interfaces it provides to application developers and users, and what will 
 
 WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the Motoko programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient.
 
-If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence. If you want to learn more about the exciting inner workings of the Internet Computer, please consult the link:../index{outfilesuffix}[Component Interface Specifications].
+If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence.
 
 This document tries to be implementation agnostic: If we decide to re-do the implementation of the Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
 
@@ -627,9 +627,6 @@ More precisely:
  * Responses (including replies with `ic0.msg_reply`, explicit rejects with `ic0.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
  * There is no particular order guarantee for ingress messages submitted via
    the HTTP interface.
-
-WARNING: There is a currently a discrepancy between the
-link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ to be ordered) and a later design document calling for all _calls_ to be ordered; this may need resolving.
 
 === Synchronicity across nodes
 
