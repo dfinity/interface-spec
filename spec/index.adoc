@@ -115,8 +115,6 @@ Principal ids, like canister ids and user ids, are – as far as most uses of th
 [#id-classes]
 === Special forms of IDs
 
-WARNING: These ids forms are not yet implemented.
-
 There are three classes of ids:
 
 1. _Opaque ids_.
@@ -322,8 +320,6 @@ The following fields is common among all requests:
 [#authentication]
 === Authentication
 
-WARNING: Signatures are not yet in any way looked at by the Internet Computer.
-
 All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
 
 * `expiry`: time(?) until the request must be executed or dropped #TODO: details#.
@@ -348,9 +344,6 @@ The signature scheme used to authenticate users is https://ed25519.cr.yp.to/inde
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
 
-WARNING: Signature scheme may still change, or multiple schemes may be
-supported; ongoing discussion involving Björn and others.
-
 The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
 NOTE: Information related to gas payments in a user-pays model would also be specified here, as a general mechanism for various request types.
@@ -362,8 +355,6 @@ The following subsections list all supported requests, including their classific
 
 [#api-create-canister]
 ==== Canister creation
-
-WARNING: This request type is currently not accepted.
 
 Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
@@ -385,10 +376,6 @@ NOTE: This request may later contain specifications of particular features neede
 
 [#api-install-code]
 ==== Canister code installation
-
-WARNING: In the current implementation, this also creates a canister with the given id if it does not exist; anybody can create any canister. No list of admins or controllers is maintained.
-
-WARNING: The `mode` field is currently ignored.
 
 Canister code can be installed for an empty canister (created via <<api-create-canister>>), or over an existing canister version. In the latter case, the state can be preserved (“canister upgrade”), or it can be wiped (“reinstallation“, e.g. to recover from a broken canister).
 
@@ -611,8 +598,6 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 
 ====
 
-WARNING: Currently, the replica does not look inside the `content` field, but expects its fields content at the top level CBOR map.
-
 // end::cbor-encoding[]
 
 === Ordering guarantees
@@ -705,8 +690,6 @@ The system assumes the canister to be fully instantiated if the `canister_init` 
 
 [#system-api-upgrades]
 ==== Canister upgrades
-
-WARNING: This is not implemented yet.
 
 When a canister is upgraded to a new version of the code, the system:
 
@@ -903,8 +886,6 @@ This system call traps if any of the `*_src+*_size` exceed the size of the WebAs
 
 [#system-api-stable-memory]
 === Stable memory
-
-WARNING: This is not implemented yet.
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this _stable memory_ is to provide space to store data beyond upgrades.  The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
