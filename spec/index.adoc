@@ -110,7 +110,7 @@ Canisters, users, etc. are _principals_, and are identified by an _id_.
 
 == Principal IDs
 
-Principal ids, like canister ids and user ids, are – as far as most uses of the system is concerend – binary blobs. There is, however, some structure to them to encode specific authentication and authorization behavior.
+Principal ids, like canister ids and user ids, are – as far as most uses of the system is concerned – binary blobs. There is, however, some structure to them to encode specific authentication and authorization behavior.
 
 [#id-classes]
 === Special forms of IDs
@@ -229,7 +229,7 @@ Certain interactions change the state of the Internet Computer. By the very natu
 7. At the end, the system forgets about the request and its response.
 
 
-Thie yields the following interaction diagram:
+This yields the following interaction diagram:
 
 [plantuml]
 ....
@@ -445,12 +445,10 @@ Request type:: `request_status`
 Request fields::
 * `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
 Response fields::
-* `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`
+* `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`, see <<async-requests>> for more details on what each status means.
 * `reply`: If the status is `replied`, then this member contains the request-type specific reply object (see the specification for the individual request types for which fields exist).
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
-
-The status `pending` is used for requests that have successfully entered the system, known to all nodes, and that are guaranteed to be acted upon eventually.
 
 WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request as pending.
 
@@ -1873,7 +1871,7 @@ copy_from_canister<es>(src : i32, size : i32) blob =
 
 ==== System imports
 
-Upon _instantiation_ of the WebAssembly module, we can provide the following executions functions as imports.
+Upon _instantiation_ of the WebAssembly module, we can provide the following functions as imports.
 
 ....
 ic0.msg_arg_data_size<es>() : i32 =
