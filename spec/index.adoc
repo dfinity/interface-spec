@@ -1988,21 +1988,6 @@ ic0.trap<es>(src : i32, size : i32) =
   Trap
 ....
 
-
-== Discussion and comments
-
-=== User and user key management
-
-We have left it up to the state transition (admin) to assign UserId to public keys. In principle a UserId can be associated with several public keys. A public key on the other hand can map to at most one user. A simpler setting would be a bijection between keys and users, or even to have no user ids at all and just refer to public keys.
-
-Currently the life cycle of a public key is existence or non-existence. A more fine-grained life cycle would be: pre-activation, active, suspended, revoked, deleted. Keys may also have usage constraints e.g. a user may want to have a not-so-secure key with a daily spending cap and very-secure key for high value transactions. And keys may come with activation/expiration times.
-
-It is open whether UserId's are deleted if they have no associated public keys. If they are, there might be overlaps in UserId's over time. This could be avoided by guaranteeing a UserId is only used once, e.g., by incremental numbering (or something else to avoid races for special numbers) or using large random numbers.
-
-As with keys, user ids and user accounts will also be subject to management. Their statuses can be: pre-activation, active, suspended, blacklisted, deleted. There may be usage constraints associated with them, and they may hold public information about a user, e.g., name.
-
-In the future we want explicit interfaces over which a user registers a public key and manage their accounts. One could imagine the user creating an ingress message with new public key, optional existing user id, registration evidence (e.g. signature by existing public key or evidence of PKI certificate), user info (e.g. name or KYC), and signature on everything. Similarly, we would need methods for other types of key management and user management.
-
 == Changelog
 
 === 0.1.0.1 (not yet released)
