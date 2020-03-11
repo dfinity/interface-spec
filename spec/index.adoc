@@ -629,9 +629,6 @@ More precisely:
  * There is no particular order guarantee for ingress messages submitted via
    the HTTP interface.
 
-WARNING: There is a currently a discrepancy between the
-link:../functional{outfilesuffix}[Functional Spec] (calling for all _messages_ to be ordered) and a later design document calling for all _calls_ to be ordered; this may need resolving.
-
 === Synchronicity across nodes
 
 This documents describes the Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
