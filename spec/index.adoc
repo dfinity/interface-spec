@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.2
+0.3 (unreleased)
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -1988,6 +1988,10 @@ ic0.trap<es>(src : i32, size : i32) =
 
 [#changelog]
 == Changelog
+
+=== 0.3 (unreleased)
+
+* none yet
 
 === 0.2.0.0 (2020-03-11)
 
