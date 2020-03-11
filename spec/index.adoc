@@ -388,8 +388,6 @@ NOTE: This request may later contain specifications of particular features neede
 
 WARNING: In the current implementation, this also creates a canister with the given id if it does not exist; anybody can create any canister. No list of admins or controllers is maintained.
 
-WARNING: The `mode` field is currently ignored.
-
 Canister code can be installed for an empty canister (created via <<api-create-canister>>), or over an existing canister version. In the latter case, the state can be preserved (“canister upgrade”), or it can be wiped (“reinstallation“, e.g. to recover from a broken canister).
 
 After an empty canister has been created via <<api-create-canister>>, the admin can install the first code:
@@ -704,7 +702,6 @@ The system assumes the canister to be fully instantiated if the `canister_init` 
 [#system-api-upgrades]
 ==== Canister upgrades
 
-WARNING: This is not implemented yet.
 
 When a canister is upgraded to a new version of the code, the system:
 
