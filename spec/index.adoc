@@ -700,7 +700,7 @@ The stable memory is preserved throughout the process; any other WebAssembly sta
 
 During these steps, no other entry point of the old or new canister is invoked. The `canister_init` function of the new canister is _not_ invoked.
 
-If` `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the old state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
+If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the old state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
 [#system-api-requests]
 ==== Public methods
