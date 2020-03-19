@@ -1993,9 +1993,19 @@ ic0.trap<es>(src : i32, size : i32) =
 
 * none yet
 
-=== 0.2.0.2 (unreleased)
+=== 0.2.0.4 (unreleased)
 
-* Nothing yet
+(none yet)
+
+=== 0.2.0.2 (2020-03-19)
+
+* ic-ref: Return status 202, empty body, on `submit`, to match spec
+* ic-ref: Allow update or inter-canister calls to query methods
+* ic-ref: Trap upon calls from queries
+* ic-ref-test: If the IC does not claim to be spec compliant, always succeed
+  (but still report errors)
+* ic-ref-test: Support --html reports
+* ic-ref-test: Use the “Universal Canister” to drive tests; more tests.
 
 === 0.2.0.0 (2020-03-11)
 
