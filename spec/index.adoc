@@ -1989,6 +1989,10 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
+=== 0.2.0.4 (unreleased)
+
+(none yet)
+
 === 0.2.0.2 (2020-03-19)
 
 * ic-ref: Return status 202, empty body, on `submit`, to match spec
