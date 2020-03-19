@@ -1989,10 +1989,12 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
+[#v0_2_0_4]
 === 0.2.0.4 (unreleased)
 
 (none yet)
 
+[#v0_2_0_2]
 === 0.2.0.2 (2020-03-19)
 
 * ic-ref: Return status 202, empty body, on `submit`, to match spec
@@ -2003,6 +2005,7 @@ ic0.trap<es>(src : i32, size : i32) =
 * ic-ref-test: Support --html reports
 * ic-ref-test: Use the “Universal Canister” to drive tests; more tests.
 
+[#v0_2_0_0]
 === 0.2.0.0 (2020-03-11)
 
 * This is the first release. Subsequent releases will include a changelog.
