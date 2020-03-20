@@ -2002,7 +2002,8 @@ ic0.trap<es>(src : i32, size : i32) =
 [#v0_2_0_4]
 === 0.2.0.4 (unreleased)
 
-(none yet)
+* ic-ref(-test): Enforce signatures checking
+* ic-ref(-test): Desired canister ids must be derived from sender
 
 [#v0_2_0_2]
 === 0.2.0.2 (2020-03-19)
