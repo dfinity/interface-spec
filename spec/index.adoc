@@ -1997,6 +1997,7 @@ ic0.trap<es>(src : i32, size : i32) =
 * ic-ref(-test): Require the 55799 semantic CBOR tag, as specified
 * ic-ref-test: Test that `ic0.msg_reply_data_append` traps after reply or reject
 * ic-ref-test: Test that `ic0.msg_reject_msg_*` traps in a reply
+* ic-ref-test: Test that `ic0.debug_print` with invalid bounds does _not_ trap
 
 [#v0_2_0_2]
 === 0.2.0.2 (2020-03-19)
