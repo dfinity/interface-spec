@@ -1978,9 +1978,10 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
-[#v0_2_0_4]
-=== 0.2.0.4 (unreleased)
+[#v0_2_2]
+=== 0.2.2 (unreleased)
 
+* simplify versioning (only three components)
 * spec: Clarification: `reply` field is always present
 * spec: General cleanup based on front-to-back reading
 * ic-ref(-test): Enforce signatures checking
