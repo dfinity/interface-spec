@@ -1978,19 +1978,22 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
-[#v0_2_2]
-=== 0.2.2 (unreleased)
+[#v0_2_4]
+=== 0.2.4 (2019-03-23)
 
-* simplify versioning (only three components)
+* simplify versioning (only three components), skip 0.2.2 to avoid confusion with 0.2.0.2
 * spec: Clarification: `reply` field is always present
 * spec: General cleanup based on front-to-back reading
-* ic-ref(-test): Enforce signatures checking
+* ic-ref(-test): Enforce signature checking
 * ic-ref(-test): Desired canister ids must be derived from sender
 * ic-ref(-test): Require the 55799 semantic CBOR tag, as specified
-* ic-ref-test: Test that `ic0.msg_reply_data_append` traps after reply or reject
-* ic-ref-test: Test that `ic0.msg_reject_msg_*` traps in a reply
+* ic-ref: Ignore duplicate requests
+* ic-ref-test: Run more tests independent of each other (try `-j 8`)
+* ic-ref-test: Submit requests with nonces
+* ic-ref-test: Test various trap conditions in reply and reject callbacks.
 * ic-ref-test: Test that `ic0.debug_print` with invalid bounds does _not_ trap
 * ic-ref-test: Allow unspecified fields to appear in the status response
+* ic-ref-test: Canister upgrade tests
 
 [#v0_2_0_2]
 === 0.2.0.2 (2020-03-19)
