@@ -1978,6 +1978,11 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
+[#v0_2_6]
+=== 0.2.4 (UNRELEASED)
+
+* none yet
+
 [#v0_2_4]
 === 0.2.4 (2019-03-23)
 
