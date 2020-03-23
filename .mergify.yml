@@ -3,8 +3,7 @@ pull_request_rules:
     conditions:
       - "#approved-reviews-by>=1"
       - "#changes-requested-reviews-by=0"
-      #- status-success=hydra:dfinity-ci-build:motoko:all-systems-go
-      - base=master
+      - status-success=hydra:dfinity-ci-build:ic-ref:all-systems-go
       - label=automerge
     actions:
       merge:
