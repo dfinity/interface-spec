@@ -257,7 +257,7 @@ Note that all gray states are _not_ represented in the system state, and are ind
 
 The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
-The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the use sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
 
 A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
 
@@ -302,7 +302,7 @@ The requests supported by the system are expressed as records, i.e. fields with 
 * `text`: Human readable text (e.g. sequence of Unicode codepoints)
 * `blob`: Arbitrary binary data
 
-For readablity, we use the following type synonyms:
+For readability, we use the following type synonyms:
 ....
 type PrincipalId = blob
 type CanisterId = PrincipalId
@@ -313,7 +313,7 @@ NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs
 
 === Common fields
 
-The following fields is common among all requests:
+The following fields are common among all requests:
 
 * `request_type` (`text`): Indicates the type of request, and is one of the values specified in <<request-types>>.
 * The field `nonce`, as specified in <<authentication>>.
@@ -335,6 +335,7 @@ For requests that have a `sender` field, the public key must authenticate the `s
 
 A public key can authenticate a principal id if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
 
+
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
 The signature schemes used to authenticate users are
@@ -352,6 +353,7 @@ The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request
 [#request-types]
 === Request types
 
+
 The following subsections list all supported requests and specify
 
 * the classification (synchronous vs. asynchronous)
@@ -359,6 +361,7 @@ The following subsections list all supported requests and specify
 * the required and optional fields of the request record
 * the required and optional field of the reply object (see <<api-request-status>>)
 * and a description of their pupose and behavior.
+
 
 [#api-create-canister]
 ==== Canister creation
@@ -559,7 +562,7 @@ possibly signed by the node.
 
 Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
 
-Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an record.
+Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a record.
 
 Requests consist of an envelope record with keys `sender_sig` (a blob), `sender_pubkey` (a blob) and `content` (a record). The first two are metadata that are used for request authentication, while the last one is the actual content of the request.
 
@@ -971,7 +974,7 @@ We specify the behavior of the system using pseudo-code.
 
 The manipulated values are primitive values (numbers, text, binary blobs), aggregate values (lists, unordered lists a.k.a. bags, partial maps, records with fixed fields, named constructors) and functions.
 
-We use an concatenation operator `·` with various types: to extend sets and maps, or to concatenate lists with lists or lists with elements.
+We use a concatenation operator `·` with various types: to extend sets and maps, or to concatenate lists with lists or lists with elements.
 
 The shape of values is described using a hand-wavy type system.  We use `Foo = Nat` to define type aliases; now `Foo` can be used instead of `Nat`. Often, the right-hand side is a more complex type here, e.g. a record, or multiple possible types separated by a vertical bar (`|`). Partial maps are written as  `Key ↦ Value` and the function type as `Argument -> Result`.
 
@@ -1007,7 +1010,7 @@ The function
 is_self_authenticating_id : PublicKey -> PrincipalId -> Bool
 is_self_authenticating_id pk id = id == H(pk) · 0x02
 ....
-characterizes the self-authenting ids.
+characterizes the self-authenticating ids.
 
 The function
 ....
@@ -1278,7 +1281,7 @@ NOTE: This is not instantaneous (the system takes some time to agree it accepts 
 
 ==== Request rejection
 
-The system may reject an received message for internal reasons (high load, low resources). The precise conditions are not specified here, but the reject code must indicate this to be a system error.
+The system may reject a received message for internal reasons (high load, low resources). The precise conditions are not specified here, but the reject code must indicate this to be a system error.
 
 Conditions::
 ....
@@ -1624,6 +1627,7 @@ A record with
 * `{status: processing}` if `RS = Processing`
 * `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `RS = Rejected (code, msg)`
 * `{status: completed; result : <result>}` if `RS = Completed { result = result }`
+
 
 ==== Read: query call
 
