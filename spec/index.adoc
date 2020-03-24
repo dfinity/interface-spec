@@ -406,7 +406,7 @@ If `mode = upgrade`, this will perform an upgrade of an existing canister module
 
 This is atomic: If the response to this request is a `reject`, then this request had no effect.
 
-The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a percentage of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0.
+The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a percentage of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin does that separately.
 
