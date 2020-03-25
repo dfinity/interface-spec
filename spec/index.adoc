@@ -1992,6 +1992,11 @@ ic0.trap<es>(src : i32, size : i32) =
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 
+[#v0_2_6]
+=== 0.2.6 (UNRELEASED)
+
+ic-ref-run: Accept any canister id in `install` commands
+
 [#v0_2_4]
 === 0.2.4 (2019-03-23)
 
