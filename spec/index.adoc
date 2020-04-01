@@ -288,7 +288,7 @@ For these endpoints, the user performs a POST request over HTTPS with `Content-t
 * The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
-In both cases case, the usual HTTP errors (e.g. 503) may occur.
+In both cases case, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
 
 NOTE: For some types of synchronous requests (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
