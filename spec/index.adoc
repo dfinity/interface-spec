@@ -1979,9 +1979,10 @@ ic0.trap<es>(src : i32, size : i32) =
 == Changelog
 
 [#v0_2_6]
-=== 0.2.6 (UNRELEASED)
+=== 0.2.6 (2019-04-01)
 
-ic-ref-run: Accept any canister id in `install` commands
+* ic-ref-run: Accept any canister id in `install` commands
+* ic-ref-test: More defensive printing of HTTP bodies
 
 [#v0_2_4]
 === 0.2.4 (2019-03-23)
