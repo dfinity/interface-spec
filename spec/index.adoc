@@ -396,7 +396,8 @@ Request fields::
 * `canister_id` (`CanisterId`): The id of the canister to install code for.
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
-* `compute_allocation` (`nat`, optional): The initial allocation requested, in percent.
+* `compute_allocation` (`nat`, optional): The initial compute allocation requested, in percent.
+* `memory_allocation` (`nat`, optional): The initial memory allocation requested, in bytes.
 * `mode` (string, one of `install`, `replace`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `replace`, then the canister must already exist, but otherwise behaves like a fresh installation.
 Reply fields::
 * None
@@ -410,6 +411,8 @@ If `mode = upgrade`, this will perform an upgrade of an existing canister module
 This is atomic: If the response to this request is a `reject`, then this request had no effect.
 
 The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a percentage of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
+
+The optional field `memory_allocation`, if present, must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, it is treated like an allocation of 2^33 (i.e. 8GB). If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin does that separately.
 
@@ -485,7 +488,7 @@ The following encodings of field values as blobs are used
 
 * Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Nat fields (`compute_allocation`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+* Nat fields (`compute_allocation`, `memory_allocation`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
 [TIP]
@@ -1318,7 +1321,7 @@ S with
 
 Only an admin of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
-The `compute_allocation` is ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
 Conditions::
 ....
@@ -1991,6 +1994,7 @@ ic0.trap<es>(src : i32, size : i32) =
 === 0.3 (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
+* Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 
 [#v0_2_6]
 === 0.2.6 (UNRELEASED)
