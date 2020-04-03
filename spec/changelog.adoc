@@ -4,7 +4,7 @@
 [#v0_10_0]
 === 0.10.0 (UNRELEASED)
 
-* none yet
+* Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 
 [#v0_9_2]
 === 0.9.2 (2020-08-05)

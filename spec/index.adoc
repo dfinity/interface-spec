@@ -940,6 +940,8 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 
 The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
 
+The optional field `memory_allocation`, if present, must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, it is treated like an allocation of 2^33 (i.e. 8GB). If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
+
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin (or admin tooling) does that separately.
 
 [#ic-set_controller]
@@ -1635,7 +1637,7 @@ S with
 
 Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
 
-The `compute_allocation` is ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
 Conditions::
 ....

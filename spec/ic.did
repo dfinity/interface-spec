@@ -9,6 +9,7 @@ service ic : {
     wasm_module : wasm_module;
     arg : blob;
     compute_allocation : opt nat;
+    memory_allocation : opt nat;
   }) -> ();
   set_controller : (record {canister_id : canister_id; new_controller : principal}) -> ();
   start_canister : (record {canister_id : canister_id}) -> ();
