@@ -142,9 +142,13 @@ These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03`.
 +
 These ids are treated specially when an id needs to be registered. In such a request, the caller (an user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id. See for example <<api-create-canister>>.
 
+4. _Anonymous id_
++
+This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
+
 The hash function `H(…)` here is SHA-256. Thus self-authenticating ids are always 33 bytes long, derived ids are always 41 bytes long.
 
-When the system creates a _fresh_ id, it never uses a self-authenticating or derived id.
+When the system creates a _fresh_ id, it never creates a self-authenticating, derived or anonymous id.
 
 
 [#textual-ids]
@@ -327,8 +331,9 @@ All requests coming in via the HTTP interface need to be _authenticated_ using a
 
 Furthermore, the request records are wrapped in a envelope record with these fields:
 
-* `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
-* `sender_sig` (`blob`): Signature to authenticate this request.
+* `signatures`: Array of zero or more objects with fields described as follows.
+ - `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+ - `sender_sig` (`blob`): Signature to authenticate this request.
 * `content` (`record`): the actual request content
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
@@ -422,7 +427,7 @@ NOTE: Some canisters may not be able to make sense of callbacks after upgrades; 
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`PrincipalId`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -456,7 +461,7 @@ Canister methods that do not change the canister state in a meaningful way can b
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`PrincipalId`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -575,6 +580,7 @@ The following encodings are used:
 * Blobs: Major type 2 (“Byte string”).
 * Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
 * Records: Major type 5 (“Map of pairs of data items”), followed by the fields, where keys are encoded with major type 3 (“Text string”).
+* Arrays: Major type 4 ("Array of data items").
 
 As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
 
@@ -586,8 +592,12 @@ As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating 
 A typical request would be (written in https://tools.ietf.org/html/rfc7049#section-6[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
 ....
 55799({
-  "sender_sig": h'DEADBEEF',
-  "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde',
+  "signatures" : [
+    {
+      "sender_sig": h'DEADBEEF',
+      "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde'
+    }
+  ],
   "content": {
     "request_type": "install_code",
     "canister_id": h'ABCD01',
@@ -1022,6 +1032,12 @@ is_derived_id oid id = ∃n. |n| == 8 ∧ id == H(oid) · n · 0x03
 ....
 characterizes the derived ids.
 
+The function
+....
+is_anonymous_id : PrincipalId -> Bool
+is_anonymous_id id = id == 0x04
+....
+
 These three predicates are mutually disjoint.
 
 
@@ -1147,8 +1163,10 @@ We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit
 ....
 Envelope = {
   content : Request | APIReadRequest;
-  sender_pubkey : PublicKey;
-  sender_sig : Signature;
+  signatures : [{
+    sender_pubkey : PublicKey;
+    sender_sig : Signature;
+  }];
 }
 
 Request
@@ -1254,25 +1272,33 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
+==== Envelope Authentication
+
+The following predicate describes when an evelope `E` correctly signs the enclosed request with a key belonging to a user `U`:
+
+....
+verify_envelope(E, U) =
+     is_anonymous_id U && E.signatures = []
+  || ∃ PK, SIG.
+       E.signatures = [{ sender_pubkey = PK, sender_sig = SIG }]
+       && is_self_authenticating_id PK U
+       && verify_signature PK SIG (request_id_of(E.content)) = true)
+....
+
+NOTE: Currently, this requires exactly one signature and a matching self-authenticating identifier, or no signature and an anonymous caller. This is a temporary restriction, which will be lifted in a future PR when we actually allow for keys stored with the canister.
+
+
 ==== API Request submission
 
 After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Received` state.
 
-This may only happen if the following validation steps pass:
-
- * The signature in the envelope is valid.
- * The key used to sign the request matches the public key encoded in the
-   user's self-authenticating id.
-
-More validation (e.g. authorization, key management) steps may be added here.
-
+This may only happen if the signature is valid and created with a correct key.
 Due to this check, the envelope is discarded after this point.
 
 Submitted request:: `E : Envelope`
 Conditions::
 ....
-    is_self_authenticating_id E.sender_pubkey E.content.sender
-    verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
+    verify_envelope(E, E.content.sender)
 ....
 State after::
 ....
@@ -1618,11 +1644,10 @@ NOTE: There is a phase where a request was issued by the user, but has not yet b
 Submitted request:: `E`
 Conditions::
 ....
-   E.content = ReadStatus RS
-   request_id_of(R) = RS.request_id_of
-   S.requests[R] = RS
-   is_self_authenticating_id E.sender_pubkey R.sender
-   verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
+  E.content = ReadStatus { request_id = RID }
+  request_id_of(R) = RID
+  verify_envelope(E, R.sender)
+  S.requests[R] = RS
 ....
 Read response::
 A record with
@@ -1640,13 +1665,11 @@ Submitted request:: `E`
 Conditions::
 ....
   E.content = CanisterQuery Q
-  is_self_authenticating_id E.sender_pubkey Q.sender
-  verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
+  verify_envelope(E, Q.sender)
   S.canisters[Q.callee] ≠ EmptyCanister
   C = S.canisters[Q.callee]
   F = C.module.query_methods[Q.method_name]
   Arg = { data = Q.arg; caller = Q.sender }
-
 ....
 Read response::
 * If `F(Arg) = Trap` then
@@ -1994,6 +2017,7 @@ ic0.trap<es>(src : i32, size : i32) =
 === 0.3 (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
+* Spec: The anonymous user is introduced, and the request envelope is generalized to multiple signatures.
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 
 [#v0_2_6]
