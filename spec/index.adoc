@@ -2013,17 +2013,22 @@ ic0.trap<es>(src : i32, size : i32) =
 [#changelog]
 == Changelog
 
-[#v0_3]
 === 0.3 (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced, and the request envelope is generalized to multiple signatures.
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 
-[#v0_2_6]
-=== 0.2.6 (UNRELEASED)
+[#v0_2_8]
+=== 0.2.8 (UNRELEASED)
 
-ic-ref-run: Accept any canister id in `install` commands
+* none yet
+
+[#v0_2_6]
+=== 0.2.6 (2019-04-01)
+
+* ic-ref-run: Accept any canister id in `install` commands
+* ic-ref-test: More defensive printing of HTTP bodies
 
 [#v0_2_4]
 === 0.2.4 (2019-03-23)
