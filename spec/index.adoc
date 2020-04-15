@@ -111,11 +111,11 @@ WebAssembly  _functions_ are exported by the WebAssembly module or provided by t
 
 External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
 
-Canisters, users, etc. are _principals_, and are identified by an _id_.
+Canisters, users, etc. are identified by a _principal_, sometimes also called an _id_.
 
-== Principal IDs
+== Principals
 
-Principal ids, like canister ids and user ids, are – as far as most uses of the system is concerned – binary blobs. There is, however, some structure to them to encode specific authentication and authorization behavior.
+Principals, i.e. ids like canister ids and user ids, are – as far as most uses of the system is concerned – binary blobs. There is, however, some structure to them to encode specific authentication and authorization behavior.
 
 [#id-classes]
 === Special forms of IDs
@@ -152,11 +152,11 @@ When the system creates a _fresh_ id, it never creates a self-authenticating, de
 
 
 [#textual-ids]
-=== Textual representation of principal ids
+=== Textual representation of principals
 
 NOTE: This textual representation does not actually show up in the interface (which always deals with blobs), so it is merely a recommended convention.
 
-We specify a _canonical textual format_ that is recommended whenever principal ids need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
+We specify a _canonical textual format_ that is recommended whenever principals need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
 
 To turn a blob into the recognizable text format,
 
@@ -308,9 +308,9 @@ The requests supported by the system are expressed as records, i.e. fields with 
 
 For readability, we use the following type synonyms:
 ....
-type PrincipalId = blob
-type CanisterId = PrincipalId
-type UserId = PrincipalId
+type Principal = blob
+type CanisterId = Principal
+type UserId = Principal
 ....
 
 NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure. Some of that structure is documented in <<id-classes>>. But since that structure is meant to be extensible without breaking existing code (especially running canisters), the interfaces are phrased in terms of arbitrary blobs.
@@ -338,8 +338,7 @@ Furthermore, the request records are wrapped in a envelope record with these fie
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
-A public key can authenticate a principal id if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-
+A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -380,8 +379,8 @@ A canister has a list of _admin users_; initially, the user who has registered t
 Synchronicity:: asynchronous
 Request type:: `create_canister`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
-* `desired_id` (`PrincipalId`, optional): The id the system should use for the canister
+* `sender` (`Principal`): The user who issued the request.
+* `desired_id` (`Principal`, optional): The id the system should use for the canister
 Reply fields::
 * `canister_id` (`CanisterId`): The canister id of the just created canister.
 
@@ -397,7 +396,7 @@ After an empty canister has been created via <<api-create-canister>>, the admin 
 Synchronicity:: asynchronous
 Request type:: `install_code`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to install code for.
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
@@ -427,7 +426,7 @@ NOTE: Some canisters may not be able to make sense of callbacks after upgrades; 
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`PrincipalId`, optional, default value `0x04`): The user who issued the request.
+* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -461,7 +460,7 @@ Canister methods that do not change the canister state in a meaningful way can b
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`PrincipalId`, optional, default value `0x04`): The user who issued the request.
+* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -967,7 +966,7 @@ The environment may copy out the data specified by `src` and `size`, and log, pr
 The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
 
 1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
-2. The use of references, instead of binary blobs, to address principals (users, canisters), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principal ids and references.
+2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
 3. In addition to the monolithic `ic0.call_simple`, a compositional builder interface to create calls is provided.
 
 A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
@@ -1007,34 +1006,34 @@ Of course, this is a huge simplification: The real Internet Computer is distribu
 
 ==== Identifiers
 
-Principal ids (canister ids and user ids) are blobs, but some of them have special form, as explained in <<id-classes>>.
+Principals (canister ids and user ids) are blobs, but some of them have special form, as explained in <<id-classes>>.
 ....
-type PrincipalId = Blob
+type Principal = Blob
 ....
 
 The predicate
 ....
-is_opaque_id : PrincipalId -> Bool
+is_opaque_id : Principal -> Bool
 ....
 characterizes all system-assigned blobs.
 
 The function
 ....
-is_self_authenticating_id : PublicKey -> PrincipalId -> Bool
+is_self_authenticating_id : PublicKey -> Principal -> Bool
 is_self_authenticating_id pk id = id == H(pk) · 0x02
 ....
 characterizes the self-authenticating ids.
 
 The function
 ....
-is_derived_id : PrincipalId -> PrincipalId -> Bool
+is_derived_id : Principal -> Principal -> Bool
 is_derived_id oid id = ∃n. |n| == 8 ∧ id == H(oid) · n · 0x03
 ....
 characterizes the derived ids.
 
 The function
 ....
-is_anonymous_id : PrincipalId -> Bool
+is_anonymous_id : Principal -> Bool
 is_anonymous_id id = id == 0x04
 ....
 
@@ -1062,7 +1061,7 @@ StableMemory = (abstract)
 
 Arg = {
   data : Blob
-  caller: PrincipalId
+  caller: Principal
 }
 
 RejectCode = Nat
@@ -1084,7 +1083,7 @@ QueryFunc = WasmState -> Trap | Return Response
 
 CanisterModule = {
   init : (CanisterId, Arg) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : PrincipalId) -> Trap | Return StableMemory
+  pre_upgrade : (WasmState, caller : Principal) -> Trap | Return StableMemory
   post_upgrade : (CanisterId, StableMemory, Arg) -> Trap | Return WasmState
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
@@ -1132,7 +1131,7 @@ Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
 Message
   = CallMessage {
       origin : CallOrigin;
-      caller : PrincipalId;
+      caller : Principal;
       callee : CanisterId;
       method_name : Text;
       data : Blob;
@@ -1715,7 +1714,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
 ....
 Params = {
   data : NoData | Blob;
-  caller : NoCaller | PrincipalId;
+  caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
 }
@@ -2016,6 +2015,8 @@ ic0.trap<es>(src : i32, size : i32) =
 === 0.3 (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
+* Spec (editorial): the term “principal” is now used for the _id_ of a canister or
+  user, not the canister or user itself
 * Spec: The anonymous user is introduced, and the request envelope is generalized to multiple signatures.
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 
