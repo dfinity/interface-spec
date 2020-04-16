@@ -370,11 +370,11 @@ The following subsections list all supported requests and specify
 [#api-create-canister]
 ==== Canister creation
 
-Before deploying a canister, the administrator of the canister first has to register  it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
+Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
 If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
 
-A canister has a list of _admin users_; initially, the user who has registered the canister is the only admin user.
+A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can change using <<api-set-controller,the `set-controller` request>>.
 
 Synchronicity:: asynchronous
 Request type:: `create_canister`
@@ -406,7 +406,7 @@ Request fields::
 Reply fields::
 * None
 
-Only a user who is an _admin user_ for the canister can install code.
+Only the _controller_ of the canister can install code.
 
 If `mode = install` or `mode = replace`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
 
@@ -419,6 +419,25 @@ The optional field `compute_allocation`, if present, must be a number between 0 
 The optional field `memory_allocation`, if present, must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, it is treated like an allocation of 2^33 (i.e. 8GB). If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin does that separately.
+
+[#api-set-controller]
+==== Canister controller management
+
+Initially, the user or canister that created a canister is its _controller_, but
+control can be yielded to another user or canister.
+
+Only the current controller of the canister can issue these requests.
+
+Synchronicity:: asynchronous
+Request type:: `set_controller`
+Request fields::
++
+* `sender` (`PrincipalId`): The user who issued the request.
+* `canister_id` (`CanisterId`): The id of the canister
+* `controller` (`PrincipalId`): The new controller of the canister.
+Reply fields::
+* None
+
 
 [#api-update]
 ==== Canister update call
@@ -1176,10 +1195,16 @@ Request
   | InstallCode = {
     nonce : Blob;
     sender : UserId;
-    canister_id :  CanisterId;
+    canister_id : CanisterId;
     module : CanisterModule;
     mode : Install | Replace | Upgrade;
     data : Blob;
+  }
+  | SetController = {
+    nonce : Blob;
+    sender : UserId;
+    canister_id : CanisterId;
+    controller : CanisterId;
   }
   | CanisterUpdateCall = {
     nonce : Blob;
@@ -1237,7 +1262,7 @@ Finally, we can describe the state of the Internet Computer as a record having t
 S = {
   requests : Request ↦ RequestStatus ;
   canisters : CanisterId ↦ CanState;
-  admins : CanisterId ↦ Set UserId;
+  controllers : CanisterId ↦ UserId;
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
 }
@@ -1254,7 +1279,7 @@ The initial state of the system is
 {
   requests = ();
   canisters = ();
-  admins = ();
+  controllers = ();
   call_contexts = ();
   messages = ();
 }
@@ -1339,12 +1364,13 @@ State after::
 S with
     requests[CreateCanister M] = Completed { result = { canister_id = CanisterId } }
     canisters[CanisterId] = EmptyCanister
+    controllers[CanisterId] = M.sender
 ....
 
 
 ==== Canister code installation
 
-Only an admin of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Only a controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -1353,7 +1379,7 @@ Conditions::
     S.requests[InstallCode M] = Received
        (M.mode = Install && S.canisters[M.canister_id] = EmptyCanister)
     or (M.mode = Replace && S.canisters[M.canister_id] ≠ EmptyCanister)
-    M.sender ∈ S.admins[M.canister_id]
+    M.sender = S.controllers[M.canister_id]
     Arg = {
       data = M.data;
       caller = M.caller
@@ -1369,7 +1395,7 @@ S with
 
 ==== Canister code upgrade
 
-Only an admin of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
+Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
 
 The `compute_allocation` is ignored in this abstract model of the Internet Computer, as the model does not address questions of performance or scheduling.
 
@@ -1378,7 +1404,7 @@ Conditions::
     S.requests[InstallCode M] = Received
     S.canisters[M.canister_id] = { wasm_state = Old_state; module = Old_module }
     M.mode = Upgrade
-    M.sender ∈ S.admins[M.canister_id]
+    M.sender = S.controllers[M.canister_id]
     Arg = {
       data = M.data;
       caller = M.caller
@@ -1391,6 +1417,22 @@ State after::
 S with
     requests[InstallCode M] = Completed { result = { } }
     canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
+....
+
+==== Canister controller management
+
+Only a controller of the given canister can modify the set of controllers.
+
+Conditions::
+....
+    S.requests[SetController M] = Received
+    M.sender = S.controllers[M.canister_id]
+....
+State after::
+....
+S with
+    requests[InstallCode M] = Completed { result = { } }
+    controllers[M.canister_id] = M.controller
 ....
 
 ==== Initiating canister calls
