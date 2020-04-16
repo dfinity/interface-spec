@@ -5,6 +5,7 @@
 === 0.8.1 (UNRELEASED)
 
  * Reflect refined process in README and intro.
+ * Spec: `ic0.time` added
 
 [#v0_8_0]
 === 0.8.0 (2020-06-23)
