@@ -781,6 +781,7 @@ ic0.stable_size() -> (page_count : i32)                                // *
 ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)             // *
 ic0.stable_write(offset : i32, src : i32, size : i32) -> ()            // *
 ic0.stable_read(dst : i32, offset : i32, size : i32) > ()              // *
+ic0.time : () -> (timestamp : i64)                                     // *
 ic0.debug_print : (src : i32, size : i32) -> ()                        // * s
 ic0.trap : (src : i32, size : i32) -> ()                               // * s
 ....
@@ -961,6 +962,22 @@ copies the data referred to by `offset`/`size` out of the stable memory and repl
 
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
+[#system-api-time]
+=== System time
+
+The canister can query the system for the current time.
+
+`+ic0.time : () -> (i64)+`
+
+The time is given as nanoseconds since 1970-01-01. The system guarantees that
+
+ * the time, as observed by the canister, is monotonically increasing, even across canister upgrades.
+ * within an invocation of one entry point, the time is constant.
+
+The system times of different canisters are unrelated, and calls from one canister to another may appear to travel “backwards in time”.
+
+NOTE: While an implementation will likely try to keep the System Time close to the real time, this is not formally part of this specification.
+
 === Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
@@ -1078,9 +1095,11 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 WasmState = (abstract)
 StableMemory = (abstract)
 
+type Timestamp = Nat;
 Arg = {
   data : Blob
   caller: Principal
+  time : Timestamp
 }
 
 RejectCode = Nat
@@ -1102,7 +1121,7 @@ QueryFunc = WasmState -> Trap | Return Response
 
 CanisterModule = {
   init : (CanisterId, Arg) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : Principal) -> Trap | Return StableMemory
+  pre_upgrade : (WasmState, caller : Principal, Timestamp) -> Trap | Return StableMemory
   post_upgrade : (CanisterId, StableMemory, Arg) -> Trap | Return WasmState
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
@@ -1263,10 +1282,11 @@ S = {
   requests : Request ↦ RequestStatus ;
   canisters : CanisterId ↦ CanState;
   controllers : CanisterId ↦ UserId;
-  call_contexts : CallId ↦ CallCtxt;
+  time : CanisterId ↦ Timestamp;
   messages : List Message; // ordered!
 }
-CanState = EmptyCanister | {
+CanState
+ = EmptyCanister | {
   wasm_state : WasmState;
   module : CanisterModule;
 }
@@ -1351,6 +1371,8 @@ S with
 
 If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
 
+This is when the System Time of the new canister starts ticking.
+
 Conditions::
 ....
     S.requests[CreateCanister M] = Received
@@ -1364,6 +1386,7 @@ State after::
 S with
     requests[CreateCanister M] = Completed { result = { canister_id = CanisterId } }
     canisters[CanisterId] = EmptyCanister
+    time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.sender
 ....
 
@@ -1382,7 +1405,8 @@ Conditions::
     M.sender = S.controllers[M.canister_id]
     Arg = {
       data = M.data;
-      caller = M.caller
+      caller = M.caller;
+      time = S.time[M.canister_id];
     }
     M.module.init(M.canister_id, Arg) = Return New_state
 ....
@@ -1407,9 +1431,10 @@ Conditions::
     M.sender = S.controllers[M.canister_id]
     Arg = {
       data = M.data;
-      caller = M.caller
+      caller = M.caller;
+      time = S.time[M.canister_id];
     }
-    Old_module.pre_upgrade(Old_State, M.caller) = Return Stable_memory
+    Old_module.pre_upgrade(Old_State, M.caller, S.time[M.canister_id]) = Return Stable_memory
     M.module.post_upgrade(M.canister_id, Stable_memory, Arg) = Return New_state
 ....
 State after::
@@ -1468,6 +1493,8 @@ Before invoking a message to a public entry point, some bookkeeping is required:
 
 The position of the message in the queue is unchanged.
 
+This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
@@ -1479,7 +1506,8 @@ Conditions::
     Ctxt_id ∉ dom S.call_contexts
     Arg = {
       data = CM.data;
-      caller = CM.caller
+      caller = CM.caller;
+      time = S.time[CM.callee];
     }
 ....
 State after::
@@ -1618,6 +1646,8 @@ S with
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
+This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
+
 Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
@@ -1635,7 +1665,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id2
         receiver = S.call_contexts[RM.call_context].canister
-        func = F (RM.response)
+        func = F (RM.response, S.time[S.call_contexts[RM.call_context].canister])
         queue = Unordered
       } ·
       Younger_messages
@@ -1675,6 +1705,20 @@ S with
     requests[M] = (deleted)
 ....
 
+==== Time progressing
+
+Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
+
+Conditions::
+....
+    T0 = S.time[CanisterId]
+    T1 > T0
+....
+State after::
+....
+S with
+    time[CanisterId] = T1
+....
 
 ==== Read: Status
 
@@ -1710,7 +1754,11 @@ Conditions::
   S.canisters[Q.callee] ≠ EmptyCanister
   C = S.canisters[Q.callee]
   F = C.module.query_methods[Q.method_name]
-  Arg = { data = Q.arg; caller = Q.sender }
+  Arg = {
+    data = Q.arg;
+    caller = Q.sender;
+    time = S.time[Q.callee];
+  }
 ....
 Read response::
 * If `F(Arg) = Trap` then
@@ -1759,6 +1807,7 @@ Params = {
   caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
+  time : Timestamp;
 }
 ExecutionState = {
   wasm_state : WasmState;
@@ -1809,7 +1858,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 init = λ (self_id, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""; time = arg.time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1830,10 +1879,10 @@ pre_upgrade = λ (old_state, caller) → Return old_state.stable_mem
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 +
 ....
-pre_upgrade = λ (old_state, caller) →
+pre_upgrade = λ (old_state, caller, time) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
-      params = { data = NoData; caller = caller; reject_code = 0; reject_message ""}
+      params = { data = NoData; caller = caller; reject_code = 0; reject_message - ""; time = time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1857,7 +1906,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 post_upgrade = λ (self_id, stable_mem, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = ""; time = arg.time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1871,7 +1920,7 @@ post_upgrade = λ (self_id, stable_mem, arg) →
 update_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = "" }
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = ""; time = arg.time }
     }
   try func<es>() with Trap then Trap
   Return {
@@ -1887,7 +1936,7 @@ update_methods[method] = λ arg → λ wasm_state →
 query_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""}
+      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""; time = arg.time }
     }
   try func<es>() with Trap then Trap
   if es.calls ≠ () then Trap
@@ -2043,6 +2092,9 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32) > ()
   if dst+size > |es.wasm_state.store.mem| then Trap
 
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
+
+ic0.time<es>() : i32 =
+  return es.params.time
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return

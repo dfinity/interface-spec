@@ -9,6 +9,7 @@
 * Spec: The anonymous user is introduced, and the request envelope is generalized to multiple signatures.
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 * Spec: Describe the `controller` attribute, add a request to change it
+* Spec: `ic0.time` added
 
 [#v0_2_8]
 === 0.2.8 (UNRELEASED)
