@@ -794,8 +794,9 @@ The comment after each function lists from where these functions may be invoked:
 * `Q`: from `canister_query …`
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
+* `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
-* `*` = `I U Q Ry Rt` (NB: Not `(start)`)
+* `*` = `I U Q Ry Rt C` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -907,21 +908,27 @@ When handling an update call (or a callback), a canister can do further calls to
     reply_env   : i32,
     reject_fun  : i32,
     reject_env  : i32,
+    cleanup_fun : i32,
+    cleanup_env : i32,
     data_src    : i32,
     data_size   : i32
   ) -> ( err_code : i32 )
 +
 This performs a function call to the canister specified by `callee_src/_size`, calling the method specified by `name_src/_size`, sending the data specified by `data_src/_size`.
 +
-The system records the current function table entry at the index `reply_fun`. Upon successful completion of the method call, the noted function is executed, and the response data can be queried using `ic0.msg_arg_data_size`/`ic0.msg_arg_data_copy`.
+The system records three callbacks, by noting the current function table entry at the index `_fun`. The `_env` value will be passed to these functions, so they need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
 +
-The system also records the current function table entry at the index `reject_fun`. If the method call fails, or the other canister explicitly rejects the call, the noted function is executed.
+1. The callback `reply_fun`/`reply_env` is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
+2. The callback `reject_fun`/`reject_env` is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
+3. The callback `cleanup_fun`/`cleanup_env` is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 +
-These callback functions need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
+During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.traps` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified gas limit) and serves to free resources associated with the callback.
++
+If this traps (e.g. runs out of gas); the state changes from the `cleanup` function are discard, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
 +
 The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
 +
-If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition.
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callback will be executed.
 +
 If the system returns a non-zero value, the call cannot (and will not be) performed.
 
@@ -1812,15 +1819,15 @@ Params = {
 ExecutionState = {
   wasm_state : WasmState;
   params : Params;
+  in_cleanup = True;
   response : NoResponse | Response;
   reply_params : { arg : Blob };
   calls : List Call;
 }
-
 ....
 
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
-Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that one invocation of such a function.
+Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that of one such function invocation.
 
 WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function.
 
@@ -1836,6 +1843,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 empty_execution_state = {
   wasm_state = (undefined);
   params = (undefined);
+  in_cleanup = false;
   response = NoResponse;
   reply_params : { arg = "" };
   calls : [];
@@ -1968,48 +1976,60 @@ Upon _instantiation_ of the WebAssembly module, we can provide the following fun
 
 ....
 ic0.msg_arg_data_size<es>() : i32 =
+  if es.in_cleanup then Trap
   if es.params.data = NoData then Trap
   return |es.params.arg|
 
 ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
+  if es.in_cleanup then Trap
   if es.params.data = NoData then Trap
   copy_to_canister<es>(dst, offset, size, es.param.arg)
 
 ic0.msg_caller_size() : i32 =
+  if es.in_cleanup then Trap
   if es.params.caller = NoCaller then Trap
   return |es.params.caller|
 
 ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
+  if es.in_cleanup then Trap
   if es.params.caller = NoCaller then Trap
   copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
+  if es.in_cleanup then Trap
   es.params.reject_code
 
 ic0.msg_reject_msg_size<es>() : i32 =
+  if es.in_cleanup then Trap
   if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
 ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+  if es.in_cleanup then Trap
   if es.reject_code = 0 then Trap
   copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
 ic0.msg_reply_data_append<es>(src : i32, size : i32) =
+  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
 ic0.msg_reply<es>() =
+  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
 
 ic0.msg_reject<es>(src : i32, size : i32) =
+  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
 
 ic0.canister_self_size<es>() : i32 =
+  if es.in_cleanup then Trap
   return |es.wasm_state.self_id|
 
 ic0.canister_self_copy(dst:i32, offset:i32, size:i32)  =
+  if es.in_cleanup then Trap
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.call_simple<es>(
@@ -2021,8 +2041,12 @@ ic0.call_simple<es>(
     reply_env   : i32,
     reject_fun  : i32,
     reject_env  : i32,
+    cleanup_fun : i32,
+    cleanup_env : i32,
     data_src    : i32,
     data_size   : i32) =
+
+  if es.in_cleanup then Trap
 
   callee := copy_from_canister<es>(callee_src, callee_size);
   method_name := copy_from_canister<es>(name_src, name_size);
@@ -2036,6 +2060,27 @@ ic0.call_simple<es>(
   if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
   on_reject := es.wasm_state.store.table[reject_fun]
 
+  if cleanup_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[cleanup_fun]) ≠ func (anyref, i32) -> () then Trap
+  on_cleanup := es.wasm_state.store.table[cleanup_fun]
+
+  let cleanup =
+    λ (self_id, wasm_state) →
+      let es' = ref {empty_execution_state with
+          wasm_state = wasm_state;
+          self_id = self_id;
+          in_cleanup = true;
+        }
+      try on_cleanup<es>(cleanup_env)
+      with Trap then
+        Trap
+      else
+      Return {
+        new_state = es'.wasm_state;
+        new_calls = []
+        response = NoResponse
+      }
+
   let build_callback (params, func, env) =
     λ (self_id, wasm_state) →
       let es' = ref {empty_execution_state with
@@ -2043,7 +2088,8 @@ ic0.call_simple<es>(
           self_id = self_id;
           params = params
         }
-      try func<es>(env) with Trap then Trap
+      try func<es>(env)
+      with Trap then cleanup(self_id,wasm_state)
       Return {
         new_state = es'.wasm_state;
         new_calls = es'.performed_calls;
