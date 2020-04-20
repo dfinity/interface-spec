@@ -4,7 +4,7 @@
 [#v0_2_8]
 === 0.2.8 (UNRELEASED)
 
-* none yet
+* Spec: Include section with CDDL description
 
 [#v0_2_6]
 === 0.2.6 (2019-04-01)

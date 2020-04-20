@@ -588,6 +588,15 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 
 ====
 
+=== CDDL description of requests and responses
+
+The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:./requests.cddl[download the file].
+
+[source,bash]
+----
+include::requests.cddl[]
+----
+
 === Ordering guarantees
 
 In order to allow for a distributed implementation of the Internet Computer, the order in which the various messages between canisters are delivered and executed is not fully specified.
