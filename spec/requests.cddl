@@ -1,0 +1,121 @@
+; The "root type" of the CDDL file is a hack: We want to define multiple
+; types in one file (to shared common definitions), but CDDL requires a single
+; root type. So we just list the types defined here. This is a common CDDL idiom.
+start =
+  async-request /
+  sync-request /
+  response
+
+; common wrappers
+
+tagged<t> = #6.55799(t) ; the CBOR tag
+
+envelope<t> = tagged<{
+  sender_sig: signature
+  sender_pubkey: pubkey
+  content: t
+}>
+
+
+; A request as submitted to /api/v1/submit
+async-request = envelope<async-content>
+async-content =
+  create-canister-request /
+  install-code-request /
+  call-request
+
+create-canister-request = {
+  request_type: "create_canister"
+  nonce : bytes
+  sender : principal
+  ? desired_id : principal
+}
+
+install-code-request = {
+  request_type: "install_code"
+  nonce : bytes
+  sender : principal
+  cainster_id : principal
+  module : bytes
+  arg : bytes
+  ? compute_allocation : 0..100
+  ? mode : "install" / "replace" / "upgrade"
+}
+
+call-request = {
+  request_type: "call"
+  nonce : bytes
+  sender : principal
+  cainster_id : principal
+  method_name : text
+  arg : bytes
+}
+
+; A request as submitted to /api/v1/read
+sync-request = envelope<sync-content>
+sync-content =
+  request-status-request /
+  query-request
+
+request-status-request = {
+  request_type: "request_status"
+  request_id : bytes
+}
+
+query-request = {
+  request_type: "query"
+  sender : principal
+  cainster_id : principal
+  method_name : text
+  arg : bytes
+}
+
+; The response, as returned from /api/v1/read
+
+response = tagged<response-content>
+response-content =
+  request-status-response /
+  query-response
+
+request-status-response = {
+  status: "unknown"
+  //
+  status: "received"
+  //
+  status: "processing"
+  //
+  status: "replied"
+  reply: create-canister-reply / install-code-reply / call-reply
+  //
+  status: "rejected"
+  reject_code: unsigned
+  reject_message:  text
+}
+
+query-response = {
+  status: "replied"
+  reply: call-reply
+  //
+  status: "rejected"
+  reject_code: unsigned
+  reject_message: text
+}
+
+create-canister-reply = {
+  canister_id : principal
+}
+
+install-code-reply = { } ; NB: Empty record
+
+call-reply = {
+  arg : bytes
+}
+
+; some common data types
+
+principal = bytes
+; with https://github.com/dfinity-lab/ic-ref/pull/22 we can have
+; principal = bytes .size (0..35)
+
+pubkey = bytes .size 32
+signature = bytes .size 64
