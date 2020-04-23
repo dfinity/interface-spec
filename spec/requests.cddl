@@ -38,7 +38,7 @@ install-code-request = {
   request_type: "install_code"
   nonce : bytes
   sender : principal
-  cainster_id : principal
+  canister_id : principal
   module : bytes
   arg : bytes
   ? compute_allocation : 0..100
@@ -50,7 +50,7 @@ set-controller-request = {
   request_type: "set_controller"
   nonce : bytes
   sender : principal
-  cainster_id : principal
+  canister_id : principal
   controller : principal
 }
 
@@ -58,7 +58,7 @@ call-request = {
   request_type: "call"
   nonce : bytes
   ? sender : principal
-  cainster_id : principal
+  canister_id : principal
   method_name : text
   arg : bytes
 }
@@ -77,7 +77,7 @@ request-status-request = {
 query-request = {
   request_type: "query"
   ? sender : principal
-  cainster_id : principal
+  canister_id : principal
   method_name : text
   arg : bytes
 }
