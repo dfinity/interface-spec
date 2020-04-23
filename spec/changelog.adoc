@@ -2,18 +2,19 @@
 == Changelog
 
 [#v0_2_8]
-=== 0.2.8 (UNRELEASED)
+=== 0.2.8 (2020-04-23)
 
 * Spec: Include section with CDDL description
+* ic-ref-test: Block less tests on `create_canister` support
 
 [#v0_2_6]
-=== 0.2.6 (2019-04-01)
+=== 0.2.6 (2020-04-01)
 
 * ic-ref-run: Accept any canister id in `install` commands
 * ic-ref-test: More defensive printing of HTTP bodies
 
 [#v0_2_4]
-=== 0.2.4 (2019-03-23)
+=== 0.2.4 (2020-03-23)
 
 * simplify versioning (only three components), skip 0.2.2 to avoid confusion with 0.2.0.2
 * spec: Clarification: `reply` field is always present
