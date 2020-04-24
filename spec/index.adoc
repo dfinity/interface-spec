@@ -908,6 +908,7 @@ When handling an update call (or a callback), a canister can do further calls to
 
 * {blank}
 +
+--
   ic0.call_simple : (
     callee_src  : i32,
     callee_size : i32,
@@ -922,24 +923,25 @@ When handling an update call (or a callback), a canister can do further calls to
     data_src    : i32,
     data_size   : i32
   ) -> ( err_code : i32 )
-+
+
 This performs a function call to the canister specified by `callee_src/_size`, calling the method specified by `name_src/_size`, sending the data specified by `data_src/_size`.
-+
-The system records three callbacks, by noting the current function table entry at the index `_fun`. The `_env` value will be passed to these functions, so they need to have type `+(env : i32) -> ()+`. If they do not have this type, then `ic0.call_simple` traps.
-+
+
+The system records three callback functions, represented by a table entry index `_fun` and some additional value `_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+` and passed the corresponding `_env` value.
+
 1. The callback `reply_fun`/`reply_env` is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
 2. The callback `reject_fun`/`reject_env` is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 3. The callback `cleanup_fun`/`cleanup_env` is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 +
 During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.traps` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified gas limit) and serves to free resources associated with the callback.
 +
-If this traps (e.g. runs out of gas); the state changes from the `cleanup` function are discard, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
-+
+If this traps (e.g. runs out of gas), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
+
 The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
-+
+
 If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callback will be executed.
-+
+
 If the system returns a non-zero value, the call cannot (and will not be) performed.
+--
 
 [#system-api-stable-memory]
 === Stable memory
@@ -1110,6 +1112,7 @@ The <<system-api,WebAssembly System API>> is relatively low-level, and some of i
 ....
 WasmState = (abstract)
 StableMemory = (abstract)
+Callback = (abstract)
 
 type Timestamp = Nat;
 Arg = {
@@ -1124,7 +1127,7 @@ MethodCall = {
   callee : CanisterId;
   method_name: MethodName;
   arg: Blob;
-  callback: Response -> UpdateFunc;
+  callback: Callback;
 }
 
 UpdateFunc = WasmState -> Trap | Return {
@@ -1141,6 +1144,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg) -> Trap | Return WasmState
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
+  callbacks : (Callback, Response, Timestamp) -> UpdateFunc
 }
 ....
 
@@ -1169,7 +1173,7 @@ CallOrigin
     }
   | FromCanister {
       calling_context : CallId;
-      callback: Response -> WasmFunc
+      callback: Callback
     }
 ....
 
@@ -1182,6 +1186,10 @@ Calls into and within the Internet Computer are implemented as messages passed b
 Therefore, a message can have different shapes:
 ....
 Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
+EntryPoint
+  = PublicMethod MethodName Principal Blob
+  | Callback Callback Response
+
 Message
   = CallMessage {
       origin : CallOrigin;
@@ -1194,7 +1202,7 @@ Message
   | FuncMessage {
       call_context : CallId;
       receiver : CanisterId;
-      func : UpdateFunc;
+      entry_point : EntryPoint;
       queue : Queue;
     }
   | ResponseMessage {
@@ -1204,8 +1212,6 @@ Message
 ....
 
 The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
-
-Although the `func` field of `FuncMessage` has type `UpdateFunc`, it could also be a query call. We will see below that an `QueryFunc` can be modeled as an `UpdateFunc`.
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document uses a single global list for a simpler and more concise system state.
 
@@ -1509,22 +1515,11 @@ Before invoking a message to a public entry point, some bookkeeping is required:
 
 The position of the message in the queue is unchanged.
 
-This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
-
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
-    M = S.canisters[CM.callee].module
-    F = if M.method_name ∈ M.update_methods
-        then M.update_methods[CM.method_name]
-        else query_to_update_func (M.query_methods[CM.method_name])
     Ctxt_id ∉ dom S.call_contexts
-    Arg = {
-      data = CM.data;
-      caller = CM.caller;
-      time = S.time[CM.callee];
-    }
 ....
 State after::
 ....
@@ -1534,7 +1529,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id;
         receiver = CM.callee;
-        func = F (Arg);
+        entry_point = PublicMethod M.method_name CM.caller CM.data
         queue = CM.queue;
       } ·
       Younger_messages
@@ -1545,35 +1540,39 @@ S with
     }
 ....
 
-The function `query_to_update_func` turns a query function into an update function, this is merely a notational trick to simplify the message execution rules:
-....
-query_to_update_func f =
-  λ arg → λ wasm_state →
-    match f(arg)(wasm_state) with
-      Trap → Trap
-      Return res → Return {
-        new_state = wasm_state;
-        new_calls = [];
-        response = res;
-      }
-....
-Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
-
-==== Message execution (non-trapping)
-
 We can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
+
+==== Message execution
+
+The transition models the actual execution of a message whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition “Call context creation”)
 
 Conditions::
 ....
     S.messages = Older_messages · FuncMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    S.canisters[C.callee] ≠ EmptyCanister
-    M.func(S.canisters[M.receiver].wasm_state) = Return res
-    (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
+    S.canisters[M.receiver] ≠ EmptyCanister
+    Mod = S.canisters[M.receiver].module
+
+    ( M.entry_point = PublicMethod Name Caller Data
+      Arg = { data = Data; caller = Caller; time = S.time[M.receiver] }
+      (F = M.update_methods[M.method_name](Arg))
+      or
+      (F = as_update(Mod.query_methods[M.method_name], Arg))
+    )
+    or
+    ( M.entry_point = Callback Callback Response
+      F = Mod.callbacks(Callback, Response, S.time[M.receiver])
+    )
+
+    R = F(S.canisters[M.receiver].wasm_state)
 ....
 State after::
 ....
-S with
+if
+  R = Return res
+  (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
+then
+  S with
     canisters[M.receiver].wasm_state = res.new_state;
     messages =
       Older_messages ·
@@ -1596,43 +1595,30 @@ S with
         }
       | if res.response ≠ NoResponse ]
 
-     // only if res.response ≠ NoResponse:
-     call_contexts[M.call_context].responded = true
+     call_contexts[M.call_context].responded =
+       call_contexts[M.call_context].responded || res.response ≠ NoResponse:
+else
+  S with
+    messages = Older_messages · Younger_messages
 ....
 
-==== Message execution (trapping)
+If message execution succeeds, the state is update and possible outbound calls and responses are enqueued.
 
-If a message traps, it gets dropped. No response is generated (some other message may still fulfill this calling context).
+If message execution traps, or if it double-responds, the message gets dropped. No response is generated (as some other message may still fulfill this calling context).
 
-Conditions::
+The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
-    S.messages = Older_messages · FuncMessage M · Younger_messages
-    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    S.canisters[M.callee] ≠ EmptyCanister
-    M.func(S.canisters[M.receiver].wasm_state) = Trap
+as_update(f,arg) = λ wasm_state →
+  match f(arg)(wasm_state) with
+    Trap → Trap
+    Return res → Return {
+      new_state = wasm_state;
+      new_calls = [];
+      response = res;
+    }
 ....
-State after::
-....
-S with messages = Older_messages · Younger_messages
-....
+Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
-==== Message execution (double response)
-
-If a message tries to respond when its calling context has already be responded to, then we treat it like a trapping message.
-
-Conditions::
-....
-    S.messages = Older_messages · FuncMessage M · Younger_messages
-    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    S.canisters[M.callee] ≠ EmptyCanister
-    M.func(S.canisters[M.receiver].wasm_state) = Return res
-    S.call_contexts[M.call_context].responded = true
-    res ≠ NoResponse
-....
-State after::
-....
-S with messages = Older_messages · Younger_messages
-....
 
 ==== Call context starvation
 
@@ -1662,15 +1648,13 @@ S with
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
-This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
-
 Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     S.call_contexts[RM.call_context].origin =
       FromCanister {
         call_context = Ctxt_id2
-        callback = F
+        callback = Callback
       }
 ....
 State after::
@@ -1680,8 +1664,8 @@ S with
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id2
-        receiver = S.call_contexts[RM.call_context].canister
-        func = F (RM.response, S.time[S.call_contexts[RM.call_context].canister])
+        receiver = C
+        entry_point = Callback Callback FM.response
         queue = Unordered
       } ·
       Younger_messages
@@ -1814,6 +1798,18 @@ As explained in Section “<<system-api-module>>”, the WebAssembly module impo
 
 We model `mem` as an array of bytes, and `table` as an array of execution functions.
 
+The abstract `Callback` type above models an entry point for responses:
+....
+Callback = {
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+    cleanup_fun : i32,
+    cleanup_env : i32,
+}
+....
+
 ==== The execution state
 
 We can model the execution of WebAssembly functions as stateful functions that have access to the WebAssembly store. In order to also model the behavior of the system imports, which have access to additional data structures, we extend the state as follows:
@@ -1931,7 +1927,7 @@ post_upgrade = λ (self_id, stable_mem, arg) →
   Return es.wasm_state
 ....
 
-* The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_update <method>`, and has value
+* The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 +
 ....
 update_methods[method] = λ arg → λ wasm_state →
@@ -1947,7 +1943,7 @@ update_methods[method] = λ arg → λ wasm_state →
   }
 ....
 
-* The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `f` named `canister_query <method>`, and has value
+* The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 +
 ....
 query_methods[method] = λ arg → λ wasm_state →
@@ -1964,6 +1960,53 @@ query_methods[method] = λ arg → λ wasm_state →
 This formulation checks afterwards that the system calls `ic0.calls_simple` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
+
+* The function `callbacks` of the `CanisterModule` is defined  as follows
++
+....
+callbacks = λ(callbacks, response, time) → λ wasm_state →
+  let (func_id, env, params) = match response with
+    Reply data ->
+      (callbacks.reply_fun, callbacks.env,
+        { data; caller = NoCaller; reject_code = 0; reject_message = ""; time })
+    Reject (reject_code, reject_message)->
+      (callbacks.reply_fun, callbacks.env,
+        { data = NoData; caller = NoCaller; reject_code; reject_message; time })
+
+  try
+    if fun > |es.wasm_state.store.table| then Trap
+    let func = es.wasm_state.store.table[fun]
+    if typeof(func) ≠ func (i32) -> () then Trap
+
+    let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      params
+    }
+    func<es>(env)
+    Return {
+      new_state = es.wasm_state;
+      new_calls = es.calls;
+      response = es.response;
+    }
+  with Trap
+    if callbacks.cleanup_fun > |es.wasm_state.store.table| then Trap
+    let func = es.wasm_state.store.table[cleanup_fun]
+    if typeof(func) ≠ func (i32) -> () then Trap
+
+    let es = ref { empty_execution_state with
+      wasm_state;
+      in_cleanup = true;
+    }
+    func<es>(callbacks.cleanup_env)
+    Return {
+      new_state = es.wasm_state;
+      new_calls = [];
+      response = NoResponse;
+    }
+....
++
+Note that if the initial callback handler traps, the cleanup callback is
+executed, and the canister has the chance to update its state.
 
 
 ==== Helper functions
@@ -2063,47 +2106,20 @@ ic0.call_simple<es>(
 
   if reply_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
-  on_reply := es.wasm_state.store.table[reply_fun]
-
   if reject_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
-  on_reject := es.wasm_state.store.table[reject_fun]
-
   if cleanup_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[cleanup_fun]) ≠ func (anyref, i32) -> () then Trap
-  on_cleanup := es.wasm_state.store.table[cleanup_fun]
 
-  let cleanup =
-    λ (self_id, wasm_state) →
-      let es' = ref {empty_execution_state with
-          wasm_state = wasm_state;
-          self_id = self_id;
-          in_cleanup = true;
-        }
-      try on_cleanup<es>(cleanup_env)
-      with Trap then
-        Trap
-      else
-      Return {
-        new_state = es'.wasm_state;
-        new_calls = []
-        response = NoResponse
-      }
+  callbacks := {
+    reply_fun
+    reply_env
+    reject_fun
+    reject_env
+    cleanup_fun
+    cleanup_env
+  }
 
-  let build_callback (params, func, env) =
-    λ (self_id, wasm_state) →
-      let es' = ref {empty_execution_state with
-          wasm_state = wasm_state;
-          self_id = self_id;
-          params = params
-        }
-      try func<es>(env)
-      with Trap then cleanup(self_id,wasm_state)
-      Return {
-        new_state = es'.wasm_state;
-        new_calls = es'.performed_calls;
-        response = es'.response;
-      }
 
   if arbitrary()
   then
@@ -2114,13 +2130,7 @@ ic0.call_simple<es>(
         callee = callee;
         method_name = method_name;
         arg = arg;
-        callback = λ response → match response with
-          Reply blob → build_callback
-              ( { data = blob; caller = NoCaller; reject_code = 0 }
-              , on_reply , reply_env )
-          Reject (reject_code, _message) → build_callback
-              ( { data = NoData; caller = NoCaller; reject_code = reject_code }
-              , on_reject , eject_env )
+        callback = callbacks
       }
     return 0
 
