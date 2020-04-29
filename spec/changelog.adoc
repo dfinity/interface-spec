@@ -2,7 +2,7 @@
 == Changelog
 
 [#v0_2_10]
-=== 0.2.10 (UNRELEASED)
+=== 0.2.10 (2020-04-29)
 
 * ic-ref: Bind to 127.0.0.1 instead of 0.0.0.0
 * ic-ref: Set content-type even for error responses
