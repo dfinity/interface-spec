@@ -402,7 +402,7 @@ Request fields::
 * `arg` (`blob`): Initialization arguments
 * `compute_allocation` (`nat`, optional): The initial compute allocation requested, in percent.
 * `memory_allocation` (`nat`, optional): The initial memory allocation requested, in bytes.
-* `mode` (string, one of `install`, `replace`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `replace`, then the canister must already exist, but otherwise behaves like a fresh installation.
+* `mode` (string, one of `install`, `replace`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `replace`, then the canister must be non-empty, but otherwise behaves like a fresh installation.
 Reply fields::
 * None
 
