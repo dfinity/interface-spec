@@ -26,14 +26,14 @@ async-content =
 
 create-canister-request = {
   request_type: "create_canister"
-  nonce : bytes
+  ? nonce : bytes
   sender : principal
   ? desired_id : principal
 }
 
 install-code-request = {
   request_type: "install_code"
-  nonce : bytes
+  ? nonce : bytes
   sender : principal
   cainster_id : principal
   module : bytes
@@ -44,7 +44,7 @@ install-code-request = {
 
 call-request = {
   request_type: "call"
-  nonce : bytes
+  ? nonce : bytes
   sender : principal
   cainster_id : principal
   method_name : text
