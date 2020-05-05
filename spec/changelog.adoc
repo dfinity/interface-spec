@@ -11,20 +11,33 @@
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
+[#v0_2_12]
+=== 0.2.12 (UNRELEASED)
+
+* none yet
+
+[#v0_2_10]
+=== 0.2.10 (2020-04-29)
+
+* ic-ref: Bind to 127.0.0.1 instead of 0.0.0.0
+* ic-ref: Set content-type even for error responses
+* ic-ref-test: Tests related to query calls
+* ic-ref-test: Test “reply after trap in prior callback”
 
 [#v0_2_8]
-=== 0.2.8 (UNRELEASED)
+=== 0.2.8 (2020-04-23)
 
 * Spec: Include section with CDDL description
+* ic-ref-test: Block less tests on `create_canister` support
 
 [#v0_2_6]
-=== 0.2.6 (2019-04-01)
+=== 0.2.6 (2020-04-01)
 
 * ic-ref-run: Accept any canister id in `install` commands
 * ic-ref-test: More defensive printing of HTTP bodies
 
 [#v0_2_4]
-=== 0.2.4 (2019-03-23)
+=== 0.2.4 (2020-03-23)
 
 * simplify versioning (only three components), skip 0.2.2 to avoid confusion with 0.2.0.2
 * spec: Clarification: `reply` field is always present
