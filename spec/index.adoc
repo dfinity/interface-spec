@@ -130,9 +130,9 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have the form `H(public_key) · 0x02`.
+These have the form `H(public_key · canister_id) · 0x02`.
 +
-An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
+An external user can use these ids as the `sender` of a request relating to a canister with identifier `canister_id` if they own the corresponding private key.  See for example <<authentication>>.
 +
 NOTE: In the future the system may gain the ability to change the authentication rules for self-authenticating ids, e.g. revoke the original key and configure another one.
 
@@ -369,6 +369,8 @@ The following subsections list all supported requests and specify
 
 [#api-create-canister]
 ==== Canister creation
+
+WARNING: The `desired_id` cannot actually be used here. The reason is that `desired_id` would be computed from `sender`, but also `sender` is computed from `desired_id`.
 
 Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
@@ -1073,8 +1075,8 @@ characterizes all system-assigned blobs.
 
 The function
 ....
-is_self_authenticating_id : PublicKey -> Principal -> Bool
-is_self_authenticating_id pk id = id == H(pk) · 0x02
+is_self_authenticating_id : PublicKey -> CanisterId -> PrincipalId -> Bool
+is_self_authenticating_id pk canister_id id = id == H(pk · canister_id) · 0x02
 ....
 characterizes the self-authenticating ids.
 
@@ -1250,7 +1252,7 @@ Request
   | CanisterUpdateCall = {
     nonce : Blob;
     sender : UserId;
-    callee : CanisterId;
+    canister_id : CanisterId;
     method_name : Text;
     data : Blob;
   }
@@ -1275,7 +1277,7 @@ APIReadRequest
   | CanisterQuery = {
     nonce : Blob;
     sender : UserId;
-    callee : CanisterId;
+    canister_id : CanisterId;
     method_name : Text;
     data : Blob;
   }
@@ -1347,8 +1349,8 @@ verify_envelope(E, U) =
      is_anonymous_id U && E.signatures = []
   || ∃ PK, SIG.
        E.signatures = [{ sender_pubkey = PK, sender_sig = SIG }]
-       && is_self_authenticating_id PK U
-       && verify_signature PK SIG (request_id_of(E.content)) = true)
+       && is_self_authenticating_id PK E.content.canister_id U
+       && verify_signature PK SIG (request_id_of(E.content)) = true
 ....
 
 NOTE: Currently, this requires exactly one signature and a matching self-authenticating identifier, or no signature and an anonymous caller. This is a temporary restriction, which will be lifted in a future PR when we actually allow for keys stored with the canister.
@@ -1373,6 +1375,8 @@ S with
 ....
 
 NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
+
+WARNING: This check cannot apply to canister create requests, since no value `canister_id` exists in that request. The canister create method will anyway need to change prior to release.
 
 ==== Request rejection
 
@@ -1502,7 +1506,7 @@ S with
       CallMessage {
         origin = FromUser { request = CanisterUpdateCall M };
         caller = M.sender;
-        callee = M.callee;
+        callee = M.canister_id;
         method_name = M.method_name;
         arg = M.arg;
         queue = Unordered;
@@ -1750,8 +1754,8 @@ Conditions::
 ....
   E.content = CanisterQuery Q
   verify_envelope(E, Q.sender)
-  S.canisters[Q.callee] ≠ EmptyCanister
-  C = S.canisters[Q.callee]
+  S.canisters[Q.canister_id] ≠ EmptyCanister
+  C = S.canisters[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
     data = Q.arg;
