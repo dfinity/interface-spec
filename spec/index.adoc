@@ -1206,7 +1206,7 @@ Message
       queue : Queue;
     }
   | ResponseMessage {
-      call_context : CallId;
+      origin : CallOrigin;
       response : Response;
     }
 ....
@@ -1535,7 +1535,7 @@ S with
       Younger_messages
     call_contexts[Ctxt_id] = {
       canister = CM.callee;
-      caller = CM.caller;
+      origin = CM.origin;
       responded = false;
     }
 ....
@@ -1590,7 +1590,7 @@ then
         }
       | for call ∈ res.new_calls ] ·
       [ ResponseMessage {
-          call_context = M.call_context;
+          origin = S.call_contexts[M.call_context].origin
           response = res.response;
         }
       | if res.response ≠ NoResponse ]
@@ -1639,7 +1639,7 @@ S with
     messages =
       S.messages ·
       ResponseMessage {
-        call_context = Ctxt_id;
+        origin = call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, "starvation");
       }
 ....
@@ -1651,8 +1651,7 @@ When an inter-canister call has been responded to, we can queue the call to the 
 Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
-    S.call_contexts[RM.call_context].origin =
-      FromCanister {
+    RM.origin = FromCanister {
         call_context = Ctxt_id2
         callback = Callback
       }
@@ -1680,7 +1679,7 @@ Conditions::
 ....
     S.requests[M] = Processing
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
-    S.call_contexts[RM.call_context].origin = FromUser { request = M }
+    RM.origin = FromUser { request = M }
 ....
 State after::
 ....
