@@ -2,10 +2,11 @@
 == Changelog
 
 [#v0_2_12]
-=== 0.2.12 (UNRELEASED)
+=== 0.2.12 (2020-05-06)
 
 * ic-ref-test: Remove code to work around lack of creater cainster.
 * ic-ref-test: Stricter tests for bad signatures
+* ic-ref: Also accept CBOR maps of indeterminite length
 
 [#v0_2_10]
 === 0.2.10 (2020-04-29)
