@@ -43,7 +43,7 @@ install-code-request = {
   arg : bytes
   ? compute_allocation : 0..100
   ? memory_allocation : 0..281474976710656
-  ? mode : "install" / "replace" / "upgrade"
+  ? mode : "install" / "reinstall" / "upgrade"
 }
 
 set-controller-request = {

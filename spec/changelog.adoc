@@ -11,10 +11,18 @@
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
-[#v0_2_12]
-=== 0.2.12 (UNRELEASED)
 
-* none yet
+[#v0_2_14]
+=== 0.2.14 (UNRELESED)
+
+* Spec: Bugfix: Mode should be `reinstall`, not `replace`
+
+[#v0_2_12]
+=== 0.2.12 (2020-05-06)
+
+* ic-ref-test: Remove code to work around lack of creater cainster.
+* ic-ref-test: Stricter tests for bad signatures
+* ic-ref: Also accept CBOR maps of indeterminite length
 
 [#v0_2_10]
 === 0.2.10 (2020-04-29)
