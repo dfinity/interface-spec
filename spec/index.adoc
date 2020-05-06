@@ -389,13 +389,13 @@ Request fields::
 * `module` (`blob`): A <<canister-module-format,canister module>>
 * `arg` (`blob`): Initialization arguments
 * `compute_allocation` (`nat`, optional): The initial allocation requested, in percent.
-* `mode` (string, one of `install`, `replace`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `replace`, then the canister must already exist, but otherwise behaves like a fresh installation.
+* `mode` (string, one of `install`, `reinstall`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `reinstall`, then the canister must already exist, but otherwise behaves like a fresh installation.
 Reply fields::
 * None
 
 Only a user who is an _admin user_ for the canister can install code.
 
-If `mode = install` or `mode = replace`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
+If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon reinstalling an existing canister, all state (including the stable memory) is cleared.
 
 If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>.
 

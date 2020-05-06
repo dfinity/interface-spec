@@ -4,7 +4,7 @@
 [#v0_2_14]
 === 0.2.14 (UNRELESED)
 
-* none yet
+* Spec: Bugfix: Mode should be `reinstall`, not `replace`
 
 
 [#v0_2_12]

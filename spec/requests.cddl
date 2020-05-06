@@ -39,7 +39,7 @@ install-code-request = {
   module : bytes
   arg : bytes
   ? compute_allocation : 0..100
-  ? mode : "install" / "replace" / "upgrade"
+  ? mode : "install" / "reinstall" / "upgrade"
 }
 
 call-request = {
