@@ -11,6 +11,7 @@
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
+* Spec: the `pay_ingress` hook is introduced
 
 [#v0_2_14]
 === 0.2.14 (UNRELESED)

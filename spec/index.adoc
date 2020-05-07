@@ -696,6 +696,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import functions listed below, at the type given below.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
+* If it exports a function called `canister_pay_ingress`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This will be allowed in the future.)
@@ -712,6 +713,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_init` and type `+() -> ()+`.
 * The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
+* The canister may export a function called `canister_pay_ingress`, the function must have type `+() -> ()+`.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
@@ -741,6 +743,19 @@ During these steps, no other entry point of the old or new canister is invoked. 
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
+[#system-api-access-control]
+==== Ingress message cost control
+
+In cases where the cost of _accepting_ calls from external users will be charged to the canister, the IC checks immediately whether a call is permitted or not. The IC makes this determination by querying the canister via the `canister_pay_ingress` call.
+
+Within the `canister_pay_ingress` function, the canister may inspect the identity of the caller (using `ic0.msg_caller_*`) and the name of the invoked method (using `ic0.msg_method_*`). If access should be granted, the canister calls the `ic0.pay_for_ingress` system function.
+
+If the canister does not export `canister_pay_ingress`, then all ingress calls are permitted.
+
+Changes to the canister state during this function are always discarded, like in a query method.
+
+NOTE: This only applies to calls that incur a cost _before_ the canister actually executes the call. In case where the caller or someone else pays for these costs (e.g. inter-canister messages), this mechanism is _not_ used. In particular, this mechanism should not be used for access control. This is also indepenent of the costs incurred for _executing_ the call.
+
 [#system-api-requests]
 ==== Public methods
 
@@ -766,17 +781,25 @@ The following sections describe various system imports, which we summarize here.
 ....
 ic0.msg_arg_data_size : () -> i32                                      // I U Q Ry
 ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()    // I U Q Ry
-ic0.msg_caller_size : () -> (i32)                                      // I G U Q
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()       // I G U Q
+ic0.msg_method_size : () -> (i32)                                      // P
+ic0.msg_method_copy : (dst : i32, offset: i32, size : i32) -> ()       // P
+ic0.msg_caller_size : () -> (i32)                                      // I P G U Q
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()       // I P G U Q
 ic0.msg_reject_code : () -> i32                                        // Ry Rt
 ic0.msg_reject_msg_size : () -> i32                                    // Rt
 ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()  // Rt
 ic0.msg_reply_data_append : (src : i32, size : i32) -> ()              // U Q Ry Rt
 ic0.msg_reply : () -> ()                                               // U Q Ry Rt
 ic0.msg_reject : (src : i32, size : i32) -> ()                         // U Q Ry Rt
+ic0.pay_for_ingress :                                                  // P
+  ( bucket_src : i32,
+    bucket_size : i32,
+    cost : i64,
+    limit : i64,
+  ) -> ()
 ic0.canister_self_size : () -> (i32)                                   // *
 ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()    // *
-ic0.call_simple                                                        // U Ry Rt
+ic0.call_simple :                                                      // U Ry Rt
   ( callee_src  : i32,
     callee_size : i32,
     name_src    : i32,
@@ -801,6 +824,7 @@ The comment after each function lists from where these functions may be invoked:
 
 * `I`: from `canister_init` or `canister_post_upgrade`
 * `G`: from `canister_pre_upgrade`
+* `P`: from `canister_pay_ingress`
 * `U`: from `canister_update …`
 * `Q`: from `canister_query …`
 * `Ry`: from a reply callback
@@ -810,6 +834,28 @@ The comment after each function lists from where these functions may be invoked:
 * `*` = `I U Q Ry Rt C` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
+
+[#system-api-pay_for_ingress]
+=== Ingress cost control
+
+In `canister_pay_ingress`, in addition to inspecting the caller, the canister can inspect the method name to be invoked:
+
+* {blank}
++
+  ic0.msg_method_size : () -> (i32)
+  ic0.msg_method_copy : (dst : i32, offset: i32, size : i32) -> ()
++
+
+If the canister does not want to pay for this call, it should return without invoking `ic0.pay_for_ingress` (or, more crudely, trap). To admit this call, the canister can invoke
+
+* `ic0.pay_for_ingress : ( bucket_src : i32, bucket_src : i32, cost : i64, limit : i64 )`
++
+This function grants access if the sum of the `cost` values of all calls that have been granted with the same `bucket` value, but have not been executed yet, including the present call, does not exceed the limit. Buckets are identified by opaque blobs of size at most 64 bytes.
++
+The meaning of cost and limit is completely up to the canister. If no rate limiting is desired, `ic0.pay_for_ingress(0, 0, 0, 0)` works fine to grant access.
++
+This function traps if invoked twice. If the canister traps after invoking this function, the access is denied.
+
 
 === Blob-typed arguments and results
 
@@ -1138,7 +1184,7 @@ UpdateFunc = WasmState -> Trap | Return {
   response : NoResponse | Response;
 }
 QueryFunc = WasmState -> Trap | Return Response
-
+AccessQuota = { bucket : Blob, cost : i64, limit : i64 }
 
 CanisterModule = {
   init : (CanisterId, Arg) -> Trap | Return WasmState
@@ -1147,6 +1193,7 @@ CanisterModule = {
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
   callbacks : (Callback, Response, Timestamp) -> UpdateFunc
+  pay_ingress : (CanisterId, MethodName, WasmState) -> Trap | Return AccessQuota
 }
 ....
 
@@ -1200,12 +1247,16 @@ Message
       method_name : Text;
       data : Blob;
       queue : Queue;
+      bucket : Blob;
+      cost : i64;
     }
   | FuncMessage {
       call_context : CallId;
       receiver : CanisterId;
       entry_point : EntryPoint;
       queue : Queue;
+      bucket : Blob;
+      cost : i64;
     }
   | ResponseMessage {
       origin : CallOrigin;
@@ -1403,8 +1454,8 @@ Conditions::
 ....
     S.requests[CreateCanister M] = Received
     match M.desired_id with
-	CanisterId -> is_derived_id M.sender CanisterId
-	None -> is_opaque_id CanisterId = true
+      CanisterId -> is_derived_id M.sender CanisterId
+      None -> is_opaque_id CanisterId = true
     CanisterId ∉ dom S.canisters
 ....
 State after::
@@ -1497,6 +1548,9 @@ We do not make any guarantees about the order of incoming messages.
 Conditions::
 ....
     S.requests[CanisterUpdateCall M] = Received
+    C = S.canisters[M.callee]
+    C.module.pay_ingress (M.callee, M.method_name, C.wasm_state) = Return Quota
+    Quota.limit ≥ Quota.cost + bucket_cost(S, M.callee, Quota.bucket)
 ....
 State after::
 ....
@@ -1510,12 +1564,25 @@ S with
         method_name = M.method_name;
         arg = M.arg;
         queue = Unordered;
+        bucket = Quota.bucket;
+        cost = Quota.cost;
       } · S.messages
+....
+
+This uses the following helper function that sums up the cost of all in-flight messages assigned to the given bucket:
+....
+bucket_cost(S, canister_id, bucket) =
+    ∑ [ M.cost | CallMessage M ∈ S.messages, M.receiver = canister_id,
+                  M.bucket = bucket ] +
+    ∑ [ M.cost | FuncMessage M ∈ S.messages, M.receiver = canister_id,
+                  M.bucket = bucket ]
 ....
 
 ==== Call context creation
 
-Before invoking a message to a public entry point, some bookkeeping is required: A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
+Before invoking a message to a public entry point, some bookkeeping is required:
+
+ * A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
 
 The position of the message in the queue is unchanged.
 
@@ -1535,6 +1602,8 @@ S with
         receiver = CM.callee;
         entry_point = PublicMethod M.method_name CM.caller CM.data
         queue = CM.queue;
+        bucket = CM.bucket;
+        cost = CM.cost;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
@@ -1670,6 +1739,8 @@ S with
         receiver = C
         entry_point = Callback Callback FM.response
         queue = Unordered
+        bucket = 0
+        cost = 0
       } ·
       Younger_messages
 ....
@@ -1822,6 +1893,7 @@ Params = {
   caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
+  method : NoMethod | Text;
   time : Timestamp;
 }
 ExecutionState = {
@@ -1831,6 +1903,7 @@ ExecutionState = {
   response : NoResponse | Response;
   reply_params : { arg : Blob };
   calls : List Call;
+  access_quota : NoQuota | AccessQuota;
 }
 ....
 
@@ -1845,9 +1918,17 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
 * The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
 
-* For more convenience when creating a new `ExecutionState`, we define the following partial record:
+* For more convenience when creating a new `ExecutionState`, we define the following partial records:
 +
 ....
+empty_params = {
+  data = NoData;
+  caller = NoCaller;
+  reject_code = 0;
+  reject_message ""
+  method_name = NoMethod;
+}
+
 empty_execution_state = {
   wasm_state = (undefined);
   params = (undefined);
@@ -1855,6 +1936,7 @@ empty_execution_state = {
   response = NoResponse;
   reply_params : { arg = "" };
   calls : [];
+  access_quota : NoQuota;
 }
 ....
 
@@ -1874,7 +1956,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 init = λ (self_id, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""; time = arg.time}
+      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1883,6 +1965,30 @@ init = λ (self_id, arg) →
 ....
 +
 This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
+
+* The `check_access` field of the `CanisterModule` is defined as follows:
++
+If the WebAssembly module does not export a function called under the name `canister_pay_ingress`, then access is always granted:
++
+....
+check_access = λ (caller, method_name, wasm_state) →
+  Return { bucket = 0; cost = 0; limit = 0 }
+....
++
+Otherwise, if the WebAssembly module exports a function `func` under the name `check_access`, it is
++
+....
+pay_ingress = λ (caller, method_name, wasm_state) →
+  let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      params = empty_params with { caller = caller; method_name = method_name }
+    }
+  try func<es>() with Trap then Trap
+  if es.calls ≠ () then Trap
+  if es.response ≠ NoResponse then Trap
+  if es.access_quota = NoQuota then Trap
+  Return es.access_quota;
+....
 
 * The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 +
@@ -1898,7 +2004,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 pre_upgrade = λ (old_state, caller, time) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
-      params = { data = NoData; caller = caller; reject_code = 0; reject_message - ""; time = time}
+      params = { empty_params with caller = caller; time = time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1922,7 +2028,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 post_upgrade = λ (self_id, stable_mem, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = ""; time = arg.time}
+      params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time}
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1936,7 +2042,7 @@ post_upgrade = λ (self_id, stable_mem, arg) →
 update_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message = ""; time = arg.time }
+      params = empty_params with { data = arg.data; caller = arg.caller ; time = arg.time }
     }
   try func<es>() with Trap then Trap
   Return {
@@ -1952,7 +2058,7 @@ update_methods[method] = λ arg → λ wasm_state →
 query_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = { data = arg.data; caller = arg.caller; reject_code = 0; reject_message ""; time = arg.time }
+      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
     }
   try func<es>() with Trap then Trap
   if es.calls ≠ () then Trap
@@ -2040,6 +2146,14 @@ ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
   if es.params.data = NoData then Trap
   copy_to_canister<es>(dst, offset, size, es.param.arg)
 
+ic0.msg_method_size() : i32 =
+  if es.params.method_name = NoMethod then Trap
+  return |es.params.method_name|
+
+ic0.msg_method_copy(dst:i32, offset:i32, size:i32) : i32 =
+  if es.params.method_name = NoCaller then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.method_name)
+
 ic0.msg_caller_size() : i32 =
   if es.in_cleanup then Trap
   if es.params.caller = NoCaller then Trap
@@ -2078,6 +2192,12 @@ ic0.msg_reject<es>(src : i32, size : i32) =
   if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
+
+ic0.pay_for_ingress<es>( bucket_src : i32, bucket_size : i32, cost : i64, limit : i64 ) =
+  if es.access_quota ≠ NoQuota then Trap
+  bucket := copy_from_canister<es>(bucket_src, bucket_size);
+  if |bucket| > 64 then Trap
+  es.access_quota := { bucket = bucket; cost = cost; limit = limit }
 
 ic0.canister_self_size<es>() : i32 =
   if es.in_cleanup then Trap
