@@ -434,9 +434,9 @@ Synchronicity:: asynchronous
 Request type:: `set_controller`
 Request fields::
 +
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister
-* `controller` (`PrincipalId`): The new controller of the canister.
+* `controller` (`Principal`): The new controller of the canister.
 Reply fields::
 * None
 
