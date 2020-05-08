@@ -331,14 +331,17 @@ All requests coming in via the HTTP interface need to be _authenticated_ using a
 
 Furthermore, the request records are wrapped in a envelope record with these fields:
 
-* `signatures`: Array of zero or more objects with fields described as follows.
- - `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
- - `sender_sig` (`blob`): Signature to authenticate this request.
 * `content` (`record`): the actual request content
+* `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
 A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+
+To “authenticate” the anonymous principal (see <<id-classes>>), the fields `sender_pubkey` and `sender_sig` must be omitted.
+
+The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the c
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -612,18 +615,14 @@ As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating 
 A typical request would be (written in https://tools.ietf.org/html/rfc7049#section-6[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
 ....
 55799({
-  "signatures" : [
-    {
-      "sender_sig": h'DEADBEEF',
-      "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde'
-    }
-  ],
   "content": {
     "request_type": "install_code",
     "canister_id": h'ABCD01',
     "module": h'0061736d01000000',
     "arg": h''
-  }
+  },
+  "sender_sig": h'DEADBEEF',
+  "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde'
 })
 ....
 
@@ -1275,10 +1274,8 @@ We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit
 ....
 Envelope = {
   content : Request | APIReadRequest;
-  signatures : [{
-    sender_pubkey : PublicKey;
-    sender_sig : Signature;
-  }];
+  sender_pubkey : PublicKey | NoPublicKey;
+  sender_sig : Signature | NoSignature;
 }
 
 Request
@@ -1397,11 +1394,10 @@ The following predicate describes when an evelope `E` correctly signs the enclos
 
 ....
 verify_envelope(E, U) =
-     is_anonymous_id U && E.signatures = []
+     is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
   || ∃ PK, SIG.
-       E.signatures = [{ sender_pubkey = PK, sender_sig = SIG }]
-       && is_self_authenticating_id PK E.content.canister_id U
-       && verify_signature PK SIG (request_id_of(E.content)) = true
+       is_self_authenticating_id E.sender_pubkey E.content.canister_id U
+       && verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
 ....
 
 NOTE: Currently, this requires exactly one signature and a matching self-authenticating identifier, or no signature and an anonymous caller. This is a temporary restriction, which will be lifted in a future PR when we actually allow for keys stored with the canister.

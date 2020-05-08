@@ -6,7 +6,7 @@
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec (editorial): the term “principal” is now used for the _id_ of a canister or
   user, not the canister or user itself
-* Spec: The anonymous user is introduced, and the request envelope is generalized to multiple signatures.
+* Spec: The anonymous user is introduced
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The cleanup callback is introduced

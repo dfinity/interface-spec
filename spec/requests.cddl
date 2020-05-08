@@ -11,11 +11,9 @@ start =
 tagged<t> = #6.55799(t) ; the CBOR tag
 
 envelope<t> = tagged<{
-  signatures: [*{
-    sender_pubkey: pubkey
-    sender_sig: signature
-  }]
   content: t
+  ? sender_pubkey: pubkey
+  ? sender_sig: signature
 }>
 
 
