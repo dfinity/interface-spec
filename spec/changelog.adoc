@@ -12,6 +12,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
 * Spec: the `pay_ingress` hook is introduced
+* Spec: Include canister id in self-authenticating ids
 
 [#v0_2_14]
 === 0.2.14 (UNRELESED)
