@@ -103,7 +103,7 @@ The public entry points of canisters are called _methods_. Methods can be declar
 
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
-Inter-canister calls do not distinguish between update and query methods. External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
+Inter-canister calls do not distinguish between update and query methods. Note that a calls from a canister to itself also count as "inter-canister". External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
@@ -120,7 +120,7 @@ Principals, i.e. ids like canister ids and user ids, are – as far as most uses
 [#id-classes]
 === Special forms of IDs
 
-There are several classes of ids:
+In all of this document, `H` denotes SHA-256 and `·` denotes blob concatenation. There are several classes of ids:
 
 1. _Opaque ids_.
 +
@@ -130,7 +130,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have the form `H(public_key · canister_id) · 0x02`.
+These have the form `H(public_key · canister_id) · 0x02` (33 bytes).
 +
 An external user can use these ids as the `sender` of a request relating to a canister with identifier `canister_id` if they own the corresponding private key.  See for example <<authentication>>.
 +
@@ -138,15 +138,13 @@ NOTE: In the future the system may gain the ability to change the authentication
 
 3. _Derived ids_
 +
-These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03`.
+These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03` (41 bytes).
 +
 These ids are treated specially when an id needs to be registered. In such a request, the caller (an user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id. See for example <<api-create-canister>>.
 
 4. _Anonymous id_
 +
 This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
-
-The hash function `H(…)` here is SHA-256. Thus self-authenticating ids are always 33 bytes long, derived ids are always 41 bytes long.
 
 When the system creates a _fresh_ id, it never creates a self-authenticating, derived or anonymous id.
 
@@ -292,7 +290,7 @@ For these endpoints, the user performs a POST request over HTTPS with `Content-t
 * The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
-In both cases case, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
+In both cases, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
 
 NOTE: For some types of synchronous requests (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
 
@@ -521,7 +519,7 @@ The following encodings of field values as blobs are used
 
 [TIP]
 ====
-Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
+Example calculation (recall that `H` denotes SHA-256 and `·` denotes blob concatenation):
 
 [source,,options="nowrap"]
 ----
@@ -683,7 +681,7 @@ WARNING: This may need refinement for features like multiple modules, shared lin
 The System API is the interface between the running canister and the Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the system (e.g. initialization), and exposes system functionality to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
 
 We want to leverage advanced WebAssembly features, such as WebAssembly host references. But as they are not yet supported by all tools involved, this section describes an initial System API that does not rely on host references. To emphasize that this is just a preliminary interface, we group the system methods under the module name `ic0`, planning to use `ic` for the real deal.
-In section [#host-references], we outline some of the proposed uses of WebAssembly host references.
+In section <<host-references>>, we outline some of the proposed uses of WebAssembly host references.
 
 [#system-api-module]
 === WebAssembly module requirements
@@ -692,7 +690,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 * If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
 * If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
-* It may only import functions listed below, at the type given below.
+* It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
 * If it exports a function called `canister_pay_ingress`, the function must have type `+() -> ()+`.
@@ -773,6 +771,7 @@ Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
 In the reply callback of a <<system-api-call,inter-canister method call>>, the argument refers to the response to that call. In reject callbacks, no argument is available.
 
 
+[#system-api-imports]
 === Overview of imports
 
 The following sections describe various system imports, which we summarize here.
