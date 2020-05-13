@@ -355,7 +355,7 @@ In particular:
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs that contain DER encodings of the public keys, see RFCs https://tools.ietf.org/rfc/rfc3279[3279], https://tools.ietf.org/rfc/rfc5758[5758], and https://tools.ietf.org/html/rfc8410[8410].
  * Request fields that indicate signatures (`sender_sig`) are binary blobs, size 64 bytes.
 
-The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
+The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
 [#request-types]
 === Request types
@@ -1397,7 +1397,7 @@ verify_envelope(E, U) =
      is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
   || ∃ PK, SIG.
        is_self_authenticating_id E.sender_pubkey E.content.canister_id U
-       && verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
+       && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 
 NOTE: Currently, this requires exactly one signature and a matching self-authenticating identifier, or no signature and an anonymous caller. This is a temporary restriction, which will be lifted in a future PR when we actually allow for keys stored with the canister.
