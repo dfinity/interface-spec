@@ -120,7 +120,7 @@ Principals, i.e. ids like canister ids and user ids, are – as far as most uses
 [#id-classes]
 === Special forms of IDs
 
-There are three classes of ids:
+There are several classes of ids:
 
 1. _Opaque ids_.
 +
