@@ -747,7 +747,7 @@ These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` tra
 
 In cases where the cost of _accepting_ calls from external users will be charged to the canister, the IC checks immediately whether a call is permitted or not. The IC makes this determination by querying the canister via the `canister_pay_ingress` call.
 
-Within the `canister_pay_ingress` function, the canister may inspect the identity of the caller (using `ic0.msg_caller_*`) and the name of the invoked method (using `ic0.msg_method_*`). If access should be granted, the canister calls the `ic0.pay_for_ingress` system function.
+Within the `canister_pay_ingress` function, the canister may inspect the identity of the caller (using `ic0.msg_caller_*`) and the name of the invoked method (using `ic0.msg_method_*`). To signal that it is willing to pay for this call, it invokes the `ic0.pay_for_ingress` system function (see <<system-api-pay_for_ingress>> for details). To refuse to pay, the canister simply returns without invoking `ic0.pay_for_ingress`.
 
 If the canister does not export `canister_pay_ingress`, then all ingress calls are permitted.
 
