@@ -8,6 +8,7 @@
   user, not the canister or user itself
 * Spec: The anonymous user is introduced
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
+* Spec: The calculation of “derived ids” has changed
 * Spec: The signature of a request needs to be calculated using a domain separator
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The cleanup callback is introduced
