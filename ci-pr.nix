@@ -1,2 +1,2 @@
-{ src ? { rev = null; }, base ? null }:
+{ src ? { rev = null; }, ... }:
 import ./ci.nix { inherit src; }
