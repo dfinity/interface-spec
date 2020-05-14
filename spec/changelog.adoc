@@ -11,6 +11,8 @@
 * Spec: The calculation of “derived ids” has changed
 * Spec: The signature of a request needs to be calculated using a domain separator
 * Spec: Describe the `controller` attribute, add a request to change it
+* Spec: The self-authenticating and derived id forms use a truncated hash
+* Spec: The textual representation of principals has changed
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
 * Spec: the `pay_ingress` hook is introduced
