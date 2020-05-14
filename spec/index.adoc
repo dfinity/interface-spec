@@ -144,7 +144,7 @@ NOTE: In the future the system may gain the ability to change the authentication
 +
 These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (29 bytes).
 +
-These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The double-hashing of `registering_principal` prevents collisions in cases where one principal is the prefix of another principal. See for example <<api-create-canister>>.
+These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The length byte `|registering_principal|` prevents collisions in cases where one principal is the prefix of another principal. See for example <<api-create-canister>>.
 
 4. _Anonymous id_
 +
