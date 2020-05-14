@@ -108,14 +108,14 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system is concerned – binary blobs.
+Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs of length at most 29 bytes.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
 [#id-classes]
 === Special forms of IDs
 
-In all of this document, `H` denotes SHA-256, `·` denotes blob concatenation and `|p|` denotes the length of `p` in bytes, encoded as a single byte.
+In this section, `H` denotes SHA-224, `·` denotes blob concatenation and `|p|` denotes the length of `p` in bytes, encoded as a single byte.
 
 There are several classes of ids:
 
@@ -127,7 +127,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have the form `H(public_key) · 0x02` (33 bytes).
+These have the form `H(public_key) · 0x02` (29 bytes).
 +
 An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
 +
@@ -135,7 +135,7 @@ NOTE: In the future the system may gain the ability to change the authentication
 
 3. _Derived ids_
 +
-These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (33 bytes).
+These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (29 bytes).
 +
 These ids are treated specially when an id needs to be registered. In such a request, whoever requests an id can provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from.
 +
@@ -152,15 +152,29 @@ NOTE: This textual representation does not actually show up in the interface (wh
 
 We specify a _canonical textual format_ that is recommended whenever principals need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
 
-To turn a blob into the recognizable text format,
+The textual representation of a blob `b` is `Grouped(Base32(CRC32(b) · b))` where
 
-1. Append a one byte checksum, calculated using CRC-8 with polynomial 0x07 (MSB-first code).
-2. Convert into hexadecimal form, with capital letters.
-3. Prepend `ic:`.
+ * `CRC32` is a four byte check sequence, calculated as defined by ISO 3309, ITU-T V.42 and https://www.w3.org/TR/2003/REC-PNG-20031110/#5CRC-algorithm[elsewhere]
+ * `Base32` is the Base32 encoding as defined in https://tools.ietf.org/html/rfc4648#section-6[RFC 4648], with no padding character added.
+ * the middle dot denotes concatenation.
+ * `Grouped` takes an ASCII string and inserts the separator `-` (dash) every 5 characters. The last group may contain less than 5 characters. There is never a separator at the beginning or end.
+
+The textual representation is conventially printed with _lower case letters_, but parsed case-insensitively.
+
+Because the maximum size of a principal is 29 bytes, the textual representation will be no longer than 63 characters (10 times 5 plus 3 characters with 10 separators in between them).
 
 [TIP]
-The canister with id `0xABCD01` becomes `ic:ABCD01A7` (https://crccalc.com/?crc=ABCD01&method=crc8&datatype=hex&outtype=hex[online calculator]).
+=====
+The canister with id `0xABCD01` has check sequence `0x233FF206` (https://crccalc.com/?crc=ABCD01&method=crc32&datatype=hex&outtype=hex[online calculator]); the final id is thus `em77e-bvlzu-aq`.
 
+Example command line calculation:
+....
+( echo ABCD01 | xxd -r -p | crc32 /dev/stdin; echo -n ABCD01 ) |
+  xxd -r -p | base32 |
+  tr A-Z a-z |tr -d = |
+  fold -w5 | paste -sd'-' -
+....
+=====
 
 [#http-interface]
 == HTTPS Interface
@@ -1487,6 +1501,7 @@ To avoid clashes with potential user ids or dis derived from users or canisters,
  * `is_system_assigned p = false` if `is_self_authenticating_id pk p` for possible canister ids `cid` and public keys `pk` and
  * `is_system_assigned dp = false` if `is_derived_id p dp` for any `p` that could be a user or canister.
 
+Furthermore, `is_derived_id p` implies `|p|≤ 29`.
 
 ==== IC Management Canister: Code installation
 

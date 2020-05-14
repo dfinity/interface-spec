@@ -4,9 +4,11 @@
 [#v0_9_0]
 === 0.9.0 (UNRELEASED)
 
- * Spec: Introduction of a domain separator (again)
- * Spec: The calculation of “derived ids” has changed
- * ic-ref-test: Also send read requests with nonces
+* Spec: Introduction of a domain separator (again)
+* Spec: The calculation of “derived ids” has changed
+* Spec: The self-authenticating and derived id forms use a truncated hash
+* Spec: The textual representation of principals has changed
+* ic-ref-test: Also send read requests with nonces
 
 [#v0_8_1]
 === 0.8.1 (2020-07-10)
