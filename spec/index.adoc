@@ -115,7 +115,7 @@ There is, however, some structure to them to encode specific authentication and 
 [#id-classes]
 === Special forms of IDs
 
-In this section, `H` denotes SHA-256 and `·` denotes blob concatenation.
+In all of this document, `H` denotes SHA-256, `·` denotes blob concatenation and `|p|` denotes the length of `p` in bytes, encoded as a single byte.
 
 There are several classes of ids:
 
@@ -127,7 +127,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have the form `H(public_key) · 0x02`.
+These have the form `H(public_key) · 0x02` (33 bytes).
 +
 An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
 +
@@ -135,9 +135,9 @@ NOTE: In the future the system may gain the ability to change the authentication
 
 3. _Derived ids_
 +
-These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03`.
+These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (33 bytes).
 +
-These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id.
+These ids are treated specially when an id needs to be registered. In such a request, whoever requests an id can provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from.
 +
 NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they maybe be used internally or in the future.
 
@@ -975,21 +975,21 @@ Principals (canister ids and user ids) are blobs, but some of them have special 
 type Principal = Blob
 ....
 
+The function
+....
+mk_self_authenticating_id : PublicKey -> Principal
+mk_self_authenticating_id pk = H(pk) · 0x02
+....
+calculates self-authenticating ids.
 
 The function
 ....
-is_self_authenticating_id : PublicKey -> Principal -> Bool
-is_self_authenticating_id pk id = id == H(pk) · 0x02
+mk_derived_id : Principal -> Blob -> Principal
+mk_derived_id p nonce = H(|p| · p · nonce) · 0x03
 ....
-characterizes the self-authenting ids.
+calculates derived ids. With `|p|` we denote the length of the principal, in bytes, encoded as a single byte.
 
-The function
-....
-is_derived_id : Principal -> Principal -> Bool
-is_derived_id oid id = ∃n. |n| == 8 ∧ id == H(oid) · n · 0x03
-....
-characterizes the derived ids.
-
+These function domains are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
 ....
@@ -1239,7 +1239,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 ....
 verify_envelope(E, U) =
   ∃ PK, SIG.
-    is_self_authenticating_id E.sender_pubkey U
+    U = mk_self_authenticating_id E.sender_pubkey U
     && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 

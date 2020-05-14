@@ -5,6 +5,7 @@
 === 0.9.0 (UNRELEASED)
 
  * Spec: Introduction of a domain separator (again)
+ * Spec: The calculation of “derived ids” has changed
  * ic-ref-test: Also send read requests with nonces
 
 [#v0_8_1]
