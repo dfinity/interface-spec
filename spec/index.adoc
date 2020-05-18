@@ -797,27 +797,27 @@ In the reply callback of a <<system-api-call,inter-canister method call>>, the a
 The following sections describe various system imports, which we summarize here.
 
 ....
-ic0.msg_arg_data_size : () -> i32                                      // I U Q Ry
-ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()    // I U Q Ry
-ic0.msg_method_size : () -> (i32)                                      // P
-ic0.msg_method_copy : (dst : i32, offset: i32, size : i32) -> ()       // P
-ic0.msg_caller_size : () -> (i32)                                      // I P G U Q
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()       // I P G U Q
-ic0.msg_reject_code : () -> i32                                        // Ry Rt
-ic0.msg_reject_msg_size : () -> i32                                    // Rt
-ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()  // Rt
-ic0.msg_reply_data_append : (src : i32, size : i32) -> ()              // U Q Ry Rt
-ic0.msg_reply : () -> ()                                               // U Q Ry Rt
-ic0.msg_reject : (src : i32, size : i32) -> ()                         // U Q Ry Rt
-ic0.pay_for_ingress :                                                  // P
+ic0.msg_arg_data_size : () -> i32;                                      // I U Q Ry
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();    // I U Q Ry
+ic0.msg_method_size : () -> (i32);                                      // P
+ic0.msg_method_copy : (dst : i32, offset: i32, size : i32) -> ();       // P
+ic0.msg_caller_size : () -> (i32);                                      // I P G U Q
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();       // I P G U Q
+ic0.msg_reject_code : () -> i32;                                        // Ry Rt
+ic0.msg_reject_msg_size : () -> i32;                                    // Rt
+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();  // Rt
+ic0.msg_reply_data_append : (src : i32, size : i32) -> ();              // U Q Ry Rt
+ic0.msg_reply : () -> ();                                               // U Q Ry Rt
+ic0.msg_reject : (src : i32, size : i32) -> ();                         // U Q Ry Rt
+ic0.pay_for_ingress :                                                   // P
   ( bucket_src : i32,
     bucket_size : i32,
     cost : i64,
-    limit : i64,
-  ) -> ()
-ic0.canister_self_size : () -> (i32)                                   // *
-ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ()   // *
-ic0.call_simple :                                                      // U Ry Rt
+    limit : i64
+  ) -> ();
+ic0.canister_self_size : () -> (i32);                                   // *
+ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();   // *
+ic0.call_simple :                                                       // U Ry Rt
   ( callee_src  : i32,
     callee_size : i32,
     name_src    : i32,
@@ -828,14 +828,14 @@ ic0.call_simple :                                                      // U Ry R
     reject_env  : i32,
     data_src    : i32,
     data_size   : i32
-  ) -> ( err_code : i32 )
-ic0.stable_size : () -> (page_count : i32)                             // *
-ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)          // *
-ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()         // *
-ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()          // *
-ic0.time : () -> (timestamp : i64)                                     // *
-ic0.debug_print : (src : i32, size : i32) -> ()                        // * s
-ic0.trap : (src : i32, size : i32) -> ()                               // * s
+  ) -> ( err_code : i32 );
+ic0.stable_size : () -> (page_count : i32);                             // *
+ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);          // *
+ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();         // *
+ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();          // *
+ic0.time : () -> (timestamp : i64);                                     // *
+ic0.debug_print : (src : i32, size : i32) -> ();                        // * s
+ic0.trap : (src : i32, size : i32) -> ();                               // * s
 ....
 
 The comment after each function lists from where these functions may be invoked:
