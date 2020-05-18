@@ -814,7 +814,7 @@ ic0.pay_for_ingress :                                                  // P
     limit : i64,
   ) -> ()
 ic0.canister_self_size : () -> (i32)                                   // *
-ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()    // *
+ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ()   // *
 ic0.call_simple :                                                      // U Ry Rt
   ( callee_src  : i32,
     callee_size : i32,
@@ -827,10 +827,10 @@ ic0.call_simple :                                                      // U Ry R
     data_src    : i32,
     data_size   : i32
   ) -> ( err_code : i32 )
-ic0.stable_size() -> (page_count : i32)                                // *
-ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)             // *
-ic0.stable_write(offset : i32, src : i32, size : i32) -> ()            // *
-ic0.stable_read(dst : i32, offset : i32, size : i32) > ()              // *
+ic0.stable_size : () -> (page_count : i32)                             // *
+ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)          // *
+ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()         // *
+ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()          // *
 ic0.time : () -> (timestamp : i64)                                     // *
 ic0.debug_print : (src : i32, size : i32) -> ()                        // * s
 ic0.trap : (src : i32, size : i32) -> ()                               // * s
@@ -1016,13 +1016,13 @@ The stable memory is initially empty.
 
 * {blank}
 +
-  ic0.stable_size() -> (page_count : i32)
+  ic0.stable_size : () -> (page_count : i32)
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 65Ki bytes.)
 
 * {blank}
 +
-  ic0.stable_grow(new_pages : i32) -> (old_page_count : i32)
+  ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 
@@ -1030,7 +1030,7 @@ If successful, returns the _previous_ size of the memory (in pages). Otherwise, 
 
 * {blank}
 +
-  ic0.stable_write(offset : i32, src : i32, size : i32) -> ()
+  ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()
 +
 copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 
@@ -1038,7 +1038,7 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory 
 
 * {blank}
 +
-  ic0.stable_read(dst : i32, offset : i32, size : i32) > ()
+  ic0.stable_read : (dst : i32, offset : i32, size : i32) > ()
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 
