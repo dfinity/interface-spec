@@ -18,10 +18,16 @@
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
 
+[#v0_2_16]
+=== 0.2.16 (UNRELEASED)
+
+* none yet
+
 [#v0_2_14]
-=== 0.2.14 (UNRELESED)
+=== 0.2.14 (2020-05-14)
 
 * Spec: Bugfix: Mode should be `reinstall`, not `replace`
+* ic-ref-test: A few more tests, refactorings
 
 [#v0_2_12]
 === 0.2.12 (2020-05-06)
