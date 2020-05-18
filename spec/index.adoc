@@ -1040,7 +1040,7 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory 
 
 * {blank}
 +
-  ic0.stable_read : (dst : i32, offset : i32, size : i32) > ()
+  ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 
@@ -2219,7 +2219,7 @@ ic0.canister_self_size<es>() : i32 =
   if es.in_cleanup then Trap
   return |es.wasm_state.self_id|
 
-ic0.canister_self_copy(dst:i32, offset:i32, size:i32)  =
+ic0.canister_self_copy(dst:i32, offset:i32, size:i32) =
   if es.in_cleanup then Trap
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
@@ -2273,10 +2273,10 @@ ic0.call_simple<es>(
       }
     return 0
 
-ic0.stable_size<es>() -> (page_count : i32) =
+ic0.stable_size<es>() : (page_count : i32) =
   return |es.wasm_state.stable_mem| / 64k
 
-ic0.stable_grow<es>(new_pages : i32) -> (old_page_count : i32) =
+ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
   if arbitrary()
   then return -1
   else
@@ -2285,13 +2285,13 @@ ic0.stable_grow<es>(new_pages : i32) -> (old_page_count : i32) =
       es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
     return old_size
 
-ic0.stable_write<es>(offset : i32, src : i32, size : i32) -> ()
+ic0.stable_write<es>(offset : i32, src : i32, size : i32)
   if src+size > |es.wasm_state.store.mem| then Trap
   if offset+size > |es.wasm_state.stable_mem| then Trap
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
-ic0.stable_read<es>(dst : i32, offset : i32, size : i32) > ()
+ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
   if offset+size > |es.wasm_state.stable_mem| then Trap
   if dst+size > |es.wasm_state.store.mem| then Trap
 
