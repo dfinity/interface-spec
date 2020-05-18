@@ -14,9 +14,11 @@ Because of its focus on the externally visible behavior of the Internet Computer
 
 === Status
 
-The `master` version of this document corresponds to _approved_ designs. It does, however, _not_ indicate any kind of implementation plan, and must not be used as an implementation specification. It may contain features that are not yet implemented, the implementation plans are made elsewhere.
+WARNING: You are looking at the `master` version of the document! If you are looking for implementation specification or documentation, look at one of the versions at https://docs.dfinity.systems/public/v/.
 
-The released versions of this document are targetted by the production implementation (e.g. `replica`, `dfx`). Releasing a new version of the spec does not, however, imply that the implementations will immediatelly target that version. Rather, deciding which version to target when is a deliberate, coordinated decision between the involved components.
+The `master` version of this document corresponds to a collection of finished and approved designs, but typically reflect neither the current status nor target of implementation.
+
+The released versions, which can be found at https://docs.dfinity.systems/public/v/, are targetted by the production implementations (e.g. `replica`, `dfx`). Implementations do not necessarily target the latest released version; chosing an implementation target is a deliberate step coordinated between the involved parties.
 
 See the https://github.com/dfinity-lab/ic-ref/blob/master/README.md[README file of the repository] for more information on versioning and release process.
 
