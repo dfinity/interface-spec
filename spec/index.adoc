@@ -152,7 +152,7 @@ These ids are treated specially when an id needs to be registered. In such a req
 +
 This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
-When the system creates a _fresh_ id, it never creates a self-authenticating, derived or anonymous id.
+When the system creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
 
 
 [#textual-ids]
