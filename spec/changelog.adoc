@@ -15,6 +15,7 @@
 * Spec: The textual representation of principals has changed
 * Spec: The cleanup callback is introduced
 * Spec: `ic0.time` added
+* Spec: The IC management canister is introduced
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
 

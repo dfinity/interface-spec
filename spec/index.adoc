@@ -146,7 +146,7 @@ NOTE: In the future the system may gain the ability to change the authentication
 +
 These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (29 bytes).
 +
-These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The length byte `|registering_principal|` prevents collisions in cases where one principal is the prefix of another principal. See for example <<api-create-canister>>.
+These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The length byte `|registering_principal|` prevents collisions in cases where one principal is the prefix of another principal. See for example <<ic-create_canister>>.
 
 4. _Anonymous id_
 +
@@ -191,57 +191,8 @@ Example command line calculation:
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes two endpoints to handle the requests, plus one for diagnostics.
 
-=== Submitting vs. reading requests
-
-.The classification of requests, with example request types.
-[plantuml]
-....
-object "API Requests" as request
-
-together {
-object "Async" as async {
-{field} May change system state
-{field} Response via status polling
-}
-
-object "Sync" as sync {
-{field} Cannot change state
-{field} Immediate response
-}
-}
-
-object "Certified" as certified {
-provided by the “system”
-}
-object "Uncertified" as uncertified {
-provided by the “node”
-}
-
-together {
- object "Canister installation" as install
- object "Canister update call" as call
- object "Canister query call" as query
- object "Read request status" as status
- object "Read account balance" as balance
-}
-
-request <|-- async
-request <|-- sync
-sync <|-- certified
-sync <|-- uncertified
-
-async <|-- install
-async <|-- call
-
-uncertified <|-- query
-certified <|-- balance
-certified <|-- status
-....
-
-
-
 [#async-requests]
-==== Asynchronous requests
+=== Asynchronous requests
 
 Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
@@ -285,7 +236,7 @@ A message may be rejected by the system or the canister. In either case, there i
 
 When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
 
-==== Synchronous requests
+=== Synchronous requests
 
 Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
 
@@ -293,7 +244,7 @@ We use the term _request_ both for the asynchronous requests that passed to `sub
 
 
 [#api-endpoints]
-==== Request Endpoints
+=== Request Endpoints
 
 NOTE: This document does not yet explain how to find the location and port of a running Internet Computer Node, nor how to find out which node(s) to talk to for a given canister.
 
@@ -378,7 +329,6 @@ The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x
 [#request-types]
 === Request types
 
-
 The following subsections list all supported requests and specify
 
 * the classification (synchronous vs. asynchronous)
@@ -387,83 +337,10 @@ The following subsections list all supported requests and specify
 * the required and optional field of the reply object (see <<api-request-status>>)
 * and a description of their pupose and behavior.
 
-
-[#api-create-canister]
-==== Canister creation
-
-Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
-
-If the create-canister request includes a derivation nonce, the created id is derived from the caller's principal; otherwise a fresh opaque id is used.
-
-WARNING: The `derivation_nonce` feature depends on the `sender` value. This does not go well with per-canister ids: The canister id would be computed from the `sender` field, but the `sender` only makes sense given a canister id. It can thus only be used with globally valid senders -- currently only the anonymous user; in the future also other canisters.
-
-A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can change using <<api-set-controller,the `set-controller` request>>.
-
-Synchronicity:: asynchronous
-Request type:: `create_canister`
-Request fields::
-* `sender` (`Principal`): The user who issued the request.
-* `derivation_nonce` (`blob`): If present, indicates that the canister id should be derived from the sender principal.
-Reply fields::
-* `canister_id` (`CanisterId`): The canister id of the just created canister.
-
-Until code is installed, the canister behaves like one with no public methods.
-
-[#api-install-code]
-==== Canister code installation
-
-Canister code can be installed for an empty canister (created via <<api-create-canister>>), or over an existing canister version. In the latter case, the state can be preserved (“canister upgrade”), or it can be wiped (“reinstallation“, e.g. to recover from a broken canister).
-
-After an empty canister has been created via <<api-create-canister>>, the admin can install the first code:
-
-Synchronicity:: asynchronous
-Request type:: `install_code`
-Request fields::
-* `sender` (`Principal`): The user who issued the request.
-* `canister_id` (`CanisterId`): The id of the canister to install code for.
-* `module` (`blob`): A <<canister-module-format,canister module>>
-* `arg` (`blob`): Initialization arguments
-* `compute_allocation` (`nat`, optional): The initial compute allocation requested, in percent.
-* `memory_allocation` (`nat`, optional): The initial memory allocation requested, in bytes.
-* `mode` (string, one of `install`, `reinstall`, `upgrade`, optional default `install`): If `install`, the canister must be empty. If `upgrade`, indicates that this is an upgrade: the canister must already exist, be non-empty, and the existing version's <<system-api-upgrades,pre-upgrade hook>> must succeed. If `reinstall`, then the canister must be non-empty, but otherwise behaves like a fresh installation.
-Reply fields::
-* None
-
-Only the _controller_ of the canister can install code.
-
-If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon reinstalling an existing canister, all state (including the stable memory) is cleared.
-
-If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>.
-
-This is atomic: If the response to this request is a `reject`, then this request had no effect.
-
-The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much computer power should be guaranteed to this canister, expressed as a percentage of the maximum computer power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
-
-The optional field `memory_allocation`, if present, must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, it is treated like an allocation of 2^33 (i.e. 8GB). If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
-
-NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin does that separately.
-
-[#api-set-controller]
-==== Canister controller management
-
-Initially, the user or canister that created a canister is its _controller_, but
-control can be yielded to another user or canister.
-
-Only the current controller of the canister can issue these requests.
-
-Synchronicity:: asynchronous
-Request type:: `set_controller`
-Request fields::
-+
-* `sender` (`Principal`): The user who issued the request.
-* `canister_id` (`CanisterId`): The id of the canister
-* `controller` (`Principal`): The new controller of the canister.
-Reply fields::
-* None
-
-
 [#api-update]
 ==== Canister update call
+
+The maybe most important request type is calling an exported method of a canister.
 
 Synchronicity:: asynchronous
 Request type:: `call`
@@ -476,6 +353,13 @@ Reply fields::
 * `arg` (`blob`): The blob representing the data replied by the canister.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
+
+NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
+
+[#api-management]
+==== Management requests (deprecated)
+
+The functionality of the <<ic-management-canister>> can also be invoked using asynchronous requests with requests types `create_canister`, `install_code` and `set_controller`. See the <<<api-cddl, CDDL description>> for details on the form of requests and responses.
 
 [#api-request-status]
 ==== Request status
@@ -646,6 +530,7 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 
 ====
 
+[#api-cddl]
 === CDDL description of requests and responses
 
 The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:./requests.cddl[download the file].
@@ -694,7 +579,6 @@ A canister module is simply a https://webassembly.github.io/spec/core/index.html
 
 WARNING: This may need refinement for features like multiple modules, shared linked libraries and possibly static assets. In that case we might go for a zip-file-with-metadata approach.
 
-
 [#system-api]
 == Canister interface (System API)
 
@@ -741,7 +625,7 @@ If the execution of any of these entry points traps for any reason, then all cha
 [#system-api-init]
 ==== Canister initializaion
 
-If `canister_init` is present, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization request (see <<api-install-code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
+If `canister_init` is present, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization call (see <<ic-install_code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
 
 The system assumes the canister to be fully instantiated if the `canister_init` method entry point returns.  If the `canister_init` method entry point traps, then canister installation has failed, and the canister is reverted to its previous state (i.e. empty with `install`, or whatever it was for a `reinstall`).
 
@@ -1091,6 +975,64 @@ The Internet Computer aims to make the most of the WebAssembly platform, and emb
 
 A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
 
+[#ic-management-canister]
+== The IC management canister
+
+The interfaces above provide the fundamental ability for external users and canisters to contact other canisters. But the Internet Computer provides additional functionality, such as canister and user management. This functionality is exposed to external users and canisters via the _IC management canister_.
+
+NOTE: The _IC management canister_ is just a facade; it does not actually exist as a canister (with isolated state, Wasm code, etc.).
+
+The IC management canister address is `ic:00` (i.e. the empty blob).
+
+[#ic-candid]
+=== Interface overview
+
+The following interface description, in https://github.com/dfinity-lab/motoko/blob/master/design/IDL.md[Candid syntax], describes the available functionality:
+----
+include::ic.did[]
+----
+
+The binary encoding of arguments and results are as per Candid specification.
+
+[#ic-create_canister]
+=== IC method `create_canister`
+
+Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
+
+If the call includes a derivation nonce, the created id is derived from the caller's principal; otherwise a fresh opaque id is used.
+
+WARNING: The `derivation_nonce` feature depends on the `sender` value. This does not go well with per-canister ids: The canister id would be computed from the `sender` field, but the `sender` only makes sense given a canister id. It can thus only be used with globally valid senders -- currently only the anonymous user; in the future also other canisters.
+
+A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can be changed using <<ic-set_controller,the `set_controller` method>>
+
+Until code is installed, the canister behaves like one with no public methods.
+
+[#ic-install_code]
+=== IC method `install_code`
+
+This method installs code into a canister.
+
+Only the _controller_ of the canister can install code.
+
+If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
+
+If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>.
+
+This is atomic: If the response to this request is a `reject`, then this call had no effect.
+
+The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
+
+The optional field `memory_allocation`, if present, must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, it is treated like an allocation of 2^33 (i.e. 8GB). If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
+
+NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin (or admin tooling) does that separately.
+
+[#ic-set_controller]
+=== IC method `set_controller`
+
+Initially, the user or canister that created a canister is its _controller_, but control can be yielded to another user or canister.
+
+Only the current controller of the canister can change the controller.
+
 [#public-spec]
 == Abstract public behavior
 
@@ -1220,7 +1162,13 @@ This high-level interface presents a pure, mathematical model of a canister, and
 
 The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through to the canister, via the `canister.self` system call.
 
+The parsing of a blob to a canister module is modelled via the predicate
+....
+parse_wasm_mod : Blob -> CanisterModule -> Bool
+....
+
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
+
 
 ==== Call contexts
 
@@ -1408,6 +1356,17 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
+We model the <<ic-management-canister>> with one state transition per method. There, we assume a function
+....
+candid : Value -> Blob
+....
+that represents Candid encoding; this is implicitly taking the method types, as declared in <<ic-candid>>, into account. We model the parsing of Candid values in the  “Conditions” section using `candid` as well, by treating it as a non-deterministic function.
+
+The principal of the management ic canister is the empty blob (i.e. `ic:00`):
+....
+ic_princpal : principal = ""
+....
+
 ==== Envelope Authentication
 
 The following predicate describes when an evelope `E` correctly signs the enclosed request with a key belonging to a user `U`:
@@ -1460,99 +1419,6 @@ S with
     requests[R] = Rejected (Code, Msg)
 ....
 
-==== Canister creation
-
-If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
-
-This is when the System Time of the new canister starts ticking.
-
-Conditions::
-....
-    S.requests[CreateCanister M] = Received
-    match M.derivation_nonce with
-      nonce -> CanisterId = mk_derived_id M.sender nonce
-      None -> is_opaque_id CanisterId = true
-    CanisterId ∉ dom S.canisters
-....
-State after::
-....
-S with
-    requests[CreateCanister M] = Completed { result = { canister_id = CanisterId } }
-    canisters[CanisterId] = EmptyCanister
-    time[CanisterId] = CurrentTime
-    controllers[CanisterId] = M.sender
-....
-
-
-==== Canister code installation
-
-Only a controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
-
-The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
-
-Conditions::
-....
-    S.requests[InstallCode M] = Received
-       (M.mode = Install && S.canisters[M.canister_id] = EmptyCanister)
-    or (M.mode = Replace && S.canisters[M.canister_id] ≠ EmptyCanister)
-    M.sender = S.controllers[M.canister_id]
-    Arg = {
-      data = M.data;
-      caller = M.caller;
-      time = S.time[M.canister_id];
-    }
-    M.module.init(M.canister_id, Arg) = Return New_state
-....
-State after::
-....
-S with
-    requests[InstallCode M] = Completed { result = { } }
-    canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
-....
-
-==== Canister code upgrade
-
-Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
-
-The `compute_allocation` is ignored in this abstract model of the Internet Computer, as the model does not address questions of performance or scheduling.
-
-Conditions::
-....
-    S.requests[InstallCode M] = Received
-    S.canisters[M.canister_id] = { wasm_state = Old_state; module = Old_module }
-    M.mode = Upgrade
-    M.sender = S.controllers[M.canister_id]
-    Arg = {
-      data = M.data;
-      caller = M.caller;
-      time = S.time[M.canister_id];
-    }
-    Old_module.pre_upgrade(Old_State, M.caller, S.time[M.canister_id]) = Return Stable_memory
-    M.module.post_upgrade(M.canister_id, Stable_memory, Arg) = Return New_state
-....
-State after::
-....
-S with
-    requests[InstallCode M] = Completed { result = { } }
-    canisters[M.canister_id] = { wasm_state = New_state; module = M.module }
-....
-
-==== Canister controller management
-
-Only a controller of the given canister can modify the set of controllers.
-
-Conditions::
-....
-    S.requests[SetController M] = Received
-    M.sender = S.controllers[M.canister_id]
-....
-State after::
-....
-S with
-    requests[InstallCode M] = Completed { result = { } }
-    controllers[M.canister_id] = M.controller
-....
-
 ==== Initiating canister calls
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
@@ -1601,6 +1467,8 @@ Before invoking a message to a public entry point, some bookkeeping is required:
  * A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
 
 The position of the message in the queue is unchanged.
+
+This only happens for “real” canisters, not the IC management canister.
 
 Conditions::
 ....
@@ -1728,8 +1596,137 @@ S with
     messages =
       S.messages ·
       ResponseMessage {
-        origin = call_contexts[Ctxt_id].origin;
+        origin = S.call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, "starvation");
+      }
+....
+
+==== IC Management Canister: Canister creation
+
+If the request indicates a derivation nonce, the system uses the derived id (if not yet already used); otherwise it creates a fresh opaque id.
+
+This is when the System Time of the new canister starts ticking.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_princpal
+    M.method_name = 'create_canister'
+    M.arg = candid({derivation_nonce = DN})
+
+    match DN with
+	nonce -> CanisterId = mk_derived_id M.sender nonce
+	None -> is_opaque_id CanisterId = true
+    CanisterId ∉ dom S.canisters
+....
+State after::
+....
+S with
+    canisters[CanisterId] = EmptyCanister
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid({canister_id = CanisterId}))
+      }
+....
+
+
+==== IC Management Canister: Code installation
+
+Only a controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+
+The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_princpal
+    M.method_name = 'install_code'
+    M.arg = candid(A)
+    Mod = parse_wasm_mod(A.wasm_module)
+
+       (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
+    or (A.mode = reinstall && S.canisters[A.canister_id] ≠ EmptyCanister)
+    M.caller = S.controllers[A.canister_id]
+    Arg = {
+      data = A.arg;
+      caller = M.caller;
+      time = S.time[A.canister_id];
+    }
+    Mod.init(A.canister_id, A.arg) = Return New_state
+....
+State after::
+....
+S with
+    canisters[A.canister_id] = { wasm_state = New_state; module = Mod }
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+      }
+....
+
+==== IC Management Canister: Code upgrade
+
+Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
+
+The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_princpal
+    M.method_name = 'install_code'
+    M.arg = candid(A)
+    Mod = parse_wasm_mod(A.wasm_module)
+
+    A.mode = upgrade
+    S.canisters[A.canister_id] ≠ EmptyCanister
+    M.caller = S.controllers[A.canister_id]
+    S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
+    Old_module.pre_upgrade(Old_State, M.caller, S.time[A.canister_id]) = Return Stable_memory
+    Arg = {
+      data = A.arg;
+      caller = M.caller;
+      time = S.time[A.canister_id];
+    }
+    Mod.post_upgrade(A.canister_id, Stable_memory, Arg) = Return New_state
+....
+State after::
+....
+S with
+    canisters[A.canister_id] = { wasm_state = New_state; module = Mod }
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+      }
+....
+
+==== IC Management Canister: Setting controllers
+
+Only a controller of the given canister can modify the controller field.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_princpal
+    M.method_name = 'set_controller'
+    M.arg = candid(A)
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    controllers[A.canister_id] = A.new_controller
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
       }
 ....
 
