@@ -1,8 +1,8 @@
 [#changelog]
 == Changelog
 
-[#v0_2_16]
-=== 0.2.16 (UNRELEASED)
+[#v0_4]
+=== 0.4 (UNRELEASED)
 
 * none yet
 
