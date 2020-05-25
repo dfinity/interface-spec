@@ -4,7 +4,11 @@
 [#v0_4]
 === 0.4 (UNRELEASED)
 
-* none yet
+* Spec (editorial): the term “principal” is now used for the _id_ of a canister or
+  user, not the canister or user itself
+* Spec: The signature of a request needs to be calculated using a domain separator
+* Spec: Describe the `controller` attribute, add a request to change it
+* Spec: The IC management canister is introduced
 
 [#v0_2_14]
 === 0.2.14 (2020-05-14)
