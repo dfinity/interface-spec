@@ -210,7 +210,7 @@ This yields the following interaction diagram:
 [plantuml]
 ....
 (*) --> "User creates request" #DDDDDD
-   --> "Submitted to node\n(with 202 response)" #DDDDDD
+   --> "Submitted to node\n(with 202 response)" as submit #DDDDDD
    --> "Received"
    --> "Processing"
 if "" as X then
@@ -223,10 +223,12 @@ if "" as X then
   "X"        --> "Rejected (system)"
   "Received" --> "Rejected (system)"
              --> "Cleaned" #DDDDDD
+
+  "submit" --> "expired" #DDDDDD
 endif
 ....
 
-Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages have an expiry date, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
+Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages (will) have an expiry date, and the last transition (forgetting the message) must happen no earlier than the message’s expiry field. Further more requests must stay in `Replied` or `Rejected` long enough (precise number TBD) for clients to catch the response when polling.
 
 The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
