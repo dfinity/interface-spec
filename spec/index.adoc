@@ -210,7 +210,7 @@ This yields the following interaction diagram:
 [plantuml]
 ....
 (*) --> "User creates request" #DDDDDD
-   --> "Submitted to node" #DDDDDD
+   --> "Submitted to node\n(with 202 response)" #DDDDDD
    --> "Received"
    --> "Processing"
 if "" as X then
