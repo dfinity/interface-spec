@@ -197,8 +197,8 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
 1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing (or it expires). From now on, the user can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
+2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the HTTP interface the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
+3. At some point, the system may accept the request for processing (or it expires). From now on, the user can ask any endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
 4. Once it is clear that the request will be acted upon, the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
 5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
 6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
@@ -240,7 +240,7 @@ When asking the system about the state or response of a request, the user uses a
 
 === Synchronous requests
 
-Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
+Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` endpoint.
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
