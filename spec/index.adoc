@@ -230,11 +230,11 @@ endif
 
 Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages (will) have an expiry date, and the last transition (forgetting the message) must happen no earlier than the message’s expiry field. Further more requests must stay in `Replied` or `Rejected` long enough (precise number TBD) for clients to catch the response when polling.
 
-The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+The crucial property of the `Received` state is that the request has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) request again. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
 The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
 
-A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+A request may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
 
 When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
 
