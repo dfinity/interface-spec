@@ -4,7 +4,7 @@
 [#v0_2_16]
 === 0.2.16 (UNRELEASED)
 
-* none yet
+* More tests about calls from query methods
 
 [#v0_2_14]
 === 0.2.14 (2020-05-14)
