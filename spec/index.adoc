@@ -32,7 +32,7 @@ A proposed change of this document should take the form of a Pull Request on Git
 
  1. Which parties (Replica, Languages, SDK, Research) are affected by this change, and why?
  2. Do the leads of the involved parties agree that this change is technical by nature, and does not need an explicit design slide?
- 3. If design slides are required: Which Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
+ 3. If design slides are required: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
 
 Such a change can be merged if
 
@@ -1412,22 +1412,22 @@ We do not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.requests[CanisterUpdateCall M] = Received
-    C = S.canisters[M.canister_id]
-    C.module.pay_ingress (M.sender, M.method_name, C.wasm_state) = Return Quota
-    Quota.limit ≥ Quota.cost + bucket_cost(S, M.canister_id, Quota.bucket)
+    S.requests[CanisterUpdateCall R] = Received
+    C = S.canisters[R.canister_id]
+    C.module.pay_ingress (R.sender, R.method_name, C.wasm_state) = Return Quota
+    Quota.limit ≥ Quota.cost + bucket_cost(S, R.canister_id, Quota.bucket)
 ....
 State after::
 ....
 S with
-    requests[CanisterUpdateCall M] = Processing
+    requests[CanisterUpdateCall R] = Processing
     messages =
       CallMessage {
-        origin = FromUser { request = CanisterUpdateCall M };
-        caller = M.sender;
-        callee = M.canister_id;
-        method_name = M.method_name;
-        arg = M.arg;
+        origin = FromUser { request = CanisterUpdateCall R };
+        caller = R.sender;
+        callee = R.canister_id;
+        method_name = R.method_name;
+        arg = R.arg;
         queue = Unordered;
         bucket = Quota.bucket;
         cost = Quota.cost;
