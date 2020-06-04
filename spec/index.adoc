@@ -1455,8 +1455,8 @@ This only happens for “real” canisters, not the IC management canister.
 
 Conditions::
 ....
-    S.messages = Older_messages · CallMessage CM · Younger_messages
-    S.canisters[CM.callee] ≠ EmptyCanister
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    S.canisters[M.callee] ≠ EmptyCanister
     Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
@@ -1466,16 +1466,16 @@ S with
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id;
-        receiver = CM.callee;
-        entry_point = PublicMethod M.method_name CM.caller CM.data
-        queue = CM.queue;
-        bucket = CM.bucket;
-        cost = CM.cost;
+        receiver = M.callee;
+        entry_point = PublicMethod M.method_name M.caller M.data
+        queue = M.queue;
+        bucket = M.bucket;
+        cost = M.cost;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
-      canister = CM.callee;
-      origin = CM.origin;
+      canister = M.callee;
+      origin = M.origin;
       responded = false;
     }
 ....
@@ -1566,7 +1566,7 @@ If there is no call, downstream calling context or response that could possibly 
 Conditions::
 ....
     S.call_contexts[Ctxt_id].responded = false
-    ∀ CallMessage msg ∈ S.messages. msg.call_context ≠ Ctxt_id
+    ∀ CallMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
     ∀ ctxt_ids.
         (S.call_contexts[ctxt_ids].responded = false || S.response[ctxt_ids] exists)
         ==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
