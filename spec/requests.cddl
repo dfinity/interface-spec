@@ -20,37 +20,7 @@ envelope<t> = tagged<{
 ; A request as submitted to /api/v1/submit
 async-request = envelope<async-content>
 async-content =
-  create-canister-request /
-  install-code-request /
-  set-controller-request /
   call-request
-
-create-canister-request = {
-  request_type: "create_canister"
-  ? nonce : bytes
-  sender : principal
-  ? derivation_nonce : bytes
-}
-
-install-code-request = {
-  request_type: "install_code"
-  ? nonce : bytes
-  sender : principal
-  canister_id : principal
-  module : bytes
-  arg : bytes
-  ? compute_allocation : 0..100
-  ? memory_allocation : 0..281474976710656
-  ? mode : "install" / "reinstall" / "upgrade"
-}
-
-set-controller-request = {
-  request_type: "set_controller"
-  ? nonce : bytes
-  sender : principal
-  canister_id : principal
-  controller : principal
-}
 
 call-request = {
   request_type: "call"
@@ -95,7 +65,7 @@ request-status-response = {
   status: "processing"
   //
   status: "replied"
-  reply: create-canister-reply / install-code-reply / call-reply
+  reply: call-reply
   //
   status: "rejected"
   reject_code: unsigned
@@ -110,12 +80,6 @@ query-response = {
   reject_code: unsigned
   reject_message: text
 }
-
-create-canister-reply = {
-  canister_id : principal
-}
-
-install-code-reply = { } ; NB: Empty record
 
 call-reply = {
   arg : bytes

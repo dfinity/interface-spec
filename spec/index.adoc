@@ -356,11 +356,6 @@ This request type can _also_ be used to call a query method. A user may choose t
 
 NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
 
-[#api-management]
-==== Management requests (deprecated)
-
-The functionality of the <<ic-management-canister>> can also be invoked using asynchronous requests with requests types `create_canister`, `install_code` and `set_controller`. See the <<<api-cddl, CDDL description>> for details on the form of requests and responses.
-
 [#api-request-status]
 ==== Request status
 
