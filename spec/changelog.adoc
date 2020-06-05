@@ -4,7 +4,7 @@
 [#v0_6]
 === 0.6 (UNRELEASED)
 
-* None yet
+* Spec: HTTP requests for management features are removed
 
 [#v0_4_0]
 === 0.4.0 (2020-05-25)
