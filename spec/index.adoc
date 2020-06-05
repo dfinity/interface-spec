@@ -1193,8 +1193,6 @@ CallOrigin
     }
 ....
 
-In this abstract description, call contexts are never garbage collected, even if nothing references them any more; an implementation can do that.
-
 ==== Calls and Messages
 
 Calls into and within the Internet Computer are implemented as messages passed between canisters. During their lifetime, messages change shape: they begin as a call to a public method, which is resolved to a WebAssembly function that is then executed, potentially generating a response which is then delivered.
@@ -1566,10 +1564,11 @@ If there is no call, downstream calling context or response that could possibly 
 Conditions::
 ....
     S.call_contexts[Ctxt_id].responded = false
-    ∀ CallMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
+    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        (S.call_contexts[ctxt_ids].responded = false || S.response[ctxt_ids] exists)
-        ==> S.call_contexts[ctxt_ids].caller.calling_context ≠ Ctxt_id
+        S.call_contexts[ctxt_ids].responded = false
+        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -1582,6 +1581,26 @@ S with
         response = Reject (CANISTER_ERROR, "starvation");
       }
 ....
+
+==== Call context removal
+
+If there is no call, downstream calling context or response that references a call context, and the call context has been replied to, then the call context can be removed.
+
+Conditions::
+....
+    S.call_contexts[Ctxt_id].responded = true
+    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ ctxt_ids.
+        S.call_contexts[ctxt_ids].responded = false
+        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
+....
+State after::
+....
+S with
+    call_contexts[Ctxt_id] = (deleted)
+....
+
 
 ==== IC Management Canister: Canister creation
 
