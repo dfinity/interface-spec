@@ -144,7 +144,10 @@ NOTE: In the future the system may gain the ability to change the authentication
 +
 These have the form `H(registering_principal) · (arbitrary 8 bytes) · 0x03`.
 +
-These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id. See for example <<ic-create_canister>>.
+These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may indicate a desired id of this form, if `registering_principal` is his own id.
++
+NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they maybe be used internally or in the future.
+
 
 When the system creates a _fresh_ id, it never creates a self-authenticating id or an id derived from what could be a canister or user.
 
@@ -894,8 +897,6 @@ The binary encoding of arguments and results are as per Candid specification.
 
 Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
-If the request indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh opaque id.
-
 A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can be changed using <<ic-set_controller,the `set_controller` method>>
 
 Until code is installed, the canister behaves like one with no public methods.
@@ -964,11 +965,6 @@ Principals (canister ids and user ids) are blobs, but some of them have special 
 type Principal = Blob
 ....
 
-The predicate
-....
-is_opaque_id : Principal -> Bool
-....
-characterizes all system-assigned blobs.
 
 The function
 ....
@@ -983,8 +979,6 @@ is_derived_id : PrincipalId -> PrincipalId -> Bool
 is_derived_id oid id = ∃n. |n| == 8 ∧ id == H(oid) · n · 0x03
 ....
 characterizes the derived ids.
-
-These three predicates are mutually disjoint.
 
 
 Method names can be arbitrary pieces of text:
@@ -1439,7 +1433,9 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-If the call indicates a desired id, the system checks that it is derived from the caller id and not yet used; otherwise it creates a fresh canister id.
+The system chooses an appropriate canister id.
+
+This is also when the System Time of the new canister starts ticking.
 
 Conditions::
 ....
@@ -1447,11 +1443,8 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_princpal
     M.method_name = 'create_canister'
-    M.arg = candid({desired_id = DI})
-
-    match DI with
-	CanisterId -> is_derived_id M.sender CanisterId
-	None -> is_opaque_id CanisterId = true
+    M.arg = candid()
+    is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
 State after::
@@ -1464,6 +1457,18 @@ S with
         response = Accepted (candid({canister_id = CanisterId}))
       }
 ....
+
+This uses the predicate
+....
+is_system_assigned : Principal -> Bool
+....
+which characterizes all system-assigned ids.
+
+To avoid clashes with potential user ids or dis derived from users or canisters, we require (somewhat handwavy) that
+
+ * `is_system_assigned = false`,
+ * `is_system_assigned p = false` if `is_self_authenticating_id pk p` for possible canister ids `cid` and public keys `pk` and
+ * `is_system_assigned dp = false` if `is_derived_id p dp` for any `p` that could be a user or canister.
 
 
 ==== IC Management Canister: Code installation

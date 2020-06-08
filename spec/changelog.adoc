@@ -1,9 +1,10 @@
 [#changelog]
 == Changelog
 
-[#v0_6]
-=== 0.6 (UNRELEASED)
+[#v0_6_0]
+=== 0.6.0 (UNRELEASED)
 
+* Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
 
 [#v0_4_0]
