@@ -13,6 +13,7 @@
 * Spec: `ic0.time` added
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
+* Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
 
 [#v0_4_0]

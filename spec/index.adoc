@@ -147,6 +147,8 @@ NOTE: In the future the system may gain the ability to change the authentication
 These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (29 bytes).
 +
 These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The length byte `|registering_principal|` prevents collisions in cases where one principal is the prefix of another principal. See for example <<ic-create_canister>>.
++
+NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they maybe be used internally or in the future.
 
 4. _Anonymous id_
 +
@@ -994,10 +996,6 @@ The binary encoding of arguments and results are as per Candid specification.
 
 Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
-If the call includes a derivation nonce, the created id is derived from the caller's principal; otherwise a fresh opaque id is used.
-
-WARNING: The `derivation_nonce` feature depends on the `sender` value. This does not go well with per-canister ids: The canister id would be computed from the `sender` field, but the `sender` only makes sense given a canister id. It can thus only be used with globally valid senders -- currently only the anonymous user; in the future also other canisters.
-
 A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can be changed using <<ic-set_controller,the `set_controller` method>>
 
 Until code is installed, the canister behaves like one with no public methods.
@@ -1068,11 +1066,6 @@ Principals (canister ids and user ids) are blobs, but some of them have special 
 type Principal = Blob
 ....
 
-The predicate
-....
-is_opaque_id : Principal -> Bool
-....
-characterizes all system-assigned blobs.
 
 The function
 ....
@@ -1089,13 +1082,11 @@ mk_derived_id p nonce = H(|p| · p · nonce) · 0x03
 calculates derived ids. With `|p|` we denote the length of the principal, in bytes, encoded as a single byte.
 
 
-The function
+The principal of the anonymous user is fixed:
 ....
 anonymous_id : Principal
 anonymous_id = 0x04
 ....
-
-These predicates, function domains resp. fixed values are mutually disjoint.
 
 
 Method names can be arbitrary pieces of text:
@@ -1599,9 +1590,9 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-If the request indicates a derivation nonce, the system uses the derived id (if not yet already used); otherwise it creates a fresh opaque id.
+The system chooses an appropriate canister id.
 
-This is when the System Time of the new canister starts ticking.
+This is also when the System Time of the new canister starts ticking.
 
 Conditions::
 ....
@@ -1609,11 +1600,8 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_princpal
     M.method_name = 'create_canister'
-    M.arg = candid({derivation_nonce = DN})
-
-    match DN with
-	nonce -> CanisterId = mk_derived_id M.sender nonce
-	None -> is_opaque_id CanisterId = true
+    M.arg = candid()
+    is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
 State after::
@@ -1626,6 +1614,19 @@ S with
         response = Accepted (candid({canister_id = CanisterId}))
       }
 ....
+
+This uses the predicate
+....
+is_system_assigned : Principal -> Bool
+....
+which characterizes all system-assigned ids.
+
+To avoid clashes with potential user ids or dis derived from users or canisters, we require (somewhat handwavy) that
+
+ * `is_system_assigned = false`,
+ * `is_system_assigned (mk_self_authenticating_id cid pk) = false` for all possible canister ids `cid` and public keys `pk` and
+ * `is_system_assigned (mk_derived_id p nonce) = false` for all `p` that could be a user or canister.
+
 
 
 ==== IC Management Canister: Code installation
