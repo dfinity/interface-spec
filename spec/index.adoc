@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.5 (unreleased)
+0.7 (unreleased)
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -367,7 +367,7 @@ Request fields::
 * `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
 Response fields::
 * `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`, see <<async-requests>> for more details on what each status means.
-* `reply`: If the status is `replied`, then this member contains the request-type specific reply object. See the specification for the individual request types for which fields exist. If no field are especified (e.g. for `install_code`), this field contains the empty record.
+* `reply`: If the status is `replied`, then this member contains the request-type specific reply object. See the specification for the individual request types for which fields exist. If no field are especified (currently not specified), this field contains the empty record.
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
 
@@ -515,10 +515,10 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 ....
 55799({
   "content": {
-    "request_type": "install_code",
+    "request_type": "call",
     "canister_id": h'ABCD01',
-    "module": h'0061736d01000000',
-    "arg": h''
+    "method_name": "say_hello",
+    "arg": h'0061736d01000000',
   },
   "sender_sig": h'DEADBEEF',
   "sender_pubkey": h'b7a3c12dc0c8c748ab07525b701122b88bd78f600c76342d27f25e5f92444cde'
@@ -1080,7 +1080,6 @@ mk_derived_id : Principal -> Blob -> Principal
 mk_derived_id p nonce = H(|p| · p · nonce) · 0x03
 ....
 calculates derived ids. With `|p|` we denote the length of the principal, in bytes, encoded as a single byte.
-
 
 The principal of the anonymous user is fixed:
 ....

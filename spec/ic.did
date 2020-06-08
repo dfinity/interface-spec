@@ -5,12 +5,12 @@ type public_key = blob;
 service ic : {
   create_canister : () -> (record {canister_id});
   install_code : (record {
-    mode : variant {install; reinstall; upgrade},
-    canister_id,
-    wasm_module,
-    arg : blob,
-    compute_allocation : opt nat,
-    memory_allocation : opt nat,
+    mode : variant {install; reinstall; upgrade};
+    canister_id;
+    wasm_module;
+    arg : blob;
+    compute_allocation : opt nat;
+    memory_allocation : opt nat;
   }) -> ();
-  set_controller : (record {canister_id, new_controller : principal}) -> ();
+  set_controller : (record {canister_id; new_controller : principal}) -> ();
 }

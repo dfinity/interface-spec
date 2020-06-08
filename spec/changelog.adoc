@@ -15,6 +15,12 @@
 * Spec: Include canister id in self-authenticating ids
 * Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
+[#v0_6_0]
+=== 0.6.0 (2020-06-08)
+
+* Spec: Make all canister ids system-chosen
+* Spec: HTTP requests for management features are removed
+* ic-ref(-test): Implement and test the above changes
 
 [#v0_4_0]
 === 0.4.0 (2020-05-25)
@@ -25,6 +31,11 @@
 * Spec: Describe the `controller` attribute, add a request to change it
 * Spec: The IC management canister is introduced
 * ic-ref(-test): Implement and test the above changes
+
+[#v0_2_16]
+=== 0.2.16 (2020-05-29)
+
+* More tests about calls from query methods
 
 [#v0_2_14]
 === 0.2.14 (2020-05-14)
