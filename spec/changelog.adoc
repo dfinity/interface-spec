@@ -2,10 +2,11 @@
 == Changelog
 
 [#v0_6_0]
-=== 0.6.0 (UNRELEASED)
+=== 0.6.0 (2020-06-08)
 
 * Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
+* ic-ref(-test): Implement and test the above changes
 
 [#v0_4_0]
 === 0.4.0 (2020-05-25)
