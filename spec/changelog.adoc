@@ -2,9 +2,9 @@
 == Changelog
 
 [#v0_6_1]
-=== 0.6.1 (UNRELEASED))
+=== 0.6.1 (UNRELEASED)
 
- * None yet
+ * Spec: Fix meaning-changing typos in `ic.did`
 
 [#v0_6_0]
 === 0.6.0 (2020-06-08)
