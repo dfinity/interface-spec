@@ -608,15 +608,15 @@ WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be
 
 The canister provides entry points which are invoked by the system under various circumstances:
 
-* The canister may export a function named `canister_init` and type `+() -> ()+`.
-* The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
-* The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
-* The canister may export a function called `canister_pay_ingress`, the function must have type `+() -> ()+`.
-* The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
-* The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
+* The canister may export a function named `canister_init` with type `+() -> ()+`.
+* The canister may export a function named `canister_pre_upgrade` with type `+() -> ()+`.
+* The canister may export a function named `canister_post_upgrade` with type `+() -> ()+`.
+* The canister may export a function named `canister_pay_ingress` with type `+() -> ()+`.
+* The canister may export functions named `canister_update <name>` with type `+() -> ()+`.
+* The canister may export functions named `canister_query <name>` with type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
 
-If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded. For upgrades, this transactional behaviour applies to the  `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
+If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded. For upgrades, this transactional behaviour applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
 
 [#system-api-init]
