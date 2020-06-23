@@ -4,7 +4,8 @@
 [#v0_8_0]
 === 0.8.0 (UNRELEASED)
 
- * None yet
+ * Spec: Revert the introduction of a domain separator
+ * ic-ref(-test): Implement and test the above changes
 
 [#v0_6_2]
 === 0.6.2 (2020-06-23)
