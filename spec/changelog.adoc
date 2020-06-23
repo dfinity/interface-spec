@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#v0_8_2]
+=== 0.8.2 (UNRELEASED)
+
+ * none yet
+
 [#v0_8_0]
 === 0.8.0 (2020-06-23)
 
