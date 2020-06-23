@@ -1,16 +1,15 @@
 type canister_id = principal;
 type user_id = principal;
 type wasm_module = blob;
-type public_key = blob;
 service ic : {
-  create_canister : () -> (record {canister_id});
+  create_canister : () -> (record {canister_id : canister_id});
   install_code : (record {
     mode : variant {install; reinstall; upgrade};
-    canister_id;
-    wasm_module;
+    canister_id : canister_id;
+    wasm_module : wasm_module;
     arg : blob;
     compute_allocation : opt nat;
     memory_allocation : opt nat;
   }) -> ();
-  set_controller : (record {canister_id; new_controller : principal}) -> ();
+  set_controller : (record {canister_id : canister_id; new_controller : principal}) -> ();
 }

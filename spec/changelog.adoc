@@ -15,6 +15,13 @@
 * Spec: Include canister id in self-authenticating ids
 * Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
+
+[#v0_6_2]
+=== 0.6.2 (2020-06-23)
+
+ * Spec: Fix meaning-changing typos in `ic.did`
+ * ic-ref-test: Be more liberal about the precise reject code in some cases.
+
 [#v0_6_0]
 === 0.6.0 (2020-06-08)
 

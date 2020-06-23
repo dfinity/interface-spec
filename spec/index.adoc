@@ -1589,7 +1589,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -1607,6 +1607,7 @@ State after::
 ....
 S with
     canisters[CanisterId] = EmptyCanister
+    controllers[CanisterId] = M.caller
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
