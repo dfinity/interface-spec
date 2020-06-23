@@ -2,7 +2,7 @@
 == Changelog
 
 [#v0_8_0]
-=== 0.8.0 (UNRELEASED)
+=== 0.8.0 (2020-06-23)
 
  * Spec: Revert the introduction of a domain separator
  * ic-ref(-test): Implement and test the above changes
