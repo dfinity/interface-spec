@@ -1,7 +1,7 @@
 [#changelog]
 == Changelog
 
-=== 0.5 (unreleased)
+=== 0.9 (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced
@@ -15,12 +15,19 @@
 * Spec: Include canister id in self-authenticating ids
 * Spec: Make all canister ids system-chosen
 * Spec: HTTP requests for management features are removed
+* ic-ref(-test): Implement the domain separator
+
+[#v0_8_0]
+=== 0.8.0 (2020-06-23)
+
+* Spec: Revert the introduction of a domain separator
+* ic-ref(-test): Implement and test the above changes
 
 [#v0_6_2]
 === 0.6.2 (2020-06-23)
 
- * Spec: Fix meaning-changing typos in `ic.did`
- * ic-ref-test: Be more liberal about the precise reject code in some cases.
+* Spec: Fix meaning-changing typos in `ic.did`
+* ic-ref-test: Be more liberal about the precise reject code in some cases.
 
 [#v0_6_0]
 === 0.6.0 (2020-06-08)
