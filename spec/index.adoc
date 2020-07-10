@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.9 (unreleased)
+∞ (unreleased)
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -16,7 +16,7 @@ Because of its focus on the externally visible behavior of the Internet Computer
 
 WARNING: You are looking at the `master` version of the document! If you are looking for implementation specification or documentation, look at one of the versions at https://docs.dfinity.systems/public/v/.
 
-The `master` version of this document corresponds to a collection of finished and approved designs, but typically reflect neither the current status nor target of implementation.
+The `master` version of this document, which claims version number `∞`, corresponds to a collection of finished and approved designs, but typically reflect neither the current status nor target of implementation.
 
 The released versions, which can be found at https://docs.dfinity.systems/public/v/, are targetted by the production implementations (e.g. `replica`, `dfx`). Implementations do not necessarily target the latest released version; chosing an implementation target is a deliberate step coordinated between the involved parties.
 
@@ -31,17 +31,10 @@ This document is maintained by its editors (currently Joachim, Jens, Björn). Th
 A proposed change of this document should take the form of a Pull Request on GitHub, be titled “Public Spec: _title_”, and its description should answer the following questions:
 
  1. Which parties (Replica, Languages, SDK, Research) are affected by this change, and why?
- 2. Do the leads of the involved parties agree that this change is technical by nature, and does not need an explicit design slide?
+ 2. Is this a a breaking change or not (important for versioning)
  3. If design slides are required: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
 
-Such a change can be merged if
-
- 1. A lead or representative of each involved party approves the change.
- 2. If required: The design slides mentioned above are actually approved.
-
-An Editor other than the PR author should check these requirements.
-
-Purely editorial changes can be merged by the editors directly.
+Changes will be merged into `master` when the design is finished. The editors will apply common sense to determine if all stakeholders have been heared and the design is complete.
 
 Generally, PRs should be merged using “squash merge”.
 
@@ -476,7 +469,7 @@ Additionally, the Internet Computer provides an API endpoint to obtain various s
 
 For this endpoint, the user performs a GET request, and receives a CBOR value with the following fields. The Internet Computer may include additional implementation-specific fields.
 
-* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the internet computer aims to support, e.g. `0.2`. The implementation may also return `unversioned` to indicate that it does _not_ comply to a particular version, e.g. in between releases.
+* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the internet computer aims to support, e.g. `0.8.1`. The implementation may also return `unversioned` to indicate that it does _not_ comply to a particular version, e.g. in between releases.
 * `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
 * `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
 * `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
@@ -730,7 +723,7 @@ The comment after each function lists from where these functions may be invoked:
 * `Rt`: from a reject callback
 * `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
-* `*` = `I U Q Ry Rt C` (NB: Not `(start)`)
+* `*` = `I G P U Q Ry Rt C` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -1139,7 +1132,7 @@ CanisterModule = {
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
   callbacks : (Callback, Response, Timestamp) -> UpdateFunc
-  pay_ingress : (CanisterId, MethodName, WasmState) -> Trap | Return AccessQuota
+  pay_ingress : (CanisterId, MethodName, WasmState, Timestamp) -> Trap | Return AccessQuota
 }
 ....
 
@@ -1284,7 +1277,7 @@ Finally, we can describe the state of the Internet Computer as a record having t
 
 ....
 S = {
-  requests : Request ↦ RequestStatus ;
+  requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
   controllers : CanisterId ↦ UserId;
   time : CanisterId ↦ Timestamp;
@@ -1397,7 +1390,7 @@ Conditions::
 ....
     S.requests[CanisterUpdateCall R] = Received
     C = S.canisters[R.canister_id]
-    C.module.pay_ingress (R.sender, R.method_name, C.wasm_state) = Return Quota
+    C.module.pay_ingress (R.sender, R.method_name, C.wasm_state, S.time[R.canister_id]) = Return Quota
     Quota.limit ≥ Quota.cost + bucket_cost(S, R.canister_id, Quota.bucket)
 ....
 State after::
@@ -1607,6 +1600,7 @@ State after::
 ....
 S with
     canisters[CanisterId] = EmptyCanister
+    time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.caller
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -1729,6 +1723,8 @@ S with
 ==== Callback invocation
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
+
+This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
 
 Conditions::
 ....
@@ -1965,7 +1961,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 init = λ (self_id, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time}
+      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -1987,10 +1983,10 @@ check_access = λ (caller, method_name, wasm_state) →
 Otherwise, if the WebAssembly module exports a function `func` under the name `check_access`, it is
 +
 ....
-pay_ingress = λ (caller, method_name, wasm_state) →
+pay_ingress = λ (caller, method_name, wasm_state, time) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with { caller = caller; method_name = method_name }
+      params = empty_params with { caller = caller; method_name = method_name; time = time };
     }
   try func<es>() with Trap then Trap
   if es.calls ≠ () then Trap
@@ -2013,7 +2009,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 pre_upgrade = λ (old_state, caller, time) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
-      params = { empty_params with caller = caller; time = time}
+      params = { empty_params with caller = caller; time = time }
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2037,7 +2033,7 @@ Otherwise, if the WebAssembly module exports a function `func` under the name `c
 post_upgrade = λ (self_id, stable_mem, arg) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-      params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time}
+      params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time }
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2051,7 +2047,7 @@ post_upgrade = λ (self_id, stable_mem, arg) →
 update_methods[method] = λ arg → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with { data = arg.data; caller = arg.caller ; time = arg.time }
+      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
     }
   try func<es>() with Trap then Trap
   Return {
@@ -2125,7 +2121,6 @@ callbacks = λ(callbacks, response, time) → λ wasm_state →
 +
 Note that if the initial callback handler traps, the cleanup callback is
 executed, and the canister has the chance to update its state.
-
 
 ==== Helper functions
 

@@ -1,7 +1,7 @@
 [#changelog]
 == Changelog
 
-=== 0.9 (unreleased)
+=== ∞ (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced
@@ -10,10 +10,16 @@
 * Spec: The self-authenticating and derived id forms use a truncated hash
 * Spec: The textual representation of principals has changed
 * Spec: The cleanup callback is introduced
-* Spec: `ic0.time` added
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
 * ic-ref(-test): Implement the domain separator
+
+[#v0_8_1]
+=== 0.8.1 (2020-07-10)
+
+ * Reflect refined process in README and intro.
+ * Spec: `ic0.time` added
+ * ic-ref(-test): Implement and test `ic0.time`
 
 [#v0_8_0]
 === 0.8.0 (2020-06-23)
