@@ -2,7 +2,7 @@
 == Changelog
 
 [#v0_8_1]
-=== 0.8.1 (UNRELEASED)
+=== 0.8.1 (2020-07-10)
 
  * Reflect refined process in README and intro.
  * Spec: `ic0.time` added
