@@ -312,7 +312,7 @@ The maybe most important request type is calling an exported method of a caniste
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -348,7 +348,7 @@ Canister methods that do not change the canister state in a meaningful way can b
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`PrincipalId`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -978,14 +978,14 @@ type Principal = Blob
 
 The function
 ....
-is_self_authenticating_id : PublicKey -> PrincipalId -> Bool
+is_self_authenticating_id : PublicKey -> Principal -> Bool
 is_self_authenticating_id pk id = id == H(pk) · 0x02
 ....
 characterizes the self-authenting ids.
 
 The function
 ....
-is_derived_id : PrincipalId -> PrincipalId -> Bool
+is_derived_id : Principal -> Principal -> Bool
 is_derived_id oid id = ∃n. |n| == 8 ∧ id == H(oid) · n · 0x03
 ....
 characterizes the derived ids.
