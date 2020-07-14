@@ -12,6 +12,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
+* Spec: Installing code via `reinstall` works also on the empty canister
 * ic-ref(-test): Implement the domain separator
 
 [#v0_8_1]
