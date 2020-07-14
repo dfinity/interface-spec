@@ -39,11 +39,13 @@ sync-content =
 
 request-status-request = {
   request_type: "request_status"
+  ? nonce : bytes
   request_id : bytes
 }
 
 query-request = {
   request_type: "query"
+  ? nonce : bytes
   sender : principal
   canister_id : principal
   method_name : text
