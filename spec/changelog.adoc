@@ -5,6 +5,7 @@
 === 0.8.2 (UNRELEASED)
 
  * ic-ref-test: Also send read requests with nonces
+ * Spec: Installing code via `reinstall` works also on the empty canister
 
 [#v0_8_1]
 === 0.8.1 (2020-07-10)
