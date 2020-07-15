@@ -291,7 +291,7 @@ The signature scheme used to authenticate users is https://ed25519.cr.yp.to/inde
  * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
 
-The `sender_sig` is calculated by signing the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
+The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
 [#request-types]
 === Request types
@@ -1240,7 +1240,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 verify_envelope(E, U) =
   ∃ PK, SIG.
     is_self_authenticating_id E.sender_pubkey U
-    && verify_signature E.sender_pubkey E.sender_sig (request_id_of(E.content)) = true
+    && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 
 
