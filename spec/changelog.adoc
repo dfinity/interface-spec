@@ -8,6 +8,7 @@
 * Spec: The calculation of “derived ids” has changed
 * Spec: The self-authenticating and derived id forms use a truncated hash
 * Spec: The textual representation of principals has changed
+* ic-ref(-test): Implement the above changes
 * ic-ref-test: Also send read requests with nonces
 
 [#v0_8_1]
