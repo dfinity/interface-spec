@@ -1495,13 +1495,11 @@ is_system_assigned : Principal -> Bool
 ....
 which characterizes all system-assigned ids.
 
-To avoid clashes with potential user ids or dis derived from users or canisters, we require (somewhat handwavy) that
+To avoid clashes with potential user ids or is derived from users or canisters, we require (somewhat handwavy) that
 
- * `is_system_assigned = false`,
- * `is_system_assigned p = false` if `is_self_authenticating_id pk p` for possible canister ids `cid` and public keys `pk` and
- * `is_system_assigned dp = false` if `is_derived_id p dp` for any `p` that could be a user or canister.
-
-Furthermore, `is_derived_id p` implies `|p|≤ 29`.
+ * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
+ * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
+ * `is_system_assigned p = false` for `|p| > 29`.
 
 ==== IC Management Canister: Code installation
 
