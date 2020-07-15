@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.8.1
+0.9.0-wip
 :toc2:
 :toclevels: 3
 :stem: latexmath
