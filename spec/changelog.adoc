@@ -1,6 +1,7 @@
 [#changelog]
 == Changelog
 
+[#unreleased]
 === ∞ (unreleased)
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
