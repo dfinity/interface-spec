@@ -110,7 +110,7 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system is concerned – binary blobs of length at most 29 bytes.
+Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs of length at most 29 bytes.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
@@ -139,7 +139,7 @@ NOTE: In the future the system may gain the ability to change the authentication
 +
 These have the form `H(|registering_principal| · registering_principal · derivation_nonce) · 0x03` (29 bytes).
 +
-These ids are treated specially when an id needs to be registered. In such a request, the caller (a user or a canister) may provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from. The length byte `|registering_principal|` prevents collisions in cases where one principal is the prefix of another principal. See for example <<ic-create_canister>>.
+These ids are treated specially when an id needs to be registered. In such a request, whoever requests an id can provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from.
 +
 NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they maybe be used internally or in the future.
 
@@ -1059,13 +1059,12 @@ Principals (canister ids and user ids) are blobs, but some of them have special 
 type Principal = Blob
 ....
 
-
 The function
 ....
 mk_self_authenticating_id : CanisterId -> PublicKey -> Principal
 mk_self_authenticating_id cid pk = H(|cid| · cid · pk) · 0x02
 ....
-calculates self-authenticating ids. With `|canister_id|` we denote the length of the canister id, in bytes, encoded as a single byte.
+calculates self-authenticating ids. With `|cid|` we denote the length of the canister id, in bytes, encoded as a single byte.
 
 The function
 ....
@@ -1080,6 +1079,7 @@ anonymous_id : Principal
 anonymous_id = 0x04
 ....
 
+These function domains and fixed values are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
 ....
@@ -1615,13 +1615,11 @@ is_system_assigned : Principal -> Bool
 ....
 which characterizes all system-assigned ids.
 
-To avoid clashes with potential user ids or dis derived from users or canisters, we require (somewhat handwavy) that
+To avoid clashes with potential user ids or is derived from users or canisters, we require (somewhat handwavy) that
 
- * `is_system_assigned = false`,
- * `is_system_assigned (mk_self_authenticating_id cid pk) = false` for all possible canister ids `cid` and public keys `pk` and
- * `is_system_assigned (mk_derived_id p nonce) = false` for all `p` that could be a user or canister.
-
-
+ * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
+ * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
+ * `is_system_assigned p = false` for `|p| > 29`.
 
 ==== IC Management Canister: Code installation
 
