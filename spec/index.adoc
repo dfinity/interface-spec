@@ -904,7 +904,7 @@ The interfaces above provide the fundamental ability for external users and cani
 
 NOTE: The _IC management canister_ is just a facade; it does not actually exist as a canister (with isolated state, Wasm code, etc.).
 
-The IC management canister address is `ic:00` (i.e. the empty blob).
+The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 
 [#ic-candid]
 === Interface overview
@@ -1241,7 +1241,7 @@ candid : Value -> Blob
 ....
 that represents Candid encoding; this is implicitly taking the method types, as declared in <<ic-candid>>, into account. We model the parsing of Candid values in the  “Conditions” section using `candid` as well, by treating it as a non-deterministic function.
 
-The principal of the management ic canister is the empty blob (i.e. `ic:00`):
+The principal of the management ic canister is the empty blob (i.e. `aaaaa-aa`):
 ....
 ic_principal : principal = ""
 ....
