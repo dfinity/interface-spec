@@ -1019,6 +1019,26 @@ Initially, the user or canister that created a canister is its _controller_, but
 
 Only the current controller of the canister can change the controller.
 
+[#ic-stop_canister]
+=== IC method `stop_canister`
+
+The controller of a canister may stop a canister (e.g., to prepare for a canister upgrade).
+
+Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `Stopping` (unless the canister is already stopped).
+The system will reject all calls to a stopping canister, indicating that the canister is stopping.
+Responses to a stopping canister are processed as usual.
+When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `Stopped` and the management canister responds to the caller of the `stop_canister` request.
+
+[#ic-start_canister]
+=== IC method `start_canister`
+A canister may be started by its controller.
+
+If the canister status was 'Stopped' or `Stopping` then the canister status is simply set to `Running`.
+In the latter case all `stop_canister` calls which are processing fail (and are rejected).
+
+If the canister was already `Running` then the status stays unchanged.
+
+
 [#public-spec]
 == Abstract public behavior
 
@@ -1232,7 +1252,7 @@ Request
   }
 ....
 
-The evolution of an `Request` goes through these states, as explained in <<async-requests>>:
+The evolution of a `Request` goes through these states, as explained in <<async-requests>>:
 ....
 RequestStatus
   = Received
@@ -1280,6 +1300,7 @@ S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
   controllers : CanisterId ↦ UserId;
+  canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -1289,6 +1310,7 @@ CanState
   wasm_state : WasmState;
   module : CanisterModule;
 }
+CanStatus = Running | Stopping (List CallOrigin) | Stopped
 ....
 
 ==== Initial state
@@ -1419,11 +1441,34 @@ bucket_cost(S, canister_id, bucket) =
                   M.bucket = bucket ]
 ....
 
+
+==== Calls to stopped/stopping canisters are rejected
+
+A call to a canister which is stopping or stopped is automatically rejected.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage CM · Younger_messages
+    (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping
+
+....
+
+State after::
+....
+    S.messages = Older_messages · Younger_messages  ·
+      ResponseMessage {
+          origin = S.call_contexts[CM.call_context].origin
+          response = Reject (CANISTER_ERROR, "canister stopped");
+      }
+....
+
 ==== Call context creation
 
 Before invoking a message to a public entry point, some bookkeeping is required:
 
  * A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
+The canister must be running (so not stopped, or stopping).
 
 The position of the message in the queue is unchanged.
 
@@ -1431,8 +1476,9 @@ This only happens for “real” canisters, not the IC management canister.
 
 Conditions::
 ....
-    S.messages = Older_messages · CallMessage M · Younger_messages
-    S.canisters[M.callee] ≠ EmptyCanister
+    S.messages = Older_messages · CallMessage CM · Younger_messages
+    S.canisters[CM.callee] ≠ EmptyCanister
+    S.canister_status[CM.callee] = Running
     Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
@@ -1460,7 +1506,7 @@ We can execute any message that is at the head of its queue, i.e. there is no ol
 
 ==== Message execution
 
-The transition models the actual execution of a message whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition “Call context creation”)
+The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition “Call context creation”).
 
 Conditions::
 ....
@@ -1582,7 +1628,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister, and the canister status is set to 'Running'.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -1607,6 +1653,7 @@ S with
         origin = M.origin
         response = Accepted (candid({canister_id = CanisterId}))
       }
+    canister_status[CanisterId] = Running
 ....
 
 This uses the predicate
@@ -1620,6 +1667,31 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
  * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
+
+==== IC Management Canister: Canister status
+
+The controller of a canister can check for its status (i.e. one of Running, Stopping, or Stopped).
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'canister_status'
+    M.arg = candid(A)
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid({
+          status = S.canister_status[A.canister_id]
+        })
+      }
+....
 
 ==== IC Management Canister: Code installation
 
@@ -1717,6 +1789,151 @@ S with
         response = Accepted (candid())
       }
 ....
+
+==== IC Management Canister: Stopping a canister
+
+The controller of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
+
+We encode this behavior via three (types of) transitions:
+
+1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status all `stop_canister` requests which arrive at the canister while it is stopping (or stopped).
+2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
+3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that that the canister is stopped.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'stop_canister'
+    M.arg = candid(A)
+    S.canister_status[A.canister_id] = Running
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages
+    S.status[A.canister_id] = Stopping [M.origin]
+....
+
+The next two transition record any additional 'stop_canister' requests that arrive at a stopping (or stopped) canister in its status.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'stop_canister'
+    M.arg = candid(A)
+    S.canister_status[A.canister_id] = Stopping Origins
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages
+    S.status[A.canister_id] = Stopping (Origins · M.origin)
+....
+
+
+The status of a stopping canister which has no open call contexts is set to `Stopped`, and all pending `stop_canister` calls are replied to.
+
+Conditions::
+....
+    S.canister_status[A.canister_id] = Stopping Origins
+    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ A.canister_id
+....
+State after::
+....
+    S.canister_status[CanisterId] = Stopped
+    S.messages = Messages ·
+        [ ResponseMessage {
+            origin = O
+            response = Accepted (candid())
+          }
+	| O ∈ Origins
+	]
+....
+
+NOTE: Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success), but is otherwise a no-op:
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'stop_canister'
+    M.arg = candid(A)
+    S.canister_status[A.canister_id] = Stopped
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages
+    S.messages = Messages ·
+        ResponseMessage {
+          origin = M.origin
+          response = Accepted (candid())
+        }
+....
+
+==== IC Management Canister: Starting a canister
+
+The controller of a canister can start a stopped canister. If the canister is already running, the command has no effect on the canister.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'start_canister'
+    M.arg = candid(A)
+    S.status[A.canister_id] = Running or S.status[A.canister_id] = Stopped
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    S.status[A.canister_id] = Running
+    messages = Older_messages · Younger_messages ·
+        ResponseMessage{
+            origin = M.origin
+            response = Accepted (candid())
+        }
+....
+
+
+If the status of the canister was 'Stopping', then the canister status is set to `Running`. The pending `stop_canister` request(s) are rejected.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'start_canister'
+    M.arg = candid(A)
+    S.status[A.canister_id] = Stopping Origins
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    S.status[A.canister_id] = Running
+    messages = Older_messages · Younger_messages ·
+        ResponseMessage{
+            origin = M.origin
+            response = Accepted (candid())
+        } ·
+        [ ResponseMessage {
+            origin = O
+            response = Reject (CANISTER_REJECT, 'Canister has been restarted')
+          }
+	| O ∈ Origins
+	]
+....
+
 
 ==== Callback invocation
 
@@ -1821,7 +2038,7 @@ A record with
 
 ==== Read: query call
 
-Canister query calls can be executed directly.
+Canister query calls can be executed directly.  They can only be executed against canisters which are `Running`.
 
 Submitted request:: `E`
 Conditions::
@@ -1829,6 +2046,7 @@ Conditions::
   E.content = CanisterQuery Q
   verify_envelope(E, Q.sender)
   S.canisters[Q.canister_id] ≠ EmptyCanister
+  S.canister_status[Q.canister_id] = Running
   C = S.canisters[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {

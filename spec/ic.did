@@ -12,4 +12,7 @@ service ic : {
     memory_allocation : opt nat;
   }) -> ();
   set_controller : (record {canister_id : canister_id; new_controller : principal}) -> ();
+  start_canister : (record {canister_id : canister_id}) -> ();
+  stop_canister : (record {canister_id : canister_id}) -> ();
+  canister_status : (record {canister_id : canister_id}) -> (record {status : variant { running; stopping; stopped }});
 }
