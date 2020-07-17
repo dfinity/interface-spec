@@ -2,7 +2,7 @@
 == Changelog
 
 [#v0_8_2]
-=== 0.8.2 (UNRELEASED)
+=== 0.8.2 (2020-07-17)
 
  * ic-ref-test: Also send read requests with nonces
  * Spec: Installing code via `reinstall` works also on the empty canister
