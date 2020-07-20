@@ -141,7 +141,7 @@ These have the form `H(|registering_principal| · registering_principal · deriv
 +
 These ids are treated specially when an id needs to be registered. In such a request, whoever requests an id can provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from.
 +
-NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they maybe be used internally or in the future.
+NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they may be used internally or in the future.
 
 4. _Anonymous id_
 +
@@ -161,10 +161,10 @@ The textual representation of a blob `b` is `Grouped(Base32(CRC32(b) · b))` whe
 
  * `CRC32` is a four byte check sequence, calculated as defined by ISO 3309, ITU-T V.42 and https://www.w3.org/TR/2003/REC-PNG-20031110/#5CRC-algorithm[elsewhere]
  * `Base32` is the Base32 encoding as defined in https://tools.ietf.org/html/rfc4648#section-6[RFC 4648], with no padding character added.
- * the middle dot denotes concatenation.
- * `Grouped` takes an ASCII string and inserts the separator `-` (dash) every 5 characters. The last group may contain less than 5 characters. There is never a separator at the beginning or end.
+ * The middle dot denotes concatenation.
+ * `Grouped` takes an ASCII string and inserts the separator `-` (dash) every 5 characters. The last group may contain less than 5 characters. A separator never appears at the beginning or end.
 
-The textual representation is conventially printed with _lower case letters_, but parsed case-insensitively.
+The textual representation is conventionally printed with _lower case letters_, but parsed case-insensitively.
 
 Because the maximum size of a principal is 29 bytes, the textual representation will be no longer than 63 characters (10 times 5 plus 3 characters with 10 separators in between them).
 
@@ -176,7 +176,7 @@ Example command line calculation:
 ....
 ( echo ABCD01 | xxd -r -p | crc32 /dev/stdin; echo -n ABCD01 ) |
   xxd -r -p | base32 |
-  tr A-Z a-z |tr -d = |
+  tr A-Z a-z | tr -d = |
   fold -w5 | paste -sd'-' -
 ....
 =====
