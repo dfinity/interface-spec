@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#v0_9_1]
+=== 0.9.1 (2020-07-20)
+
+* Forward-port changes from 0.8.2
+
 [#v0_9_0]
 === 0.9.0 (2020-07-15)
 
@@ -10,6 +15,13 @@
 * Spec: The textual representation of principals has changed
 * ic-ref(-test): Implement the above changes
 * ic-ref-test: Also send read requests with nonces
+
+[#v0_8_2]
+=== 0.8.2 (2020-07-17)
+
+ * ic-ref-test: Also send read requests with nonces
+ * Spec: Installing code via `reinstall` works also on the empty canister
+ * ic-ref(-test): Implement and test the above changes
 
 [#v0_8_1]
 === 0.8.1 (2020-07-10)

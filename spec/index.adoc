@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.9.0
+0.9.1
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -1515,8 +1515,8 @@ Conditions::
     M.method_name = 'install_code'
     M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
-       (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
-    or (A.mode = reinstall && S.canisters[A.canister_id] ≠ EmptyCanister)
+      (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
+    or A.mode = reinstall
     M.caller = S.controllers[A.canister_id]
     Arg = {
       data = A.arg;
