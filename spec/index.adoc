@@ -894,7 +894,7 @@ The stable memory is initially empty.
 +
   ic0.stable_size : () -> (page_count : i32)
 +
-returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 65Ki bytes.)
+returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64Ki bytes.)
 
 * {blank}
 +
