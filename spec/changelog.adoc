@@ -10,6 +10,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
+* Spec: The managemnet canister supports the `raw_rand` method
 * Spec: The `expiry` field is added to requests
 * Spec: Canister controllers can stop/start canisters and can query their status.
 
