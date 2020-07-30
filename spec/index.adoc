@@ -1050,6 +1050,13 @@ In the latter case all `stop_canister` calls which are processing fail (and are 
 
 If the canister was already `Running` then the status stays unchanged.
 
+[#ic-delete_canister]
+=== IC method `delete_canister`
+
+This method deletes a canister from the IC.
+
+Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone and any state stored on the canister is permanently deleted. Once a canister is deleted, its ID cannot be reused.
+
 [#ic-raw_rand]
 === IC method `raw_rand`
 
@@ -1664,7 +1671,7 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.callee = ic_princpal
+    M.callee = ic_principal
     M.method_name = 'create_canister'
     M.arg = candid()
     is_system_assigned CanisterId
@@ -1962,6 +1969,32 @@ S with
 	]
 ....
 
+==== IC Management Canister: Canister deletion
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'delete_canister'
+    M.arg = candid(A)
+    S.canister_status[A.canister_id] = Stopped
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    canisters[CanisterId] = (deleted)
+    controllers[CanisterId] = (deleted)
+    canister_status[CanisterId] = (deleted)
+    time[CanisterId] = (deleted)
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+      }
+....
+
 ==== IC Management Canister: Random numbers
 
 The management canister can produce pseud-random bytes. It always returns a 32-byte `blob`:
@@ -2017,7 +2050,6 @@ S with
       } ·
       Younger_messages
 ....
-
 
 ==== Respond to user request
 

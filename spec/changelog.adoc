@@ -13,6 +13,7 @@
 * Spec: The managemnet canister supports the `raw_rand` method
 * Spec: The `expiry` field is added to requests
 * Spec: Canister controllers can stop/start canisters and can query their status.
+* Spec: Canister controllers can delete canisters
 
 [#v0_9_1]
 === 0.9.1 (2020-07-20)
