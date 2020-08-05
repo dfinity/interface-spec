@@ -2,10 +2,12 @@
 == Changelog
 
 [#v0_9_2]
-=== 0.9.2 (UNRELEASED)
+=== 0.9.2 (2020-08-05)
 
 * Spec: Canister controllers can stop/start canisters and can query their status.
 * Spec: Canister controllers can delete canisters
+* ic-ref(-test): Implement and test the above changes
+* ic-ref: refactorings
 
 [#v0_9_1]
 === 0.9.1 (2020-07-20)
