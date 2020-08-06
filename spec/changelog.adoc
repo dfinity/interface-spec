@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#v0_10_0]
+=== 0.10.0 (UNRELEASED)
+
+* none yet
+
 [#v0_9_2]
 === 0.9.2 (2020-08-05)
 
