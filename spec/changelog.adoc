@@ -6,12 +6,17 @@
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced
-* Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 * Spec: The cleanup callback is introduced
 * Spec: the `pay_ingress` hook is introduced
 * Spec: Include canister id in self-authenticating ids
 * Spec: The managemnet canister supports the `raw_rand` method
+
+[#v0_10_0]
+=== 0.10.0 (2020-08-06)
+
+* Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 * Spec: The `expiry` field is added to requests
+* ic-ref(-test): Implement and test the above changes, as far as possible
 
 [#v0_9_2]
 === 0.9.2 (2020-08-05)

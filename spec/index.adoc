@@ -2139,14 +2139,15 @@ Conditions::
   request_id_of(R) = RS.request_id
   verify_envelope(E, R.sender)
   S.system_time <= RS.ingress_expiry
-  S.requests[R] = RS
+  S.requests[R] = Status
 ....
 Read response::
 A record with
-* `{status: accepted}` if `RS = Received`
-* `{status: processing}` if `RS = Processing`
-* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `RS = Rejected (code, msg)`
-* `{status: completed; result : <result>}` if `RS = Completed { result = result }`
+* `{status: received}` if `Status = Received`
+* `{status: processing}` if `Status = Processing`
+* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `Status = Rejected (code, msg)`
+* `{status: replied; result : <result>}` if `Status = Completed { result = result }`
+* `{status: done}` if `Status = Done`
 
 
 ==== Read: query call
