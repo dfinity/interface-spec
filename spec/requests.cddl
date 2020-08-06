@@ -60,18 +60,23 @@ response-content =
   query-response
 
 request-status-response = {
-  status: "unknown"
-  //
-  status: "received"
-  //
-  status: "processing"
-  //
-  status: "replied"
-  reply: call-reply
-  //
-  status: "rejected"
-  reject_code: unsigned
-  reject_message:  text
+  (
+    status: "unknown"
+    //
+    status: "received"
+    //
+    status: "processing"
+    //
+    status: "replied"
+    reply: call-reply
+    //
+    status: "rejected"
+    reject_code: unsigned
+    reject_message:  text
+    //
+    status: "done"
+  )
+  time : timestamp
 }
 
 query-response = {
@@ -95,3 +100,4 @@ principal = bytes
 
 pubkey = bytes .size 32
 signature = bytes .size 64
+timestamp = unsigned

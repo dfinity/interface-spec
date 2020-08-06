@@ -187,12 +187,13 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
 1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the request. (Althought as part of the RPC the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing (or it expires). From now on, the user can ask any RPC endpoint (for the canister) about the status of the pending request. Initially, the status is `received`: The system as a whole (not just a single node) has received the request, but it may still decide not to perform it, e.g. because of high load.
-4. Once it is clear that the request will be acted upon, the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
+2. For a certain amount of time, the system behaves as if it does not know about the request. (Although as part of the HTTP interface the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
+3. At some point, the system may accept the request for processing and set its status to `received`.  This indicates that the system as a whole has received the request and plans on processing it (although it may still not get processed if the system is under high load).  Further, the user should also be able to ask any endpoint (for the canister) about the status of the pending request.
+4. Once it is clear that the request will be acted upon (sufficient resources, request not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
 5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
 6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
-7. At the end, the system forgets about the request and its response.
+7. In the case that the response has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the request as `done`, to prevent a replay.
+8. Once the expiry time is past, the system can prune the request and its response, and completely forget about it.
 
 
 This yields the following interaction diagram:
@@ -200,35 +201,46 @@ This yields the following interaction diagram:
 [plantuml]
 ....
 (*) --> "User creates request" #DDDDDD
-   --> "Submitted to node" #DDDDDD
-   --> "Received"
-   --> "Processing"
+   --> "Submitted to node\n(with 202 response)" as submit #DDDDDD
+   --> "received"
+   --> "processing"
 if "" as X then
-  --> "Replied"
-  --> "Cleaned" #DDDDDD
+  --> "replied"
+  --> "done"
   else
-  --> "Rejected (canister)"
-  --> "Cleaned" #DDDDDD
+  --> "rejected (canister)"
+  --> "done"
 
-  "X"        --> "Rejected (system)"
-  "Received" --> "Rejected (system)"
-             --> "Cleaned" #DDDDDD
+  "X"        --> "rejected (system)"
+  "received" --> "rejected (system)"
+             --> "done"
+
+  "received" --> "pruned" #DDDDDD
+  "submit" --> "dropped" #DDDDDD
+  "done" --> "pruned" #DDDDDD
+
 endif
 ....
 
-Note that all gray states are _not_ represented in the system state, and are indistinguishable from “request does not exist”. In order to avoid replay-attacks, messages have an expiry date, and the last transition (forgetting the message) must happen after the message’s expiry field invalidates it.
+State transitions may be instantaneous and not always externally visible. For example, the system may move from `Received` via `Processing` to `Replied` in one go. Similarly, the system may not implement the `Done` state at all, and keep requests in the previous state until they are dropped.
 
-The crucial property of the `Received` state is _it is pointless (but harmless) to submit the (identical) request again_. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+All gray states are _not_ explicitly represented in the system state, and are indistinguishable from “request does not exist”.
 
-The crucial property of the `Processing` state is _the initial effect of the request can happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+The crucial property of the `Received` state is that the request has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) request again. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
-A message may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+The crucial property of the `Processing` state is _the initial effect of the request has or will happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+
+A request may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+
+To avoid replay attacks, the transition from `done` or `received` to `pruned` must happen no earlier than the request’s `ingress_expiry` field.
+
+Requests must stay in `Replied` or `Rejected` long enough for polling clients to catch the response.
 
 When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
 
 === Synchronous requests
 
-Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` RPC endpoint.
+Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` endpoint.
 
 We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
 
@@ -274,19 +286,20 @@ type UserId = Principal
 
 NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure. Some of that structure is documented in <<id-classes>>. But since that structure is meant to be extensible without breaking existing code (especially running canisters), the interfaces are phrased in terms of arbitrary blobs.
 
-=== Common fields
+All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
 
 The following fields are common among all requests:
 
 * `request_type` (`text`): Indicates the type of request, and is one of the values specified in <<request-types>>.
-* The field `nonce`, as specified in <<authentication>>.
+* The fields `nonce` and `ingress_expiry`, as specified in <<authentication>>.
 
 [#authentication]
 === Authentication
 
-All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following field is added to these requests:
+All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields is added to these requests:
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
+* `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future.
 
 Furthermore, the request records are wrapped in a envelope record with these fields:
 
@@ -345,14 +358,15 @@ Request type:: `request_status`
 Request fields::
 * `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
 Response fields::
-* `status` (`text`): one of `unknown`, `received`, `processing`, `replied` or `rejected`, see <<async-requests>> for more details on what each status means.
+* `status` (`text`): one of `unknown`, `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
 * `reply`: If the status is `replied`, then this member contains the request-type specific reply object. See the specification for the individual request types for which fields exist. If no field are especified (currently not specified), this field contains the empty record.
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
+* `time` (`nat`): indicates how fresh this response it. This is _not_ the time of the latest state change, but the time of the certification (to be specified) of this response.
 
-WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is still working on accepting the request as pending.
+WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is in the process of receiving the request.
 
-NOTE: Request responses will not actually be kept around indefinitely, and eventually the status will revert to `unknown`. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
+NOTE: Request responses will not be kept around indefinitely, and eventually the status will revert to `unknown`, as described in <<async-requests>>.
 
 [#api-query]
 ==== Canister query call
@@ -1171,6 +1185,7 @@ Envelope = {
 Request
   = CanisterUpdateCall = {
     nonce : Blob;
+    ingress_expiry : Nat;
     sender : UserId;
     canister_id : CanisterId;
     method_name : Text;
@@ -1178,13 +1193,14 @@ Request
   }
 ....
 
-The evolution of an `Request` goes through these states, as explained in <<async-requests>>:
+The evolution of a `Request` goes through these states, as explained in <<async-requests>>:
 ....
 RequestStatus
   = Received
   | Processing
   | Rejected (RejectCode, Text)
   | Completed { result : Value }
+  | Done
 ....
 
 These are the synchronous read messages:
@@ -1192,10 +1208,12 @@ These are the synchronous read messages:
 APIReadRequest
   = ReadStatus = {
     nonce : Blob;
+    ingress_expiry : Nat;
     request_id : Request;
   }
   | CanisterQuery = {
     nonce : Blob;
+    ingress_expiry : Nat;
     sender : UserId;
     canister_id : CanisterId;
     method_name : Text;
@@ -1228,6 +1246,7 @@ S = {
   controllers : CanisterId ↦ UserId;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
+  system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
 }
@@ -1248,11 +1267,12 @@ The initial state of the system is
   canisters = ();
   controllers = ();
   time = ();
+  system_time = T;
   call_contexts = ();
   messages = ();
 }
 ....
-using `()` to denote the empty map or bag.
+for some time stamp `T`, using `()` to denote the empty map or bag.
 
 === State transitions
 
@@ -1294,10 +1314,14 @@ After a node accepts a request via `/api/v1/submit`, it gets added to the system
 This may only happen if the signature is valid and is created with a correct key.
 Due to this check, the envelope is discarded after this point.
 
+Requests that have expired are dropped here.
+
 Submitted request:: `E : Envelope`
 Conditions::
 ....
     verify_envelope(E, E.content.sender)
+    E.content ∉ requests
+    S.system_time <= E.content.ingress_expiry
 ....
 State after::
 ....
@@ -1309,7 +1333,7 @@ NOTE: This is not instantaneous (the system takes some time to agree it accepts 
 
 ==== Request rejection
 
-The system may reject a received message for internal reasons (high load, low resources). The precise conditions are not specified here, but the reject code must indicate this to be a system error.
+The system may reject a received message for internal reasons (high load, low resources) or expiry. The precise conditions are not specified here, but the reject code must indicate this to be a system error.
 
 Conditions::
 ....
@@ -1326,14 +1350,17 @@ S with
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
+This is only allowed if the request has not expired.
+
 The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.requests[CanisterUpdateCall M] = Received
-    C = S.canisters[M.callee]
+    S.requests[CanisterUpdateCall R] = Received
+    S.system_time <= R.ingress_expiry
+    C = S.canisters[R.canister_id]
 ....
 State after::
 ....
@@ -1915,11 +1942,25 @@ S with
 
 ==== Request clean up
 
-At some point, a request will be removed from memory of the system. This must happen no earlier than the expiry time set in the request, and late enough so that the user had a fair chance of retrieving the response. Details are yet to be determined.
+The system will keep the data for a completed or rejected request around for a certain, implementation defined amount of time, to allow clients to poll for the data. After that time, the data of the request will be dropped:
 
 Conditions::
 ....
     (S.requests[M] = Completed _) or (S.requests[M] = Rejected _)
+....
+State after::
+....
+S with
+    requests[M] = Done
+....
+
+
+At the same or some later point, the request will be removed from memory of the system. This must happen no earlier than the ingress expiry time set in the request.
+
+Conditions::
+....
+    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
+    M.ingress_expiry < S.system_time
 ....
 State after::
 ....
@@ -1942,6 +1983,19 @@ S with
     time[CanisterId] = T1
 ....
 
+Similarly, the system time, used to expire requests, progresses:
+
+Conditions::
+....
+    T0 = S.system_time
+    T1 > T0
+....
+State after::
+....
+S with
+    system_time = T1
+....
+
 ==== Read: Status
 
 The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
@@ -1951,17 +2005,19 @@ NOTE: There is a phase where a request was issued by the user, but has not yet b
 Submitted request:: `E`
 Conditions::
 ....
-  E.content = ReadStatus { request_id = RID }
-  request_id_of(R) = RID
+  E.content = ReadStatus RS
+  request_id_of(R) = RS.request_id
   verify_envelope(E, R.sender)
-  S.requests[R] = RS
+  S.system_time <= RS.ingress_expiry
+  S.requests[R] = Status
 ....
 Read response::
 A record with
-* `{status: accepted}` if `RS = Received`
-* `{status: processing}` if `RS = Processing`
-* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `RS = Rejected (code, msg)`
-* `{status: completed; result : <result>}` if `RS = Completed { result = result }`
+* `{status: received}` if `Status = Received`
+* `{status: processing}` if `Status = Processing`
+* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `Status = Rejected (code, msg)`
+* `{status: replied; result : <result>}` if `Status = Completed { result = result }`
+* `{status: done}` if `Status = Done`
 
 
 ==== Read: query call
@@ -1973,6 +2029,7 @@ Conditions::
 ....
   E.content = CanisterQuery Q
   verify_envelope(E, Q.sender)
+  S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
   C = S.canisters[Q.canister_id]
