@@ -408,7 +408,7 @@ The following encodings of field values as blobs are used
 
 * Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
 * String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Nat fields (`compute_allocation`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+* Nat fields (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
 [TIP]
@@ -1919,7 +1919,6 @@ S with
       } ·
       Younger_messages
 ....
-
 
 ==== Respond to user request
 

@@ -11,9 +11,9 @@ start =
 tagged<t> = #6.55799(t) ; the CBOR tag
 
 envelope<t> = tagged<{
-  sender_sig: signature
-  sender_pubkey: pubkey
   content: t
+  sender_pubkey: pubkey
+  sender_sig: signature
 }>
 
 
@@ -25,6 +25,7 @@ async-content =
 call-request = {
   request_type: "call"
   ? nonce : bytes
+  ingress_expiry : timestamp
   sender : principal
   canister_id : principal
   method_name : text
@@ -40,12 +41,14 @@ sync-content =
 request-status-request = {
   request_type: "request_status"
   ? nonce : bytes
+  ingress_expiry : timestamp
   request_id : bytes
 }
 
 query-request = {
   request_type: "query"
   ? nonce : bytes
+  ingress_expiry : timestamp
   sender : principal
   canister_id : principal
   method_name : text
