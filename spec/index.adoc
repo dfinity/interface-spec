@@ -1660,7 +1660,7 @@ S with
 
 ==== IC Management Canister: Code installation
 
-Only a controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Only the controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -1695,7 +1695,7 @@ S with
 
 ==== IC Management Canister: Code upgrade
 
-Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
+Only the controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -1733,7 +1733,7 @@ S with
 
 ==== IC Management Canister: Setting controllers
 
-Only a controller of the given canister can modify the controller field.
+Only the controller of the given canister can modify the controller field.
 
 Conditions::
 ....
