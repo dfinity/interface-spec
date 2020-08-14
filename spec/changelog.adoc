@@ -7,8 +7,6 @@
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced
 * Spec: The cleanup callback is introduced
-* Spec: the `pay_ingress` hook is introduced
-* Spec: Include canister id in self-authenticating ids
 * Spec: The managemnet canister supports the `raw_rand` method
 
 [#v0_10_0]

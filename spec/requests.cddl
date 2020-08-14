@@ -41,13 +41,15 @@ sync-content =
 request-status-request = {
   request_type: "request_status"
   ? nonce : bytes
+  ingress_expiry : timestamp
   request_id : bytes
 }
 
 query-request = {
   request_type: "query"
-  ? sender : principal
   ? nonce : bytes
+  ingress_expiry : timestamp
+  ? sender : principal
   canister_id : principal
   method_name : text
   arg : bytes
