@@ -110,9 +110,11 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs of length at most 29 bytes.
+Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
+
+Principals can have any length between 0 and 29 bytes.
 
 [#id-classes]
 === Special forms of IDs
