@@ -1274,7 +1274,7 @@ Finally, we can describe the state of the Internet Computer as a record having t
 S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
-  controllers : CanisterId ↦ UserId;
+  controllers : CanisterId ↦ Principal;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   system_time : Timestamp
