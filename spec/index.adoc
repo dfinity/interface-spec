@@ -649,7 +649,7 @@ These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` tra
 
 To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
 
-NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
+NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional. There is exactly one space between `canister_update/canister_query` and the `<name>`.
 
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
 
