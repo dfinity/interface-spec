@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.10.0
+0.10.1
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -991,6 +991,11 @@ This method deletes a canister from the IC.
 
 Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone and any state stored on the canister is permanently deleted. Once a canister is deleted, its ID cannot be reused.
 
+[#ic-raw_rand]
+=== IC method `raw_rand`
+
+This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
+
 [#public-spec]
 == Abstract public behavior
 
@@ -1627,7 +1632,7 @@ S with
 
 ==== IC Management Canister: Code installation
 
-Only a controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Only the controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -1662,7 +1667,7 @@ S with
 
 ==== IC Management Canister: Code upgrade
 
-Only a controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
+Only the controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -1700,7 +1705,7 @@ S with
 
 ==== IC Management Canister: Setting controllers
 
-Only a controller of the given canister can modify the controller field.
+Only the controller of the given canister can modify the controller field.
 
 Conditions::
 ....
@@ -1889,6 +1894,32 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
+      }
+....
+
+==== IC Management Canister: Random numbers
+
+The management canister can produce pseud-random bytes. It always returns a 32-byte `blob`:
+
+The precise guarantees around the randomness, e.g. unpredictability, are not captured in these formal semantics.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'raw_rand'
+    M.arg = candid()
+    |B| = 32
+....
+State after::
+....
+S with
+    controllers[A.canister_id] = A.new_controller
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid(B))
       }
 ....
 

@@ -16,4 +16,5 @@ service ic : {
   stop_canister : (record {canister_id : canister_id}) -> ();
   canister_status : (record {canister_id : canister_id}) -> (record {status : variant { running; stopping; stopped }});
   delete_canister : (record {canister_id : canister_id}) -> ();
+  raw_rand : () -> (blob);
 }
