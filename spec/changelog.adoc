@@ -7,7 +7,11 @@
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The anonymous user is introduced
 * Spec: The cleanup callback is introduced
-* Spec: The managemnet canister supports the `raw_rand` method
+
+[#v0_10_1]
+=== 0.10.1 (2020-09-01)
+
+* Forward-port changes from 0.9.3
 
 [#v0_10_0]
 === 0.10.0 (2020-08-06)
@@ -15,6 +19,12 @@
 * Spec: Users can set/update a memory allocation when installing/upgrading a canister.
 * Spec: The `expiry` field is added to requests
 * ic-ref(-test): Implement and test the above changes, as far as possible
+
+[#v0_9_3]
+=== 0.9.3 (2020-09-01)
+
+* Spec: The managemnet canister supports the `raw_rand` method
+* ic-ref(-test): Implement and test the above changes
 
 [#v0_9_2]
 === 0.9.2 (2020-08-05)
