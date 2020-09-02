@@ -133,9 +133,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 +
 These have the form `H(public_key) · 0x02` (29 bytes).
 +
-An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
-+
-NOTE: In the future the system may gain the ability to change the authentication rules for self-authenticating ids, e.g. revoke the original key and configure another one.
+An external user can use these ids as the `sender` of a request if they own the corresponding private key.  The public key uses DER encoding as described in <<authentication>>.
 
 3. _Derived ids_
 +
@@ -325,11 +323,13 @@ The `request_id` (see <<api-request-id>>) is calculated from the content record.
 The signature schemes used to authenticate users are
 
  * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
- * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`).
+ * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
 
 In particular:
 
- * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs that contain DER encodings of the public keys, see RFCs https://tools.ietf.org/rfc/rfc3279[3279], https://tools.ietf.org/rfc/rfc5758[5758], and https://tools.ietf.org/html/rfc8410[8410].
+ * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs that contain DER encodings of the public keys.
+   See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
+   See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs, size 64 bytes.
 
 The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
