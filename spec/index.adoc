@@ -385,7 +385,7 @@ NOTE: Request responses will not be kept around indefinitely, and eventually the
 [#api-query]
 ==== Canister query call
 
-Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
+Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
 Synchronicity:: synchronous
 Request type:: `query`
