@@ -133,7 +133,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 +
 These have the form `H(public_key) · 0x02` (29 bytes).
 +
-An external user can use these ids as the `sender` of a request if they own the corresponding private key.  The public key uses DER encoding as described in <<authentication>>.
+An external user can use these ids as the `sender` of a request if they own the corresponding private key.  The public key uses an encoding as described in <<authentication>>.
 
 3. _Derived ids_
 +
@@ -327,12 +327,15 @@ The signature schemes used to authenticate users are
 
 In particular:
 
- * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs that contain DER encodings of the public keys.
+ * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain public keys.
+   Allowed encodings are DER for Ed25519 and ECDSA, or raw bytes for Ed25519; the system will detect the right encoding.
    See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
    See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs, size 64 bytes.
 
-The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
+The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `sender_pubkey`.
+
+NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
 
 [#request-types]
 === Request types
