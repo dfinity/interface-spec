@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#v0_10_2]
+=== 0.10.2 (2020-09-08)
+
+* ic-ref(-test): Bugfix: A query response should _not_ include a `time` field
+
 [#v0_10_1]
 === 0.10.1 (2020-09-01)
 
