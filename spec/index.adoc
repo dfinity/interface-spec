@@ -750,10 +750,10 @@ To provide access to a string or blob `foo`, the System API provides two functio
   ic0.foo_size : () -> (i32)
   ic0.foo_copy : (dst : i32, offset: i32, size : i32) -> ()
 
-The `*_size` function indicates the size, in bytes, of `foo`. The `_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
+The `*_size` function indicates the size, in bytes, of `foo`. The `*_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
 
 
-Dually, a System API function that conceptually takes a blob or string as a paramter `foo` has two parameters:
+Dually, a System API function that conceptually takes a blob or string as a parameter `foo` has two parameters:
 
   ic0.set_foo : (src : i32, size: i32) -> …
 
