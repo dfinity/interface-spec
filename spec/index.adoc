@@ -131,9 +131,10 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have the form `H(public_key) · 0x02` (29 bytes).
+These have one of the forms `H(public_key) · 0x02` or `H(public_key) · 0x06` (both 29 bytes).
 +
-An external user can use these ids as the `sender` of a request if they own the corresponding private key.  The public key uses an encoding as described in <<authentication>>.
+An external user can use these ids as the `sender` of a request if they own the corresponding private key.
+The public key uses either DER encoding (for trailing `0x02`) or COSE encoding (for trailing `0x06`) as described in <<authentication>>.
 
 3. _Derived ids_
 +
@@ -320,7 +321,9 @@ The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
-The signature schemes used to authenticate users are
+==== Plain authentication
+
+If the principal of the sender ends with `0x02`, then the signature schemes used to authenticate users are
 
  * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
  * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
@@ -336,6 +339,24 @@ In particular:
 The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `sender_pubkey`.
 
 NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
+
+==== Web authentication (WebAuthn)
+
+If the principal of the sender ends with `0x06`, then the signature scheme used to authenticate users is
+
+ * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
+
+In particular:
+
+ * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain COSE encodings of the public keys.
+   See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details.
+ * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three fields:
+   - `authenticatorData` (`blob`): WebAuthn authenticator data.
+   - `clientDataJSON` (`text`): WebAuthn client data in JSON representation.
+   - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
+
+The 32 byte <<api-request-id, _request id_>> is used as the challenge in the assertion.
+The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
 
 [#request-types]
 === Request types
@@ -1063,10 +1084,10 @@ type Principal = Blob
 
 The function
 ....
-mk_self_authenticating_id : PublicKey -> Principal
-mk_self_authenticating_id pk = H(pk) · 0x02
+is_self_authenticating_id : Principal -> PublicKey -> Bool
+is_self_authenticating_id p pk = (p = H(pk) · 0x02) || (p = H(pk) · 0x06)
 ....
-calculates self-authenticating ids.
+verifies whether a principal is self-authenticating for a specific public key.
 
 The function
 ....
@@ -1264,7 +1285,8 @@ request_id_of : Request -> Request
 ....
 
 
-For the signatures in a `Request`, we assume that the following function implements verification of https://ed25519.cr.yp.to/index.html[*Ed25519*] and https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] signatures, depending on the type of public key.
+For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
+In particular, the function implements  https://ed25519.cr.yp.to/index.html[*Ed25519*] and https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] signatures, depending on the type of public key, for the plain format, as well as ECDSA signatures for the WebAuthn format.
 ....
 PublicKey = Blob
 Signature = Blob
@@ -1339,7 +1361,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 verify_envelope(E, U) =
      is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
   || ∃ PK, SIG.
-       U = mk_self_authenticating_id E.sender_pubkey
+       is_self_authenticating_id U E.sender_pubkey
        && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 
@@ -1634,7 +1656,7 @@ which characterizes all system-assigned ids.
 
 To avoid clashes with potential user ids or is derived from users or canisters, we require (somewhat handwavy) that
 
- * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
+ * `is_system_assigned p && is_self_authenticating_id p pk = false` for possible principals p and public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
 
