@@ -1954,9 +1954,9 @@ S with
 
 ==== IC Management Canister: Random numbers
 
-The management canister can produce pseud-random bytes. It always returns a 32-byte `blob`:
+The management canister can produce pseudo-random bytes. It always returns a 32-byte `blob`:
 
-The precise guarantees around the randomness, e.g. unpredictability, are not captured in these formal semantics.
+The precise guarantees around the randomness, e.g. unpredictability, are not captured in this formal semantics.
 
 Conditions::
 ....
@@ -1982,7 +1982,7 @@ S with
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
-This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
+This “bookkeeping transition” must be immediately followed by the corresponding “Message execution” transition.
 
 Conditions::
 ....
