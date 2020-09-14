@@ -63,24 +63,26 @@ response-content =
   query-response
 
 request-status-response = {
-  (
-    status: "unknown"
-    //
-    status: "received"
-    //
-    status: "processing"
-    //
-    status: "replied"
-    reply: call-reply
-    //
-    status: "rejected"
-    reject_code: unsigned
-    reject_message:  text
-    //
-    status: "done"
-  )
+  request-status-body
   time : timestamp
 }
+
+request-status-body = (
+  status: "unknown"
+  //
+  status: "received"
+  //
+  status: "processing"
+  //
+  status: "replied"
+  reply: call-reply
+  //
+  status: "rejected"
+  reject_code: unsigned
+  reject_message:  text
+  //
+  status: "done"
+)
 
 query-response = {
   status: "replied"
