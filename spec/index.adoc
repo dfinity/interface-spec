@@ -965,6 +965,13 @@ Initially, the user or canister that created a canister is its _controller_, but
 
 Only the current controller of the canister can change the controller.
 
+[#ic-canister_status]
+=== IC method `canister_status`
+
+Indicates the current status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
+
+Only the current controller of the canister can request its status.
+
 [#ic-stop_canister]
 === IC method `stop_canister`
 
