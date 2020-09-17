@@ -351,8 +351,8 @@ In particular:
  * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain COSE encodings of the public keys.
    See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three fields:
-   - `authenticatorData` (`blob`): WebAuthn authenticator data.
-   - `clientDataJSON` (`text`): WebAuthn client data in JSON representation.
+   - `authenticator_data` (`blob`): WebAuthn authenticator data.
+   - `client_data_json` (`text`): WebAuthn client data in JSON representation.
    - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
 
 The 32 byte <<api-request-id, _request id_>> is used as the challenge in the assertion.
