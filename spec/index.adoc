@@ -102,7 +102,7 @@ Inter-canister calls do not distinguish between update and query methods. Note t
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
-WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
+[[define-wasm-fn]]WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
 
 External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
 
@@ -489,7 +489,7 @@ Rejection codes are member of the following enumeration:
 * `SYS_TRANSIENT` (2): Transient system error, retry might be possible.
 * `DESTINATION_INVALID` (3): Invalid destination (e.g. canister/account does not exist)
 * `CANISTER_REJECT` (4): Explicit reject by the canister.
-* `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
+* [[CANISTER_ERROR]]`CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
@@ -792,6 +792,7 @@ It returns the special “no error” code `0` if the callback is _not_ invoked 
 +
 The reject message. Traps if there there is no reject message (i.e. if `reject_code` is `0`).
 
+[#responding]
 === Responding
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
@@ -1563,9 +1564,13 @@ else
     messages = Older_messages · Younger_messages
 ....
 
-If message execution succeeds, the state is update and possible outbound calls and responses are enqueued.
+If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
 
-If message execution traps, or if it double-responds, the message gets dropped. No response is generated (as some other message may still fulfill this calling context).
+If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function)>>, the state is updated and possible outbound calls and responses are enqueued.
+
+Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would requre a (unique) call to `ic0.reply`.
+Note also that the state changes are persisted even when the system is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<starvation>>).
+
 
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
@@ -1580,6 +1585,7 @@ as_update(f,arg) = λ wasm_state →
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
+[#starvation]
 ==== Call context starvation
 
 If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
