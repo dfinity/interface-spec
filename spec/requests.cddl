@@ -12,8 +12,8 @@ tagged<t> = #6.55799(t) ; the CBOR tag
 
 envelope<t> = tagged<{
   content: t
-  sender_pubkey: pubkey
-  sender_sig: signature
+  ? sender_pubkey: pubkey
+  ? sender_sig: signature
 }>
 
 
@@ -26,7 +26,7 @@ call-request = {
   request_type: "call"
   ? nonce : bytes
   ingress_expiry : timestamp
-  sender : principal
+  ? sender : principal
   canister_id : principal
   method_name : text
   arg : bytes
@@ -49,7 +49,7 @@ query-request = {
   request_type: "query"
   ? nonce : bytes
   ingress_expiry : timestamp
-  sender : principal
+  ? sender : principal
   canister_id : principal
   method_name : text
   arg : bytes

@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.10.2
+0.10.3
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -100,7 +100,7 @@ Inter-canister calls do not distinguish between update and query methods. Note t
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
-WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
+[[define-wasm-fn]]WebAssembly  _functions_ are exported by the WebAssembly module or provided by the System API. These are _invoked_ and can either _trap_ or _return_, possibly with a return value. Functions, too, have parameters and take arguments.
 
 External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
 
@@ -108,9 +108,11 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs of length at most 29 bytes.
+Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
+
+Principals can have any length between 0 and 29 bytes.
 
 [#id-classes]
 === Special forms of IDs
@@ -141,8 +143,11 @@ These ids are treated specially when an id needs to be registered. In such a req
 +
 NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they may be used internally or in the future.
 
+4. _Anonymous id_
++
+This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
-When the system creates a _fresh_ id, it never creates a self-authenticating id or an id derived from what could be a canister or user.
+When the system creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
 
 
 [#textual-ids]
@@ -303,13 +308,15 @@ All requests coming in via the HTTP interface need to be _authenticated_ using a
 
 Furthermore, the request records are wrapped in a envelope record with these fields:
 
-* `sender_pubkey` (`blob`): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
-* `sender_sig` (`blob`): Signature to authenticate this request.
 * `content` (`record`): the actual request content
+* `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
 A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+
+The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the anonymous principal.
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -339,7 +346,7 @@ The maybe most important request type is calling an exported method of a caniste
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`Principal`): The user who issued the request.
+* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -371,12 +378,12 @@ NOTE: Request responses will not be kept around indefinitely, and eventually the
 [#api-query]
 ==== Canister query call
 
-Canister methods that do not change the canister state in a meaningful way can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
+Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`Principal`): The user who issued the request.
+* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -451,7 +458,7 @@ Rejection codes are member of the following enumeration:
 * `SYS_TRANSIENT` (2): Transient system error, retry might be possible.
 * `DESTINATION_INVALID` (3): Invalid destination (e.g. canister/account does not exist)
 * `CANISTER_REJECT` (4): Explicit reject by the canister.
-* `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
+* [[CANISTER_ERROR]]`CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
@@ -606,7 +613,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
 
-If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded. For upgrades, this transactional behaviour applies to the  `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
+If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded. For upgrades, this transactional behaviour applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
 
 [#system-api-init]
@@ -636,7 +643,7 @@ These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` tra
 
 To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>` or `canister_query <name>` and type `+() -> ()+`. We call this the _method entry point_. The name of the exported function distinguishes update and query methods.
 
-NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional.
+NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional. There is exactly one space between `canister_update/canister_query` and the `<name>`.
 
 The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
 
@@ -710,10 +717,10 @@ To provide access to a string or blob `foo`, the System API provides two functio
   ic0.foo_size : () -> (i32)
   ic0.foo_copy : (dst : i32, offset: i32, size : i32) -> ()
 
-The `*_size` function indicates the size, in bytes, of `foo`. The `_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
+The `*_size` function indicates the size, in bytes, of `foo`. The `*_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
 
 
-Dually, a System API function that conceptually takes a blob or string as a paramter `foo` has two parameters:
+Dually, a System API function that conceptually takes a blob or string as a parameter `foo` has two parameters:
 
   ic0.set_foo : (src : i32, size: i32) -> …
 
@@ -752,6 +759,7 @@ It returns the special “no error” code `0` if the callback is _not_ invoked 
 +
 The reject message. Traps if there there is no reject message (i.e. if `reject_code` is `0`).
 
+[#responding]
 === Responding
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
@@ -824,7 +832,7 @@ The system records two callback functions, represented by a table entry index `_
 +
 The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
 
-If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callbacks will be executed.
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callback will be executed.
 
 If the system returns a non-zero value, the call cannot (and will not be) performed.
 --
@@ -1057,7 +1065,13 @@ mk_derived_id p nonce = H(|p| · p · nonce) · 0x03
 ....
 calculates derived ids. With `|p|` we denote the length of the principal, in bytes, encoded as a single byte.
 
-These function domains are mutually disjoint.
+The principal of the anonymous user is fixed:
+....
+anonymous_id : Principal
+anonymous_id = 0x04
+....
+
+These function domains and fixed values are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
 ....
@@ -1190,8 +1204,8 @@ We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit
 ....
 Envelope = {
   content : Request | APIReadRequest;
-  sender_pubkey : PublicKey;
-  sender_sig : Signature;
+  sender_pubkey : PublicKey | NoPublicKey;
+  sender_sig : Signature | NoSignature;
 }
 
 Request
@@ -1255,7 +1269,7 @@ Finally, we can describe the state of the Internet Computer as a record having t
 S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
-  controllers : CanisterId ↦ UserId;
+  controllers : CanisterId ↦ Principal;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   system_time : Timestamp
@@ -1313,9 +1327,10 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 
 ....
 verify_envelope(E, U) =
-  ∃ PK, SIG.
-    U = mk_self_authenticating_id E.sender_pubkey U
-    && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
+     is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
+  || ∃ PK, SIG.
+       is_self_authenticating_id U E.sender_pubkey
+       && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 
 
@@ -1508,9 +1523,13 @@ else
     messages = Older_messages · Younger_messages
 ....
 
-If message execution succeeds, the state is update and possible outbound calls and responses are enqueued.
+If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
 
-If message execution traps, or if it double-responds, the message gets dropped. No response is generated (as some other message may still fulfill this calling context).
+If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function)>>, the state is updated and possible outbound calls and responses are enqueued.
+
+Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would requre a (unique) call to `ic0.reply`.
+Note also that the state changes are persisted even when the system is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<starvation>>).
+
 
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
@@ -1525,6 +1544,7 @@ as_update(f,arg) = λ wasm_state →
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
+[#starvation]
 ==== Call context starvation
 
 If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
@@ -1906,9 +1926,9 @@ S with
 
 ==== IC Management Canister: Random numbers
 
-The management canister can produce pseud-random bytes. It always returns a 32-byte `blob`:
+The management canister can produce pseudo-random bytes. It always returns a 32-byte `blob`:
 
-The precise guarantees around the randomness, e.g. unpredictability, are not captured in these formal semantics.
+The precise guarantees around the randomness, e.g. unpredictability, are not captured in this formal semantics.
 
 Conditions::
 ....
@@ -1934,7 +1954,7 @@ S with
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
-This “bookkeeping transition” must be immediatelly followed by the corresponding “Message execution” transition.
+This “bookkeeping transition” must be immediately followed by the corresponding “Message execution” transition.
 
 Conditions::
 ....
