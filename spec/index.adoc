@@ -655,6 +655,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_init` and type `+() -> ()+`.
 * The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
+* The canister may export functions named `canister_get_ingress_bucket` and `canister_get_ingress_limit_per_second` with type `+() -> ()+`. It must export none or both of these functions.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
