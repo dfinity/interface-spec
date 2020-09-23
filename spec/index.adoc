@@ -321,6 +321,7 @@ The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
+[#authentication-plain]
 ==== Plain authentication
 
 If the principal of the sender ends with `0x02`, then the signature schemes used to authenticate users are
@@ -340,6 +341,7 @@ The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x
 
 NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
 
+[#authentication-webauthn]
 ==== Web authentication (WebAuthn)
 
 If the principal of the sender ends with `0x06`, then the signature scheme used to authenticate users is
@@ -350,13 +352,24 @@ In particular:
 
  * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain COSE encodings of the public keys.
    See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details.
- * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three fields:
+ * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three mandatory fields:
    - `authenticator_data` (`blob`): WebAuthn authenticator data.
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
    - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
 
 The 32 byte <<api-request-id, _request id_>> is used as the challenge in the assertion.
 The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
+
+Signing transactions can be delegated from a Web Authentication key to a key used in plain authentication. If delegation is used, The `sender_pubkey` field is still set to the COSE encoding of the public key used in WebAuthn. The `sender_sig` field is a binary blob containing a CBOR encoding with the same fields as above, and additionally:
+
+ * `delegation` (`blob`): CBOR-encoding of a map with two mandatory fields:
+   - `key` (`blob`): DER-encoded public key as described in <<authentication-plain>>, i.e. Ed25519 or ECDSA.
+   - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field in <<authentication>>.
+ * `delegate_signature` (`blob`): Signature as described in <<authentication-plain>>.
+
+The fields `delegation` and `delegate_signature` must be both absent or both present.
+If both fields are present, then the 32 byte <<api-request-id, _request id_>> is signed using the plain signature scheme relative to the key specified in the `delegation` object.
+The challenge in the WebAuthn assertion is set to `SHA-256(delegation)`, where `delegation` refers to the encoded CBOR object.
 
 [#request-types]
 === Request types
