@@ -7,11 +7,16 @@
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The cleanup callback is introduced
 * Spec: User authentication method based on WebAuthn is introduced
-* Spec: Support for funds (balances and transfers)
 * Spec: Ingress rate limiting
 
+[#0_11_0]
+=== 0.11.0 (2020-09-23)
+
+* Spec: Inter-canister calls are now performed using a builder-like API
+* Spec: Support for funds (balances and transfers)
+
 [#v0_10_3]
-=== 0.19.3 (2020-09-21)
+=== 0.10.3 (2020-09-21)
 
 * Spec: The anonymous user is introduced
 

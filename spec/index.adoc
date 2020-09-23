@@ -934,7 +934,6 @@ The reply callback is executed upon successful completion of the method call, wh
 
 The reject callback is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 --
 
@@ -2481,7 +2480,6 @@ ExecutionState = {
   reply_params : { arg : Blob };
   pending_call : MethodCall | NoPendingCall;
   calls : List MethodCall;
-  calls : List Call;
   bucket_cost : NoBucket | BucketCost
   rate_limit : NoLimit | i64
 }
