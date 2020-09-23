@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.10.3
+0.11.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -547,7 +547,7 @@ More precisely:
  * Method calls between any _two_ canisters are delivered in order, as if they
    were communicating over a single simple FIFO queue.
  * If a WebAssembly function, within a single invocation, makes multiple calls
-   to the same canister, they are queued in the order of invocations to `ic0.call_simple`.
+   to the same canister, they are queued in the order of invocations to `ic0.call_perform`.
  * Responses (including replies with `ic0.msg_reply`, explicit rejects with `ic0.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
  * There is no particular order guarantee for ingress messages submitted via
    the HTTP interface.
@@ -611,9 +611,9 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
-* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks in `ic0.call_simple` traps.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
 
-If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_simple`), are discarded. For upgrades, this transactional behaviour applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
+If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behaviour applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
 
 [#system-api-init]
@@ -662,37 +662,51 @@ In the reply callback of a <<system-api-call,inter-canister method call>>, the a
 The following sections describe various system imports, which we summarize here.
 
 ....
-ic0.msg_arg_data_size : () -> i32;                                      // I U Q Ry
-ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();    // I U Q Ry
-ic0.msg_caller_size : () -> (i32);                                      // I G U Q
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();       // I G U Q
-ic0.msg_reject_code : () -> i32;                                        // Ry Rt
-ic0.msg_reject_msg_size : () -> i32;                                    // Rt
-ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();  // Rt
-ic0.msg_reply_data_append : (src : i32, size : i32) -> ();              // U Q Ry Rt
-ic0.msg_reply : () -> ();                                               // U Q Ry Rt
-ic0.msg_reject : (src : i32, size : i32) -> ();                         // U Q Ry Rt
-ic0.canister_self_size : () -> (i32);                                   // *
-ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();   // *
-ic0.call_simple :                                                       // U Ry Rt
+ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry
+ic0.msg_caller_size : () -> (i32);                                          // I G U Q
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q
+ic0.msg_reject_code : () -> i32;                                            // Ry Rt
+ic0.msg_reject_msg_size : () -> i32;                                        // Rt
+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
+
+ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q Ry Rt
+ic0.msg_reply : () -> ();                                                   // U Q Ry Rt
+ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
+
+ic0.msg_funds_available : ( unit_src : i32, unit_size : i32 ) -> i64;       // U Rt Ry
+ic0.msg_funds_refunded : ( unit_src : i32, unit_size : i32 ) -> i64;        // Rt Ry
+ic0.msg_funds_accept :                                                      // U Rt Ry
+  ( unit_src : i32, unit_size : i32, amount : i64 ) -> ();
+
+ic0.canister_self_size : () -> (i32);                                       // *
+ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
+ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) : i64;           // *
+
+ic0.call_new :                                                              // U Ry Rt
   ( callee_src  : i32,
     callee_size : i32,
-    name_src    : i32,
-    name_size   : i32,
-    reply_fun   : i32,
-    reply_env   : i32,
-    reject_fun  : i32,
-    reject_env  : i32,
-    data_src    : i32,
-    data_size   : i32
-  ) -> ( err_code : i32 );
-ic0.stable_size : () -> (page_count : i32);                             // *
-ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);          // *
-ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();         // *
-ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();          // *
-ic0.time : () -> (timestamp : i64);                                     // *
-ic0.debug_print : (src : i32, size : i32) -> ();                        // * s
-ic0.trap : (src : i32, size : i32) -> ();                               // * s
+    name_src : i32,
+    name_size : i32,
+    reply_fun : i32,
+    reply_env : i32,
+    reject_fun : i32,
+    reject_env : i32,
+  ) -> ();
+ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
+ic0.call_funds_add :                                                        // U Ry Rt
+  (unit_src : i32, unit_size : i32,  amount : i64) -> ();
+ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt
+
+ic0.stable_size : () -> (page_count : i32);                                 // *
+ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
+ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
+ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
+
+ic0.time : () -> (timestamp : i64);                                         // *
+
+ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
+ic0.trap : (src : i32, size : i32) -> ();                                   // * s
 ....
 
 The comment after each function lists from where these functions may be invoked:
@@ -725,8 +739,6 @@ Dually, a System API function that conceptually takes a blob or string as a para
   ic0.set_foo : (src : i32, size: i32) -> …
 
 which copies, at the time of function invocation, the data referred to by `src`/`size` out of the canister. Unless otherwise noted, this traps if `src+size` exceeds the size of the WebAssembly memory.
-
-
 
 === Method arguments
 
@@ -777,6 +789,8 @@ This traps if the current call already has been responded to.
 Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
++
+See <<system-api-funds>> for how this interacts with funds available on this call.
 
 * `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
 +
@@ -787,6 +801,8 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory,
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
++
+See <<system-api-funds>> for how this interacts with funds available on this call.
 
 [#system-api-canister-self]
 === Self-identification
@@ -804,38 +820,100 @@ These functions allow the canister to query its own canister id (as a blob).
 [#system-api-call]
 === Inter-canister method calls
 
-When handling an update call (or a callback), a canister can do further calls to another canister.
+When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
 
 * {blank}
 +
 --
-  ic0.call_simple : (
-    callee_src  : i32,
-    callee_size : i32,
-    name_src    : i32,
-    name_size   : i32,
-    reply_fun   : i32,
-    reply_env   : i32,
-    reject_fun  : i32,
-    reject_env  : i32,
-    data_src    : i32,
-    data_size   : i32
-  ) -> ( err_code : i32 )
+  ic0.call_new :
+    ( callee_src : i32,
+      callee_size : i32,
+      name_src : i32,
+      name_size : i32,
+      reply_fun : i32,
+      reply_env : i32,
+      reject_fun : i32,
+      reject_env : i32,
+    ) -> ()
 
-This performs a function call to the canister specified by `callee_src/_size`, calling the method specified by `name_src/_size`, sending the data specified by `data_src/_size`.
+Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
 
-The system records two callback functions, represented by a table entry index `_fun` and some additional value `_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+` and passed the corresponding `_env` value.
+The system records two mandatory callback functions, represented by a table entry index `fun` and some additional value `env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+` and passed the corresponding `env` value.
 
-1. The callback `reply_fun`/`reply_env` is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
-2. The callback `reject_fun`/`reject_env` is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
-+
-+
-The system queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
+The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
 
-If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callback will be executed.
+The reject callback is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-If the system returns a non-zero value, the call cannot (and will not be) performed.
+
+Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 --
+
+* `+ic0.call_data_append : (src : i32, size : i32)+`
++
+Appends the specified bytes to the argument of the call. Initially, the argument is empty.
++
+This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
+
+
+* `+ic0.call_funds_add : (unit_src : i32, unit_size : i32,  amount : i64) -> ()+`
++
+This adds funds onto a call. See <<system-api-funds>>.
++
+This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
+
+* `+ic0.call_perform  : () -> ( err_code : i32 )+`
++
+This call concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
++
+If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of gas condition. This also means that exactly one of the reply or reject callback will be executed.
++
+If the system returns a non-zero value, the call cannot (and will not be) performed.
++
+After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap
+
+[#system-api-funds]
+=== Funds
+
+Each canister maintains funds of various units. Units are represented as blob. At the moment, the only supported units are Cycles (represented as `"\x00"`) and ICPT (represented as `"\0x01"`). Other units, including canister-defined units, can be added in the future.
+
+Cycles work like other units, but have some additional special purpose rules since computation on the Internet Computer is paid for in cycles.
+
+* `ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) -> (i64)`
++
+indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_simple`, plus any funds accepted via `ic0.msg_funds_accept`.
++
+After execution of the message, unused cycles from the reserve may be added to the cycles balance again.
+
+* `ic0.msg_funds_available : ( unit_src i32, unit_size : i32 ) -> (i64)`
++
+returns the amount of the specified `unit` that was transferred by the caller of the current call, and is still available in this message.
++
+Initially, in the update method entry point, this is the amount that the caller passed to the canister. When funds are accepted (`ic0.msg_funds_accept`), this reports less funds accordingly. When the call is responsed to (reply or reject), all available funds are refunded to the caller, and this will return 0.
+
+* `ic0.msg_funds_accept : ( unit_src i32, unit_size : i32, amount : i64 ) -> ()`
++
+This moves funds from the call to the canister balance. It can be called multiple times.
++
+This traps if the canister tries to accept more funds than it can according to `ic0.msg_funds_available`.
++
+This means it will trap when used after calling `ic0.msg_reply` or `ic0.msg_reject`, unless `amount = 0`.
++
+[TIP]
+=====
+Example: To accept all ICPTs provided, invoke `ic0.msg_funds_accept("\x01", 1, ic0.msg_funds_available("\x01",1))` in the method handler or a callback handler, _before_ calling reply or reject.
+=====
+
+* `ic0.call_funds_add : (unit_src : i32, unit_size : i32,  amount : i64) -> ()`
++
+This function moves funds from the canister balance onto the call under construction, to be transferred with that call.
++
+The funds are deducted from the balance as shown by `ic0.canister_balance` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without callling `ic0.call_perform`).
++
+This traps if trying to transfer more funds than are in the current balance of the canister.
+
+* `ic0.msg_funds_refunded : ( unit_src i32, unit_size : i32 ) -> (i64)`
++
+this can only be used in a callback handler (reply or reject), and indicates the amount of the specified `unit` that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
 [#system-api-stable-memory]
 === Stable memory
@@ -915,7 +993,7 @@ The Internet Computer aims to make the most of the WebAssembly platform, and emb
 
 1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
 2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
-3. In addition to the monolithic `ic0.call_simple`, a compositional builder interface to create calls is provided.
+3. Making the builder interface to create calls build calls identified by a reference, rather than having an implicit partial call in the background.
 
 A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
 
@@ -1078,6 +1156,36 @@ Method names can be arbitrary pieces of text:
 MethodName = Text
 ....
 
+[#abstract-funds]
+==== Funds
+
+Canisters can store and transfer funds, which come in various units. One unit, namely cycles, has special semantics in the system, as many actions deduct cycles.
+
+The type of fund units is a blob, and the values for cycles and ICPT are defined:
+....
+Unit = Blob
+cycle_unit : "\x00"
+icpt_unit : "\x01"
+....
+
+The type of balances or transferred funds is a (total) function from fund units to amounts.
+....
+Funds = Unit -> Nat
+....
+Operations like `+`, `-` are overloaded pointwise. In this spec, all subtractions must be well-defined (i.e. not produce negative results). Comparisons like `<` hold if they hold at all units.
+
+The term `no_funds` indicates no funds:
+....
+no_funds
+ = (λ u. 0) : Funds
+....
+
+The following shorthands create funds containing funds of one unit:
+....
+funds_of_unit(unit, amount) = (λ u. if u = unit then amount else 0) : Funds
+cycle_funds(n) = funds_of_unit(cycle_unit, n)
+....
+
 
 [#abstract-canisters]
 ==== Abstract canisters
@@ -1106,6 +1214,7 @@ MethodCall = {
   callee : CanisterId;
   method_name: MethodName;
   arg: Blob;
+  transferred_funds: Funds;
   callback: Callback;
 }
 
@@ -1113,16 +1222,20 @@ UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
   response : NoResponse | Response;
+  funds_accepted : Funds;
 }
 QueryFunc = WasmState -> Trap | Return Response
 
+Balance = Funds
+AvailableFunds = Funds
+
 CanisterModule = {
-  init : (CanisterId, Arg) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : Principal, Timestamp) -> Trap | Return StableMemory
-  post_upgrade : (CanisterId, StableMemory, Arg) -> Trap | Return WasmState
-  update_methods : MethodName ↦ (Arg -> UpdateFunc)
-  query_methods : MethodName ↦ (Arg -> QueryFunc)
-  callbacks : (Callback, Response, Timestamp) -> UpdateFunc
+  init : (CanisterId, Arg, Balance) -> Trap | Return WasmState
+  pre_upgrade : (WasmState, caller : Principal, Timestamp, Balance) -> Trap | Return StableMemory
+  post_upgrade : (CanisterId, StableMemory, Arg, Balance) -> Trap | Return WasmState
+  update_methods : MethodName ↦ ((Arg, Balance, AvailableFunds) -> UpdateFunc)
+  query_methods : MethodName ↦ ((Arg, Balance) -> QueryFunc)
+  callbacks : (Callback, Response, Funds, Timestamp, Balance, AvailableFunds) -> UpdateFunc
 }
 ....
 
@@ -1149,6 +1262,7 @@ CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
   responded : bool;
+  available_funds : Funds;
 }
 CallId = (abstract)
 CallOrigin
@@ -1170,7 +1284,7 @@ Therefore, a message can have different shapes:
 Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
 EntryPoint
   = PublicMethod MethodName Principal Blob
-  | Callback Callback Response
+  | Callback Callback Response Funds
 
 Message
   = CallMessage {
@@ -1179,6 +1293,7 @@ Message
       callee : CanisterId;
       method_name : Text;
       data : Blob;
+      transferred_funds : Funds;
       queue : Queue;
     }
   | FuncMessage {
@@ -1190,6 +1305,7 @@ Message
   | ResponseMessage {
       origin : CallOrigin;
       response : Response;
+      refunded_funds : Funds;
     }
 ....
 
@@ -1272,6 +1388,7 @@ S = {
   controllers : CanisterId ↦ Principal;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
+  balances: CanisterId ↦ Funds;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -1281,7 +1398,10 @@ CanState
   wasm_state : WasmState;
   module : CanisterModule;
 }
-CanStatus = Running | Stopping (List CallOrigin) | Stopped
+CanStatus
+  = Running
+  | Stopping (List (CallOrigin, Funds))
+  | Stopped
 ....
 
 ==== Initial state
@@ -1293,6 +1413,7 @@ The initial state of the system is
   canisters = ();
   controllers = ();
   time = ();
+  balances = ();
   system_time = T;
   call_contexts = ();
   messages = ();
@@ -1400,6 +1521,7 @@ S with
         callee = R.canister_id;
         method_name = R.method_name;
         arg = R.arg;
+        transferred_funds = no_funds;
         queue = Unordered;
       } · S.messages
 ....
@@ -1412,7 +1534,7 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping
+    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _
 ....
 
 State after::
@@ -1421,6 +1543,7 @@ State after::
       ResponseMessage {
           origin = S.call_contexts[CM.call_context].origin
           response = Reject (CANISTER_ERROR, "canister stopped");
+          refunded_funds = CM.transferred_funds;
       }
 ....
 
@@ -1450,7 +1573,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id;
         receiver = CM.callee;
-        entry_point = PublicMethod M.method_name CM.caller CM.data
+        entry_point = PublicMethod CM.method_name CM.caller CM.data
         queue = CM.queue;
       } ·
       Younger_messages
@@ -1458,6 +1581,7 @@ S with
       canister = CM.callee;
       origin = CM.origin;
       responded = false;
+      available_funds = CM.funds;
     }
 ....
 
@@ -1474,15 +1598,17 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
+    Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
+    Available = S.call_contexts[M.call_contexts].available_funds
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller; time = S.time[M.receiver] }
-      (F = M.update_methods[M.method_name](Arg))
+      (F = M.update_methods[M.method_name](Arg, Balance_before, Available))
       or
-      (F = as_update(Mod.query_methods[M.method_name], Arg))
+      (F = as_update(Mod.query_methods[M.method_name], Arg, Balance_before))
     )
     or
-    ( M.entry_point = Callback Callback Response
-      F = Mod.callbacks(Callback, Response, S.time[M.receiver])
+    ( M.entry_point = Callback Callback Response Refund
+      F = Mod.callbacks(Callback, Response, Refund, S.time[M.receiver], Balance_before, Available)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -1491,6 +1617,10 @@ State after::
 ....
 if
   R = Return res
+  cycle_funds(Cycles_used) ≤ cycle_funds(Max_cycles)
+  res.funds_accepted ≤ Available
+  cycle_funds(Cycles_used) + ∑ [ call.transferred_funds | call ∈ res.new_calls ]
+     ≤ S.balances[M.receiver] + res.funds_accepted
   (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
 then
   S with
@@ -1507,21 +1637,42 @@ then
           callee = call.callee;
           method_name = call.method_name;
           arg = call.arg;
+          transferred_funds = call.transferred_funds
           queue = Queue { from = M.receiver; to = call.callee };
         }
-      | for call ∈ res.new_calls ] ·
+      | call ∈ res.new_calls ] ·
       [ ResponseMessage {
           origin = S.call_contexts[M.call_context].origin
           response = res.response;
+          refunded_funds = AvailableFunds - res.funds_accepted;
         }
-      | if res.response ≠ NoResponse ]
+      | res.response ≠ NoResponse ]
 
-     call_contexts[M.call_context].responded =
-       call_contexts[M.call_context].responded || res.response ≠ NoResponse:
+    if res.response = NoResponse:
+       call_contexts[M.call_context].available_funds = AvailableFunds - res.funds_accepted
+    else
+       call_contexts[M.call_context].responded = true
+       call_contexts[M.call_context].available_funds = no_funds
+
+    balances[M.receiver] = S.balances[M.receiver]
+      + res.funds_accepted
+      - cycle_funds(Cycles_used)
+      - ∑ [ call.transferred_funds | call ∈ res.new_calls ]
 else
   S with
     messages = Older_messages · Younger_messages
+    balances[M.receiver] = S.balances[M.receiver]
+      - cycle_funds(Cycles_used)
 ....
+
+The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable. The maximum number of cycles to consume is also unspecified, and expressed as `Max_cycles`.
+
+This transition detects certain behaviour that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
+
+ * Responding if the present call context has already been responded to
+ * Accepting more funds than are available on the call context
+ * Sending out more funds than available to the canister
+ * Consuming more cycles than allowed (and reserved)
 
 If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
 
@@ -1530,16 +1681,16 @@ If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would requre a (unique) call to `ic0.reply`.
 Note also that the state changes are persisted even when the system is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<starvation>>).
 
-
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
-as_update(f,arg) = λ wasm_state →
-  match f(arg)(wasm_state) with
+as_update(f, arg, balance) = λ wasm_state →
+  match f(arg, balance)(wasm_state) with
     Trap → Trap
     Return res → Return {
       new_state = wasm_state;
       new_calls = [];
       response = res;
+      funds_accepted = no_funds;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
@@ -1562,11 +1713,13 @@ State after::
 ....
 S with
     call_contexts[Ctxt_id].responded = true
+    call_contexts[Ctxt_id].available_funds = no_funds
     messages =
       S.messages ·
       ResponseMessage {
         origin = S.call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, "starvation");
+        refunded_funds = S.call_contexts[Ctxt_id].available_funds
       }
 ....
 
@@ -1592,7 +1745,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister, and the canister status is set to 'Running'.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister. The canister status is set to 'Running'. All funds on this call are now the canister's initial funds.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -1612,10 +1765,12 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.caller
+    funds[CanisterId] = M.transferred_funds
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid({canister_id = CanisterId}))
+        refunded_funds = no_funds
       }
     canister_status[CanisterId] = Running
 ....
@@ -1654,6 +1809,7 @@ S with
         response = candid({
           status = S.canister_status[A.canister_id]
         })
+        refunded_funds = M.transferred_funds
       }
 ....
 
@@ -1689,6 +1845,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
+        refunded_funds = M.transferred_funds
       }
 ....
 
@@ -1727,6 +1884,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
+        refunded_funds = M.transferred_funds
       }
 ....
 
@@ -1751,6 +1909,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
+        refunded_funds = M.transferred_funds
       }
 ....
 
@@ -1760,7 +1919,7 @@ The controller of a canister can stop a canister. Stopping a canister goes throu
 
 We encode this behavior via three (types of) transitions:
 
-1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status all `stop_canister` requests which arrive at the canister while it is stopping (or stopped).
+1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and funds) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
 2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that that the canister is stopped.
 
@@ -1778,7 +1937,7 @@ State after::
 ....
 S with
     messages = Older_messages · Younger_messages
-    S.status[A.canister_id] = Stopping [M.origin]
+    S.status[A.canister_id] = Stopping [(M.origin, M.transferred_funds)]
 ....
 
 The next two transition record any additional 'stop_canister' requests that arrive at a stopping (or stopped) canister in its status.
@@ -1797,7 +1956,7 @@ State after::
 ....
 S with
     messages = Older_messages · Younger_messages
-    S.status[A.canister_id] = Stopping (Origins · M.origin)
+    S.status[A.canister_id] = Stopping (Origins · (M.origin, M.transferred_funds))
 ....
 
 
@@ -1815,8 +1974,9 @@ State after::
         [ ResponseMessage {
             origin = O
             response = Accepted (candid())
+            refunded_funds = F
           }
-	| O ∈ Origins
+	| (O, F) ∈ Origins
 	]
 ....
 
@@ -1865,6 +2025,7 @@ S with
         ResponseMessage{
             origin = M.origin
             response = Accepted (candid())
+            refunded_funds = M.transferred_funds
         }
 ....
 
@@ -1889,12 +2050,14 @@ S with
         ResponseMessage{
             origin = M.origin
             response = Accepted (candid())
+            refunded_funds = M.transferred_funds
         } ·
         [ ResponseMessage {
             origin = O
             response = Reject (CANISTER_REJECT, 'Canister has been restarted')
+            refunded_funds = F
           }
-	| O ∈ Origins
+	| (O, F) ∈ Origins
 	]
 ....
 
@@ -1917,10 +2080,12 @@ S with
     controllers[CanisterId] = (deleted)
     canister_status[CanisterId] = (deleted)
     time[CanisterId] = (deleted)
+    balances[CanisterId] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
+        refunded_funds = M.transferred_funds + S.balances[CanisterId]
       }
 ....
 
@@ -1947,6 +2112,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid(B))
+        refunded_funds = M.transferred_funds
       }
 ....
 
@@ -1960,19 +2126,20 @@ Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     RM.origin = FromCanister {
-        call_context = Ctxt_id2
+        call_context = Ctxt_id
         callback = Callback
       }
 ....
 State after::
 ....
 S with
+    balances[S.call_contexts[Ctxt_id].canister] += RM.refunded_funds
     messages =
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id2
         receiver = C
-        entry_point = Callback Callback FM.response
+        entry_point = Callback Callback FM.response RM.refunded_funds
         queue = Unordered
       } ·
       Younger_messages
@@ -1996,6 +2163,8 @@ S with
       | Completed { result = R } if response = Reply R
       | Rejected R               if response = Reject R
 ....
+
+NB: The refunded funds, `RM.refunded_funds` are, by construction, empty, with the exception of when the controller of a canister is a user, and deletes a canister with funds. In the current specification, these funds disappear in thin air in that case. This is likely to change in some way or another.
 
 ==== Request clean up
 
@@ -2090,6 +2259,7 @@ Conditions::
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
   C = S.canisters[Q.canister_id]
+  Balance = S.balances[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
     data = Q.arg;
@@ -2098,17 +2268,17 @@ Conditions::
   }
 ....
 Read response::
-* If `F(Arg) = Trap` then
+* If `F(Arg, Balance) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Arg) = Return (Reject (code, msg))` then
+* Else if `F(Arg, Balance) = Return (Reject (code, msg))` then
 +
 ....
 {status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
-* Else if `F(Arg) = Return (Reply R)` then
+* Else if `F(Arg, Balance) = Return (Reply R)` then
 +
 ....
 {status: success; result: <R> }
@@ -2137,11 +2307,14 @@ We model `mem` as an array of bytes, and `table` as an array of execution functi
 
 The abstract `Callback` type above models an entry point for responses:
 ....
+Closure = {
+    fun   : i32,
+    env   : i32,
+}
+
 Callback = {
-    reply_fun   : i32,
-    reply_env   : i32,
-    reject_fun  : i32,
-    reject_env  : i32,
+  on_reply : Closure;
+  on_reject : Closure;
 }
 ....
 
@@ -2155,15 +2328,19 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   time : Timestamp;
+  funds_refunded : Funds;
 }
 ExecutionState = {
   wasm_state : WasmState;
   params : Params;
   response : NoResponse | Response;
+  funds_accepted : Funds;
+  funds_available : Funds;
+  balance : Funds;
   reply_params : { arg : Blob };
-  calls : List Call;
+  pending_call : MethodCall | NoPendingCall;
+  calls : List MethodCall;
 }
-
 ....
 
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed _execution functions_.
@@ -2184,15 +2361,20 @@ empty_params = {
   data = NoData;
   caller = NoCaller;
   reject_code = 0;
-  reject_message ""
+  reject_message = "";
+  funds_refunded = no_funds;
 }
 
 empty_execution_state = {
   wasm_state = (undefined);
   params = (undefined);
   response = NoResponse;
-  reply_params : { arg = "" };
-  calls : [];
+  funds_accepted = no_funds;
+  funds_available = no_funds;
+  balance = no_funds;
+  reply_params = { arg = "" };
+  pending_call = NoPendingCall;
+  calls = [];
 }
 ....
 
@@ -2202,17 +2384,18 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-init = λ (self_id, arg) →
+init = λ (self_id, arg, balance) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 +
 ....
-init = λ (self_id, arg) →
+init = λ (self_id, arg, balance) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
       params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
+      balance = balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2227,16 +2410,17 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 +
 ....
-pre_upgrade = λ (old_state, caller) → Return old_state.stable_mem
+pre_upgrade = λ (old_state, caller, time, balance) → Return old_state.stable_mem
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 +
 ....
-pre_upgrade = λ (old_state, caller, time) →
+pre_upgrade = λ (old_state, caller, time, balance) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
       params = { empty_params with caller = caller; time = time }
+      balance = balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2250,17 +2434,18 @@ pre_upgrade = λ (old_state, caller, time) →
 If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg) →
+post_upgrade = λ (self_id, stable_mem, arg, balance) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg) →
+post_upgrade = λ (self_id, stable_mem, arg, balance) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
       params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time }
+      balance = balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2271,28 +2456,41 @@ post_upgrade = λ (self_id, stable_mem, arg) →
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ arg → λ wasm_state →
+update_methods[method] = λ (arg, balance, available) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
+      params = empty_params with {
+        data = arg.data;
+        caller = arg.caller;
+        time = arg.time;
+      }
+      balance = balance
+      funds_available = arg.funds;
     }
   try func<es>() with Trap then Trap
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
     response = es.response;
+    funds_accepted = es.funds_accepted;
   }
 ....
 
 * The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 +
 ....
-query_methods[method] = λ arg → λ wasm_state →
+query_methods[method] = λ (arg, balance) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
+      params = empty_params with {
+        data = arg.data;
+        caller = arg.caller;
+        time = arg.time
+      }
+      balance = balance
     }
   try func<es>() with Trap then Trap
+  if es.funds_accepted ≠ no_funds then Trap
   if es.calls ≠ () then Trap
   if es.response = NoResponse then Trap
   Return es.response;
@@ -2305,14 +2503,18 @@ By construction, the (possibly modified) `es.wasm_state` is discarded.
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, time) → λ wasm_state →
+callbacks = λ(callbacks, response, refund, time, balance, available) → λ wasm_state →
+  let params0 = { empty_params with
+    time = time;
+    funds_received = refund;
+  }
   let (func_id, env, params) = match response with
     Reply data ->
-      (callbacks.reply_fun, callbacks.env,
-        { data; caller = NoCaller; reject_code = 0; reject_message = ""; time })
+      (callbacks.on_reply.fun, callbacks.on_reply.env,
+        { params0 with data})
     Reject (reject_code, reject_message)->
-      (callbacks.reply_fun, callbacks.env,
-        { data = NoData; caller = NoCaller; reject_code; reject_message; time })
+      (callbacks.on_reject.fun, callbacks.on_reject.env,
+        { params0 with reject_code; reject_message})
 
   if fun > |es.wasm_state.store.table| then Trap
   let func = es.wasm_state.store.table[fun]
@@ -2320,13 +2522,16 @@ callbacks = λ(callbacks, response, time) → λ wasm_state →
 
   let es = ref {empty_execution_state with
     wasm_state = wasm_state;
-    params
+    params = params;
+    balance = balance;
+    funds_available = available;
   }
   func<es>(env)
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
     response = es.response;
+    balance = es.balance;
   }
 ....
 
@@ -2334,6 +2539,7 @@ callbacks = λ(callbacks, response, time) → λ wasm_state →
 
 In the following section, we use the these helper functions
 
+....
 copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
   if offset+size > |data| then Trap
   if dst+size > |es.wasm_state.store.mem| then Trap
@@ -2342,6 +2548,7 @@ copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
 copy_from_canister<es>(src : i32, size : i32) blob =
   if src+size > |es.wasm_state.store.mem| then Trap
   return es.wasm_state.store.mem[src..src+size]
+....
 
 ==== System imports
 
@@ -2386,14 +2593,34 @@ ic0.msg_reply<es>() =
 ic0.msg_reject<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
+  es.funds_available := no_funds
+
+ic0.msg_funds_available<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
+  let unit := copy_from_canister<es>(unit_src, unit_size)
+  return es.funds_available(unit)
+
+ic0.msg_funds_refunded<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
+  return es.params.funds_refunded(unit)
+
+ic0.msg_funds_accept<es> : ( unit_src : i32, unit_size : i32; amount : i64 ) =
+  let unit := copy_from_canister<es>(unit_src, unit_size)
+  let funds := funds_of_unit(unit, amount)
+  if funds > es.funds_available then Trap
+  es.funds_available := es.funds_available - funds
+  es.funds_accepted := es.funds_accepted + funds
+
 
 ic0.canister_self_size<es>() : i32 =
   return |es.wasm_state.self_id|
 
-ic0.canister_self_copy(dst:i32, offset:i32, size:i32)  =
+ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
-ic0.call_simple<es>(
+ic0.canister_balance<es> : ( unit_src : i32, unit_size : i32 ) : i64 =
+  let unit := copy_from_canister<es>(unit_src, unit_size)
+  return es.balance(unit)
+
+ic0.call_new<es>(
     callee_src  : i32,
     callee_size : i32,
     name_src    : i32,
@@ -2402,38 +2629,60 @@ ic0.call_simple<es>(
     reply_env   : i32,
     reject_fun  : i32,
     reject_env  : i32,
-    data_src    : i32,
-    data_size   : i32) =
+  ) =
+
+  discard_pending_call<es>()
 
   callee := copy_from_canister<es>(callee_src, callee_size);
   method_name := copy_from_canister<es>(name_src, name_size);
-  arg := copy_from_canister<es>(data_src, data_size);
 
   if reply_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
+
   if reject_fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
 
-  callbacks := {
-    reply_fun
-    reply_env
-    reject_fun
-    reject_env
+  es.pending_call = MethodCall {
+    callee = callee;
+    method_name = callee;
+    arg = "";
+    transferred_funds = no_funds;
+    callback = Callback {
+      on_reply = Closure { fun = reply_fun; env = reply_env }
+      on_reject = Closure { fun = reject_fun; env = reject_env }
+    };
   }
 
+ic0.call_data_append<es> (src : i32, size : i32) =
+  if es.pending_call = NoPendingCall then Trap
+  es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
+
+ic0.call_funds_add<es> (unit_src : i32, unit_size : i32,  amount : i32) =
+  if es.pending_call = NoPendingCall then Trap
+  let unit := copy_from_canister<es>(unit_src, unit_size)
+  let funds := funds_of_unit(unit, amount)
+  if funds > es.balance then Trap
+
+  es.balance := es.balance - funds
+  es.pending_call.transferred_funds := es.pending_call.transferred_funds + funds
+
+ic0.call_funds_peform<es> () : ( err_code : i32 ) =
+  if es.pending_call = NoPendingCall then Trap
 
   if arbitrary()
   then
+    discard_pending_call<es>()
     return 1
   or
-    es.calls := es.calls ·
-      {
-        callee = callee;
-        method_name = method_name;
-        arg = arg;
-        callback = callbacks
-      }
+    es.calls := es.calls · es.pending_call
+    es.pending_call := NoPendingCall
     return 0
+
+// helper function
+discard_pending_call<es>() =
+  if es.pending_call ≠ NoPendingCall then
+    es.balance := es.balance + es.pending_call.transferred_funds
+    es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
   return |es.wasm_state.stable_mem| / 64k
