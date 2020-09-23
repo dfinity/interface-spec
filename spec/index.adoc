@@ -625,6 +625,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
+* If it exports functions called `canister_get_ingress_bucket` or `canister_get_ingress_limit_per_second`, the functions must have type `+() -> ()+`. It must export either both or none of these two functions.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * No floating point instructions are used in the module. (This will be allowed in the future.)
@@ -694,19 +695,27 @@ In the reply callback of a <<system-api-call,inter-canister method call>>, the a
 The following sections describe various system imports, which we summarize here.
 
 ....
-ic0.msg_arg_data_size : () -> i32;                                      // I U Q Ry
-ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();    // I U Q Ry
-ic0.msg_caller_size : () -> (i32);                                      // I G U Q
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();       // I G U Q
-ic0.msg_reject_code : () -> i32;                                        // Ry Rt
-ic0.msg_reject_msg_size : () -> i32;                                    // Rt
-ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();  // Rt
-ic0.msg_reply_data_append : (src : i32, size : i32) -> ();              // U Q Ry Rt
-ic0.msg_reply : () -> ();                                               // U Q Ry Rt
-ic0.msg_reject : (src : i32, size : i32) -> ();                         // U Q Ry Rt
-ic0.canister_self_size : () -> (i32);                                   // *
-ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();   // *
-ic0.call_simple :                                                       // U Ry Rt
+ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry Lb
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry Lb
+ic0.msg_caller_size : () -> (i32);                                          // I G U Q Lb
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q Lb
+ic0.msg_reject_code : () -> i32;                                            // Ry Rt
+ic0.msg_reject_msg_size : () -> i32;                                        // Rt
+ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
+ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q Ry Rt
+ic0.msg_reply : () -> ();                                                   // U Q Ry Rt
+ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
+ic0.ingress_rate_bucket_size : () -> i32;                                   // Ll
+ic0.ingress_rate_bucket_copy : (dst : i32, offset : i32, size : i32) -> (); // Ll
+ic0.return_ingress_bucket :
+  ( bucket_src : i32,
+    bucket_size : i32,
+    cost : i64
+  ) -> ();                                                                  // Lb
+ic0.return_ingress_limit_per_second : (limit : i64) -> ();                  // Ll
+ic0.canister_self_size : () -> (i32);                                       // *
+ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
+ic0.call_simple :                                                           // U Ry Rt
   ( callee_src  : i32,
     callee_size : i32,
     name_src    : i32,
@@ -718,13 +727,13 @@ ic0.call_simple :                                                       // U Ry 
     data_src    : i32,
     data_size   : i32
   ) -> ( err_code : i32 );
-ic0.stable_size : () -> (page_count : i32);                             // *
-ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);          // *
-ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();         // *
-ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();          // *
-ic0.time : () -> (timestamp : i64);                                     // *
-ic0.debug_print : (src : i32, size : i32) -> ();                        // * s
-ic0.trap : (src : i32, size : i32) -> ();                               // * s
+ic0.stable_size : () -> (page_count : i32);                                 // *
+ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
+ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
+ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
+ic0.time : () -> (timestamp : i64);                                         // *
+ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
+ic0.trap : (src : i32, size : i32) -> ();                                   // * s
 ....
 
 The comment after each function lists from where these functions may be invoked:
@@ -737,7 +746,9 @@ The comment after each function lists from where these functions may be invoked:
 * `Rt`: from a reject callback
 * `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
-* `*` = `I G U Q Ry Rt C` (NB: Not `(start)`)
+* `Lb`: from `canister_get_ingress_bucket`
+* `Ll`: from `canister_get_ingress_limit_per_second`
+* `*` = `I G U Q Ry Rt C Lb Ll` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -820,6 +831,36 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory,
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
+
+[#system-api-rate-limiting]
+=== Ingress message rate limiting
+
+A canister can apply a rate limiting mechanism to ingress messages. When the IC receives an update call from a user, the IC will use the canister methods `canister_get_ingress_bucket` and `canister_get_ingress_limit_per_second` to obtain rate limiting information from the canister, and will ensure that the specified rates are respected.
+If the canister does not implement `canister_get_ingress_bucket` and does not implement `canister_get_ingress_limit_per_second`, then no rate limiting is applied and the canister will receive the update calls.
+
+The function `canister_get_ingress_bucket` is called for each message, possibly (but not necessarily) even multiple times, on different canister states.
+The function `canister_get_ingress_limit_per_second` is called periodically (typically every few seconds) for buckets for which new messages arrive.
+This means, in particular, that the canister state on which `canister_get_ingress_bucket` is called for a message, and the state on which `canister_get_ingress_limit_per_second` is called for determining the rate limit affecting that same message, may differ.
+
+* In `canister_get_ingress_bucket`, the canister can specify a bucket and a cost for the message by invoking
++
+`ic0.return_ingress_bucket : ( bucket_src : i32, bucket_size : i32, cost : i64 ) -> ()`.
++
+This function assigns to the message the bucket identified by the `bucket_*` parameters, and the cost specified by `cost`. All messages assigned to the same bucket are treated together during rate limiting, whereas messages in different buckets are handled independently. Buckets are identified by opaque blobs of size at most 64 bytes.
++
+The unit of cost is completely up to the canister.
++
+This function traps if invoked twice, or if `bucket_size` exceeds 64.
++
+If the canister traps in `canister_get_ingress_bucket` or does not call `ic0.return_ingress_bucket`, then the access is denied.
+
+* In `canister_get_ingress_limit`, the canister obtains a blob of length at most 64 bytes (the bucket) as an argument, which can be retrieved via `ic0.ingress_rate_bucket_*`. The canister can specify a limit for the bucket by invoking
++
+`ic0.return_ingress_limit_per_second : ( limit : i64 ) -> ()`.
++
+The unit of limit (just like that of cost above) is completely up to the canister, but the platform guarantees that (possibly with a rolling average over a few seconds) the accumulated cost per second does not exceed limit.
++
+This function traps if invoked twice. If the canister traps or the canister does not call `ic0.return_ingress_limit_per_second`, the canister does not receive any messages from that bucket.
 
 [#system-api-canister-self]
 === Self-identification
@@ -1155,6 +1196,8 @@ UpdateFunc = WasmState -> Trap | Return {
 }
 QueryFunc = WasmState -> Trap | Return Response
 
+BucketCost = { bucket : Blob, cost : i64 }
+
 CanisterModule = {
   init : (CanisterId, Arg) -> Trap | Return WasmState
   pre_upgrade : (WasmState, caller : Principal, Timestamp) -> Trap | Return StableMemory
@@ -1162,6 +1205,8 @@ CanisterModule = {
   update_methods : MethodName ↦ (Arg -> UpdateFunc)
   query_methods : MethodName ↦ (Arg -> QueryFunc)
   callbacks : (Callback, Response, Timestamp) -> UpdateFunc
+  get_ingress_bucket : (UserId, MethodName, WasmState Arg, Timestamp) -> Trap | Return (bucket : Blob, cost : i64)
+  get_ingress_limit_per_second : (UserId, WasmState, Timestamp, bucket : Blob) -> Trap |  Return (NoLimit | limit : i64)
 }
 ....
 
@@ -1219,12 +1264,18 @@ Message
       method_name : Text;
       data : Blob;
       queue : Queue;
+      bucket : None | Blob;
+      cost : i64;
+      rate_limit_time : None | Timestamp;
     }
   | FuncMessage {
       call_context : CallId;
       receiver : CanisterId;
       entry_point : EntryPoint;
       queue : Queue;
+      bucket : None | Blob;
+      cost : i64;
+      rate_limit_time : None | Timestamp;
     }
   | ResponseMessage {
       origin : CallOrigin;
@@ -1418,7 +1469,7 @@ S with
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
-This is only allowed if the request has not expired.
+This is only allowed if the request has not expired and potential rate limiting is respected.
 
 The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
 
@@ -1429,6 +1480,9 @@ Conditions::
     S.requests[CanisterUpdateCall R] = Received
     S.system_time <= R.ingress_expiry
     C = S.canisters[R.canister_id]
+    C.module.get_ingress_bucket (R.sender, R.method_name, C.wasm_state, R.data, S.time[R.canister_id]) = Return (assigned_bucket, assigned_cost)
+    C.module.get_ingress_limit_per_second : (R.sender, C.wasm_state, S.time[R.canister_id], assigned_bucket) = Return assigned_limit
+    assigned_limit = NoLimit || assigned_limit ≥ assigned_cost + bucket_cost(S, R.canister_id, assigned_bucket)
 ....
 State after::
 ....
@@ -1442,7 +1496,19 @@ S with
         method_name = R.method_name;
         arg = R.arg;
         queue = Unordered;
+        bucket = assigned_bucket;
+        cost = assigned_cost;
+        rate_limit_timestamp = S.time[R.canister_id];
       } · S.messages
+....
+
+This uses the following helper function that sums up the cost of all in-flight messages in the same bucket and within the latest second:
+....
+bucket_cost(S, canister_id, bucket) =
+     ∑ [ M.cost | CallMessage M ∈ S.messages, M.receiver = canister_id,
+                   M.bucket = bucket, M.rate_limit_timestamp >= S.time[R.canister_id] - 1s ] +
+     ∑ [ M.cost | FuncMessage M ∈ S.messages, M.receiver = canister_id,
+                   M.bucket = bucket, M.rate_limit_timestamp >= S.time[R.canister_id] - 1s ]
 ....
 
 ==== Calls to stopped/stopping canisters are rejected
@@ -1493,6 +1559,9 @@ S with
         receiver = CM.callee;
         entry_point = PublicMethod M.method_name CM.caller CM.data
         queue = CM.queue;
+        bucket = CM.bucket;
+        cost = CM.cost;
+        rate_limit_timestamp = CM.rate_limit_timestamp;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
@@ -2015,6 +2084,9 @@ S with
         receiver = C
         entry_point = Callback Callback FM.response
         queue = Unordered
+        bucket = None
+        cost = 0
+        rate_limit_timestamp = None
       } ·
       Younger_messages
 ....
@@ -2198,6 +2270,7 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   time : Timestamp;
+  ingress_rate_bucket : NoBucket | Blob;
 }
 ExecutionState = {
   wasm_state : WasmState;
@@ -2206,7 +2279,8 @@ ExecutionState = {
   response : NoResponse | Response;
   reply_params : { arg : Blob };
   calls : List Call;
-  access_quota : NoQuota | AccessQuota;
+  bucket_cost : NoBucket | BucketCost
+  rate_limit : NoLimit | i64
 }
 ....
 
@@ -2395,6 +2469,52 @@ callbacks = λ(callbacks, response, time) → λ wasm_state →
 Note that if the initial callback handler traps, the cleanup callback is
 executed, and the canister has the chance to update its state.
 
+* The `get_ingress_bucket` field of the `CanisterModule` is defined as follows.
++
+If the WebAssembly module does not export a function called under the name `canister_get_ingress_bucket`, then access is always granted:
++
+....
+get_ingress_bucket = λ (caller, method_name, wasm_state, data, time) →
+  Return { bucket = None; cost = 0 }
+....
+Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_bucket`, it is
++
+....
+get_ingress_bucket = λ (caller, method_name, wasm_state, data, time) →
+   let es = ref {empty_execution_state with
+       wasm_state = wasm_state;
+       params = empty_params with { caller = caller; method_name = method_name; time = time };
+     }
+   try func<es>() with Trap then Trap
+   if es.calls ≠ () then Trap
+   if es.response ≠ NoResponse then Trap
+   if es.bucket_cost = NoBucket then Trap
+   Return es.bucket_cost;
+....
+
+* The `get_ingress_limit_per_second` field of the `CanisterModule` is defined as follows.
++
+If the WebAssembly module does not export a function called under the name `canister_get_ingress_limit_per_second`, then access is always granted:
++
+....
+get_ingress_limit_per_second = λ (caller, wasm_state, time, bucket) →
+  Return NoLimit
+....
+Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_limit_per_second`, it is
++
+....
+get_ingress_limit_per_second = λ (caller, wasm_state, time, bucket) →
+   let es = ref {empty_execution_state with
+       wasm_state = wasm_state;
+       params = empty_params with { time = time, ingress_rate_bucket = bucket };
+     }
+   try func<es>() with Trap then Trap
+   if es.calls ≠ () then Trap
+   if es.response ≠ NoResponse then Trap
+   if es.rate_limit = NoLimit then Trap
+   Return es.rate_limit;
+....
+
 ==== Helper functions
 
 In the following section, we use the these helper functions
@@ -2462,6 +2582,28 @@ ic0.msg_reject<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
 
+ic0.ingress_rate_bucket_size<es>() =
+  if es.in_cleanup then Trap
+  if es.params.ingress_rate_bucket = NoBucket then Trap
+  return |es.params.ingress_rate_bucket|
+
+ic0.ingress_rate_bucket_copy<es>(dst : i32, offset : i32, size : i32) =
+  if es.in_cleanup then Trap
+  if es.params.ingress_rate_bucket = NoBucket then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.ingress_rate_bucket)
+
+ic0.return_ingress_bucket<es>(bucket_src : i32, bucket_size : i32, cost : i64) =
+  if es.in_cleanup then Trap
+  if es.bucket_cost ≠ NoBucket then Trap
+  es.bucket_cost.bucket = copy_from_canister<es>(bucket_src, bucket_size)
+  if |es.bucket_cost.bucket| > 64 then Trap
+  es.bucket_cost.cost = cost
+
+ic0.return_ingress_limit_per_second(limit : i64) =
+  if es.in_cleanup then Trap
+  if es.rate_limit ≠ NoLimit then Trap
+  es.rate_limit = limit
+
 ic0.canister_self_size<es>() : i32 =
   if es.in_cleanup then Trap
   return |es.wasm_state.self_id|
@@ -2516,7 +2658,10 @@ ic0.call_simple<es>(
         callee = callee;
         method_name = method_name;
         arg = arg;
-        callback = callbacks
+        callback = callbacks;
+        bucket = None;
+        cost = 0;
+        rate_limit_time = None
       }
     return 0
 
