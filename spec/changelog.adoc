@@ -7,6 +7,7 @@
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The cleanup callback is introduced
 * Spec: User authentication method based on WebAuthn is introduced
+* Spec: Support for funds (balances and transfers)
 * Spec: Ingress rate limiting
 
 [#v0_10_3]
