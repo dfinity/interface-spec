@@ -1304,11 +1304,16 @@ WasmState = (abstract)
 StableMemory = (abstract)
 Callback = (abstract)
 
-type Timestamp = Nat;
 Arg = {
   data : Blob
   caller: Principal
+}
+
+Timestamp = Nat;
+Balance = Funds
+Env = {
   time : Timestamp
+  balance : Balance;
 }
 
 RejectCode = Nat
@@ -1329,26 +1334,27 @@ UpdateFunc = WasmState -> Trap | Return {
 }
 QueryFunc = WasmState -> Trap | Return Response
 
-Balance = Funds
 AvailableFunds = Funds
 
 BucketCost = { bucket : Blob, cost : i64 }
 
 CanisterModule = {
-  init : (CanisterId, Arg, Balance) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : Principal, Timestamp, Balance) -> Trap | Return StableMemory
-  post_upgrade : (CanisterId, StableMemory, Arg, Balance) -> Trap | Return WasmState
-  update_methods : MethodName ↦ ((Arg, Balance, AvailableFunds) -> UpdateFunc)
-  query_methods : MethodName ↦ ((Arg, Balance) -> QueryFunc)
-  callbacks : (Callback, Response, Funds, Timestamp, Balance, AvailableFunds) -> UpdateFunc
-  get_ingress_bucket : (MethodName, WasmState, Arg, Balance) -> Trap | Return (bucket : Blob, cost : i64)
-  get_ingress_limit_per_second : (WasmState, Timestamp, Balance, bucket : Blob) -> Trap |  Return (NoLimit | limit : i64)
+  init : (CanisterId, Arg, Env) -> Trap | Return WasmState
+  pre_upgrade : (WasmState, caller : Principal, Env) -> Trap | Return StableMemory
+  post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
+  update_methods : MethodName ↦ ((Arg, Env, AvailableFunds) -> UpdateFunc)
+  query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
+  callbacks : (Callback, Response, Funds, Env, AvailableFunds) -> UpdateFunc
+  get_ingress_bucket : (MethodName, WasmState, Arg, Env) -> Trap | Return (bucket : Blob, cost : i64)
+  get_ingress_limit_per_second : (WasmState, Timestamp, Env, bucket : Blob) -> Trap |  Return (NoLimit | limit : i64)
 }
 ....
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
 The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through to the canister, via the `canister.self` system call.
+
+The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
 The parsing of a blob to a canister module is modelled via the predicate
 ....
@@ -1539,7 +1545,7 @@ for some time stamp `T`, using `()` to denote the empty map or bag.
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be considered received.
+ * Asynchronous API requests that are submitted via `/api/v1/submit`. These transitions describes checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
  * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
@@ -1733,16 +1739,18 @@ Conditions::
     Mod = S.canisters[M.receiver].module
 
     Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
+    Env = { time = S.time[M.receiver]; balance = Balance_before }
+
     Available = S.call_contexts[M.call_contexts].available_funds
     ( M.entry_point = PublicMethod Name Caller Data
-      Arg = { data = Data; caller = Caller; time = S.time[M.receiver] }
-      (F = M.update_methods[M.method_name](Arg, Balance_before, Available))
+      Arg = { data = Data; caller = Caller }
+      (F = M.update_methods[M.method_name](Arg, Env, Available)
       or
-      (F = as_update(Mod.query_methods[M.method_name], Arg, Balance_before))
+      (F = as_update(Mod.query_methods[M.method_name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response Refund
-      F = Mod.callbacks(Callback, Response, Refund, S.time[M.receiver], Balance_before, Available)
+    ( M.entry_point = Callback Callback Response
+      F = Mod.callbacks(Callback, Response, Env, Available)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -1817,8 +1825,8 @@ Note also that the state changes are persisted even when the system is set to sy
 
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
-as_update(f, arg, balance) = λ wasm_state →
-  match f(arg, balance)(wasm_state) with
+as_update(f, arg, env) = λ wasm_state →
+  match f(arg, env)(wasm_state) with
     Trap → Trap
     Return res → Return {
       new_state = wasm_state;
@@ -1967,9 +1975,9 @@ Conditions::
     Arg = {
       data = A.arg;
       caller = M.caller;
-      time = S.time[A.canister_id];
     }
-    Mod.init(A.canister_id, A.arg) = Return New_state
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver] }
+    Mod.init(A.canister_id, Arg, Env) = Return New_state
 ....
 State after::
 ....
@@ -2002,13 +2010,13 @@ Conditions::
     S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller = S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
-    Old_module.pre_upgrade(Old_State, M.caller, S.time[A.canister_id]) = Return Stable_memory
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver] }
+    Old_module.pre_upgrade(Old_State, M.caller, Env) = Return Stable_memory
     Arg = {
       data = A.arg;
       caller = M.caller;
-      time = S.time[A.canister_id];
     }
-    Mod.post_upgrade(A.canister_id, Stable_memory, Arg) = Return New_state
+    Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env) = Return New_state
 ....
 State after::
 ....
@@ -2396,26 +2404,25 @@ Conditions::
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
   C = S.canisters[Q.canister_id]
-  Balance = S.balances[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
     data = Q.arg;
     caller = Q.sender;
-    time = S.time[Q.callee];
   }
+  Env = { time = S.time[M.receiver]; canister_location = S.canister_location; balance = S.balances[Q.canister_id] }
 ....
 Read response::
-* If `F(Arg, Balance) = Trap` then
+* If `F(Arg, Env) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Arg, Balance) = Return (Reject (code, msg))` then
+* Else if `F(Arg, Env) = Return (Reject (code, msg))` then
 +
 ....
 {status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
-* Else if `F(Arg, Balance) = Return (Reply R)` then
+* Else if `F(Arg, Env) = Return (Reply R)` then
 +
 ....
 {status: success; result: <R> }
@@ -2465,7 +2472,7 @@ Params = {
   caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
-  time : Timestamp;
+  sysenv : Env;
   funds_refunded : Funds;
   ingress_rate_bucket : NoBucket | Blob;
 }
@@ -2527,18 +2534,18 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-init = λ (self_id, arg, balance) →
+init = λ (self_id, arg, sysenv) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 +
 ....
-init = λ (self_id, arg, balance) →
+init = λ (self_id, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2555,17 +2562,17 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 +
 ....
-pre_upgrade = λ (old_state, caller, time, balance) → Return old_state.stable_mem
+pre_upgrade = λ (old_state, caller, sysenv) → Return old_state.stable_mem
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 +
 ....
-pre_upgrade = λ (old_state, caller, time, balance) →
+pre_upgrade = λ (old_state, caller, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
-      params = { empty_params with caller = caller; time = time }
-      balance = balance
+      params = { empty_params with caller = caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2581,18 +2588,18 @@ pre_upgrade = λ (old_state, caller, time, balance) →
 If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg, balance) →
+post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg, balance) →
+post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-      params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time }
-      balance = balance
+      params = { empty_params with data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2605,15 +2612,11 @@ post_upgrade = λ (self_id, stable_mem, arg, balance) →
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ (arg, balance, available) → λ wasm_state →
+update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with {
-        data = arg.data;
-        caller = arg.caller;
-        time = arg.time;
-      }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
       funds_available = arg.funds;
     }
   try func<es>() with Trap then Trap
@@ -2630,15 +2633,11 @@ update_methods[method] = λ (arg, balance, available) → λ wasm_state →
 * The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 +
 ....
-query_methods[method] = λ (arg, balance) → λ wasm_state →
+query_methods[method] = λ (arg, sysenv) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with {
-        data = arg.data;
-        caller = arg.caller;
-        time = arg.time
-      }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.funds_accepted ≠ no_funds then Trap
@@ -2656,9 +2655,9 @@ By construction, the (possibly modified) `es.wasm_state` is discarded.
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, refund, time, balance, available) → λ wasm_state →
+callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
-    time = time;
+    sysenv
     funds_received = refund;
   }
   let (func_id, env, params) = match response with
@@ -2676,7 +2675,7 @@ callbacks = λ(callbacks, response, refund, time, balance, available) → λ was
     let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       params = params;
-      balance = balance;
+      balance = sysenv.balance;
       funds_available = available;
     }
     func<es>(env)
@@ -2715,21 +2714,21 @@ present) is executed, and the canister has the chance to update its state.
 If the WebAssembly module does not export a function called under the name `canister_get_ingress_bucket`, then access is always granted:
 +
 ....
-get_ingress_bucket = λ (method_name, wasm_state, arg, balance) →
+get_ingress_bucket = λ (method_name, wasm_state, arg, sysenv) →
   Return { bucket = None; cost = 0 }
 ....
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_bucket`, it is
 +
 ....
-get_ingress_bucket = λ (method_name, wasm_state, arg, balance) →
+get_ingress_bucket = λ (method_name, wasm_state, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       params = empty_params with {
         data = arg.data;
         caller = arg.caller;
-        time = arg.time;
+        sysenv
       }
-      balance = balance;
+      balance = sysenv.balance;
       funds_available = no_funds; // ingress requests have no funds
     }
    try func<es>() with Trap then Trap
@@ -2745,16 +2744,17 @@ get_ingress_bucket = λ (method_name, wasm_state, arg, balance) →
 If the WebAssembly module does not export a function called under the name `canister_get_ingress_limit_per_second`, then access is always granted:
 +
 ....
-get_ingress_limit_per_second = λ (wasm_state, time, balance, bucket) →
+get_ingress_limit_per_second = λ (wasm_state, time, sysenv, bucket) →
   Return NoLimit
 ....
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_limit_per_second`, it is
 +
 ....
-get_ingress_limit_per_second = λ (wasm_state, time, balance, bucket) →
+get_ingress_limit_per_second = λ (wasm_state, time, sysenv, bucket) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with { time = time, ingress_rate_bucket = bucket };
+      params = empty_params with { sysenv, ingress_rate_bucket = bucket };
+      balance = sysenv.balance;
     }
   try func<es>() with Trap then Trap
   if es.calls ≠ () then Trap
