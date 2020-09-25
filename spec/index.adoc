@@ -728,7 +728,7 @@ ic0.msg_funds_accept :                                                      // U
 
 ic0.canister_self_size : () -> (i32);                                       // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
-ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) : i64;           // *
+ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) -> i64;           // *
 
 ic0.ingress_rate_bucket_size : () -> i32;                                   // Ll
 ic0.ingress_rate_bucket_copy : (dst : i32, offset : i32, size : i32) -> (); // Ll
@@ -747,7 +747,7 @@ ic0.call_new :                                                              // U
     reply_fun : i32,
     reply_env : i32,
     reject_fun : i32,
-    reject_env : i32,
+    reject_env : i32
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
