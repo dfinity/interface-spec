@@ -8,6 +8,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: User authentication method based on WebAuthn is introduced
 * Spec: Ingress rate limiting
+* Spec: The `deposit_funds` call
 * Spec: Certification
 
 [#0_11_0]

@@ -1226,6 +1226,16 @@ This method deletes a canister from the IC.
 
 Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone and any state stored on the canister is permanently deleted. Once a canister is deleted, its ID cannot be reused.
 
+[#ic-deposit_funds]
+=== IC method `deposit_funds`
+
+This method deposits the funds included in this call into the specified canister.
+
+Only the controller of the canister can deposit funds.
+
+This action may have a cost in cycles, which is deducted from the receiving canister after the funds on this call have been deposited. The call fails if the canister balance plus the deposited funds do not cover the cost.
+
+
 [#ic-raw_rand]
 === IC method `raw_rand`
 
@@ -2429,6 +2439,34 @@ S with
         refunded_funds = M.transferred_funds + S.balances[CanisterId]
       }
 ....
+
+==== IC Management Canister: Depositing funds
+
+The unspecified cost for this operation is modeled as `Cycle_cost`.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'deposit_funds'
+    M.arg = candid(A)
+    M.caller = S.controllers[A.canister_id]
+    cycle_funds(Cycle_cost) ≤ S.balances[A.canister_id] + M.transferred_funds
+....
+State after::
+....
+S with
+    balances[CanisterId] =
+      S.balances[A.canister_id] + M.transferred_funds - Cycle_cost
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+        refunded_funds = no_funds
+      }
+....
+
 
 ==== IC Management Canister: Random numbers
 
