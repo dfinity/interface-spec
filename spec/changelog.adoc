@@ -5,6 +5,7 @@
 === 0.11.1 (2020-10-01))
 
 * Spec: The `deposit_funds` call
+* ic-ref(-test): Implement and test the above changes
 
 [#0_11_0]
 === 0.11.0 (2020-09-23)
