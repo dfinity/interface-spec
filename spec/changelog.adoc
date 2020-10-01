@@ -8,6 +8,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: User authentication method based on WebAuthn is introduced
 * Spec: Ingress rate limiting
+* Spec: Certification
 
 [#0_11_0]
 === 0.11.0 (2020-09-23)

@@ -182,6 +182,50 @@ Example command line calculation:
 ....
 =====
 
+
+[#state-tree]
+== The system state tree
+
+Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or, eventually, certified variables) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
+
+Conceptually, the system state is a tree with labeled children, and values in the leafs. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
+
+Labels are always blobs (but often with an human readable representation). In this document, paths are written suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors, and labels may contain the 0x2F byte (ASCII `/`) just fine. Values are either natural numbers, text values or blob values.
+
+This section describes specifies the publicly relevant paths in the tree.
+
+[#state-tree-time]
+=== Certification time
+
+* `/time` (natural):
++
+All certificate trees include a timestamp, indicating the time at which the state tree is current.
+
+[#state-tree-request-status]
+=== Request status
+
+For each asynchronous request known to the system, its status is in a subtree at `/request_status/<request_id>`. Please see <<async-requests>> for more details on how asynchronous requests work.
+
+* `/request_status/<request_id>/status` (text)
++
+One of `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
+
+* `/request_status/<request_id>/reply` (blob)
++
+If the status is `replied`, then this path contains the reply blob, else it is not present.
+
+* `/request_status/<request_id>/reject_code` (natural)
++
+If the status is `rejected`, then this path contains the reject code (seee <<reject-codes>>), else it is not present.
+
+* `/request_status/<request_id>/reject_message` (text)
++
+If the status is `rejected`, then this path contains a textual diagnostic mmessage, else it is not present.
+
+NOTE: Immediately after submitting a request, the request may not show up yet even though the system is still working on accepting the request as pending.
+
+NOTE: Request statuses will not actually be kept around indefinitely, and eventually the system forgets about the request. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
+
 [#http-interface]
 == HTTPS Interface
 
@@ -242,7 +286,7 @@ To avoid replay attacks, the transition from `done` or `received` to `pruned` mu
 
 Requests must stay in `Replied` or `Rejected` long enough for polling clients to catch the response.
 
-When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
+When asking the system about the state or response of a request, the user uses the request id (see <<api-request-id>>) to read the request status (see <<state-tree-request-status>>) from the state tree (see <<api-request-read-state>>).
 
 === Synchronous requests
 
@@ -266,13 +310,10 @@ NOTE: Should we add features that _change the state_ but are node-specific (e.g.
 
 For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
+* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can read the state tree (see <<api-request-read-state>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
 In both cases, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
-
-NOTE: For some types of synchronous requests (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
-
 
 [#field-types]
 === Field types
@@ -282,6 +323,7 @@ The requests supported by the system are expressed as records, i.e. fields with 
 * `nat`: A (possibly unbounded) natural number
 * `text`: Human readable text (e.g. sequence of Unicode codepoints)
 * `blob`: Arbitrary binary data
+* sequences (i.e. arrays, lists) of values
 
 For readability, we use the following type synonyms:
 ....
@@ -302,22 +344,22 @@ The following fields are common among all requests:
 [#authentication]
 === Authentication
 
-All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields is added to these requests:
+All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to all request records (next to `request_type`):
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 * `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future.
+* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 
-Furthermore, the request records are wrapped in a envelope record with these fields:
+Furthermore, the whole request record is wrapped in a envelope record with these fields:
 
 * `content` (`record`): the actual request content
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
-For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
+The public key must authenticate the `sender` principal:
 
-A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-
-The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the anonymous principal.
+* A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+* The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the anonymous principal.
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -357,7 +399,7 @@ In particular:
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
    - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
 
-The 32 byte <<api-request-id, _request id_>> is used as the challenge in the assertion.
+The 32 byte <<api-request-id,_request id_>> is used as the challenge in the assertion.
 The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
 
 Signing transactions can be delegated from a Web Authentication key to a key used in plain authentication. If delegation is used, The `sender_pubkey` field is still set to the COSE encoding of the public key used in WebAuthn. The `sender_sig` field is a binary blob containing a CBOR encoding with the same fields as above, and additionally:
@@ -374,13 +416,7 @@ The challenge in the WebAuthn assertion is set to `SHA-256(delegation)`, where `
 [#request-types]
 === Request types
 
-The following subsections list all supported requests and specify
-
-* the classification (synchronous vs. asynchronous)
-* the request type string
-* the required and optional fields of the request record
-* the required and optional field of the reply object (see <<api-request-status>>)
-* and a description of their pupose and behavior.
+The following subsections list all supported requests.
 
 [#api-update]
 ==== Canister update call
@@ -390,34 +426,36 @@ The maybe most important request type is calling an exported method of a caniste
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
-Reply fields::
-* `arg` (`blob`): The blob representing the data replied by the canister.
+Response fields::
+None, the server returns no body and HTTP status 202.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
 
+The response will be represented in the state tree, as described in <<state-tree-request-status>>, and can be read using <<api-request-read-state>>.
+
 NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
 
-[#api-request-status]
-==== Request status
+[#api-request-read-state]
+==== State tree reads
 
 Synchronicity:: synchronous
-Request type:: `request_status`
+Request type:: `read_state`
 Request fields::
-* `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
+* `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
 Response fields::
-* `status` (`text`): one of `unknown`, `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
-* `reply`: If the status is `replied`, then this member contains the request-type specific reply object. See the specification for the individual request types for which fields exist. If no field are especified (currently not specified), this field contains the empty record.
-* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
-* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
-* `time` (`nat`): indicates how fresh this response it. This is _not_ the time of the latest state change, but the time of the certification (to be specified) of this response.
+* `certificate` (`blob`): A certificate (see <<certification>>).
 
-WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is in the process of receiving the request.
+The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
-NOTE: Request responses will not be kept around indefinitely, and eventually the status will revert to `unknown`, as described in <<async-requests>>.
+All requested paths must have one of the following paths as prefix:
+
+ * `/time`. Can be requested by anyone.
+ * `/request_status/<request_id>`. Can only be read if this read was signed by same sender as the original request.
+
+See <<state-tree>> for details on the state tree.
 
 [#api-query]
 ==== Canister query call
@@ -427,7 +465,6 @@ Canister methods that do not change the canister state can be executed more effi
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -440,7 +477,7 @@ Response fields::
 [#api-request-id]
 === Request ids
 
-When querying the status of a request (see <<api-request-status>>), the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using using the following stesp. The hash operation is always SHA-256.
+When querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
 
 1. Treat the request type as the value of a text field named `request_type`.
 2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
@@ -458,9 +495,10 @@ E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0
 The following encodings of field values as blobs are used
 
 * Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
-* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Nat fields (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+* Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+* Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+* Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
 
 [TIP]
 ====
@@ -524,6 +562,7 @@ For this endpoint, the user performs a GET request, and receives a CBOR value wi
 * `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
 * `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
 * `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
+* `root_key` (blob, only in development instances): The public key of the root key of this Internet Computer instance. This _must_ be present in short-lived development instances, to allow the client to fetch the public key. In production environments, clients must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See <<api-cbor>> for details on the precise CBOR encoding of this object.
 
@@ -1192,6 +1231,163 @@ Only the _controller_ of the canister can delete it and the canister must alread
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
+[#certification]
+== Certification
+
+Some parts of the system state are exposed to clients in a tamperproof way via certification: the system can reveal a _partial state tree_ which includes just the data of interest, together with a signature of the state tree.  This means that a client can be sure that the response is correct, even if the client happens to be communicating with a malicious server, or have received the certificate via some other untrusted way.
+
+To validate a value using a certificate, the client conceptually
+
+ 1. checks the validity of the partial tree using `verify_cert`,
+ 2. looks up the data in the certificate using `lookup` at a given path,
+
+This mechanism is used in the `read_state` request type, and eventually also for other purposes.
+
+=== Root of trust
+
+The root of trust is the _root public key_, which must be known to the client a priori. For temporary instances of the internet computer, e.g. during local development, the key can be fetched via the <<api-status,`/api/v1/status`>> endpoint.
+
+=== Certificate
+
+A certificate consists of
+
+ * the partial system state, which contains the data of interest, and allows to recover the _tree root hash_,
+ * a signature on the tree root hash valid under some _public key_
+ * a sequence (typically 0 or 1) of _delegations_ that link the public key to _root public key_.
+
+More formally, certificate is thus described by the following data structure:
+....
+Certificate = {
+  tree : HashTree
+  signature : Signature
+  delegations : List(Delegation)
+}
+HashTree
+  = Empty
+  | Fork HashTree HashTree
+  | Labeled Label HashTree
+  | Leaf blob
+  | Pruned Hash
+Hash = Blob
+Signature = Blob
+PublicKey = Blob
+Timestamp = Nat
+....
+
+A certificate is validated with regard to the root of trust by the following algorithm (which uses `check_delegations` defined in <<certification-delegation>>):
+....
+verify_cert(cert) =
+  let root_hash = reconstruct(cert.tree)
+  let key = check_delegations(cert.delegations) // see section Delegations below
+  verify_bls_signature(key, cert.signature, domain_sep("ic-state-root") · root_hash)
+
+reconstruct(Empty)       = H(domain_sep("ic-hashtree-empty"))
+reconstruct(Fork t1 t2)  = H(domain_sep("ic-hashtree-fork") · reconstruct(t1) · reconstruct(t2))
+reconstruct(Labeled l t) = H(domain_sep("ic-hashtree-labeled") · label · reconstruct(t))
+reconstruct(Leaf v)      = H(domain_sep("ic-hashtree-leaf") · v)
+reconstruct(Pruned h)    = h
+
+domain_sep(s) = byte(|s|) · s
+....
+where `H` is the SHA-256 hash function and
+....
+verify_bls_signature : PublicKey -> Signature -> Blob -> Bool
+....
+is the https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-02#section-4[BLS signature verification function], ciphersuite BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_. See that document also for details on the encoding of BLS public keys and signatures. The DER encoding of the public key follows https://tools.ietf.org/html/rfc5480[RFC4580] with (at least temorarily) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+
+All certificate trees include the time at path `/time` (see <<state-tree-time>>). Clients can use this timestamp to guard against old certificates in cases where they expect a fresh certificate.
+
+=== Lookup
+
+Given a (verified) tree, the client can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors.
+
+The following algorithm looks up a `path` in a certificate, and returns either
+
+ * the value
+ * `Absent`, if the value is guaranteed to be absent in the original state tree,
+ * `Unknown`, if this partial view does not include information about this path, or
+ * `Error`, if the path does not make sense for this certificate:
+
+....
+lookup(path, cert) = lookup_path(path, cert.tree)
+
+lookup_path([], Empty) = Absent
+lookup_path([], Leaf v) = v
+lookup_path([], Pruned _) = Unknown
+lookup_path([], Labeled _ _) = Error
+lookup_path([], Fork _ _) = Error
+
+lookup_path(l::ls, tree) =
+  match find_label(l, flatten_forks(tree)) with
+  | Absent -> Absent
+  | Unknown -> Unknown
+  | Error -> Error
+  | Found subtree -> lookup_path ls subtree
+
+flatten_forks(Empty) = []
+flatten_forks(Fork t1 t2) = flatten_forks(t1) · flatten_forks(t2)
+flatten_forks(t) = [t]
+
+find_label(l, _ · Labeled l1 t · _)                | l == l1     = Found t
+find_label(l, _ · Labeled l1 _ · Labeled l2 _ · _) | l1 < l < l2 = Absent
+find_label(l,                    Labeled l2 _ · _) |      l < l2 = Absent
+find_label(l, _ · Labeled l1 _ )                   | l1 < l      = Absent
+find_label(l, [])                                                = Absent
+find_label(l, _)                                                 = Unknown
+....
+
+The system will only produce well-formed trees, and the above algorithm assumes welformed trees. These have the property that labeled subtrees apper in strictly increasing order of labels, and are not mixed with leaves. More formally:
+....
+well_formed(tree) =
+  (tree = Leaf _) ∨ (well_formed_forest(flatten_forks(tree)))
+
+well_formed_forest(trees) =
+  strictly_increasing([l | Label l _ ∈ trees]) ∧
+  ∀ Label _ t ∈ trees. well_formed(t) ∧
+  ∀ t ∈ trees ≠ Leaf _
+....
+
+
+[#certification-delegation]
+=== Delegation
+
+To facilitate a distributed implementation of the Internet Computer, the root key can delegate certification authority to other keys.
+
+The exact form of delegations is still under discussion; as scaffolding we use an insecure unsigned delegation:
+....
+Delegation =
+ InsecureDelegation {
+   key : PublicKey;
+ }
+....
+
+Additional forms of delegations will be added that would contain a signature or certificate linking the `key` to the root key.
+
+A chain of delegations is verified using the following algorithm, which also returns the delegated key:
+
+....
+check_delegations(InsecureDelegation d :: ds) : public_bls_key =
+  return key
+check_delegations([]) : public_bls_key =
+  return root_public_key
+....
+where `root_public_key` is the a priori known root key of the Internet Computer instance.
+
+=== Encoding of certificates
+
+The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:./certificates.cddl[download the file].
+
+[source,bash]
+----
+include::certificates.cddl[]
+----
+
+The values in the <<state-tree>> are encoded to blobs as follows:
+
+* natural numbers are leb128-encoded.
+* text values are UTF-8-encoded
+* blob values are encoded as is
+
 [#public-spec]
 == Abstract public behavior
 
@@ -1460,17 +1656,19 @@ RequestStatus
   = Received
   | Processing
   | Rejected (RejectCode, Text)
-  | Completed { result : Value }
+  | Replied Blob
   | Done
 ....
 
 These are the synchronous read messages:
 ....
+Path = List(Blob)
 APIReadRequest
-  = ReadStatus = {
+  = StateRead = {
     nonce : Blob;
     ingress_expiry : Nat;
-    request_id : Request;
+    sender : UserId;
+    paths : List(Path);
   }
   | CanisterQuery = {
     nonce : Blob;
@@ -1482,15 +1680,14 @@ APIReadRequest
   }
 ....
 
-A `ReadStatus` refers to a request by way of a _request id_, as specifeid in <<api-request-id>>:
+A `Path` may refer to a request by way of a _request id_, as specifeid in <<api-request-id>>:
 ....
 Request = Blob
 request_id_of : Request -> Request
 ....
 
-
 For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
-In particular, the function implements  https://ed25519.cr.yp.to/index.html[*Ed25519*] and https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] signatures, depending on the type of public key, for the plain format, as well as ECDSA signatures for the WebAuthn format.
+In particular, the function implements https://ed25519.cr.yp.to/index.html[*Ed25519*], https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] or *BLS* signatures, depending on the type of the public key, for the plain format, as well as ECDSA signatures for the WebAuthn format.
 ....
 PublicKey = Blob
 Signature = Blob
@@ -1512,6 +1709,7 @@ S = {
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
+  root_key : PublicKey
 }
 CanState
  = EmptyCanister | {
@@ -1537,9 +1735,10 @@ The initial state of the system is
   system_time = T;
   call_contexts = ();
   messages = ();
+  root_key = PublicKey;
 }
 ....
-for some time stamp `T`, using `()` to denote the empty map or bag.
+for some time stamp `T`, some BLS public key PublicKey, and using `()` to denote the empty map or bag.
 
 === State transitions
 
@@ -2305,8 +2504,8 @@ State after::
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Completed { result = R } if response = Reply R
-      | Rejected R               if response = Reject R
+      | Replied R   if response = Reply R
+      | Rejected R  if response = Reject R
 ....
 
 NB: The refunded funds, `RM.refunded_funds` are, by construction, empty, with the exception of when the controller of a canister is a user, and deletes a canister with funds. In the current specification, these funds disappear in thin air in that case. This is likely to change in some way or another.
@@ -2317,7 +2516,7 @@ The system will keep the data for a completed or rejected request around for a c
 
 Conditions::
 ....
-    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _)
+    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _)
 ....
 State after::
 ....
@@ -2330,7 +2529,7 @@ At the same or some later point, the request will be removed from memory of the 
 
 Conditions::
 ....
-    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
+    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
     M.ingress_expiry < S.system_time
 ....
 State after::
@@ -2367,30 +2566,6 @@ S with
     system_time = T1
 ....
 
-==== Read: Status
-
-The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
-
-NOTE: There is a phase where a request was issued by the user, but has not yet been received by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending.
-
-Submitted request:: `E`
-Conditions::
-....
-  E.content = ReadStatus RS
-  request_id_of(R) = RS.request_id
-  verify_envelope(E, R.sender)
-  S.system_time <= RS.ingress_expiry
-  S.requests[R] = Status
-....
-Read response::
-A record with
-* `{status: received}` if `Status = Received`
-* `{status: processing}` if `Status = Processing`
-* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `Status = Rejected (code, msg)`
-* `{status: replied; result : <result>}` if `Status = Completed { result = result }`
-* `{status: done}` if `Status = Done`
-
-
 ==== Read: query call
 
 Canister query calls can be executed directly.  They can only be executed against canisters which are `Running`.
@@ -2425,8 +2600,58 @@ Read response::
 * Else if `F(Arg, Env) = Return (Reply R)` then
 +
 ....
-{status: success; result: <R> }
+{status: success; reply: { arg :  <R> } }
 ....
+
+==== Read: Certified state reads
+
+The user can read elements of the _state tree_, using a `read_state` request.
+
+Submitted request:: `E`
+Conditions::
+....
+  E.content = ReadState RS
+  verify_envelope(E, RS.sender)
+  S.system_time <= RS.ingress_expiry
+  ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
+....
+Read response::
+A record with
+* `{certificate: C}`
+
+The predicate `may_read_path` is defined as follows, implementing the access control outlined in <<api-request-read-state>>:
+....
+may_read_path(S, _, ["time"]) = True
+may_read_path(S, _, ["request_status", Rid] · _) =
+  if ∃ R ∈ S.requests ∧ request_id_of(R) = Rid
+  then RS.sender = R.sender
+  else True
+may_read_path(S, _, _) = False
+....
+
+The response is a certificate `cert`, as specified in <<certification>>, which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in <<state-tree>> that is a suffix of a path in `RS.paths` or of `["time"]`, we have
+....
+lookup(path, cert) = lookup_in_tree(path, state_tree(S))
+....
+where `state_tree` constructs the a labeled tree from the system state `S` (as per <<state-tree>>)
+....
+state_tree(S) = {
+  "time": S.system_time;
+  "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests }
+}
+
+request_status_tree(Received) =
+  { "status": "received" }
+request_status_tree(Processing) =
+  { "status": "processing" }
+request_status_tree(Rejected (code,msg)) =
+  { "status": "rejected"; "reject_code": code; "reject_message": msg }
+request_status_tree(Replied arg) =
+  { "status": "replied"; "reply": arg }
+request_status_tree(Done) =
+  { "status": "Done" }
+....
+and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
 
 
 [#concrete-canisters]
