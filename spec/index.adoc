@@ -3046,69 +3046,52 @@ copy_from_canister<es>(src : i32, size : i32) blob =
 
 Upon _instantiation_ of the WebAssembly module, we can provide the following functions as imports.
 
+The pseudo-code below does _not_ explicitly enforce the restrictions of which imports are available in which contexts; for that the table in <<system-api-imports>> is authorative, and is assumed to be part of the implementation.
+
 ....
 ic0.msg_arg_data_size<es>() : i32 =
-  if es.in_cleanup then Trap
-  if es.params.data = NoData then Trap
   return |es.params.arg|
 
 ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
-  if es.in_cleanup then Trap
-  if es.params.data = NoData then Trap
   copy_to_canister<es>(dst, offset, size, es.param.arg)
 
 ic0.msg_caller_size() : i32 =
-  if es.in_cleanup then Trap
-  if es.params.caller = NoCaller then Trap
   return |es.params.caller|
 
 ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
-  if es.in_cleanup then Trap
-  if es.params.caller = NoCaller then Trap
   copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
-  if es.in_cleanup then Trap
   es.params.reject_code
 
 ic0.msg_reject_msg_size<es>() : i32 =
-  if es.in_cleanup then Trap
-  if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
 ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
-  if es.in_cleanup then Trap
-  if es.reject_code = 0 then Trap
   copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
 ic0.msg_reply_data_append<es>(src : i32, size : i32) =
-  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
 ic0.msg_reply<es>() =
-  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
   es.funds_available := no_funds
 
 ic0.msg_reject<es>(src : i32, size : i32) =
-  if es.in_cleanup then Trap
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
   es.funds_available := no_funds
 
 ic0.msg_funds_available<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
-  if es.in_cleanup then Trap
   let unit := copy_from_canister<es>(unit_src, unit_size)
   return es.funds_available(unit)
 
 ic0.msg_funds_refunded<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
-  if es.in_cleanup then Trap
   return es.params.funds_refunded(unit)
 
 ic0.msg_funds_accept<es> : ( unit_src : i32, unit_size : i32; amount : i64 ) =
-  if es.in_cleanup then Trap
   let unit := copy_from_canister<es>(unit_src, unit_size)
   let funds := funds_of_unit(unit, amount)
   if funds > es.funds_available then Trap
@@ -3116,37 +3099,28 @@ ic0.msg_funds_accept<es> : ( unit_src : i32, unit_size : i32; amount : i64 ) =
   es.funds_accepted := es.funds_accepted + funds
 
 ic0.ingress_rate_bucket_size<es>() =
-  if es.in_cleanup then Trap
-  if es.params.ingress_rate_bucket = NoBucket then Trap
   return |es.params.ingress_rate_bucket|
 
 ic0.ingress_rate_bucket_copy<es>(dst : i32, offset : i32, size : i32) =
-  if es.in_cleanup then Trap
-  if es.params.ingress_rate_bucket = NoBucket then Trap
   copy_to_canister<es>(dst, offset, size, es.params.ingress_rate_bucket)
 
 ic0.return_ingress_bucket<es>(bucket_src : i32, bucket_size : i32, cost : i64) =
-  if es.in_cleanup then Trap
   if es.bucket_cost ≠ NoBucket then Trap
   if bucket_size > 64 then Trap
   es.bucket_cost.bucket = copy_from_canister<es>(bucket_src, bucket_size)
   es.bucket_cost.cost = cost
 
 ic0.return_ingress_limit_per_second(limit : i64) =
-  if es.in_cleanup then Trap
   if es.rate_limit ≠ NoLimit then Trap
   es.rate_limit = limit
 
 ic0.canister_self_size<es>() : i32 =
-  if es.in_cleanup then Trap
   return |es.wasm_state.self_id|
 
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
-  if es.in_cleanup then Trap
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_balance<es> : ( unit_src : i32, unit_size : i32 ) : i64 =
-  if es.in_cleanup then Trap
   let unit := copy_from_canister<es>(unit_src, unit_size)
   return es.balance(unit)
 
@@ -3160,8 +3134,6 @@ ic0.call_new<es>(
     reject_fun  : i32,
     reject_env  : i32,
   ) =
-  if es.in_cleanup then Trap
-
   discard_pending_call<es>()
 
   callee := copy_from_canister<es>(callee_src, callee_size);
@@ -3189,12 +3161,10 @@ ic0.call_new<es>(
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
-  if es.in_cleanup then Trap
   if es.pending_call = NoPendingCall then Trap
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
-  if es.in_cleanup then Trap
   if fun > |es.wasm_state.store.table| then Trap
   if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
   if es.pending_call = NoPendingCall then Trap
@@ -3202,7 +3172,6 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
 ic0.call_funds_add<es> (unit_src : i32, unit_size : i32,  amount : i32) =
-  if es.in_cleanup then Trap
   if es.pending_call = NoPendingCall then Trap
   let unit := copy_from_canister<es>(unit_src, unit_size)
   let funds := funds_of_unit(unit, amount)
@@ -3212,7 +3181,6 @@ ic0.call_funds_add<es> (unit_src : i32, unit_size : i32,  amount : i32) =
   es.pending_call.transferred_funds := es.pending_call.transferred_funds + funds
 
 ic0.call_funds_peform<es> () : ( err_code : i32 ) =
-  if es.in_cleanup then Trap
   if es.pending_call = NoPendingCall then Trap
 
   if arbitrary()
