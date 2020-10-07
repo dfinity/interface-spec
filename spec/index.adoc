@@ -1562,9 +1562,9 @@ The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through
 
 The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
-The parsing of a blob to a canister module is modelled via the predicate
+The parsing of a blob to a canister module is modelled via the (possibly implicitly failing) function
 ....
-parse_wasm_mod : Blob -> CanisterModule -> Bool
+parse_wasm_mod : Blob -> CanisterModule
 ....
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
