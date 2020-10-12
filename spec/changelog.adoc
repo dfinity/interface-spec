@@ -9,6 +9,7 @@
 * Spec: User authentication method based on WebAuthn is introduced
 * Spec: Ingress rate limiting
 * Spec: Certification
+* Spec: Certified variables
 
 [#0_11_1]
 === 0.11.1 (2020-10-01))
