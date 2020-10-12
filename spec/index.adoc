@@ -188,7 +188,7 @@ Example command line calculation:
 
 Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or, eventually, certified variables) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
 
-Conceptually, the system state is a tree with labeled children, and values in the leafs. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
+Conceptually, the system state is a tree with labeled children, and values in the leaves. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
 
 Labels are always blobs (but often with an human readable representation). In this document, paths are written suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors, and labels may contain the 0x2F byte (ASCII `/`) just fine. Values are either natural numbers, text values or blob values.
 
@@ -225,6 +225,13 @@ If the status is `rejected`, then this path contains a textual diagnostic mmessa
 NOTE: Immediately after submitting a request, the request may not show up yet even though the system is still working on accepting the request as pending.
 
 NOTE: Request statuses will not actually be kept around indefinitely, and eventually the system forgets about the request. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
+
+[#state-tree-certified-data]
+=== Certified data
+
+* `/canister/<canister_id>/certified_data` (blob):
++
+The certified data of the canister with the given id, see <<system-api-certified-data>>.
 
 [#http-interface]
 == HTTPS Interface
@@ -454,6 +461,8 @@ All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can be requested by anyone.
  * `/request_status/<request_id>`. Can only be read if this read was signed by same sender as the original request.
+
+Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
 See <<state-tree>> for details on the state tree.
 
@@ -799,6 +808,11 @@ ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
 ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
 
+ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt
+ic0.data_certificate_present : () -> i32                                    // Q
+ic0.data_certificate_size : () -> i32                                       // Q
+ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // Q
+
 ic0.time : () -> (timestamp : i64);                                         // *
 
 ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
@@ -1109,6 +1123,37 @@ The time is given as nanoseconds since 1970-01-01. The system guarantees that
 The system times of different canisters are unrelated, and calls from one canister to another may appear to travel “backwards in time”.
 
 NOTE: While an implementation will likely try to keep the System Time close to the real time, this is not formally part of this specification.
+
+[#system-api-certified-data]
+=== Certified data
+
+For each canister, the system keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+
+* `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
++
+The canister can update the certified data with this call. The passed data must be no larger than 32 bytes. This can be used any number of times.
+
+When executing a query method via a query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
+
+* `+ic0.data_certificate_present : () -> (i32)+`
++
+returns `1` if a certificate is present, and `0` otherwise.
++
+This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
++
+NOTE: In the future, this may also return `0` for query calls if the system executes query calls on not-yet-certified states.
+
+* {blank}
++
+  ic0.data_certificate_size : () -> i32
+  ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()
++
+Copies the certificate for the current value of the certified data to the canister.
++
+The certificate is a blob as described in <<certification>> that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of <<state-tree>>.
++
+This traps if `ic0.data_certificate_present()` returns `0`.
+
 
 === Debugging aids
 
@@ -1520,6 +1565,7 @@ Balance = Funds
 Env = {
   time : Timestamp
   balance : Balance;
+  certificate : NoCertificate | Blob
 }
 
 RejectCode = Nat
@@ -1535,6 +1581,7 @@ MethodCall = {
 UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
+  new_certified_data : NoCertifiedData | Blob
   response : NoResponse | Response;
   funds_accepted : Funds;
 }
@@ -1716,6 +1763,7 @@ S = {
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Funds;
+  certified_data: CanisterId ↦ Blob;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -1948,7 +1996,7 @@ Conditions::
     Mod = S.canisters[M.receiver].module
 
     Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
-    Env = { time = S.time[M.receiver]; balance = Balance_before }
+    Env = { time = S.time[M.receiver]; balance = Balance_before; certificate = NoCertificate}
 
     Available = S.call_contexts[M.call_contexts].available_funds
     ( M.entry_point = PublicMethod Name Caller Data
@@ -2004,6 +2052,9 @@ then
     else
        call_contexts[M.call_context].responded = true
        call_contexts[M.call_context].available_funds = no_funds
+
+    if res.new_certified_data ≠ NoCertifiedData:
+      certified_data[M.receiver] = res.new_certified_data
 
     balances[M.receiver] = S.balances[M.receiver]
       + res.funds_accepted
@@ -2117,6 +2168,7 @@ S with
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.caller
     funds[CanisterId] = M.transferred_funds
+    certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -2185,7 +2237,7 @@ Conditions::
       data = A.arg;
       caller = M.caller;
     }
-    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver] }
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
     Mod.init(A.canister_id, Arg, Env) = Return New_state
 ....
 State after::
@@ -2219,7 +2271,7 @@ Conditions::
     S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller = S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
-    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver] }
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
     Old_module.pre_upgrade(Old_State, M.caller, Env) = Return Stable_memory
     Arg = {
       data = A.arg;
@@ -2608,6 +2660,8 @@ S with
 
 Canister query calls can be executed directly.  They can only be executed against canisters which are `Running`.
 
+During the execution of a query call, a certificate is provided to the canister that is valid, is current (or “recent enough”; the specification is currently vague about how old the certificate may be) and reveals the canister’s <<system-api-certified-data,Certified Data>>.
+
 Submitted request:: `E`
 Conditions::
 ....
@@ -2622,7 +2676,10 @@ Conditions::
     data = Q.arg;
     caller = Q.sender;
   }
-  Env = { time = S.time[M.receiver]; canister_location = S.canister_location; balance = S.balances[Q.canister_id] }
+  verify_cert(Cert)
+  lookup(["canister",Q.canister_id,"certified_data"], Cert) = Found S.certified_data[Q.canister_id]
+  lookup(["time"], Cert) = Found S.system_time // or “recent enough”
+  Env = { time = S.time[M.receiver]; canister_location = S.canister_location; balance = S.balances[Q.canister_id]; certificate = Cert }
 ....
 Read response::
 * If `F(Arg, Env) = Trap` then
@@ -2750,6 +2807,7 @@ ExecutionState = {
   reply_params : { arg : Blob };
   pending_call : MethodCall | NoPendingCall;
   calls : List MethodCall;
+  new_certified_data : NoCertifiedData | Blob;
   bucket_cost : NoBucket | BucketCost
   rate_limit : NoLimit | i64
 }
@@ -2788,6 +2846,9 @@ empty_execution_state = {
   reply_params = { arg = "" };
   pending_call = NoPendingCall;
   calls = [];
+  new_certified_data = NoCertifiedData;
+  bucket_cost = NoBucket;
+  rate_limit = NoLimit;
 }
 ....
 
@@ -2890,6 +2951,7 @@ update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
     new_calls = es.calls;
     response = es.response;
     funds_accepted = es.funds_accepted;
+    new_certified_data = es.new_certified_data
   }
 ....
 
@@ -3224,6 +3286,23 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
 
 ic0.time<es>() : i32 =
   return es.params.time
+
+ic0.certified_data_set<es>(src: i32, size: i32) =
+  es.new_certified_data := es.wasm_state[src..src+size]
+
+ic0.data_certificate_present<es>() : i32 =
+  if es.params.sysenv.certificate = NoCertificate
+  then return 0
+  else return 1
+
+ic0.data_certificate_size<es>() : i32 =
+  if es.params.sysenv.certificate = NoCertificate then Trap
+  return |es.params.sysenv.certificate|
+
+ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
+  if es.params.sysenv.certificate = NoCertificate then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
+
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return
