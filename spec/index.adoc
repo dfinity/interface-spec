@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.11.1
+0.12.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -316,7 +316,7 @@ For requests that have a `sender` field, the public key must authenticate the `s
 
 A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
 
-The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the anonymous principal.
+The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is the anonymous principal.
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -346,7 +346,7 @@ The maybe most important request type is calling an exported method of a caniste
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -383,7 +383,7 @@ Canister methods that do not change the canister state can be executed more effi
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
+* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
