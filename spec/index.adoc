@@ -355,7 +355,7 @@ All requests coming in via the HTTP interface need to be _authenticated_ using a
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 * `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future.
-* `sender` (`Principal`, optional, default value `0x04`): The user who issued the request.
+* `sender` (`Principal`, required): The user who issued the request.
 
 Furthermore, the whole request record is wrapped in a envelope record with these fields:
 
@@ -366,7 +366,7 @@ Furthermore, the whole request record is wrapped in a envelope record with these
 The public key must authenticate the `sender` principal:
 
 * A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-* The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is absent or the anonymous principal.
+* The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is the anonymous principal.
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
