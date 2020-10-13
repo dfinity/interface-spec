@@ -26,7 +26,7 @@ call-request = {
   request_type: "call"
   ? nonce : bytes
   ingress_expiry : timestamp
-  ? sender : principal
+  sender : principal
   canister_id : principal
   method_name : text
   arg : bytes
@@ -49,7 +49,7 @@ query-request = {
   request_type: "query"
   ? nonce : bytes
   ingress_expiry : timestamp
-  ? sender : principal
+  sender : principal
   canister_id : principal
   method_name : text
   arg : bytes
