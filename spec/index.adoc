@@ -362,11 +362,13 @@ Furthermore, the whole request record is wrapped in a envelope record with these
 * `content` (`record`): the actual request content
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
+* `sender_delegation` (`array` of maps, optional): a chain of <<authentication-delegation, delegations>>, starting with the one signed by `sender_pubkey` and ending with the one delegating to the key relating to `sender_sig`.
 
 The public key must authenticate the `sender` principal:
 
 * A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-* The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is the anonymous principal.
+* The fields `sender_pubkey`, `sender_sig`, and `sender_delegation` must be omitted if the `sender` field is the anonymous principal.
+  The fields `sender_pubkey` and `sender_sig` must be set if the `sender` field is not the anonymous principal.
 
 The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
 
@@ -400,7 +402,7 @@ The only allowed signature scheme for web authentication is
 
 In particular:
 
- * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain DER-wrapped COSE encodings of the public keys, as further described below.
+ * Request fields that indicate a public key (`sender_pubkey`, `key` in a delegation) are binary blobs that contain DER-wrapped COSE encodings of the public keys, as further described below.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three mandatory fields:
    - `authenticator_data` (`blob`): WebAuthn authenticator data.
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
@@ -431,14 +433,25 @@ The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YN
 
 Signing transactions can be delegated from a Web Authentication key to a key used in plain authentication. If delegation is used, The `sender_pubkey` field is still set to the COSE encoding of the public key used in WebAuthn. The `sender_sig` field is a binary blob containing a CBOR encoding with the same fields as above, and additionally:
 
- * `delegation` (`blob`): CBOR-encoding of a map with two mandatory fields:
-   - `key` (`blob`): DER-encoded public key as described in <<authentication-plain>>, i.e. Ed25519 or ECDSA.
-   - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field in <<authentication>>.
- * `delegate_signature` (`blob`): Signature as described in <<authentication-plain>>.
+[#authentication-delegation]
+==== Delegation
 
-The fields `delegation` and `delegate_signature` must be both absent or both present.
-If both fields are present, then the 32 byte <<api-request-id, _request id_>> is signed using the plain signature scheme relative to the key specified in the `delegation` object.
-The challenge in the WebAuthn assertion is set to `SHA-256(delegation)`, where `delegation` refers to the encoded CBOR object.
+Signing transactions can be delegated from a one key to another one.
+If delegation is used, then the `sender_delegation` field contains an array of delegations, each of which is a map with the following fields:
+
+ * `delegation` (`map`): Map with two fields:
+   - `pubkey` (`blob`): DER-encoded public key as described in either <<authentication-plain>> or <<authentication-webauthn>>.
+   - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field in <<authentication>>.
+ * `signature` (`blob`): Signature as described in either <<authentication-plain>> or <<authentication-webauthn>>, depending on the key used for signing the delegation.
+
+The `signature` field of a delegation contains a signature on the concatenation of the 27 bytes `\x1Aic-request-auth-delegation` (the domain separator) and the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field.
+For  the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
+
+The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
+
+All signatures are created and verified as described in <<authentication-plain>> and <<authentication-webauthn>>, respectively, depending on the type of public key.
+
+The delegation field, if present, must not contain more than four delegations.
 
 [#request-types]
 === Request types
@@ -503,23 +516,18 @@ Response fields::
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
 
-[#api-request-id]
-=== Request ids
+[#api-hash-of-map]
+=== Representation-independent hashing of structured data
 
-When querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
+Structured data, such as (recursive) maps, are authenticated by signing a representation-independent hash of the data.
+This hash is computed as follows:
 
-1. Treat the request type as the value of a text field named `request_type`.
-2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
+1. For each field that is present in the map (i.e. omitted optional fields are indeed omitted):
    * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
-3. Sort these by the hash of the field name.
-4. Concatenate these hashes, and hash the result.
+2. Sort these by the hash of the field name.
+3. Concatenate these hashes, and hash the result.
 
-The resulting hash of 256bits (32 bytes) is the request id.
-
-NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
-
-NOTE: The recommended textual representation of a request id is a hexadecimal string with capital letters prefixed with '0x'.
-E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F`.
+The resulting hash of 256 bits (32 bytes) is the representation-independent hash.
 
 The following encodings of field values as blobs are used
 
@@ -528,6 +536,19 @@ The following encodings of field values as blobs are used
 * Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 * Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+* Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
+
+[#api-request-id]
+=== Request ids
+
+When querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
+
+The request id is computed as the <<api-hash-of-map, representation-independent hash>> of `content`.
+
+NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
+
+NOTE: The recommended textual representation of a request id is a hexadecimal string with capital letters prefixed with '0x'.
+E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F`.
 
 [TIP]
 ====
@@ -535,7 +556,7 @@ Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenati
 
 [source,,options="nowrap"]
 ----
-request_id_of({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
+hash_of_map({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
  = H(concat (sort
    [ H("request_type") · H("call")
    , H("canister_id") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
@@ -1714,6 +1735,7 @@ Envelope = {
   content : Request | APIReadRequest;
   sender_pubkey : PublicKey | NoPublicKey;
   sender_sig : Signature | NoSignature;
+  sender_delegation: [SignedDelegation]
 }
 
 Request
@@ -1757,10 +1779,10 @@ APIReadRequest
   }
 ....
 
-A `Path` may refer to a request by way of a _request id_, as specifeid in <<api-request-id>>:
+A `Path` may refer to a request by way of a _request id_, as specified in <<api-request-id>>:
 ....
 Request = Blob
-request_id_of : Request -> Request
+hash_of_map: Request -> Request
 ....
 
 For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
@@ -1769,6 +1791,17 @@ This function picks the corresponding signature scheme according to the on the D
 PublicKey = Blob
 Signature = Blob
 verify_signature : PublicKey -> Signature -> Blob -> Bool
+....
+
+Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
+....
+SignedDelegation = {
+  delegation : {
+    pubkey : PublicKey;
+    expiration : Timestamp
+  };
+  signature : Signature
+}
 ....
 
 ==== The system state
@@ -1841,17 +1874,21 @@ ic_principal : principal = ""
 
 ==== Envelope Authentication
 
-The following predicate describes when an envelope `E` correctly signs the enclosed request with a key belonging to a user `U`:
+The following predicate describes when an envelope `E` correctly signs the enclosed request with a key belonging to a user `U`, at time `T`:
 
 ....
-verify_envelope(E, U) =
-     is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
-  || ∃ PK, SIG.
-       U = mk_self_authenticating_id E.sender_pubkey
-       && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
-....
+verify_envelope({ content = C }, U, T)
+  = U = anonymous_id
+verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
+  = U = mk_self_authenticating_id E.sender_pubkey
+  ∧ PK' = verify_delegations(DS, PK, T)
+  ∧ verify_signature ("\x0Aic-request" · hash_of_map(C), PK')
 
-NOTE: Currently, this requires exactly one signature and a matching self-authenticating identifier, or no signature and an anonymous caller. This is a temporary restriction, which will be lifted in a future PR when we actually allow for keys stored with the canister.
+verify_delegations([], PK, T) = PK
+verify_delegations([D] · DS, PK, T) = verify_delegations(DS, D.pubkey, T)
+  if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
+   ∧ D.delegation.expiration ≥ T
+....
 
 ==== API Request submission
 
@@ -1865,7 +1902,7 @@ Requests that have expired are dropped here.
 Submitted request:: `E : Envelope`
 Conditions::
 ....
-    verify_envelope(E, E.content.sender)
+    verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
 ....
@@ -1898,7 +1935,7 @@ A first step in processing a canister update call is to create a `CallMessage` i
 
 This is only allowed if the request has not expired and potential rate limiting is respected.
 
-The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
+The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `hash_of_map` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
 
@@ -2686,7 +2723,7 @@ Submitted request:: `E`
 Conditions::
 ....
   E.content = CanisterQuery Q
-  verify_envelope(E, Q.sender)
+  verify_envelope(E, Q.sender, S.system_time)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
@@ -2738,7 +2775,7 @@ The predicate `may_read_path` is defined as follows, implementing the access con
 ....
 may_read_path(S, _, ["time"]) = True
 may_read_path(S, _, ["request_status", Rid] · _) =
-  if ∃ R ∈ S.requests ∧ request_id_of(R) = Rid
+  if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
   then RS.sender = R.sender
   else True
 may_read_path(S, _, _) = False
