@@ -131,10 +131,10 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 
 2. _Self-authenticating ids_.
 +
-These have one of the forms `H(public_key) · 0x02` or `H(public_key) · 0x06` (both 29 bytes).
+These have the form `H(public_key) · 0x02` (29 bytes).
 +
 An external user can use these ids as the `sender` of a request if they own the corresponding private key.
-The public key uses either DER encoding (for trailing `0x02`) or COSE encoding (for trailing `0x06`) as described in <<authentication>>.
+The public key uses one of the encodings described in <<authentication>>.
 
 3. _Derived ids_
 +
@@ -373,7 +373,7 @@ The `request_id` (see <<api-request-id>>) is calculated from the content record.
 [#authentication-plain]
 ==== Plain authentication
 
-If the principal of the sender ends with `0x02`, then the signature schemes used to authenticate users are
+The plain authentication scheme applies if the `sender_pubkey` field contains a DER-encoded public key that is either:
 
  * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
  * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
@@ -393,14 +393,14 @@ NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
 [#authentication-webauthn]
 ==== Web authentication (WebAuthn)
 
-If the principal of the sender ends with `0x06`, then the signature scheme used to authenticate users is
+The web authentication scheme applies if the `sender_pubkey` field contains a DER-wrapped public key in COSE format.
+The only allowed signature scheme for web authentication is
 
  * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
 
 In particular:
 
- * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain COSE encodings of the public keys.
-   See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details.
+ * Request fields that indicate public key (`sender_pubkey`) are binary blobs that contain DER-wrapped COSE encodings of the public keys, as further described below.
  * Request fields that indicate signatures (`sender_sig`) are binary blobs that contain a CBOR encoding of a map with three mandatory fields:
    - `authenticator_data` (`blob`): WebAuthn authenticator data.
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
@@ -408,6 +408,26 @@ In particular:
 
 The 32 byte <<api-request-id,_request id_>> is used as the challenge in the assertion.
 The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
+
+The DER-wrapped COSE format uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
+See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details on the COSE encoding.
+
+[TIP]
+====
+A DER wrapping of a COSE key is shown below. It can be parsed via the command `sed "s/#.*//" | xxd -r -p | openssl asn1parse -inform der`.
+....
+30 5E                                       # SEQUENCE of length 94 bytes
+  30 0C                                     # SEQUENCE of length 12 bytes
+    06 0A 2B 06 01 04 01 83 B8 43 01 01     # OID 1.3.6.1.4.1.56387.1.1
+  03 4E 00                                  # BIT STRING encoding of length 78,
+    A501 0203 2620 0121 5820 7FFD 8363 2072 #    length is at byte boundary
+    FD1B FEAF 3FBA A431 46E0 EF95 C3F5 5E39 #    contents is a valid COSE key
+    94A4 1BBF 2B51 74D7 71DA 2258 2032 497E #    with ECDSA on curve P-256
+    ED0A 7F6F 0009 2876 5B83 1816 2CFD 80A9
+    4E52 5A6A 368C 2363 063D 04E6 ED
+....
+The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[in an online ASN.1 JavaScript decoder].
+====
 
 Signing transactions can be delegated from a Web Authentication key to a key used in plain authentication. If delegation is used, The `sender_pubkey` field is still set to the COSE encoding of the public key used in WebAuthn. The `sender_sig` field is a binary blob containing a CBOR encoding with the same fields as above, and additionally:
 
@@ -1485,10 +1505,10 @@ type Principal = Blob
 
 The function
 ....
-is_self_authenticating_id : Principal -> PublicKey -> Bool
-is_self_authenticating_id p pk = (p = H(pk) · 0x02) || (p = H(pk) · 0x06)
+mk_self_authenticating_id : Principal -> PublicKey
+mk_self_authenticating_id pk = H(pk) · 0x02
 ....
-verifies whether a principal is self-authenticating for a specific public key.
+calculates self-authenticating ids.
 
 The function
 ....
@@ -1744,7 +1764,7 @@ request_id_of : Request -> Request
 ....
 
 For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
-In particular, the function implements https://ed25519.cr.yp.to/index.html[*Ed25519*], https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] or *BLS* signatures, depending on the type of the public key, for the plain format, as well as ECDSA signatures for the WebAuthn format.
+This function picks the corresponding signature scheme according to the on the DER-encoded metadata in the public key.
 ....
 PublicKey = Blob
 Signature = Blob
@@ -1827,7 +1847,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 verify_envelope(E, U) =
      is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
   || ∃ PK, SIG.
-       is_self_authenticating_id U E.sender_pubkey
+       U = mk_self_authenticating_id E.sender_pubkey
        && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
 ....
 
@@ -2186,7 +2206,7 @@ which characterizes all system-assigned ids.
 
 To avoid clashes with potential user ids or is derived from users or canisters, we require (somewhat handwavy) that
 
- * `is_system_assigned p && is_self_authenticating_id p pk = false` for possible principals p and public keys `pk` and
+ * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible principals p and public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
 
