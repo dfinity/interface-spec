@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_12_1]
+=== 0.12.1 (2020-10-16)
+
+* Spec: Return more information in the `canister_status` management call
+
 [#0_12_0]
 === 0.12.0 (2020-10-13)
 
