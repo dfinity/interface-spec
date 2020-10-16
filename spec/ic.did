@@ -1,6 +1,7 @@
 type canister_id = principal;
 type user_id = principal;
 type wasm_module = blob;
+type unit = blob;
 service ic : {
   create_canister : () -> (record {canister_id : canister_id});
   install_code : (record {
@@ -14,7 +15,13 @@ service ic : {
   set_controller : (record {canister_id : canister_id; new_controller : principal}) -> ();
   start_canister : (record {canister_id : canister_id}) -> ();
   stop_canister : (record {canister_id : canister_id}) -> ();
-  canister_status : (record {canister_id : canister_id}) -> (record {status : variant { running; stopping; stopped }});
+  canister_status : (record {canister_id : canister_id}) -> (record {
+      status : variant { running; stopping; stopped };
+      module_hash: opt blob;
+      controller: principal;
+      memory_size: nat;
+      balance: vec record {unit; nat};
+  });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_funds: (record {canister_id : canister_id}) -> ();
   raw_rand : () -> (blob);
