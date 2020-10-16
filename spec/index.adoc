@@ -1282,7 +1282,12 @@ Only the current controller of the canister can change the controller.
 [#ic-canister_status]
 === IC method `canister_status`
 
-Indicates the current status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
+Indicates various information about the canister. It contains:
+* The status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
+* A hash of the module installed on the canister. This is `null` if no code is installed.
+* The controller of the canister.
+* The memory size taken by this canister.
+* The balances of this canister. It includes Cycles and ICPTs.
 
 Only the current controller of the canister can request its status.
 
@@ -1826,6 +1831,7 @@ CanState
  = EmptyCanister | {
   wasm_state : WasmState;
   module : CanisterModule;
+  raw_module : Blob;
 }
 CanStatus
   = Running
@@ -2251,6 +2257,10 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
 
 The controller of a canister can check for its status (i.e. one of Running, Stopping, or Stopped).
 
+The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
+
+The order of units in the `balances` field is unspecified.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2267,7 +2277,16 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid({
-          status = S.canister_status[A.canister_id]
+          status = S.canister_status[A.canister_id];
+	  module_hash =
+            if S.canisters[A.canister_id] = EmptyCanister
+            then null
+            else ?(SHA-265(S.canisters[A.canister_id].raw_module));
+          controller = S.controllers[A.canister_id];
+          memory_size = Memory_size;
+          balances =
+            [ (unit, S.balance[A.canister_id](unit))
+            | S.balance[A.canister_id](unit) > 0 ];
         })
         refunded_funds = M.transferred_funds
       }
@@ -2300,7 +2319,8 @@ Conditions::
 State after::
 ....
 S with
-    canisters[A.canister_id] = { wasm_state = New_state; module = Mod }
+    canisters[A.canister_id] =
+      { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -2339,7 +2359,8 @@ Conditions::
 State after::
 ....
 S with
-    canisters[A.canister_id] = { wasm_state = New_state; module = Mod }
+    canisters[A.canister_id] =
+      { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin

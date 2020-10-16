@@ -8,6 +8,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: User authentication method based on WebAuthn is introduced
 * Spec: Ingress rate limiting
+* Spec: Return more information in the `canister_status` management call
 * Spec: Certification
 * Spec: Delegation between user public keys
 * Spec: Certified variables
