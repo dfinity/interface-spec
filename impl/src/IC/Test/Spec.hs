@@ -444,7 +444,8 @@ icTests = withTestConfig $ testGroup "Public Spec acceptance tests"
   ]
 
   , testGroup "anonymous user"
-    [ simpleTestCase "update, sender absent" $ \cid ->
+    [ {- removed to make  0.10 tests more liberal
+      simpleTestCase "update, sender absent" $ \cid ->
       do submitCBOR $ rec
           [ "request_type" =: GText "call"
           , "canister_id" =: GBlob cid
@@ -460,7 +461,8 @@ icTests = withTestConfig $ testGroup "Public Spec acceptance tests"
           , "arg" =: GBlob (run (replyData caller))
           ]
         >>= queryResponse >>= isReply >>= is anonymousUser
-    , simpleTestCase "update, sender explicit" $ \cid ->
+    , -}
+      simpleTestCase "update, sender explicit" $ \cid ->
       do submitCBOR $ rec
           [ "request_type" =: GText "call"
           , "canister_id" =: GBlob cid
@@ -846,10 +848,12 @@ icTests = withTestConfig $ testGroup "Public Spec acceptance tests"
           req <- addExpiry req
           postCBOR "/api/v1/read" req >>= code4xx
 
+    {- removed to make  0.10 tests more liberal
     , testCase "non-existing canister" $ do
         req <- addExpiry queryToNonExistant
         postCBOR "/api/v1/read" (envelopeFor anonymousUser req)
           >>= okCBOR >>= queryResponse >>= isReject [3]
+    -}
     ]
 
   , testGroup "request_status"
