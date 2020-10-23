@@ -1519,7 +1519,7 @@ type Principal = Blob
 
 The function
 ....
-mk_self_authenticating_id : Principal -> PublicKey
+mk_self_authenticating_id : PublicKey -> Principal
 mk_self_authenticating_id pk = H(pk) · 0x02
 ....
 calculates self-authenticating ids.
@@ -2237,7 +2237,7 @@ which characterizes all system-assigned ids.
 
 To avoid clashes with potential user ids or is derived from users or canisters, we require (somewhat handwavy) that
 
- * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible principals p and public keys `pk` and
+ * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
 
@@ -2865,7 +2865,6 @@ Params = {
 ExecutionState = {
   wasm_state : WasmState;
   params : Params;
-  in_cleanup = True;
   response : NoResponse | Response;
   funds_accepted : Funds;
   funds_available : Funds;
@@ -2904,7 +2903,6 @@ empty_params = {
 empty_execution_state = {
   wasm_state = (undefined);
   params = (undefined);
-  in_cleanup = false;
   response = NoResponse;
   funds_accepted = no_funds;
   funds_available = no_funds;
@@ -3086,7 +3084,6 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
 
     let es = ref { empty_execution_state with
       wasm_state;
-      in_cleanup = true;
     }
     func<es>(callbacks.on_cleanup.env)
     Return {

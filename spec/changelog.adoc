@@ -6,11 +6,16 @@
 
 * Spec: Users can use ECDSA in addition to Ed25519 to sign their requests.
 * Spec: The cleanup callback is introduced
-* Spec: User authentication method based on WebAuthn is introduced
 * Spec: Ingress rate limiting
 * Spec: Certification
 * Spec: Delegation between user public keys
 * Spec: Certified variables
+
+[#0_12_2]
+=== 0.12.2 (2020-10-23)
+
+* Spec: User authentication method based on WebAuthn is introduced
+* Spec: Public keys are DER-encoded
 
 [#0_12_1]
 === 0.12.1 (2020-10-16)
