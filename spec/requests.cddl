@@ -99,10 +99,8 @@ call-reply = {
 
 ; some common data types
 
-principal = bytes
-; with https://github.com/dfinity-lab/ic-ref/pull/22 we can have
-; principal = bytes .size (0..35)
+principal = bytes .size (0..29)
 
-pubkey = bytes .size 32
-signature = bytes .size 64
+pubkey = bytes
+signature = bytes
 timestamp = unsigned

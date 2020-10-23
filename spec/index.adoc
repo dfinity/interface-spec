@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.12.1
+0.12.2
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -131,9 +131,8 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 +
 These have the form `H(public_key) · 0x02` (29 bytes).
 +
-An external user can use these ids as the `sender` of a request if they own the corresponding private key.  See for example <<authentication>>.
-+
-NOTE: In the future the system may gain the ability to change the authentication rules for self-authenticating ids, e.g. revoke the original key and configure another one.
+An external user can use these ids as the `sender` of a request if they own the corresponding private key.
+The public key uses one of the encodings described in <<authentication>>.
 
 3. _Derived ids_
 +
@@ -180,6 +179,61 @@ Example command line calculation:
   fold -w5 | paste -sd'-' -
 ....
 =====
+
+[#signatures]
+== Signatures
+
+Digital signature schemes are used for authenticating messages in various parts of the IC infrastructure.
+Signatures are domain separated, which means that every message is prefixed with a byte string that is unique to the purpose of the signature.
+The IC supports plain signatures as well as signatures generated via web authentication.
+
+- Plain signatures are supported for the schemes
++
+ * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
+ * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
++
+The signature is calculated by signing the concatenation of the domain separator and the message.
++
+ * Allowed encodings for the public key are DER for Ed25519 and ECDSA, or raw bytes for Ed25519; the verifier will detect the right encoding.
+   See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
+   See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
+ * The signatures are encoded as raw bytes.
+
+- The only allowed signature scheme for web authentication is
++
+ * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
++
+The signature is calculated by using the concatenation of the domain separator and the message as the challenge in the web authentication assertion.
+The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
++
+ * The public key is encoded as DER-wrapped COSE key as detailed below.
+ * The signature is a CBOR encoding of a map with three mandatory fields:
+   - `authenticator_data` (`blob`): WebAuthn authenticator data.
+   - `client_data_json` (`text`): WebAuthn client data in JSON representation.
+   - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
+
+The DER-wrapped COSE format uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
+See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details on the COSE encoding.
+
+[TIP]
+====
+A DER wrapping of a COSE key is shown below. It can be parsed via the command `sed "s/#.*//" | xxd -r -p | openssl asn1parse -inform der`.
+....
+30 5E                                       # SEQUENCE of length 94 bytes
+  30 0C                                     # SEQUENCE of length 12 bytes
+    06 0A 2B 06 01 04 01 83 B8 43 01 01     # OID 1.3.6.1.4.1.56387.1.1
+  03 4E 00                                  # BIT STRING encoding of length 78,
+    A501 0203 2620 0121 5820 7FFD 8363 2072 #    length is at byte boundary
+    FD1B FEAF 3FBA A431 46E0 EF95 C3F5 5E39 #    contents is a valid COSE key
+    94A4 1BBF 2B51 74D7 71DA 2258 2032 497E #    with ECDSA on curve P-256
+    ED0A 7F6F 0009 2876 5B83 1816 2CFD 80A9
+    4E52 5A6A 368C 2363 063D 04E6 ED
+....
+The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[in an online ASN.1 JavaScript decoder].
+====
+
+NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
+
 
 [#http-interface]
 == HTTPS Interface
@@ -281,6 +335,7 @@ The requests supported by the system are expressed as records, i.e. fields with 
 * `nat`: A (possibly unbounded) natural number
 * `text`: Human readable text (e.g. sequence of Unicode codepoints)
 * `blob`: Arbitrary binary data
+* sequences (i.e. arrays, lists) of values
 
 For readability, we use the following type synonyms:
 ....
@@ -301,31 +356,30 @@ The following fields are common among all requests:
 [#authentication]
 === Authentication
 
-All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields is added to these requests:
+All requests coming in via the HTTP interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are added to all request records (next to `request_type`):
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 * `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future.
 
-Furthermore, the request records are wrapped in a envelope record with these fields:
+Furthermore, the whole request record is wrapped in a envelope record with these fields:
 
 * `content` (`record`): the actual request content
-* `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may have more than one key, this field tells the system which key is used.
+* `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may in the future have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
 For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
 
-A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+* A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
+* The fields `sender_pubkey` and `sender_sig` must be omitted if the sender the anonymous principal.
+  The fields `sender_pubkey` and `sender_sig` must be set if the sender not the anonymous principal.
 
-The fields `sender_pubkey` and `sender_sig` must be omitted if and only if the `sender` field is the anonymous principal.
+The request id (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the request id, and implies that signature and public key are not semantically relevant.
 
-The `request_id` (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the `request_id`, and implies that signature and public key are not semantically relevant.
+The field `sender_pubkey` contains a public key supported by one of the schemes described in <<signatures>>.
 
-The signature scheme used to authenticate users is https://ed25519.cr.yp.to/index.html[*Ed25519*]. In particular:
 
- * Request fields that indicate public key (`sender_pubkey`, `public_key`) are binary blobs of size 32.
- * Request fields that indicate signatures (`sender_sig`) are binary blobs of size 64.
+The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the public key specified in `sender_pubkey`.
 
-The `sender_sig` is calculated by signing the concatenation of the 11 bytes `"\x0Aic-request"` (the domain separator) and the 32 byte <<api-request-id, _request id_>> with the secret key that belongs to the public key specified in `public_key`.
 
 [#request-types]
 === Request types
@@ -393,30 +447,38 @@ Response fields::
 * `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
 * `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
 
+[#api-hash-of-map]
+=== Representation-independent hashing of structured data
+
+Structured data, such as (recursive) maps, are authenticated by signing a representation-independent hash of the data.
+This hash is computed as follows:
+
+1. For each field that is present in the map (i.e. omitted optional fields are indeed omitted):
+   * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
+2. Sort these by the hash of the field name.
+3. Concatenate these hashes, and hash the result.
+
+The resulting hash of 256 bits (32 bytes) is the representation-independent hash.
+
+The following encodings of field values as blobs are used
+
+* Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
+* Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+* Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+  For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+* Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+
 [#api-request-id]
 === Request ids
 
-When querying the status of a request (see <<api-request-status>>), the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using using the following stesp. The hash operation is always SHA-256.
+When querying the status of a request (see <<api-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
 
-1. Treat the request type as the value of a text field named `request_type`.
-2. For each field that is present in the request (i.e. omitted optional fields are indeed omitted):
-   * hash the fields name (in ascii-encoding, without terminal `\x00`) and the value (with the encoding specified below).
-3. Sort these by the hash of the field name.
-4. Concatenate these hashes, and hash the result.
-
-The resulting hash of 256bits (32 bytes) is the request id.
+The request id is computed as the <<api-hash-of-map, representation-independent hash>> of `content`.
 
 NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
 
 NOTE: The recommended textual representation of a request id is a hexadecimal string with capital letters prefixed with '0x'.
 E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F`.
-
-The following encodings of field values as blobs are used
-
-* Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
-* String fields (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Nat fields (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
-  For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
 [TIP]
 ====
@@ -424,7 +486,7 @@ Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenati
 
 [source,,options="nowrap"]
 ----
-request_id_of({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
+hash_of_map({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
  = H(concat (sort
    [ H("request_type") · H("call")
    , H("canister_id") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
@@ -502,6 +564,7 @@ The following encodings are used:
 * Blobs: Major type 2 (“Byte string”).
 * Integer numbers: Major type 0 or 1 (“Unsigned/signed integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
 * Records: Major type 5 (“Map of pairs of data items”), followed by the fields, where keys are encoded with major type 3 (“Text string”).
+* Arrays: Major type 4 ("Array of data items").
 
 As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
 
@@ -1258,9 +1321,9 @@ This high-level interface presents a pure, mathematical model of a canister, and
 
 The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through to the canister, via the `canister.self` system call.
 
-The parsing of a blob to a canister module is modelled via the predicate
+The parsing of a blob to a canister module is modelled via the (possibly implicitly failing) function
 ....
-parse_wasm_mod : Blob -> CanisterModule -> Bool
+parse_wasm_mod : Blob -> CanisterModule
 ....
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
@@ -1381,11 +1444,11 @@ APIReadRequest
 A `ReadStatus` refers to a request by way of a _request id_, as specifeid in <<api-request-id>>:
 ....
 Request = Blob
-request_id_of : Request -> Request
+hash_of_map: Request -> Request
 ....
 
-
-For the signatures in an `Request`, we assume that the following function implements https://ed25519.cr.yp.to/index.html[*Ed25519*].
+For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
+This function picks the corresponding signature scheme according to the on the DER-encoded metadata in the public key.
 ....
 PublicKey = Blob
 Signature = Blob
@@ -1441,7 +1504,7 @@ for some time stamp `T`, using `()` to denote the empty map or bag.
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API requests that are submitted via `/api/v1/read`. These transitions describes checks that the request must pass to be considered received.
+ * Asynchronous API requests that are submitted via `/api/v1/submit`. These transitions describes checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
  * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
@@ -1460,16 +1523,15 @@ ic_principal : principal = ""
 
 ==== Envelope Authentication
 
-The following predicate describes when an envelope `E` correctly signs the enclosed request with a key belonging to a user `U`:
+The following predicate describes when an envelope `E` correctly signs the enclosed request with a key belonging to a user `U`, at time `T`:
 
 ....
-verify_envelope(E, U) =
-     is_anonymous_id U && E.sender_pubkey = NoPublicKey && E.sender_sig = NoSignature
-  || ∃ PK, SIG.
-       is_self_authenticating_id U E.sender_pubkey
-       && verify_signature E.sender_pubkey E.sender_sig ("\x0Aic-request" · request_id_of(E.content)) = true
+verify_envelope({ content = C }, U, T)
+  = U = anonymous_id
+verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig }, U, T)
+  = U = mk_self_authenticating_id E.sender_pubkey
+  ∧ verify_signature ("\x0Aic-request" · hash_of_map(C), PK)
 ....
-
 
 ==== API Request submission
 
@@ -1483,7 +1545,7 @@ Requests that have expired are dropped here.
 Submitted request:: `E : Envelope`
 Conditions::
 ....
-    verify_envelope(E, E.content.sender)
+    verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
 ....
@@ -1516,7 +1578,7 @@ A first step in processing a canister update call is to create a `CallMessage` i
 
 This is only allowed if the request has not expired.
 
-The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `request_id_of` for this purpose, but this formulation is more abstract.
+The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `hash_of_map` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
 
@@ -2292,7 +2354,7 @@ Conditions::
 ....
   E.content = ReadStatus RS
   request_id_of(R) = RS.request_id
-  verify_envelope(E, R.sender)
+  verify_envelope(E, R.sender, S.system_time)
   S.system_time <= RS.ingress_expiry
   S.requests[R] = Status
 ....
@@ -2313,7 +2375,7 @@ Submitted request:: `E`
 Conditions::
 ....
   E.content = CanisterQuery Q
-  verify_envelope(E, Q.sender)
+  verify_envelope(E, Q.sender, S.system_time)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
@@ -2613,32 +2675,28 @@ copy_from_canister<es>(src : i32, size : i32) blob =
 
 Upon _instantiation_ of the WebAssembly module, we can provide the following functions as imports.
 
+The pseudo-code below does _not_ explicitly enforce the restrictions of which imports are available in which contexts; for that the table in <<system-api-imports>> is authorative, and is assumed to be part of the implementation.
+
 ....
 ic0.msg_arg_data_size<es>() : i32 =
-  if es.params.data = NoData then Trap
   return |es.params.arg|
 
 ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
-  if es.params.data = NoData then Trap
   copy_to_canister<es>(dst, offset, size, es.param.arg)
 
 ic0.msg_caller_size() : i32 =
-  if es.params.caller = NoCaller then Trap
   return |es.params.caller|
 
 ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
-  if es.params.caller = NoCaller then Trap
   copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
   es.params.reject_code
 
 ic0.msg_reject_msg_size<es>() : i32 =
-  if es.reject_code = 0 then Trap
   return |es.params.reject_msg|
 
 ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
-  if es.reject_code = 0 then Trap
   copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
 ic0.msg_reply_data_append<es>(src : i32, size : i32) =
@@ -2648,6 +2706,7 @@ ic0.msg_reply_data_append<es>(src : i32, size : i32) =
 ic0.msg_reply<es>() =
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
+  es.funds_available := no_funds
 
 ic0.msg_reject<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
@@ -2689,7 +2748,6 @@ ic0.call_new<es>(
     reject_fun  : i32,
     reject_env  : i32,
   ) =
-
   discard_pending_call<es>()
 
   callee := copy_from_canister<es>(callee_src, callee_size);
