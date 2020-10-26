@@ -1225,7 +1225,7 @@ The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 [#ic-candid]
 === Interface overview
 
-The following interface description, in https://github.com/dfinity-lab/motoko/blob/master/design/IDL.md[Candid syntax], describes the available functionality. You can also link:./ic.did[download the file].
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:./ic.did[download the file].
 ----
 include::ic.did[]
 ----
