@@ -1357,6 +1357,7 @@ HashTree
   | Labeled Label HashTree
   | Leaf blob
   | Pruned Hash
+Label = Blob
 Hash = Blob
 Signature = Blob
 PublicKey = Blob
