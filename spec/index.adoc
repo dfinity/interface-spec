@@ -134,7 +134,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 These have the form `H(public_key) · 0x02` (29 bytes).
 +
 An external user can use these ids as the `sender` of a request if they own the corresponding private key.
-The public key uses one of the encodings described in <<authentication>>.
+The public key uses one of the encodings described in <<signatures>>.
 
 3. _Derived ids_
 +
@@ -213,6 +213,8 @@ The signature is checked by verifying that the request id appears in base64url e
    - `authenticator_data` (`blob`): WebAuthn authenticator data.
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
    - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
+
+[#oid-der-wrapped-cose]
 
 The DER-wrapped COSE format uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
 See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details on the COSE encoding.
@@ -1065,7 +1067,7 @@ Cycles work like other units, but have some additional special purpose rules sin
 
 * `ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) -> (i64)`
 +
-indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_simple`, plus any funds accepted via `ic0.msg_funds_accept`.
+indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_new`, plus any funds accepted via `ic0.msg_funds_accept`.
 +
 After execution of the message, unused cycles from the reserve may be added to the cycles balance again.
 
@@ -1208,7 +1210,7 @@ The environment may copy out the data specified by `src` and `size`, and log, pr
 The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
 
 1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
-2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
+2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_new`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
 3. Making the builder interface to create calls build calls identified by a reference, rather than having an implicit partial call in the background.
 
 A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
