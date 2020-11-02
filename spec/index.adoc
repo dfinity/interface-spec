@@ -3047,7 +3047,7 @@ query_methods[method] = λ (arg, sysenv) → λ wasm_state →
   Return es.response;
 ....
 +
-This formulation checks afterwards that the system calls `ic0.calls_simple` was not invoked; an implementation can of course trap already when these system calls have been invoked.
+This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
