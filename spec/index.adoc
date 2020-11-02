@@ -173,12 +173,19 @@ Because the maximum size of a principal is 29 bytes, the textual representation 
 =====
 The canister with id `0xABCD01` has check sequence `0x233FF206` (https://crccalc.com/?crc=ABCD01&method=crc32&datatype=hex&outtype=hex[online calculator]); the final id is thus `em77e-bvlzu-aq`.
 
-Example command line calculation:
+Example encoding from hex, and decoding to hex, in bash (the following can be pasted into a terminal as it):
 ....
-( echo ABCD01 | xxd -r -p | crc32 /dev/stdin; echo -n ABCD01 ) |
-  xxd -r -p | base32 |
-  tr A-Z a-z | tr -d = |
-  fold -w5 | paste -sd'-' -
+function textual_encode() {
+  ( echo "$1" | xxd -r -p | /usr/bin/crc32 /dev/stdin; echo -n "$1" ) |
+  xxd -r -p | base32 | tr A-Z a-z |
+  tr -d = | fold -w5 | paste -sd'-' -
+}
+
+function textual_decode() {
+  echo -n "$1" | tr -d - | tr a-z A-Z |
+  fold -w 8 | xargs -n1 printf '%-8s' | tr ' ' = |
+  base32 -d | xxd -p | cut -b9- | tr a-z A-Z
+}
 ....
 =====
 
