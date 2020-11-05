@@ -35,15 +35,19 @@ call-request = {
 ; A request as submitted to /api/v1/read
 sync-request = envelope<sync-content>
 sync-content =
-  request-status-request /
+  read-state-request /
   query-request
 
-request-status-request = {
-  request_type: "request_status"
+read-state-request = {
+  request_type: "read_state"
   ? nonce : bytes
   ingress_expiry : timestamp
-  request_id : bytes
+  sender : principal
+  paths: [* state-path]
 }
+
+state-path = [* path-label]
+path-label = bytes
 
 query-request = {
   request_type: "query"
@@ -59,30 +63,12 @@ query-request = {
 
 response = tagged<response-content>
 response-content =
-  request-status-response /
+  read-state-response /
   query-response
 
-request-status-response = {
-  request-status-body
-  time : timestamp
+read-state-response = {
+  certificate: bytes
 }
-
-request-status-body = (
-  status: "unknown"
-  //
-  status: "received"
-  //
-  status: "processing"
-  //
-  status: "replied"
-  reply: call-reply
-  //
-  status: "rejected"
-  reject_code: unsigned
-  reject_message:  text
-  //
-  status: "done"
-)
 
 query-response = {
   status: "replied"

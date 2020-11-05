@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_13_0]
+=== 0.13.0 (2020-10-19)
+
+* Spec: Certification (also removes “request-status” request)
+
 [#0_12_2]
 === 0.12.2 (2020-10-23)
 
