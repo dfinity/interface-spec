@@ -499,7 +499,7 @@ All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can be requested by anyone.
  * `/subnet`. Can be requested by anyone.
- * `/request_status/<request_id>`. Can only be read if this read was signed by same sender as the original request.
+ * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -2174,6 +2174,7 @@ as_update(f, arg, env) = λ wasm_state →
       new_calls = [];
       response = res;
       funds_accepted = no_funds;
+      new_certified_data = NoCertifiedData;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
@@ -2845,7 +2846,6 @@ request_status_tree(Done) =
 ....
 and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
 
-
 [#concrete-canisters]
 === Abstract Canisters to System API
 
@@ -3105,7 +3105,8 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
       new_state = es.wasm_state;
       new_calls = es.calls;
       response = es.response;
-      balance = es.balance;
+      funds_accepted = es.funds_accepted;
+      new_certified_data = es.certified_data;
     }
   with Trap
     if callbacks.on_cleanup = NoClosure then Trap
