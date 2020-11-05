@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.12.2
+0.13.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -83,14 +83,13 @@ return "Hello world!"
 User <-- IC : "Hello World!"
 ....
 
-Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with high precision.
-
+Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with more rigor.
 
 === Nomenclature
 
 To get some consistency in this document, we try to use the following terms with precision:
 
-We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code acting on behalf of a (human) user.
+We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code (sometimes called “agent”) acting on behalf of a (human) user.
 
 The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved) or _query methods_ (state mutation is discarded, no further calls can be made).
 
@@ -108,7 +107,7 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs.
+Principals, like canister, user and subnet ids, are – as far as most uses of the system are concerned – binary blobs.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
@@ -132,7 +131,7 @@ NOTE: Typically, these end with the byte `0x01`, but users of the IC should not 
 These have the form `H(public_key) · 0x02` (29 bytes).
 +
 An external user can use these ids as the `sender` of a request if they own the corresponding private key.
-The public key uses one of the encodings described in <<authentication>>.
+The public key uses one of the encodings described in <<signatures>>.
 
 3. _Derived ids_
 +
@@ -171,12 +170,19 @@ Because the maximum size of a principal is 29 bytes, the textual representation 
 =====
 The canister with id `0xABCD01` has check sequence `0x233FF206` (https://crccalc.com/?crc=ABCD01&method=crc32&datatype=hex&outtype=hex[online calculator]); the final id is thus `em77e-bvlzu-aq`.
 
-Example command line calculation:
+Example encoding from hex, and decoding to hex, in bash (the following can be pasted into a terminal as it):
 ....
-( echo ABCD01 | xxd -r -p | crc32 /dev/stdin; echo -n ABCD01 ) |
-  xxd -r -p | base32 |
-  tr A-Z a-z | tr -d = |
-  fold -w5 | paste -sd'-' -
+function textual_encode() {
+  ( echo "$1" | xxd -r -p | /usr/bin/crc32 /dev/stdin; echo -n "$1" ) |
+  xxd -r -p | base32 | tr A-Z a-z |
+  tr -d = | fold -w5 | paste -sd'-' -
+}
+
+function textual_decode() {
+  echo -n "$1" | tr -d - | tr a-z A-Z |
+  fold -w 8 | xargs -n1 printf '%-8s' | tr ' ' = |
+  base32 -d | xxd -p | cut -b9- | tr a-z A-Z
+}
 ....
 =====
 
@@ -212,6 +218,8 @@ The signature is checked by verifying that the request id appears in base64url e
    - `client_data_json` (`text`): WebAuthn client data in JSON representation.
    - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
 
+[#oid-der-wrapped-cose]
+
 The DER-wrapped COSE format uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
 See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details on the COSE encoding.
 
@@ -234,6 +242,64 @@ The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YN
 
 NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
 
+[#state-tree]
+== The system state tree
+
+Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or, eventually, certified variables) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
+
+Conceptually, the system state is a tree with labeled children, and values in the leaves. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
+
+Labels are always blobs (but often with an human readable representation). In this document, paths are written suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors, and labels may contain the 0x2F byte (ASCII `/`) just fine. Values are either natural numbers, text values or blob values.
+
+This section specifies the publicly relevant paths in the tree.
+
+[#state-tree-time]
+=== Certification time
+
+* `/time` (natural):
++
+All certificate trees include a timestamp, indicating the time at which the state tree is current.
+
+[#state-tree-subnet]
+=== Subnet information
+
+The state tree contains information about the topology of the Internet Computer.
+
+* `/subnet/<subnet_id>/public_key` (blob)
++
+The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
+
+[#state-tree-request-status]
+=== Request status
+
+For each asynchronous request known to the system, its status is in a subtree at `/request_status/<request_id>`. Please see <<async-requests>> for more details on how asynchronous requests work.
+
+* `/request_status/<request_id>/status` (text)
++
+One of `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
+
+* `/request_status/<request_id>/reply` (blob)
++
+If the status is `replied`, then this path contains the reply blob, else it is not present.
+
+* `/request_status/<request_id>/reject_code` (natural)
++
+If the status is `rejected`, then this path contains the reject code (seee <<reject-codes>>), else it is not present.
+
+* `/request_status/<request_id>/reject_message` (text)
++
+If the status is `rejected`, then this path contains a textual diagnostic mmessage, else it is not present.
+
+NOTE: Immediately after submitting a request, the request may not show up yet as the system is still working on accepting the request as pending.
+
+NOTE: Request statuses will not actually be kept around indefinitely, and eventually the system forgets about the request. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
+
+[#state-tree-certified-data]
+=== Certified data
+
+* `/canister/<canister_id>/certified_data` (blob):
++
+The certified data of the canister with the given id, see <<system-api-certified-data>>.
 
 [#http-interface]
 == HTTPS Interface
@@ -295,7 +361,7 @@ To avoid replay attacks, the transition from `done` or `received` to `pruned` mu
 
 Requests must stay in `Replied` or `Rejected` long enough for polling clients to catch the response.
 
-When asking the system about the state or response of a request, the user uses a request id (see <<api-request-id>>).
+When asking the system about the state or response of a request, the user uses the request id (see <<api-request-id>>) to read the request status (see <<state-tree-request-status>>) from the state tree (see <<api-request-read-state>>).
 
 === Synchronous requests
 
@@ -319,13 +385,10 @@ NOTE: Should we add features that _change the state_ but are node-specific (e.g.
 
 For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
-* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can use separate `request_status` requests (see <<api-request-status>>) to determine the response.
+* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can read the state tree (see <<api-request-read-state>>) to determine the response.
 * The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
 
 In both cases, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
-
-NOTE: For some types of synchronous requests (but not all), the node will be able to _prove_ that the overall system agrees on the particular value (e.g. fetching the response from an update call). For which reads, and how this can happen, still needs to be specified.
-
 
 [#field-types]
 === Field types
@@ -359,7 +422,8 @@ The following fields are common among all requests:
 All requests coming in via the HTTP interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are added to all request records (next to `request_type`):
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
-* `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future.
+* `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `signature_expiry`).
+* `sender` (`Principal`, required): The user who issued the request.
 
 Furthermore, the whole request record is wrapped in a envelope record with these fields:
 
@@ -367,16 +431,15 @@ Furthermore, the whole request record is wrapped in a envelope record with these
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may in the future have more than one key, this field tells the system which key is used.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
-For requests that have a `sender` field, the public key must authenticate the `sender` principal. For the `request_status` request, the public key must authenticate the sender of the original request.
+The public key must authenticate the `sender` principal:
 
 * A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-* The fields `sender_pubkey` and `sender_sig` must be omitted if the sender the anonymous principal.
-  The fields `sender_pubkey` and `sender_sig` must be set if the sender not the anonymous principal.
+* The fields `sender_pubkey` and `sender_sig` must be omitted if the `sender` field is the anonymous principal.
+  The fields `sender_pubkey` and `sender_sig` must be set if the `sender` field is not the anonymous principal.
 
 The request id (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the request id, and implies that signature and public key are not semantically relevant.
 
 The field `sender_pubkey` contains a public key supported by one of the schemes described in <<signatures>>.
-
 
 The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the public key specified in `sender_pubkey`.
 
@@ -384,13 +447,7 @@ The `sender_sig` field is calculated by signing the concatenation of the 11 byte
 [#request-types]
 === Request types
 
-The following subsections list all supported requests and specify
-
-* the classification (synchronous vs. asynchronous)
-* the request type string
-* the required and optional fields of the request record
-* the required and optional field of the reply object (see <<api-request-status>>)
-* and a description of their pupose and behavior.
+The following subsections list all supported requests.
 
 [#api-update]
 ==== Canister update call
@@ -400,34 +457,39 @@ The maybe most important request type is calling an exported method of a caniste
 Synchronicity:: asynchronous
 Request type:: `call`
 Request fields::
-* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to call.
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
-Reply fields::
-* `arg` (`blob`): The blob representing the data replied by the canister.
+Response fields::
+None, the server returns no body and HTTP status 202.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
 
+The response will be represented in the state tree, as described in <<state-tree-request-status>>, and can be read using <<api-request-read-state>>.
+
 NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
 
-[#api-request-status]
-==== Request status
+[#api-request-read-state]
+==== State tree reads
 
 Synchronicity:: synchronous
-Request type:: `request_status`
+Request type:: `read_state`
 Request fields::
-* `request_id` (`blob`): The request id to check the status for, see <<api-request-id>>.
+* `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
 Response fields::
-* `status` (`text`): one of `unknown`, `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
-* `reply`: If the status is `replied`, then this member contains the request-type specific reply object. See the specification for the individual request types for which fields exist. If no field are especified (currently not specified), this field contains the empty record.
-* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
-* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
-* `time` (`nat`): indicates how fresh this response it. This is _not_ the time of the latest state change, but the time of the certification (to be specified) of this response.
+* `certificate` (`blob`): A certificate (see <<certification>>).
 
-WARNING: Immediately after submitting a request, this may fail (e.g. return with `unknown`) even though the system is in the process of receiving the request.
+The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
-NOTE: Request responses will not be kept around indefinitely, and eventually the status will revert to `unknown`, as described in <<async-requests>>.
+All requested paths must have one of the following paths as prefix:
+
+ * `/time`. Can be requested by anyone.
+ * `/subnet`. Can be requested by anyone.
+ * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`.
+
+Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
+
+See <<state-tree>> for details on the state tree.
 
 [#api-query]
 ==== Canister query call
@@ -437,7 +499,6 @@ Canister methods that do not change the canister state can be executed more effi
 Synchronicity:: synchronous
 Request type:: `query`
 Request fields::
-* `sender` (`Principal`): The user who issued the request.
 * `canister_id` (`CanisterId`): The id of the canister to query.
 * `method_name` (`text`): Name of the canister query method to call
 * `arg` (`blob`): Argument to pass to the canister method
@@ -464,14 +525,15 @@ The following encodings of field values as blobs are used
 
 * Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
 * Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
-* Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
+* Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 * Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+* Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
 
 [#api-request-id]
 === Request ids
 
-When querying the status of a request (see <<api-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
+When querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
 
 The request id is computed as the <<api-hash-of-map, representation-independent hash>> of `content`.
 
@@ -542,6 +604,7 @@ For this endpoint, the user performs a GET request, and receives a CBOR value wi
 * `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
 * `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
 * `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
+* `root_key` (blob, only in development instances): The public key (a DER-encoded BLS key) of the root key of this Internet Computer instance. This _must_ be present in short-lived development instances, to allow the client to fetch the public key. In production environments, clients must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See <<api-cbor>> for details on the precise CBOR encoding of this object.
 
@@ -766,6 +829,11 @@ ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
 ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
 
+ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt
+ic0.data_certificate_present : () -> i32                                    // Q
+ic0.data_certificate_size : () -> i32                                       // Q
+ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // Q
+
 ic0.time : () -> (timestamp : i64);                                         // *
 
 ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
@@ -943,7 +1011,7 @@ Cycles work like other units, but have some additional special purpose rules sin
 
 * `ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) -> (i64)`
 +
-indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_simple`, plus any funds accepted via `ic0.msg_funds_accept`.
+indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_new`, plus any funds accepted via `ic0.msg_funds_accept`.
 +
 After execution of the message, unused cycles from the reserve may be added to the cycles balance again.
 
@@ -1031,6 +1099,37 @@ The system times of different canisters are unrelated, and calls from one canist
 
 NOTE: While an implementation will likely try to keep the System Time close to the real time, this is not formally part of this specification.
 
+[#system-api-certified-data]
+=== Certified data
+
+For each canister, the system keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+
+* `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
++
+The canister can update the certified data with this call. The passed data must be no larger than 32 bytes. This can be used any number of times.
+
+When executing a query method via a query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
+
+* `+ic0.data_certificate_present : () -> (i32)+`
++
+returns `1` if a certificate is present, and `0` otherwise.
++
+This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
++
+NOTE: In the future, this may also return `0` for query calls if the system executes query calls on not-yet-certified states.
+
+* {blank}
++
+  ic0.data_certificate_size : () -> i32
+  ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()
++
+Copies the certificate for the current value of the certified data to the canister.
++
+The certificate is a blob as described in <<certification>> that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of <<state-tree>>.
++
+This traps if `ic0.data_certificate_present()` returns `0`.
+
+
 === Debugging aids
 
 During local development and execution on a local network, the canister needs a way to emit textual trace messages. On the “real” network, these do not do anything.
@@ -1055,7 +1154,7 @@ The environment may copy out the data specified by `src` and `size`, and log, pr
 The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
 
 1. The introduction of a `api_nonce` reference, which models the capability to use the System API. It is passed as an argument to `canister_init`, `canister_update <name>` etc., and expected as an argument by almost all system function calls. (The debugging aids remain unconstrainted.)
-2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_simple`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
+2. The use of references, instead of binary blobs, to address principals (user ids, canister ids), e.g. in `ic0.msg_caller` or in `ic0.call_new`. Additional functions will be provided to convert between the transparent binary representation of principals and references.
 3. Making the builder interface to create calls build calls identified by a reference, rather than having an implicit partial call in the background.
 
 A canister may only use the old _or_ the new interface; the system detects which interface the canister intends to use based on the names and types of its function imports and exports.
@@ -1072,7 +1171,7 @@ The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 [#ic-candid]
 === Interface overview
 
-The following interface description, in https://github.com/dfinity-lab/motoko/blob/master/design/IDL.md[Candid syntax], describes the available functionality. You can also link:./ic.did[download the file].
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:./ic.did[download the file].
 ----
 include::ic.did[]
 ----
@@ -1166,6 +1265,170 @@ This action may have a cost in cycles, which is deducted from the receiving cani
 === IC method `raw_rand`
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
+
+[#certification]
+== Certification
+
+Some parts of the system state are exposed to clients in a tamperproof way via certification: the system can reveal a _partial state tree_ which includes just the data of interest, together with a signature of the state tree.  This means that a client can be sure that the response is correct, even if the client happens to be communicating with a malicious server, or have received the certificate via some other untrusted way.
+
+To validate a value using a certificate, the client conceptually
+
+ 1. checks the validity of the partial tree using `verify_cert`,
+ 2. looks up the data in the certificate using `lookup` at a given path,
+
+This mechanism is used in the `read_state` request type, and eventually also for other purposes.
+
+=== Root of trust
+
+The root of trust is the _root public key_, which must be known to the client a priori. For temporary instances of the internet computer, e.g. during local development, the key can be fetched via the <<api-status,`/api/v1/status`>> endpoint.
+
+=== Certificate
+
+A certificate consists of
+
+ * the partial system state, which contains the data of interest, and allows to recover the _tree root hash_,
+ * a signature on the tree root hash valid under some _public key_
+ * an optional _delegation_ that link that public key to _root public key_.
+
+More formally, certificate is thus described by the following data structure:
+....
+Certificate = {
+  tree : HashTree
+  signature : Signature
+  delegation : NoDelegation | Delegation
+}
+HashTree
+  = Empty
+  | Fork HashTree HashTree
+  | Labeled Label HashTree
+  | Leaf blob
+  | Pruned Hash
+Label = Blob
+Hash = Blob
+Signature = Blob
+PublicKey = Blob
+Timestamp = Nat
+....
+
+A certificate is validated with regard to the root of trust by the following algorithm (which uses `check_delegation` defined in <<certification-delegation>>):
+....
+verify_cert(cert) =
+  let root_hash = reconstruct(cert.tree)
+  let der_key = check_delegation(cert.delegation) // see section Delegations below
+  bls_key = extract_der(der_key)
+  verify_bls_signature(key, cert.signature, domain_sep("ic-state-root") · root_hash)
+
+reconstruct(Empty)       = H(domain_sep("ic-hashtree-empty"))
+reconstruct(Fork t1 t2)  = H(domain_sep("ic-hashtree-fork") · reconstruct(t1) · reconstruct(t2))
+reconstruct(Labeled l t) = H(domain_sep("ic-hashtree-labeled") · label · reconstruct(t))
+reconstruct(Leaf v)      = H(domain_sep("ic-hashtree-leaf") · v)
+reconstruct(Pruned h)    = h
+
+domain_sep(s) = byte(|s|) · s
+....
+where `H` is the SHA-256 hash function,
+....
+verify_bls_signature : PublicKey -> Signature -> Blob -> Bool
+....
+is the https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04#section-4[BLS signature verification function], ciphersuite BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_. See that document also for details on the encoding of BLS public keys and signatures, and
+....
+extract_der : Blob -> Blob
+....
+implements DER decoding of the public key, following https://tools.ietf.org/html/rfc5480[RFC4580] using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+
+All certificate trees include the time at path `/time` (see <<state-tree-time>>). Clients can use this timestamp to guard against old certificates in cases where they expect a fresh certificate.
+
+=== Lookup
+
+Given a (verified) tree, the client can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors.
+
+The following algorithm looks up a `path` in a certificate, and returns either
+
+ * the value
+ * `Absent`, if the value is guaranteed to be absent in the original state tree,
+ * `Unknown`, if this partial view does not include information about this path, or
+ * `Error`, if the path does not make sense for this certificate:
+
+....
+lookup(path, cert) = lookup_path(path, cert.tree)
+
+lookup_path([], Empty) = Absent
+lookup_path([], Leaf v) = v
+lookup_path([], Pruned _) = Unknown
+lookup_path([], Labeled _ _) = Error
+lookup_path([], Fork _ _) = Error
+
+lookup_path(l::ls, tree) =
+  match find_label(l, flatten_forks(tree)) with
+  | Absent -> Absent
+  | Unknown -> Unknown
+  | Error -> Error
+  | Found subtree -> lookup_path ls subtree
+
+flatten_forks(Empty) = []
+flatten_forks(Fork t1 t2) = flatten_forks(t1) · flatten_forks(t2)
+flatten_forks(t) = [t]
+
+find_label(l, _ · Labeled l1 t · _)                | l == l1     = Found t
+find_label(l, _ · Labeled l1 _ · Labeled l2 _ · _) | l1 < l < l2 = Absent
+find_label(l,                    Labeled l2 _ · _) |      l < l2 = Absent
+find_label(l, _ · Labeled l1 _ )                   | l1 < l      = Absent
+find_label(l, [])                                                = Absent
+find_label(l, _)                                                 = Unknown
+....
+
+The system will only produce well-formed trees, and the above algorithm assumes welformed trees. These have the property that labeled subtrees apper in strictly increasing order of labels, and are not mixed with leaves. More formally:
+....
+well_formed(tree) =
+  (tree = Leaf _) ∨ (well_formed_forest(flatten_forks(tree)))
+
+well_formed_forest(trees) =
+  strictly_increasing([l | Label l _ ∈ trees]) ∧
+  ∀ Label _ t ∈ trees. well_formed(t) ∧
+  ∀ t ∈ trees ≠ Leaf _
+....
+
+[#certification-delegation]
+=== Delegation
+
+To facilitate a distributed implementation of the Internet Computer, the root key can delegate certification authority to other keys.
+
+A certificate by the root subnet does not have a delegation field. A certificate by other subnets include a delegation, which is itself a certificate that proves that the subnet is listed in the root subnet’s state tree (see <<state-tree-subnet>>), and reveals its public key.
+
+NOTE: The nested certificate _typically_ does not itself again contain a delegation, although there is no reason why agents should enforce that property.
+....
+Delegation =
+ Delegation {
+   subnet_id : Principal;
+   certificate : Certificate;
+ }
+....
+
+A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
+
+....
+check_delegations(NoDelegation) : public_bls_key =
+  return root_public_key
+check_delegations(Delegation d) : public_bls_key =
+  verify_cert(d.certificate)
+  return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
+....
+where `root_public_key` is the a priori known root key of the Internet Computer instance.
+
+=== Encoding of certificates
+
+The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:./certificates.cddl[download the file].
+
+[source,bash]
+----
+include::certificates.cddl[]
+----
+
+The values in the <<state-tree>> are encoded to blobs as follows:
+
+* natural numbers are leb128-encoded.
+* text values are UTF-8-encoded
+* blob values are encoded as is
 
 [#public-spec]
 == Abstract public behavior
@@ -1279,11 +1542,17 @@ WasmState = (abstract)
 StableMemory = (abstract)
 Callback = (abstract)
 
-type Timestamp = Nat;
 Arg = {
   data : Blob
   caller: Principal
+}
+
+Timestamp = Nat;
+Balance = Funds
+Env = {
   time : Timestamp
+  balance : Balance;
+  certificate : NoCertificate | Blob
 }
 
 RejectCode = Nat
@@ -1299,27 +1568,29 @@ MethodCall = {
 UpdateFunc = WasmState -> Trap | Return {
   new_state : WasmState;
   new_calls : List MethodCall;
+  new_certified_data : NoCertifiedData | Blob
   response : NoResponse | Response;
   funds_accepted : Funds;
 }
 QueryFunc = WasmState -> Trap | Return Response
 
-Balance = Funds
 AvailableFunds = Funds
 
 CanisterModule = {
-  init : (CanisterId, Arg, Balance) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : Principal, Timestamp, Balance) -> Trap | Return StableMemory
-  post_upgrade : (CanisterId, StableMemory, Arg, Balance) -> Trap | Return WasmState
-  update_methods : MethodName ↦ ((Arg, Balance, AvailableFunds) -> UpdateFunc)
-  query_methods : MethodName ↦ ((Arg, Balance) -> QueryFunc)
-  callbacks : (Callback, Response, Funds, Timestamp, Balance, AvailableFunds) -> UpdateFunc
+  init : (CanisterId, Arg, Env) -> Trap | Return WasmState
+  pre_upgrade : (WasmState, caller : Principal, Env) -> Trap | Return StableMemory
+  post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
+  update_methods : MethodName ↦ ((Arg, Env, AvailableFunds) -> UpdateFunc)
+  query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
+  callbacks : (Callback, Response, Funds, Env, AvailableFunds) -> UpdateFunc
 }
 ....
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section <<system-api>>.
 
 The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through to the canister, via the `canister.self` system call.
+
+The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
 The parsing of a blob to a canister module is modelled via the (possibly implicitly failing) function
 ....
@@ -1419,17 +1690,19 @@ RequestStatus
   = Received
   | Processing
   | Rejected (RejectCode, Text)
-  | Completed { result : Value }
+  | Replied Blob
   | Done
 ....
 
 These are the synchronous read messages:
 ....
+Path = List(Blob)
 APIReadRequest
-  = ReadStatus = {
+  = StateRead = {
     nonce : Blob;
     ingress_expiry : Nat;
-    request_id : Request;
+    sender : UserId;
+    paths : List(Path);
   }
   | CanisterQuery = {
     nonce : Blob;
@@ -1441,7 +1714,7 @@ APIReadRequest
   }
 ....
 
-A `ReadStatus` refers to a request by way of a _request id_, as specifeid in <<api-request-id>>:
+A `Path` may refer to a request by way of a _request id_, as specified in <<api-request-id>>:
 ....
 Request = Blob
 hash_of_map: Request -> Request
@@ -1467,9 +1740,11 @@ S = {
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Funds;
+  certified_data: CanisterId ↦ Blob;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
+  root_key : PublicKey
 }
 CanState
  = EmptyCanister | {
@@ -1496,9 +1771,10 @@ The initial state of the system is
   system_time = T;
   call_contexts = ();
   messages = ();
+  root_key = PublicKey;
 }
 ....
-for some time stamp `T`, using `()` to denote the empty map or bag.
+for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using `()` to denote the empty map or bag.
 
 === State transitions
 
@@ -1528,9 +1804,15 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 ....
 verify_envelope({ content = C }, U, T)
   = U = anonymous_id
-verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig }, U, T)
+verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
   = U = mk_self_authenticating_id E.sender_pubkey
-  ∧ verify_signature ("\x0Aic-request" · hash_of_map(C), PK)
+  ∧ PK' = verify_delegations(DS, PK, T)
+  ∧ verify_signature ("\x0Aic-request" · hash_of_map(C), PK')
+
+verify_delegations([], PK, T) = PK
+verify_delegations([D] · DS, PK, T) = verify_delegations(DS, D.pubkey, T)
+  if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
+   ∧ D.delegation.expiration ≥ T
 ....
 
 ==== API Request submission
@@ -1677,16 +1959,18 @@ Conditions::
     Mod = S.canisters[M.receiver].module
 
     Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
+    Env = { time = S.time[M.receiver]; balance = Balance_before; certificate = NoCertificate}
+
     Available = S.call_contexts[M.call_contexts].available_funds
     ( M.entry_point = PublicMethod Name Caller Data
-      Arg = { data = Data; caller = Caller; time = S.time[M.receiver] }
-      (F = M.update_methods[M.method_name](Arg, Balance_before, Available))
+      Arg = { data = Data; caller = Caller }
+      (F = M.update_methods[M.method_name](Arg, Env, Available)
       or
-      (F = as_update(Mod.query_methods[M.method_name], Arg, Balance_before))
+      (F = as_update(Mod.query_methods[M.method_name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response Refund
-      F = Mod.callbacks(Callback, Response, Refund, S.time[M.receiver], Balance_before, Available)
+    ( M.entry_point = Callback Callback Response
+      F = Mod.callbacks(Callback, Response, Env, Available)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -1732,6 +2016,9 @@ then
        call_contexts[M.call_context].responded = true
        call_contexts[M.call_context].available_funds = no_funds
 
+    if res.new_certified_data ≠ NoCertifiedData:
+      certified_data[M.receiver] = res.new_certified_data
+
     balances[M.receiver] = S.balances[M.receiver]
       + res.funds_accepted
       - cycle_funds(Cycles_used)
@@ -1761,14 +2048,15 @@ Note also that the state changes are persisted even when the system is set to sy
 
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
-as_update(f, arg, balance) = λ wasm_state →
-  match f(arg, balance)(wasm_state) with
+as_update(f, arg, env) = λ wasm_state →
+  match f(arg, env)(wasm_state) with
     Trap → Trap
     Return res → Return {
       new_state = wasm_state;
       new_calls = [];
       response = res;
       funds_accepted = no_funds;
+      new_certified_data = NoCertifiedData;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
@@ -1844,6 +2132,7 @@ S with
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.caller
     funds[CanisterId] = M.transferred_funds
+    certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -1924,9 +2213,9 @@ Conditions::
     Arg = {
       data = A.arg;
       caller = M.caller;
-      time = S.time[A.canister_id];
     }
-    Mod.init(A.canister_id, A.arg) = Return New_state
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
+    Mod.init(A.canister_id, Arg, Env) = Return New_state
 ....
 State after::
 ....
@@ -1960,13 +2249,13 @@ Conditions::
     S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller = S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
-    Old_module.pre_upgrade(Old_State, M.caller, S.time[A.canister_id]) = Return Stable_memory
+    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
+    Old_module.pre_upgrade(Old_State, M.caller, Env) = Return Stable_memory
     Arg = {
       data = A.arg;
       caller = M.caller;
-      time = S.time[A.canister_id];
     }
-    Mod.post_upgrade(A.canister_id, Stable_memory, Arg) = Return New_state
+    Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env) = Return New_state
 ....
 State after::
 ....
@@ -2281,8 +2570,8 @@ State after::
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Completed { result = R } if response = Reply R
-      | Rejected R               if response = Reject R
+      | Replied R   if response = Reply R
+      | Rejected R  if response = Reject R
 ....
 
 NB: The refunded funds, `RM.refunded_funds` are, by construction, empty, with the exception of when the controller of a canister is a user, and deletes a canister with funds. In the current specification, these funds disappear in thin air in that case. This is likely to change in some way or another.
@@ -2293,7 +2582,7 @@ The system will keep the data for a completed or rejected request around for a c
 
 Conditions::
 ....
-    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _)
+    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _)
 ....
 State after::
 ....
@@ -2306,7 +2595,7 @@ At the same or some later point, the request will be removed from memory of the 
 
 Conditions::
 ....
-    (S.requests[M] = Completed _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
+    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
     M.ingress_expiry < S.system_time
 ....
 State after::
@@ -2343,33 +2632,11 @@ S with
     system_time = T1
 ....
 
-==== Read: Status
-
-The user can query the status of a request. The type of `result`, given as `Value` in the above spec, can vary depending on the request type.
-
-NOTE: There is a phase where a request was issued by the user, but has not yet been received by the whole system. During this phase, the request status behaves as if the request has never been seen. It may silently be dropped, or eventually be marked as pending.
-
-Submitted request:: `E`
-Conditions::
-....
-  E.content = ReadStatus RS
-  request_id_of(R) = RS.request_id
-  verify_envelope(E, R.sender, S.system_time)
-  S.system_time <= RS.ingress_expiry
-  S.requests[R] = Status
-....
-Read response::
-A record with
-* `{status: received}` if `Status = Received`
-* `{status: processing}` if `Status = Processing`
-* `{status: rejected; reject_code: <code>: reject_message: <msg>}` if `Status = Rejected (code, msg)`
-* `{status: replied; result : <result>}` if `Status = Completed { result = result }`
-* `{status: done}` if `Status = Done`
-
-
 ==== Read: query call
 
 Canister query calls can be executed directly.  They can only be executed against canisters which are `Running`.
+
+During the execution of a query call, a certificate is provided to the canister that is valid, is current (or “recent enough”; the specification is currently vague about how old the certificate may be) and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
 Submitted request:: `E`
 Conditions::
@@ -2380,30 +2647,83 @@ Conditions::
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
   C = S.canisters[Q.canister_id]
-  Balance = S.balances[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
     data = Q.arg;
     caller = Q.sender;
-    time = S.time[Q.callee];
   }
+  verify_cert(Cert)
+  lookup(["canister",Q.canister_id,"certified_data"], Cert) = Found S.certified_data[Q.canister_id]
+  lookup(["time"], Cert) = Found S.system_time // or “recent enough”
+  Env = { time = S.time[M.receiver]; canister_location = S.canister_location; balance = S.balances[Q.canister_id]; certificate = Cert }
 ....
 Read response::
-* If `F(Arg, Balance) = Trap` then
+* If `F(Arg, Env) = Trap` then
 +
 ....
 {status: failed; error: "Query execution trapped"}
 ....
-* Else if `F(Arg, Balance) = Return (Reject (code, msg))` then
+* Else if `F(Arg, Env) = Return (Reject (code, msg))` then
 +
 ....
 {status: rejected; reject_code: <code>: reject_message: <msg>}
 ....
-* Else if `F(Arg, Balance) = Return (Reply R)` then
+* Else if `F(Arg, Env) = Return (Reply R)` then
 +
 ....
-{status: success; result: <R> }
+{status: success; reply: { arg :  <R> } }
 ....
+
+==== Read: Certified state reads
+
+The user can read elements of the _state tree_, using a `read_state` request.
+
+Submitted request:: `E`
+Conditions::
+....
+  E.content = ReadState RS
+  verify_envelope(E, RS.sender)
+  S.system_time <= RS.ingress_expiry
+  ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
+....
+Read response::
+A record with
+* `{certificate: C}`
+
+The predicate `may_read_path` is defined as follows, implementing the access control outlined in <<api-request-read-state>>:
+....
+may_read_path(S, _, ["time"]) = True
+may_read_path(S, _, ["request_status", Rid] · _) =
+  if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
+  then RS.sender = R.sender
+  else True
+may_read_path(S, _, _) = False
+....
+
+The response is a certificate `cert`, as specified in <<certification>>, which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in <<state-tree>> that is a suffix of a path in `RS.paths` or of `["time"]`, we have
+....
+lookup(path, cert) = lookup_in_tree(path, state_tree(S))
+....
+where `state_tree` constructs the a labeled tree from the system state `S` and the (so far underspecified) set of subnets `subnets`, as per <<state-tree>>
+....
+state_tree(S) = {
+  "time": S.system_time;
+  "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
+  "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
+}
+
+request_status_tree(Received) =
+  { "status": "received" }
+request_status_tree(Processing) =
+  { "status": "processing" }
+request_status_tree(Rejected (code,msg)) =
+  { "status": "rejected"; "reject_code": code; "reject_message": msg }
+request_status_tree(Replied arg) =
+  { "status": "replied"; "reply": arg }
+request_status_tree(Done) =
+  { "status": "Done" }
+....
+and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
 
 
 [#concrete-canisters]
@@ -2448,7 +2768,7 @@ Params = {
   caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
-  time : Timestamp;
+  sysenv : Env;
   funds_refunded : Funds;
 }
 ExecutionState = {
@@ -2461,6 +2781,7 @@ ExecutionState = {
   reply_params : { arg : Blob };
   pending_call : MethodCall | NoPendingCall;
   calls : List MethodCall;
+  new_certified_data : NoCertifiedData | Blob;
 }
 ....
 
@@ -2496,6 +2817,7 @@ empty_execution_state = {
   reply_params = { arg = "" };
   pending_call = NoPendingCall;
   calls = [];
+  new_certified_data = NoCertifiedData;
 }
 ....
 
@@ -2505,18 +2827,18 @@ empty_execution_state = {
 If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-init = λ (self_id, arg, balance) →
+init = λ (self_id, arg, sysenv) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 +
 ....
-init = λ (self_id, arg, balance) →
+init = λ (self_id, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = empty_params with { data = arg.data; caller = arg.caller; time = arg.time }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2531,17 +2853,17 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 +
 ....
-pre_upgrade = λ (old_state, caller, time, balance) → Return old_state.stable_mem
+pre_upgrade = λ (old_state, caller, sysenv) → Return old_state.stable_mem
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 +
 ....
-pre_upgrade = λ (old_state, caller, time, balance) →
+pre_upgrade = λ (old_state, caller, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = old_state
-      params = { empty_params with caller = caller; time = time }
-      balance = balance
+      params = { empty_params with caller = caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2555,18 +2877,18 @@ pre_upgrade = λ (old_state, caller, time, balance) →
 If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg, balance) →
+post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   Return { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
 +
 ....
-post_upgrade = λ (self_id, stable_mem, arg, balance) →
+post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-      params = { empty_params with data = arg.data; caller = arg.caller; time = arg.time }
-      balance = balance
+      params = { empty_params with data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
@@ -2577,15 +2899,11 @@ post_upgrade = λ (self_id, stable_mem, arg, balance) →
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 +
 ....
-update_methods[method] = λ (arg, balance, available) → λ wasm_state →
+update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with {
-        data = arg.data;
-        caller = arg.caller;
-        time = arg.time;
-      }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
       funds_available = arg.funds;
     }
   try func<es>() with Trap then Trap
@@ -2594,21 +2912,18 @@ update_methods[method] = λ (arg, balance, available) → λ wasm_state →
     new_calls = es.calls;
     response = es.response;
     funds_accepted = es.funds_accepted;
+    new_certified_data = es.new_certified_data
   }
 ....
 
 * The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 +
 ....
-query_methods[method] = λ (arg, balance) → λ wasm_state →
+query_methods[method] = λ (arg, sysenv) → λ wasm_state →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
-      params = empty_params with {
-        data = arg.data;
-        caller = arg.caller;
-        time = arg.time
-      }
-      balance = balance
+      params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
+      balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
   if es.funds_accepted ≠ no_funds then Trap
@@ -2617,16 +2932,16 @@ query_methods[method] = λ (arg, balance) → λ wasm_state →
   Return es.response;
 ....
 +
-This formulation checks afterwards that the system calls `ic0.calls_simple` was not invoked; an implementation can of course trap already when these system calls have been invoked.
+This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, refund, time, balance, available) → λ wasm_state →
+callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
-    time = time;
+    sysenv
     funds_received = refund;
   }
   let (func_id, env, params) = match response with
@@ -2653,6 +2968,7 @@ callbacks = λ(callbacks, response, refund, time, balance, available) → λ was
     new_calls = es.calls;
     response = es.response;
     balance = es.balance;
+    new_certified_data = es.certified_data;
   }
 ....
 
@@ -2827,6 +3143,23 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
 
 ic0.time<es>() : i32 =
   return es.params.time
+
+ic0.certified_data_set<es>(src: i32, size: i32) =
+  es.new_certified_data := es.wasm_state[src..src+size]
+
+ic0.data_certificate_present<es>() : i32 =
+  if es.params.sysenv.certificate = NoCertificate
+  then return 0
+  else return 1
+
+ic0.data_certificate_size<es>() : i32 =
+  if es.params.sysenv.certificate = NoCertificate then Trap
+  return |es.params.sysenv.certificate|
+
+ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
+  if es.params.sysenv.certificate = NoCertificate then Trap
+  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
+
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return
