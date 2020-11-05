@@ -1,7 +1,7 @@
 certificate = tagged<{
   tree : hash-tree
   signature : signature
-  delegations : [* delegation]
+  ? delegation : delegation
 }>
 
 hash-tree =
@@ -20,8 +20,8 @@ tree-leaf    = [ 3 bytes ]
 tree-pruned  = [ 4 hash ]
 
 delegation = {
-  type : "insecure"
-  key: pubkey
+  subnet_id : bytes
+  certificate: bytes
 }
 
 tagged<t> = #6.55799(t) ; the CBOR tag

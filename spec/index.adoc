@@ -85,14 +85,13 @@ return "Hello world!"
 User <-- IC : "Hello World!"
 ....
 
-Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with high precision.
-
+Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with more rigor.
 
 === Nomenclature
 
 To get some consistency in this document, we try to use the following terms with precision:
 
-We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code acting on behalf of a (human) user.
+We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to the external entity interacting with the internet computer, even if in most cases it will be some code (sometimes called “agent”) acting on behalf of a (human) user.
 
 The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved) or _query methods_ (state mutation is discarded, no further calls can be made).
 
@@ -110,7 +109,7 @@ Canisters, users, etc. are identified by a _principal_, sometimes also called an
 
 == Principals
 
-Principals, like canister ids and user ids, are – as far as most uses of the system are concerned – binary blobs.
+Principals, like canister, user and subnet ids, are – as far as most uses of the system are concerned – binary blobs.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
@@ -254,7 +253,7 @@ Conceptually, the system state is a tree with labeled children, and values in th
 
 Labels are always blobs (but often with an human readable representation). In this document, paths are written suggestively with slashes as separators; the actual encoding is not actually using slashes as delimitors, and labels may contain the 0x2F byte (ASCII `/`) just fine. Values are either natural numbers, text values or blob values.
 
-This section describes specifies the publicly relevant paths in the tree.
+This section specifies the publicly relevant paths in the tree.
 
 [#state-tree-time]
 === Certification time
@@ -262,6 +261,15 @@ This section describes specifies the publicly relevant paths in the tree.
 * `/time` (natural):
 +
 All certificate trees include a timestamp, indicating the time at which the state tree is current.
+
+[#state-tree-subnet]
+=== Subnet information
+
+The state tree contains information about the topology of the Internet Computer.
+
+* `/subnet/<subnet_id>/public_key` (blob)
++
+The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
 
 [#state-tree-request-status]
 === Request status
@@ -284,7 +292,7 @@ If the status is `rejected`, then this path contains the reject code (seee <<rej
 +
 If the status is `rejected`, then this path contains a textual diagnostic mmessage, else it is not present.
 
-NOTE: Immediately after submitting a request, the request may not show up yet even though the system is still working on accepting the request as pending.
+NOTE: Immediately after submitting a request, the request may not show up yet as the system is still working on accepting the request as pending.
 
 NOTE: Request statuses will not actually be kept around indefinitely, and eventually the system forgets about the request. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented, but likely longer, so that users have a chance to fetch it. The precise policy is not yet defined.
 
@@ -490,6 +498,7 @@ The returned certificate reveals all values whose path is a suffix of the list o
 All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can be requested by anyone.
+ * `/subnet`. Can be requested by anyone.
  * `/request_status/<request_id>`. Can only be read if this read was signed by same sender as the original request.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
@@ -609,7 +618,7 @@ For this endpoint, the user performs a GET request, and receives a CBOR value wi
 * `impl_source` (string, optional): Identifies the implementation of the Internet Computer, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/dfinity`).
 * `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
 * `impl_revision` (string, optional): The precise git revision of the Internet Computer implementation
-* `root_key` (blob, only in development instances): The public key of the root key of this Internet Computer instance. This _must_ be present in short-lived development instances, to allow the client to fetch the public key. In production environments, clients must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
+* `root_key` (blob, only in development instances): The public key (a DER-encoded BLS key) of the root key of this Internet Computer instance. This _must_ be present in short-lived development instances, to allow the client to fetch the public key. In production environments, clients must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See <<api-cbor>> for details on the precise CBOR encoding of this object.
 
@@ -1351,14 +1360,14 @@ A certificate consists of
 
  * the partial system state, which contains the data of interest, and allows to recover the _tree root hash_,
  * a signature on the tree root hash valid under some _public key_
- * a sequence (typically 0 or 1) of _delegations_ that link the public key to _root public key_.
+ * an optional _delegation_ that link that public key to _root public key_.
 
 More formally, certificate is thus described by the following data structure:
 ....
 Certificate = {
   tree : HashTree
   signature : Signature
-  delegations : List(Delegation)
+  delegation : NoDelegation | Delegation
 }
 HashTree
   = Empty
@@ -1373,11 +1382,12 @@ PublicKey = Blob
 Timestamp = Nat
 ....
 
-A certificate is validated with regard to the root of trust by the following algorithm (which uses `check_delegations` defined in <<certification-delegation>>):
+A certificate is validated with regard to the root of trust by the following algorithm (which uses `check_delegation` defined in <<certification-delegation>>):
 ....
 verify_cert(cert) =
   let root_hash = reconstruct(cert.tree)
-  let key = check_delegations(cert.delegations) // see section Delegations below
+  let der_key = check_delegation(cert.delegation) // see section Delegations below
+  bls_key = extract_der(der_key)
   verify_bls_signature(key, cert.signature, domain_sep("ic-state-root") · root_hash)
 
 reconstruct(Empty)       = H(domain_sep("ic-hashtree-empty"))
@@ -1388,11 +1398,15 @@ reconstruct(Pruned h)    = h
 
 domain_sep(s) = byte(|s|) · s
 ....
-where `H` is the SHA-256 hash function and
+where `H` is the SHA-256 hash function,
 ....
 verify_bls_signature : PublicKey -> Signature -> Blob -> Bool
 ....
-is the https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-02#section-4[BLS signature verification function], ciphersuite BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_. See that document also for details on the encoding of BLS public keys and signatures. The DER encoding of the public key follows https://tools.ietf.org/html/rfc5480[RFC4580] with (at least temorarily) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+is the https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04#section-4[BLS signature verification function], ciphersuite BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_. See that document also for details on the encoding of BLS public keys and signatures, and
+....
+extract_der : Blob -> Blob
+....
+implements DER decoding of the public key, following https://tools.ietf.org/html/rfc5480[RFC4580] using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
 
 All certificate trees include the time at path `/time` (see <<state-tree-time>>). Clients can use this timestamp to guard against old certificates in cases where they expect a fresh certificate.
 
@@ -1446,29 +1460,30 @@ well_formed_forest(trees) =
   ∀ t ∈ trees ≠ Leaf _
 ....
 
-
 [#certification-delegation]
 === Delegation
 
 To facilitate a distributed implementation of the Internet Computer, the root key can delegate certification authority to other keys.
 
-The exact form of delegations is still under discussion; as scaffolding we use an insecure unsigned delegation:
+A certificate by the root subnet does not have a delegation field. A certificate by other subnets include a delegation, which is itself a certificate that proves that the subnet is listed in the root subnet’s state tree (see <<state-tree-subnet>>), and reveals its public key.
+
+NOTE: The nested certificate _typically_ does not itself again contain a delegation, although there is no reason why agents should enforce that property.
 ....
 Delegation =
- InsecureDelegation {
-   key : PublicKey;
+ Delegation {
+   subnet_id : Principal;
+   certificate : Certificate;
  }
 ....
 
-Additional forms of delegations will be added that would contain a signature or certificate linking the `key` to the root key.
-
-A chain of delegations is verified using the following algorithm, which also returns the delegated key:
+A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
 
 ....
-check_delegations(InsecureDelegation d :: ds) : public_bls_key =
-  return key
-check_delegations([]) : public_bls_key =
+check_delegations(NoDelegation) : public_bls_key =
   return root_public_key
+check_delegations(Delegation d) : public_bls_key =
+  verify_cert(d.certificate)
+  return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
 where `root_public_key` is the a priori known root key of the Internet Computer instance.
 
@@ -1547,7 +1562,12 @@ anonymous_id : Principal
 anonymous_id = 0x04
 ....
 
-These function domains and fixed values are mutually disjoint.
+The predicate describing the principals used for subnets is unspecified:
+....
+is_subnet_id : Principal -> Bool
+....
+
+These functions, predicates and constants are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
 ....
@@ -1853,7 +1873,7 @@ The initial state of the system is
   root_key = PublicKey;
 }
 ....
-for some time stamp `T`, some BLS public key PublicKey, and using `()` to denote the empty map or bag.
+for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using `()` to denote the empty map or bag.
 
 === State transitions
 
@@ -2804,11 +2824,12 @@ The response is a certificate `cert`, as specified in <<certification>>, which p
 ....
 lookup(path, cert) = lookup_in_tree(path, state_tree(S))
 ....
-where `state_tree` constructs the a labeled tree from the system state `S` (as per <<state-tree>>)
+where `state_tree` constructs the a labeled tree from the system state `S` and the (so far underspecified) set of subnets `subnets`, as per <<state-tree>>
 ....
 state_tree(S) = {
   "time": S.system_time;
-  "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests }
+  "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
+  "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
 
 request_status_tree(Received) =
