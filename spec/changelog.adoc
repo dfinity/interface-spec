@@ -6,6 +6,10 @@
 
 * Spec: The cleanup callback is introduced
 * Spec: Ingress rate limiting
+
+[#0_13_1]
+=== 0.13.1 (2020-11-06)
+
 * Spec: Delegation between user public keys
 
 [#0_13_0]
