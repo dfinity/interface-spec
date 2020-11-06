@@ -13,6 +13,7 @@ tagged<t> = #6.55799(t) ; the CBOR tag
 envelope<t> = tagged<{
   content: t
   ? sender_pubkey: pubkey
+  ? sender_delegation: [*4 signed-delegation]
   ? sender_sig: signature
 }>
 
@@ -81,6 +82,15 @@ query-response = {
 
 call-reply = {
   arg : bytes
+}
+
+signed-delegation = {
+  delegation: {
+    pubkey: bytes
+    expiration: timestamp
+    ? targets: [* principal]
+  }
+  signature: bytes
 }
 
 ; some common data types

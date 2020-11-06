@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.13.0
+0.13.1
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -429,20 +429,33 @@ Furthermore, the whole request record is wrapped in a envelope record with these
 
 * `content` (`record`): the actual request content
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may in the future have more than one key, this field tells the system which key is used.
+* `sender_delegation` (`array` of maps, optional): a chain of delegations, starting with the one signed by `sender_pubkey` and ending with the one delegating to the key relating to `sender_sig`.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
 The public key must authenticate the `sender` principal:
 
 * A public key can authenticate a principal if the latter is a self-authenticating id derived from that public key (see <<id-classes>>).
-* The fields `sender_pubkey` and `sender_sig` must be omitted if the `sender` field is the anonymous principal.
+* The fields `sender_pubkey`, `sender_sig`, and `sender_delegation` must be omitted if the `sender` field is the anonymous principal.
   The fields `sender_pubkey` and `sender_sig` must be set if the `sender` field is not the anonymous principal.
 
 The request id (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the request id, and implies that signature and public key are not semantically relevant.
 
 The field `sender_pubkey` contains a public key supported by one of the schemes described in <<signatures>>.
 
-The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the public key specified in `sender_pubkey`.
+Signing transactions can be delegated from a one key to another one.
+If delegation is used, then the `sender_delegation` field contains an array of delegations, each of which is a map with the following fields:
 
+ * `delegation` (`map`): Map with fields:
+   - `pubkey` (`blob`): Public key as described in <<signatures>>.
+   - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
+   - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list.
+ * `signature` (`blob`): Signature on the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the the domain separator.
++
+For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
+
+The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
+
+The delegation field, if present, must not contain more than four delegations.
 
 [#request-types]
 === Request types
@@ -1671,6 +1684,7 @@ Envelope = {
   content : Request | APIReadRequest;
   sender_pubkey : PublicKey | NoPublicKey;
   sender_sig : Signature | NoSignature;
+  sender_delegation: [SignedDelegation]
 }
 
 Request
@@ -1726,6 +1740,18 @@ This function picks the corresponding signature scheme according to the on the D
 PublicKey = Blob
 Signature = Blob
 verify_signature : PublicKey -> Signature -> Blob -> Bool
+....
+
+Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
+....
+SignedDelegation = {
+  delegation : {
+    pubkey : PublicKey;
+    targets : [CanisterId] | Unrestricted;
+    expiration : Timestamp
+  };
+  signature : Signature
+}
 ....
 
 ==== The system state
@@ -1800,19 +1826,25 @@ ic_principal : principal = ""
 ==== Envelope Authentication
 
 The following predicate describes when an envelope `E` correctly signs the enclosed request with a key belonging to a user `U`, at time `T`:
-
+It returns which canister ids this envelope may be used at (as a set of principals).
 ....
 verify_envelope({ content = C }, U, T)
-  = U = anonymous_id
+  = { p : p is PrincipalId } if U = anonymous_id
 verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
-  = U = mk_self_authenticating_id E.sender_pubkey
-  ∧ PK' = verify_delegations(DS, PK, T)
+  = TS if U = mk_self_authenticating_id E.sender_pubkey
+  ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is PrincipalId })
   ∧ verify_signature ("\x0Aic-request" · hash_of_map(C), PK')
 
-verify_delegations([], PK, T) = PK
-verify_delegations([D] · DS, PK, T) = verify_delegations(DS, D.pubkey, T)
+verify_delegations([], PK, T, TS) = (PK, TS)
+verify_delegations([D] · DS, PK, T, TS)
+  = verify_delegations(C, DS, D.pubkey, T, TS ∩ delegation_targets(DS))
   if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
    ∧ D.delegation.expiration ≥ T
+
+delegation_targets(DS)
+  = if D.targets = Unrestricted
+    then { p : p is PrincipalId }
+    else D.targets
 ....
 
 ==== API Request submission
@@ -1827,7 +1859,7 @@ Requests that have expired are dropped here.
 Submitted request:: `E : Envelope`
 Conditions::
 ....
-    verify_envelope(E, E.content.sender, S.system_time)
+    E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
 ....
@@ -2642,7 +2674,7 @@ Submitted request:: `E`
 Conditions::
 ....
   E.content = CanisterQuery Q
-  verify_envelope(E, Q.sender, S.system_time)
+  Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
@@ -2682,9 +2714,10 @@ Submitted request:: `E`
 Conditions::
 ....
   E.content = ReadState RS
-  verify_envelope(E, RS.sender)
+  TS = verify_envelope(E, RS.sender, S.system_time)
   S.system_time <= RS.ingress_expiry
   ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
+  ∀ ["request_status", Rid] · _ ∈ RS.paths.  ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid ∧ R.canister_id ∈ TS
 ....
 Read response::
 A record with
@@ -2724,7 +2757,6 @@ request_status_tree(Done) =
   { "status": "Done" }
 ....
 and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
-
 
 [#concrete-canisters]
 === Abstract Canisters to System API
