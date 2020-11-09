@@ -446,7 +446,6 @@ The field `sender_pubkey` contains a public key supported by one of the schemes 
 
 Signing transactions can be delegated from a one key to another one.
 If delegation is used, then the `sender_delegation` field contains an array of delegations, each of which is a map with the following fields:
-<<<<<<< HEAD
 
  * `delegation` (`map`): Map with fields:
    - `pubkey` (`blob`): Public key as described in <<signatures>>.
@@ -458,19 +457,6 @@ For the first delegation in the array, this signature is created with the key co
 
 The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
 
-=======
-
- * `delegation` (`map`): Map with fields:
-   - `pubkey` (`blob`): Public key as described in <<signatures>>.
-   - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
-   - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list.
- * `signature` (`blob`): Signature on the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the the domain separator.
-+
-For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
-
-The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
-
->>>>>>> 0.13.1
 The delegation field, if present, must not contain more than four delegations.
 
 [#request-types]
