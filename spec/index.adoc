@@ -1443,6 +1443,76 @@ The values in the <<state-tree>> are encoded to blobs as follows:
 * text values are UTF-8-encoded
 * blob values are encoded as is
 
+=== Example
+
+Consider the following tree-shaped data (all single charachter strings denote labels, all other denote values)
+....
+─┬╴ "a" ─┬─ "x" ─╴"hello"
+ │       └╴ "y" ─╴"world"
+ ├╴ "b" ──╴ "good"
+ ├╴ "c"
+ └╴ "d" ──╴ "morning"
+....
+
+A possible hash tree for this labeled tree might be, where `┬` denotes a fork.
+This is not a typical encoding (a fork with `Empty` on one side can be
+avoided), but it is valid.
+....
+─┬─┬╴"a" ─┬─┬╴"x" ─╴"hello"
+ │ │      │ └╴Empty
+ │ │      └╴  "y" ─╴"world"
+ │ └╴"b" ──╴"good"
+ └─┬╴"c" ──╴Empty
+   └╴"d" ──╴"morning"
+....
+
+// The following is checked in `impl/src/IC/Test/HashTree.hs`, so please keep
+// in sync
+
+This tree has the following CBOR encoding
+....
+8301830183024161830183018302417882034568656c6c6f810083024179820345776f726c6483024162820344676f6f648301830241638100830241648203476d6f726e696e67
+....
+and the following root hash
+....
+eb5c5b2195e62d996b84c9bcc8259d19a83786a2f59e0878cec84c811f669aa0
+....
+
+Pruning this tree with the following paths
+....
+  /a/y
+  /ax
+  /d
+....
+would lead to this tree (with pruned subtree represented by their hash):
+....
+─┬─┬╴"a" ─┬─ 1B4FEFF9BEF8131788B0C9DC6DBAD6E81E524249C879E9F10F71CE3749F5A638
+ │ │      └╴ "y" ─╴"world"
+ │ └╴"b" ──╴7B32AC0C6BA8CE35AC82C255FC7906F7FC130DAB2A090F80FE12F9C2CAE83BA6
+ └─┬╴EC8324B8A1F1AC16BD2E806EDBA78006479C9877FED4EB464A25485465AF601D
+   └╴"d" ──╴"morning"
+....
+Note that the `"b"` label is included (without content) to prove the absence of the `/ax` path.
+
+This tree encodes to CBOR as
+....
+83018301830241618301820458201b4feff9bef8131788b0c9dc6dbad6e81e524249c879e9f10f71ce3749f5a63883024179820345776f726c6483024162820458207b32ac0c6ba8ce35ac82c255fc7906f7fc130dab2a090f80fe12f9c2cae83ba6830182045820ec8324b8a1f1ac16bd2e806edba78006479c9877fed4eb464a25485465af601d830241648203476d6f726e696e67
+....
+and (obviously) the same root hash.
+
+In the pruned tree, the `lookup_path` function behaves as follows:
+....
+lookup_path(["a", "a"], pruned_tree) = Unknown
+lookup_path(["a", "y"], pruned_tree) = Found "world"
+lookup_path(["aa"],     pruned_tree) = Absent
+lookup_path(["ax"],     pruned_tree) = Absent
+lookup_path(["b"],      pruned_tree) = Unknown
+lookup_path(["bb"],     pruned_tree) = Unknown
+lookup_path(["d"],      pruned_tree) = Found "morning"
+lookup_path(["e"],      pruned_tree) = Absent
+....
+
+
 [#public-spec]
 == Abstract public behavior
 
