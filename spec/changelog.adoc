@@ -2,7 +2,7 @@
 == Changelog
 
 [#0_13_2]
-=== 0.13.2 (UNRELEASED)
+=== 0.13.2 (2020-11-12)
 
 * Spec: The `ic0.canister_status` system call
 
