@@ -821,6 +821,7 @@ ic0.msg_funds_accept :                                                      // U
 ic0.canister_self_size : () -> (i32);                                       // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) : i64;           // *
+ic0.canister_status : () -> i32;                                            // *
 
 ic0.call_new :                                                              // U Ry Rt
   ( callee_src  : i32,
@@ -960,6 +961,18 @@ A canister can learn about its own identity:
 +
 These functions allow the canister to query its own canister id (as a blob).
 
+[#system-api-canister-status]
+=== Self-identification
+
+This function allows a canister to find out if it is running, stopping or stopped (see <<ic-canister_status>> and <<ic-stop_canister>> for context).
+
+* `ic0.canister_status : () -> i32`
++
+returns the current status of the canister:
++
+Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
++
+Status `2` can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
 [#system-api-call]
 === Inter-canister method calls
@@ -1636,6 +1649,7 @@ Env = {
   time : Timestamp
   balance : Balance;
   certificate : NoCertificate | Blob
+  status : Running | Stopping | Stopped
 }
 
 RejectCode = Nat
@@ -2061,7 +2075,12 @@ Conditions::
     Mod = S.canisters[M.receiver].module
 
     Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
-    Env = { time = S.time[M.receiver]; balance = Balance_before; certificate = NoCertificate}
+    Env = {
+      time = S.time[M.receiver];
+      balance = Balance_before;
+      certificate = NoCertificate;
+      status = S.status[M.receiver];
+    }
 
     Available = S.call_contexts[M.call_contexts].available_funds
     ( M.entry_point = PublicMethod Name Caller Data
@@ -2316,7 +2335,12 @@ Conditions::
       data = A.arg;
       caller = M.caller;
     }
-    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
+    Env = {
+      time = S.time[M.receiver];
+      balance = S.balances[M.receiver];
+      certificate = NoCertificate;
+      status = S.status[M.receiver];
+    }
     Mod.init(A.canister_id, Arg, Env) = Return New_state
 ....
 State after::
@@ -2351,7 +2375,12 @@ Conditions::
     S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller = S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
-    Env = { time = S.time[M.receiver]; balance = S.balances[M.receiver]; certificate = NoCertificate }
+    Env = {
+      time = S.time[M.receiver];
+      balance = S.balances[M.receiver];
+      certificate = NoCertificate;
+      status = S.status[M.receiver];
+    }
     Old_module.pre_upgrade(Old_State, M.caller, Env) = Return Stable_memory
     Arg = {
       data = A.arg;
@@ -2757,7 +2786,12 @@ Conditions::
   verify_cert(Cert)
   lookup(["canister",Q.canister_id,"certified_data"], Cert) = Found S.certified_data[Q.canister_id]
   lookup(["time"], Cert) = Found S.system_time // or “recent enough”
-  Env = { time = S.time[M.receiver]; canister_location = S.canister_location; balance = S.balances[Q.canister_id]; certificate = Cert }
+  Env = {
+    time = S.time[Q.receiver];
+    balance = S.balances[Q.canister_id];
+    certificate = Cert;
+    status = S.status[Q.receiver];
+  }
 ....
 Read response::
 * If `F(Arg, Env) = Trap` then
@@ -3155,6 +3189,12 @@ ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
 ic0.canister_balance<es> : ( unit_src : i32, unit_size : i32 ) : i64 =
   let unit := copy_from_canister<es>(unit_src, unit_size)
   return es.balance(unit)
+
+ic0.canister_status<es>() : i32 =
+  match es.params.sysenv.canister_status with
+    Running  -> return 1
+    Stopping -> return 2
+    Stopped  -> return 3
 
 ic0.call_new<es>(
     callee_src  : i32,

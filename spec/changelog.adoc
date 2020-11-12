@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_13_2]
+=== 0.13.2 (UNRELEASED)
+
+* Spec: The `ic0.canister_status` system call
+
 [#0_13_1]
 === 0.13.1 (2020-11-06)
 
