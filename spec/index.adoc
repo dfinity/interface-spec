@@ -962,7 +962,7 @@ A canister can learn about its own identity:
 These functions allow the canister to query its own canister id (as a blob).
 
 [#system-api-canister-status]
-=== Self-identification
+=== Canister status
 
 This function allows a canister to find out if it is running, stopping or stopped (see <<ic-canister_status>> and <<ic-stop_canister>> for context).
 
