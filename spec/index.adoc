@@ -1282,7 +1282,7 @@ Only the _controller_ of the canister can install code.
 
 If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
 
-If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>, passing `arg` to the `post_upgrade` system method of the new instance.
+If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` system method of the new instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
