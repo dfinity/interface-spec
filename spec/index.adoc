@@ -1019,7 +1019,7 @@ returns the current status of the canister:
 +
 Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 +
-Status `2` can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
+Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
 [#system-api-call]
 === Inter-canister method calls
