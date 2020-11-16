@@ -181,7 +181,7 @@ function textual_encode() {
 function textual_decode() {
   echo -n "$1" | tr -d - | tr a-z A-Z |
   fold -w 8 | xargs -n1 printf '%-8s' | tr ' ' = |
-  base32 -d | xxd -p | cut -b9- | tr a-z A-Z
+  base32 -d | xxd -p | tr -d '\n' | cut -b9- | tr a-z A-Z
 }
 ....
 =====
@@ -972,7 +972,7 @@ returns the current status of the canister:
 +
 Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 +
-Status `2` can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
+Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
 [#system-api-call]
 === Inter-canister method calls
@@ -1243,6 +1243,7 @@ Only the current controller of the canister can change the controller.
 === IC method `canister_status`
 
 Indicates various information about the canister. It contains:
+
 * The status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
 * A hash of the module installed on the canister. This is `null` if no code is installed.
 * The controller of the canister.
