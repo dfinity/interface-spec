@@ -1303,6 +1303,7 @@ Only the current controller of the canister can change the controller.
 === IC method `canister_status`
 
 Indicates various information about the canister. It contains:
+
 * The status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
 * A hash of the module installed on the canister. This is `null` if no code is installed.
 * The controller of the canister.
