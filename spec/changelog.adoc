@@ -1,6 +1,14 @@
 [#changelog]
 == Changelog
 
+[#0_14_0]
+=== 0.14.0 (2020-11-18)
+
+* Support for funds is scaled back to only support cycles
+* The `ic0.msg_cycles_accept` system call now returns the actually accepted
+  cycles
+* The `provisional_` management calls are introduced
+
 [#0_13_2]
 === 0.13.2 (2020-11-12)
 
