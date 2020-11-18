@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.13.2
+0.14.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -104,6 +104,18 @@ Internally, a call or a response is transmitted as a _message_ from a _sender_ t
 External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
 
 Canisters, users, etc. are identified by a _principal_, sometimes also called an _id_.
+
+== Unspecified constants and limits
+
+This specification may refer to certain constants and limits without specifying their concrete value (yet), i.e. they are implementation defined. Many are resource limits which are relevant only to specify the error-handling behaviour of the system (which, as mentioned above, is also not yet precisely described in this document). This list is not complete.
+
+* `MAX_CYCLES_PER_MESSAGE`
++
+Amount of cycles that a canister has to have before a message is attempted to be executed, which is deducted from the canister balance before message execution. See <<rule-message-execution>>.
+
+* `MAX_CANISTER_BALANCE`
++
+Maximum canister cycle balance. Any excess is discarded. Less than 2⁶⁴.
 
 == Principals
 
@@ -803,7 +815,7 @@ The following sections describe various system imports, which we summarize here.
 ....
 ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry
 ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry
-ic0.msg_caller_size : () -> (i32);                                          // I G U Q
+ic0.msg_caller_size : () -> i32;                                            // I G U Q
 ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q
 ic0.msg_reject_code : () -> i32;                                            // Ry Rt
 ic0.msg_reject_msg_size : () -> i32;                                        // Rt
@@ -813,14 +825,13 @@ ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U
 ic0.msg_reply : () -> ();                                                   // U Q Ry Rt
 ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
 
-ic0.msg_funds_available : ( unit_src : i32, unit_size : i32 ) -> i64;       // U Rt Ry
-ic0.msg_funds_refunded : ( unit_src : i32, unit_size : i32 ) -> i64;        // Rt Ry
-ic0.msg_funds_accept :                                                      // U Rt Ry
-  ( unit_src : i32, unit_size : i32, amount : i64 ) -> ();
+ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
+ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
+ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 );           // U Rt Ry
 
-ic0.canister_self_size : () -> (i32);                                       // *
+ic0.canister_self_size : () -> i32;                                         // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
-ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) : i64;           // *
+ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_status : () -> i32;                                            // *
 
 ic0.call_new :                                                              // U Ry Rt
@@ -834,8 +845,7 @@ ic0.call_new :                                                              // U
     reject_env : i32,
   ) -> ();
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
-ic0.call_funds_add :                                                        // U Ry Rt
-  (unit_src : i32, unit_size : i32,  amount : i64) -> ();
+ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt
 ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt
 
 ic0.stable_size : () -> (page_count : i32);                                 // *
@@ -873,7 +883,7 @@ WebAssembly functions parameter and result types can only be primitive number ty
 
 To provide access to a string or blob `foo`, the System API provides two functions:
 
-  ic0.foo_size : () -> (i32)
+  ic0.foo_size : () -> i32
   ic0.foo_copy : (dst : i32, offset: i32, size : i32) -> ()
 
 The `*_size` function indicates the size, in bytes, of `foo`. The `*_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
@@ -898,7 +908,7 @@ The message argument data.
 
 * {blank}
 +
-  ic0.msg_caller_size : () -> (i32)
+  ic0.msg_caller_size : () -> i32
   ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
 +
 The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of of the user or canister requesting the installation or upgrade.
@@ -935,7 +945,7 @@ Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 +
 This function can be called at most once (a second call will trap), and must be called exactly once to indicate success.
 +
-See <<system-api-funds>> for how this interacts with funds available on this call.
+See <<system-api-cycles>> for how this interacts with cycles available on this call.
 
 * `+ic0.msg_reject : (src : i32, size : i32) -> ()+`
 +
@@ -947,7 +957,7 @@ The other end will receive this reject with reject code `CANISTER_REJECT`, see <
 +
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
 +
-See <<system-api-funds>> for how this interacts with funds available on this call.
+See <<system-api-cycles>> for how this interacts with cycles available on this call.
 
 [#system-api-canister-self]
 === Self-identification
@@ -956,7 +966,7 @@ A canister can learn about its own identity:
 
 * {blank}
 +
-  ic0.canister_self_size : () -> (i32)
+  ic0.canister_self_size : () -> i32
   ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()
 +
 These functions allow the canister to query its own canister id (as a blob).
@@ -1012,9 +1022,9 @@ Appends the specified bytes to the argument of the call. Initially, the argument
 This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
 
-* `+ic0.call_funds_add : (unit_src : i32, unit_size : i32,  amount : i64) -> ()+`
+* `+ic0.call_cycles_add : ( amount : i64) -> ()+`
 +
-This adds funds onto a call. See <<system-api-funds>>.
+This adds cycles onto a call. See <<system-api-cycles>>.
 +
 This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
@@ -1028,49 +1038,59 @@ If the system returns a non-zero value, the call cannot (and will not be) perfor
 +
 After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap
 
-[#system-api-funds]
-=== Funds
+[#system-api-cycles]
+=== Cycles
 
-Each canister maintains funds of various units. Units are represented as blob. At the moment, the only supported units are Cycles (represented as `"\x00"`) and ICPT (represented as `"\0x01"`). Other units, including canister-defined units, can be added in the future.
+Each canister maintains a balance of _cycles_, the utility token used to pay for platform usage.
 
-Cycles work like other units, but have some additional special purpose rules since computation on the Internet Computer is paid for in cycles.
+NOTE: This specification currently does not go into details about which actions cost how many cycles and/or when. In general, assume that the canister’s cycle balance can change arbitrarily between method executions, and during each system function API call, unless explicitly mentioned otherwise.
 
-* `ic0.canister_balance : ( unit_src : i32, unit_size : i32 ) -> (i64)`
+* `ic0.canister_cycle_balance : () -> i64`
 +
-indicates the current balance of that unit. The number is the balance before the execution of the current message, minus a reserve for the execution of the current message (only if `unit` denotes cycles), minus any funds queued up to send via `ic0.call_new`, plus any funds accepted via `ic0.msg_funds_accept`.
+indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the system may add unused cycles from the reserve back to the balance.
 +
-After execution of the message, unused cycles from the reserve may be added to the cycles balance again.
+NOTE: Should a future version of this specification allow `MAX_CANISTER_BALANCE` >= 2⁶⁴, then this call will report 2⁶⁴-1 if the balance exceeds 2⁶⁴. A new, wider System API will then be provided for canisters that need to deal precisely with large canister balances.
 
-* `ic0.msg_funds_available : ( unit_src i32, unit_size : i32 ) -> (i64)`
+* `ic0.msg_cycles_available : () -> i64`
 +
-returns the amount of the specified `unit` that was transferred by the caller of the current call, and is still available in this message.
+returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
 +
-Initially, in the update method entry point, this is the amount that the caller passed to the canister. When funds are accepted (`ic0.msg_funds_accept`), this reports less funds accordingly. When the call is responsed to (reply or reject), all available funds are refunded to the caller, and this will return 0.
+Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept`), this reports less cycles accordingly. When the call is responsed to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
 
-* `ic0.msg_funds_accept : ( unit_src i32, unit_size : i32, amount : i64 ) -> ()`
+* `ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 )`
 +
-This moves funds from the call to the canister balance. It can be called multiple times.
-+
-This traps if the canister tries to accept more funds than it can according to `ic0.msg_funds_available`.
-+
-This means it will trap when used after calling `ic0.msg_reply` or `ic0.msg_reject`, unless `amount = 0`.
-+
+--
+This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
+
+* It moves no more cycles than `max_amount`.
+
+* It moves no more cycles than available according to `ic0.msg_cycles_available`, and
+
+* The canister balance afterwards does not exceeed `MAX_CANISTER_BALANCE` minus any possible outstanding balances. The precise logic of this limit is not yet specified here.
+
+It can be called multiple times, each time possibly adding more cycles to the balance.
+
+The return value indicates how much cycles were actually moved.
+
+This does not trap.
+
 [TIP]
 =====
-Example: To accept all ICPTs provided, invoke `ic0.msg_funds_accept("\x01", 1, ic0.msg_funds_available("\x01",1))` in the method handler or a callback handler, _before_ calling reply or reject.
+Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(ic0.msg_cycles_available())` in the method handler or a callback handler, _before_ calling reply or reject.
 =====
+--
 
-* `ic0.call_funds_add : (unit_src : i32, unit_size : i32,  amount : i64) -> ()`
+* `ic0.call_cycles_add : ( amount : i64 ) -> ()`
 +
-This function moves funds from the canister balance onto the call under construction, to be transferred with that call.
+This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
 +
-The funds are deducted from the balance as shown by `ic0.canister_balance` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without callling `ic0.call_perform`).
+The cycles are deducted from the balance as shown by `ic0.canister_cycle_balance` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without callling `ic0.call_perform`).
 +
-This traps if trying to transfer more funds than are in the current balance of the canister.
+This traps if trying to transfer more cycles than are in the current balance of the canister.
 
-* `ic0.msg_funds_refunded : ( unit_src i32, unit_size : i32 ) -> (i64)`
+* `ic0.msg_cycles_refunded : () -> i64`
 +
-this can only be used in a callback handler (reply or reject), and indicates the amount of the specified `unit` that came back with the response as a refund. The refund has already been added to the canister balance automatically.
+this can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
 [#system-api-stable-memory]
 === Stable memory
@@ -1114,7 +1134,7 @@ This system call traps if `dst+size` exceeds the size of the WebAssembly memory 
 
 The canister can query the system for the current time.
 
-`+ic0.time : () -> (i64)+`
+`+ic0.time : () -> i64+`
 
 The time is given as nanoseconds since 1970-01-01. The system guarantees that
 
@@ -1136,7 +1156,7 @@ The canister can update the certified data with this call. The passed data must 
 
 When executing a query method via a query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
 
-* `+ic0.data_certificate_present : () -> (i32)+`
+* `+ic0.data_certificate_present : () -> i32+`
 +
 returns `1` if a certificate is present, and `0` otherwise.
 +
@@ -1276,22 +1296,39 @@ If the canister was already `Running` then the status stays unchanged.
 
 This method deletes a canister from the IC.
 
-Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone and any state stored on the canister is permanently deleted. Once a canister is deleted, its ID cannot be reused.
+Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
 
-[#ic-deposit_funds]
-=== IC method `deposit_funds`
+[#ic-deposit_cycles]
+=== IC method `deposit_cycles`
 
-This method deposits the funds included in this call into the specified canister.
+This method deposits the cycles included in this call into the specified canister.
 
-Only the controller of the canister can deposit funds.
-
-This action may have a cost in cycles, which is deducted from the receiving canister after the funds on this call have been deposited. The call fails if the canister balance plus the deposited funds do not cover the cost.
-
+Only the controller of the canister can deposit cycles.
 
 [#ic-raw_rand]
 === IC method `raw_rand`
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
+
+[#ic-provisional_create_canister_with_cycles]
+=== IC method `provisional_create_canister_with_cycles`
+
+As a provisional method, until developers can convert real ICP tokens to provision a new canister with cycles, the system provides the `provisional_create_canister_with_cycles` method. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `MAX_CANISTER_BALANCE` if `amount = null`, else capping the balance at `MAX_CANISTER_BALANCE`).
+
+Cycles added to this call via `ic0.call_cycles_add` are returned to the caller.
+
+This method is only available in local development instances, and will be removed in the future.
+
+[#ic-provisional_top_up_canister]
+=== IC method `provisional_top_up_canister`
+
+As a provisional method, until developers can convert real ICP tokens to a top up an existing canister, the system provides the `provisional_top_up_canister` method. It adds `amount` cycles to the balance of canister identified by `amount` (implicitly capping it at `MAX_CANISTER_BALANCE`).
+
+Cycles added to this call via `ic0.call_cycles_add` are returned to the caller.
+
+Any user can top-up any canister this way.
+
+This method is only available in local development instances, and will be removed in the future.
 
 [#certification]
 == Certification
@@ -1594,37 +1631,6 @@ Method names can be arbitrary pieces of text:
 MethodName = Text
 ....
 
-[#abstract-funds]
-==== Funds
-
-Canisters can store and transfer funds, which come in various units. One unit, namely cycles, has special semantics in the system, as many actions deduct cycles.
-
-The type of fund units is a blob, and the values for cycles and ICPT are defined:
-....
-Unit = Blob
-cycle_unit : "\x00"
-icpt_unit : "\x01"
-....
-
-The type of balances or transferred funds is a (total) function from fund units to amounts.
-....
-Funds = Unit -> Nat
-....
-Operations like `+`, `-` are overloaded pointwise. In this spec, all subtractions must be well-defined (i.e. not produce negative results). Comparisons like `<` hold if they hold at all units.
-
-The term `no_funds` indicates no funds:
-....
-no_funds
- = (λ u. 0) : Funds
-....
-
-The following shorthands create funds containing funds of one unit:
-....
-funds_of_unit(unit, amount) = (λ u. if u = unit then amount else 0) : Funds
-cycle_funds(n) = funds_of_unit(cycle_unit, n)
-....
-
-
 [#abstract-canisters]
 ==== Abstract canisters
 
@@ -1645,10 +1651,9 @@ Arg = {
 }
 
 Timestamp = Nat;
-Balance = Funds
 Env = {
   time : Timestamp
-  balance : Balance;
+  balance : Nat;
   certificate : NoCertificate | Blob
   status : Running | Stopping | Stopped
 }
@@ -1659,7 +1664,7 @@ MethodCall = {
   callee : CanisterId;
   method_name: MethodName;
   arg: Blob;
-  transferred_funds: Funds;
+  transferred_cycles: Nat;
   callback: Callback;
 }
 
@@ -1668,19 +1673,20 @@ UpdateFunc = WasmState -> Trap | Return {
   new_calls : List MethodCall;
   new_certified_data : NoCertifiedData | Blob
   response : NoResponse | Response;
-  funds_accepted : Funds;
+  cycles_accepted : Nat;
 }
 QueryFunc = WasmState -> Trap | Return Response
 
-AvailableFunds = Funds
+AvailableCycles = Nat
+RefundedCycles = Nat
 
 CanisterModule = {
   init : (CanisterId, Arg, Env) -> Trap | Return WasmState
   pre_upgrade : (WasmState, caller : Principal, Env) -> Trap | Return StableMemory
   post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
-  update_methods : MethodName ↦ ((Arg, Env, AvailableFunds) -> UpdateFunc)
+  update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
-  callbacks : (Callback, Response, Funds, Env, AvailableFunds) -> UpdateFunc
+  callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
 }
 ....
 
@@ -1709,7 +1715,7 @@ CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
   responded : bool;
-  available_funds : Funds;
+  available_cycles : Nat;
 }
 CallId = (abstract)
 CallOrigin
@@ -1731,7 +1737,7 @@ Therefore, a message can have different shapes:
 Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
 EntryPoint
   = PublicMethod MethodName Principal Blob
-  | Callback Callback Response Funds
+  | Callback Callback Response RefundedCycles
 
 Message
   = CallMessage {
@@ -1740,7 +1746,7 @@ Message
       callee : CanisterId;
       method_name : Text;
       data : Blob;
-      transferred_funds : Funds;
+      transferred_cycles : Nat;
       queue : Queue;
     }
   | FuncMessage {
@@ -1752,7 +1758,7 @@ Message
   | ResponseMessage {
       origin : CallOrigin;
       response : Response;
-      refunded_funds : Funds;
+      refunded_cycles : Nat;
     }
 ....
 
@@ -1850,7 +1856,7 @@ S = {
   controllers : CanisterId ↦ Principal;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
-  balances: CanisterId ↦ Funds;
+  balances: CanisterId ↦ Nat;
   certified_data: CanisterId ↦ Blob;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
@@ -1865,7 +1871,7 @@ CanState
 }
 CanStatus
   = Running
-  | Stopping (List (CallOrigin, Funds))
+  | Stopping (List (CallOrigin, Nat))
   | Stopped
 ....
 
@@ -1998,7 +2004,7 @@ S with
         callee = R.canister_id;
         method_name = R.method_name;
         arg = R.arg;
-        transferred_funds = no_funds;
+        transferred_cycles = 0;
         queue = Unordered;
       } · S.messages
 ....
@@ -2020,7 +2026,7 @@ State after::
       ResponseMessage {
           origin = S.call_contexts[CM.call_context].origin
           response = Reject (CANISTER_ERROR, "canister stopped");
-          refunded_funds = CM.transferred_funds;
+          refunded_cycles = CM.transferred_cycles;
       }
 ....
 
@@ -2058,12 +2064,13 @@ S with
       canister = CM.callee;
       origin = CM.origin;
       responded = false;
-      available_funds = CM.funds;
+      available_cycles = CM.transferred_cycles;
     }
 ....
 
 We can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
 
+[#rule-message-execution]
 ==== Message execution
 
 The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition “Call context creation”).
@@ -2075,15 +2082,15 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Balance_before = S.balances[M.receiver] - cycle_funds(Max_cycles)
+    Visible_balance = S.balances[M.receiver] - MAX_CYCLES_PER_MESSAGE
     Env = {
       time = S.time[M.receiver];
-      balance = Balance_before;
+      balance = Visible_balance;
       certificate = NoCertificate;
       status = S.status[M.receiver];
     }
 
-    Available = S.call_contexts[M.call_contexts].available_funds
+    Available = S.call_contexts[M.call_contexts].available_cycles
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
       (F = M.update_methods[M.method_name](Arg, Env, Available)
@@ -2101,10 +2108,10 @@ State after::
 ....
 if
   R = Return res
-  cycle_funds(Cycles_used) ≤ cycle_funds(Max_cycles)
-  res.funds_accepted ≤ Available
-  cycle_funds(Cycles_used) + ∑ [ call.transferred_funds | call ∈ res.new_calls ]
-     ≤ S.balances[M.receiver] + res.funds_accepted
+  Cycles_used ≤ Max_cycles
+  res.cycles_accepted ≤ Available
+  Cycles_used + ∑ [ call.transferred_cycles | call ∈ res.new_calls ]
+     ≤ S.balances[M.receiver] + res.cycles_accepted
   (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
 then
   S with
@@ -2121,35 +2128,35 @@ then
           callee = call.callee;
           method_name = call.method_name;
           arg = call.arg;
-          transferred_funds = call.transferred_funds
+          transferred_cycles = call.transferred_cycles
           queue = Queue { from = M.receiver; to = call.callee };
         }
       | call ∈ res.new_calls ] ·
       [ ResponseMessage {
           origin = S.call_contexts[M.call_context].origin
           response = res.response;
-          refunded_funds = AvailableFunds - res.funds_accepted;
+          refunded_cycles = Available - res.cycles_accepted;
         }
       | res.response ≠ NoResponse ]
 
     if res.response = NoResponse:
-       call_contexts[M.call_context].available_funds = AvailableFunds - res.funds_accepted
+       call_contexts[M.call_context].available_cycles = Available - res.cycles_accepted
     else
        call_contexts[M.call_context].responded = true
-       call_contexts[M.call_context].available_funds = no_funds
+       call_contexts[M.call_context].available_cycles = 0
 
     if res.new_certified_data ≠ NoCertifiedData:
       certified_data[M.receiver] = res.new_certified_data
 
-    balances[M.receiver] = S.balances[M.receiver]
-      + res.funds_accepted
-      - cycle_funds(Cycles_used)
-      - ∑ [ call.transferred_funds | call ∈ res.new_calls ]
+    balances[M.receiver] =
+      min(
+        S.balances[M.receiver] + res.cycles_accepted
+        - Cycles_used - ∑ [ call.transferred_cycles | call ∈ res.new_calls ]
+      , MAX_CANISTER_BALANCE)
 else
   S with
     messages = Older_messages · Younger_messages
-    balances[M.receiver] = S.balances[M.receiver]
-      - cycle_funds(Cycles_used)
+    balances[M.receiver] = S.balances[M.receiver] - Cycles_used
 ....
 
 The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable. The maximum number of cycles to consume is also unspecified, and expressed as `Max_cycles`.
@@ -2157,8 +2164,8 @@ The cycle consumption of executing this message is modeled via the unspecified `
 This transition detects certain behaviour that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
  * Responding if the present call context has already been responded to
- * Accepting more funds than are available on the call context
- * Sending out more funds than available to the canister
+ * Accepting more cycles than are available on the call context
+ * Sending out more cycles than available to the canister
  * Consuming more cycles than allowed (and reserved)
 
 If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
@@ -2166,7 +2173,7 @@ If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>
 If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function)>>, the state is updated and possible outbound calls and responses are enqueued.
 
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would requre a (unique) call to `ic0.reply`.
-Note also that the state changes are persisted even when the system is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<starvation>>).
+Note also that the state changes are persisted even when the system is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<rule-starvation>>).
 
 The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
 ....
@@ -2177,13 +2184,13 @@ as_update(f, arg, env) = λ wasm_state →
       new_state = wasm_state;
       new_calls = [];
       response = res;
-      funds_accepted = no_funds;
+      cycles_accepted = 0;
       new_certified_data = NoCertifiedData;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
-[#starvation]
+[#rule-starvation]
 ==== Call context starvation
 
 If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
@@ -2201,13 +2208,13 @@ State after::
 ....
 S with
     call_contexts[Ctxt_id].responded = true
-    call_contexts[Ctxt_id].available_funds = no_funds
+    call_contexts[Ctxt_id].available_cycles = 0
     messages =
       S.messages ·
       ResponseMessage {
         origin = S.call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, "starvation");
-        refunded_funds = S.call_contexts[Ctxt_id].available_funds
+        refunded_cycles = S.call_contexts[Ctxt_id].available_cycles
       }
 ....
 
@@ -2233,7 +2240,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister. The canister status is set to 'Running'. All funds on this call are now the canister's initial funds.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister. The canister status is set to 'Running'. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -2253,13 +2260,13 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = M.caller
-    funds[CanisterId] = M.transferred_funds
+    balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid({canister_id = CanisterId}))
-        refunded_funds = no_funds
+        refunded_cycles = 0
       }
     canister_status[CanisterId] = Running
 ....
@@ -2281,8 +2288,6 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
 The controller of a canister can check for its status (i.e. one of Running, Stopping, or Stopped).
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
-
-The order of units in the `balances` field is unspecified.
 
 Conditions::
 ....
@@ -2307,11 +2312,9 @@ S with
             else ?(SHA-265(S.canisters[A.canister_id].raw_module));
           controller = S.controllers[A.canister_id];
           memory_size = Memory_size;
-          balances =
-            [ (unit, S.balance[A.canister_id](unit))
-            | S.balance[A.canister_id](unit) > 0 ];
+          cycles = S.balance[A.canister_id];
         })
-        refunded_funds = M.transferred_funds
+        refunded_cycles = M.transferred_cycles
       }
 ....
 
@@ -2353,7 +2356,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
-        refunded_funds = M.transferred_funds
+        refunded_cycles = M.transferred_cycles
       }
 ....
 
@@ -2398,7 +2401,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
-        refunded_funds = M.transferred_funds
+        refunded_cycles = M.transferred_cycles
       }
 ....
 
@@ -2423,7 +2426,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
-        refunded_funds = M.transferred_funds
+        refunded_cycles = M.transferred_cycles
       }
 ....
 
@@ -2433,9 +2436,9 @@ The controller of a canister can stop a canister. Stopping a canister goes throu
 
 We encode this behavior via three (types of) transitions:
 
-1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and funds) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
+1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
 2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
-3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that that the canister is stopped.
+3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
 Conditions::
 ....
@@ -2451,7 +2454,7 @@ State after::
 ....
 S with
     messages = Older_messages · Younger_messages
-    S.status[A.canister_id] = Stopping [(M.origin, M.transferred_funds)]
+    S.status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles)]
 ....
 
 The next two transition record any additional 'stop_canister' requests that arrive at a stopping (or stopped) canister in its status.
@@ -2470,7 +2473,7 @@ State after::
 ....
 S with
     messages = Older_messages · Younger_messages
-    S.status[A.canister_id] = Stopping (Origins · (M.origin, M.transferred_funds))
+    S.status[A.canister_id] = Stopping (Origins · (M.origin, M.transferred_cycles))
 ....
 
 
@@ -2488,9 +2491,9 @@ State after::
         [ ResponseMessage {
             origin = O
             response = Accepted (candid())
-            refunded_funds = F
+            refunded_cycles = C
           }
-	| (O, F) ∈ Origins
+	| (O, C) ∈ Origins
 	]
 ....
 
@@ -2539,7 +2542,7 @@ S with
         ResponseMessage{
             origin = M.origin
             response = Accepted (candid())
-            refunded_funds = M.transferred_funds
+            refunded_cycles = M.transferred_cycles
         }
 ....
 
@@ -2564,14 +2567,14 @@ S with
         ResponseMessage{
             origin = M.origin
             response = Accepted (candid())
-            refunded_funds = M.transferred_funds
+            refunded_cycles = M.transferred_cycles
         } ·
         [ ResponseMessage {
             origin = O
             response = Reject (CANISTER_REJECT, 'Canister has been restarted')
-            refunded_funds = F
+            refunded_cycles = C
           }
-	| (O, F) ∈ Origins
+	| (O, C) ∈ Origins
 	]
 ....
 
@@ -2599,37 +2602,34 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
-        refunded_funds = M.transferred_funds + S.balances[CanisterId]
+        refunded_cycles = M.transferred_cycles
       }
 ....
 
-==== IC Management Canister: Depositing funds
-
-The unspecified cost for this operation is modeled as `Cycle_cost`.
+==== IC Management Canister: Depositing cycles
 
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
-    M.method_name = 'deposit_funds'
+    M.method_name = 'deposit_cycles'
     M.arg = candid(A)
     M.caller = S.controllers[A.canister_id]
-    cycle_funds(Cycle_cost) ≤ S.balances[A.canister_id] + M.transferred_funds
+    Cycle_cost ≤ S.balances[A.canister_id] + M.transferred_cycles
 ....
 State after::
 ....
 S with
     balances[CanisterId] =
-      S.balances[A.canister_id] + M.transferred_funds - Cycle_cost
+      min(S.balances[A.canister_id] + M.transferred_cycles, MAX_CANISTER_BALANCE)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid())
-        refunded_funds = no_funds
+        refunded_cycles = 0
       }
 ....
-
 
 ==== IC Management Canister: Random numbers
 
@@ -2654,9 +2654,58 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Accepted (candid(B))
-        refunded_funds = M.transferred_funds
+        refunded_cycles = M.transferred_cycles
       }
 ....
+
+==== IC Management Canister: Canister creation with cycles
+
+This is a variant of `create_canister`, which sets the initial cycle balance based on the `amount` argument.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'provisional_create_canister_with_cycles'
+    M.arg = candid(A)
+    is_system_assigned CanisterId
+    CanisterId ∉ dom S.canisters
+....
+State after::
+....
+S with
+    canisters[CanisterId] = EmptyCanister
+    time[CanisterId] = CurrentTime
+    controllers[CanisterId] = M.caller
+    balances[CanisterId] = min(A.amount, MAX_CANISTER_BALANCE)
+    certified_data[CanisterId] = ""
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid({canister_id = CanisterId}))
+        transferred_cycles = M.transferred_cycles
+      }
+    canister_status[CanisterId] = Running
+....
+
+==== IC Management Canister: Top up canister
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'provisional_top_up_canister'
+    M.arg = candid(A)
+    A.canister_id ∈ dom S.canisters
+....
+State after::
+....
+S with
+    balances[CanisterId] = min(balances[CanisterId] + A.amount, MAX_CANISTER_BALANCE)
+....
+
 
 ==== Callback invocation
 
@@ -2675,13 +2724,15 @@ Conditions::
 State after::
 ....
 S with
-    balances[S.call_contexts[Ctxt_id].canister] += RM.refunded_funds
+    balances[S.call_contexts[Ctxt_id].canister] =
+      min(balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles,
+          MAX_CANISTER_BALANCE)
     messages =
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id2
         receiver = C
-        entry_point = Callback Callback FM.response RM.refunded_funds
+        entry_point = Callback Callback FM.response RM.refunded_cycles
         queue = Unordered
       } ·
       Younger_messages
@@ -2706,7 +2757,7 @@ S with
       | Rejected R  if response = Reject R
 ....
 
-NB: The refunded funds, `RM.refunded_funds` are, by construction, empty, with the exception of when the controller of a canister is a user, and deletes a canister with funds. In the current specification, these funds disappear in thin air in that case. This is likely to change in some way or another.
+NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
 
 ==== Request clean up
 
@@ -2906,14 +2957,14 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   sysenv : Env;
-  funds_refunded : Funds;
+  cycles_refundend : Nat;
 }
 ExecutionState = {
   wasm_state : WasmState;
   params : Params;
   response : NoResponse | Response;
-  funds_accepted : Funds;
-  funds_available : Funds;
+  cycles_accepted : Nat;
+  cycles_available : Nat;
   balance : Funds;
   reply_params : { arg : Blob };
   pending_call : MethodCall | NoPendingCall;
@@ -2941,16 +2992,16 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
-  funds_refunded = no_funds;
+  cycles_refundend = 0;
 }
 
 empty_execution_state = {
   wasm_state = (undefined);
   params = (undefined);
   response = NoResponse;
-  funds_accepted = no_funds;
-  funds_available = no_funds;
-  balance = no_funds;
+  cycles_accepted = 0;
+  cycles_available = 0;
+  balance = 0;
   reply_params = { arg = "" };
   pending_call = NoPendingCall;
   calls = [];
@@ -3041,14 +3092,14 @@ update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
       wasm_state = wasm_state;
       params = empty_params with { data = arg.data; caller = arg.caller; sysenv }
       balance = sysenv.balance
-      funds_available = arg.funds;
+      cycles_available = arg.cycles;
     }
   try func<es>() with Trap then Trap
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
     response = es.response;
-    funds_accepted = es.funds_accepted;
+    cycles_accepted = es.cycles_accepted;
     new_certified_data = es.new_certified_data
   }
 ....
@@ -3063,7 +3114,7 @@ query_methods[method] = λ (arg, sysenv) → λ wasm_state →
       balance = sysenv.balance
     }
   try func<es>() with Trap then Trap
-  if es.funds_accepted ≠ no_funds then Trap
+  if es.cycles_accepted ≠ 0 then Trap
   if es.calls ≠ () then Trap
   if es.response = NoResponse then Trap
   Return es.response;
@@ -3079,7 +3130,7 @@ By construction, the (possibly modified) `es.wasm_state` is discarded.
 callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
     sysenv
-    funds_received = refund;
+    cycles_received = refund;
   }
   let (func_id, env, params) = match response with
     Reply data ->
@@ -3097,7 +3148,7 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
     wasm_state = wasm_state;
     params = params;
     balance = balance;
-    funds_available = available;
+    cycles_available = available;
   }
   func<es>(env)
   Return {
@@ -3159,27 +3210,25 @@ ic0.msg_reply_data_append<es>(src : i32, size : i32) =
 ic0.msg_reply<es>() =
   if es.response ≠ NoResponse then Trap
   es.response := Reply (es.reply_params.arg)
-  es.funds_available := no_funds
+  es.cycles_available := 0
 
 ic0.msg_reject<es>(src : i32, size : i32) =
   if es.response ≠ NoResponse then Trap
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
-  es.funds_available := no_funds
+  es.cycles_available := 0
 
-ic0.msg_funds_available<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
-  let unit := copy_from_canister<es>(unit_src, unit_size)
-  return es.funds_available(unit)
+ic0.msg_cycles_available<es>() : i64 =
+  return es.cycles_available
 
-ic0.msg_funds_refunded<es> : ( unit_src : i32, unit_size : i32 ) -> (i64) =
-  return es.params.funds_refunded(unit)
+ic0.msg_cycles_refunded<es>() : i64 =
+  return es.params.cycles_refundend
 
-ic0.msg_funds_accept<es> : ( unit_src : i32, unit_size : i32; amount : i64 ) =
-  let unit := copy_from_canister<es>(unit_src, unit_size)
-  let funds := funds_of_unit(unit, amount)
-  if funds > es.funds_available then Trap
-  es.funds_available := es.funds_available - funds
-  es.funds_accepted := es.funds_accepted + funds
-
+ic0.msg_cycles_accept<es>( max_amount : i64 ) : i64 =
+  let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
+  es.cycles_available := es.cycles_available - amount
+  es.cycles_accepted := es.cycles_accepted + amount
+  es.balance := es.balance + amount
+  return amount
 
 ic0.canister_self_size<es>() : i32 =
   return |es.wasm_state.self_id|
@@ -3187,9 +3236,8 @@ ic0.canister_self_size<es>() : i32 =
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
-ic0.canister_balance<es> : ( unit_src : i32, unit_size : i32 ) : i64 =
-  let unit := copy_from_canister<es>(unit_src, unit_size)
-  return es.balance(unit)
+ic0.canister_cycle_balance<es>() : i64 =
+  return es.balance
 
 ic0.canister_status<es>() : i32 =
   match es.params.sysenv.canister_status with
@@ -3222,7 +3270,7 @@ ic0.call_new<es>(
     callee = callee;
     method_name = callee;
     arg = "";
-    transferred_funds = no_funds;
+    transferred_cycles = 0;
     callback = Callback {
       on_reply = Closure { fun = reply_fun; env = reply_env }
       on_reject = Closure { fun = reject_fun; env = reject_env }
@@ -3233,16 +3281,14 @@ ic0.call_data_append<es> (src : i32, size : i32) =
   if es.pending_call = NoPendingCall then Trap
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
-ic0.call_funds_add<es> (unit_src : i32, unit_size : i32,  amount : i32) =
+ic0.call_cycles_add<es>(amount : i32) =
   if es.pending_call = NoPendingCall then Trap
-  let unit := copy_from_canister<es>(unit_src, unit_size)
-  let funds := funds_of_unit(unit, amount)
-  if funds > es.balance then Trap
+  if amount > es.balance then Trap
 
-  es.balance := es.balance - funds
-  es.pending_call.transferred_funds := es.pending_call.transferred_funds + funds
+  es.balance := es.balance - amount
+  es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
-ic0.call_funds_peform<es> () : ( err_code : i32 ) =
+ic0.call_peform<es>() : ( err_code : i32 ) =
   if es.pending_call = NoPendingCall then Trap
 
   if arbitrary()
@@ -3257,7 +3303,7 @@ ic0.call_funds_peform<es> () : ( err_code : i32 ) =
 // helper function
 discard_pending_call<es>() =
   if es.pending_call ≠ NoPendingCall then
-    es.balance := es.balance + es.pending_call.transferred_funds
+    es.balance := min(es.balance + es.pending_call.transferred_cycles, MAX_CANISTER_BALANCE)
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =

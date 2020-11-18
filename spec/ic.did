@@ -20,9 +20,15 @@ service ic : {
       module_hash: opt blob;
       controller: principal;
       memory_size: nat;
-      balance: vec record {unit; nat};
+      cycles: nat;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
-  deposit_funds: (record {canister_id : canister_id}) -> ();
+  deposit_cycles : (record {canister_id : canister_id}) -> ();
   raw_rand : () -> (blob);
+
+  // provisional interfaces for the pre-ledger world
+  provisional_create_canister_with_cycles :
+    (record { amount: opt nat }) -> (record {canister_id : canister_id});
+  provisional_top_up_canister :
+    (record { canister_id: canister_id; amount: nat }) -> ();
 }
