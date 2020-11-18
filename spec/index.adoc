@@ -781,7 +781,7 @@ When a canister is upgraded to a new WebAssembly module, the system:
 
  1. Invokes `canister_pre_upgrade` (if present) on the old instance, to give the canister a chance to clean up (e.g. move data to <<system-api-stable-memory,stable memory>>).
  2. Instantiates the new module, including the execution of `(start)`, with a fresh WebAssembly state.
- 3. Invokes `canister_post_upgrade` (if present) on the new instance.
+ 3. Invokes `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call (<<ic-install_code>>).
 
 The stable memory is preserved throughout the process; any other WebAssembly state is discarded.
 
@@ -842,7 +842,7 @@ ic0.call_new :                                                              // U
     reply_fun : i32,
     reply_env : i32,
     reject_fun : i32,
-    reject_env : i32,
+    reject_env : i32
   ) -> ();
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
 ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt
@@ -1242,7 +1242,7 @@ Only the _controller_ of the canister can install code.
 
 If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
 
-If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>.
+If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` system method of the new instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -2438,7 +2438,7 @@ We encode this behavior via three (types of) transitions:
 
 1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
 2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
-3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
+3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that that the canister is stopped.
 
 Conditions::
 ....
