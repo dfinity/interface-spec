@@ -177,4 +177,7 @@ rec {
     haskellPackages.ic-ref.env.overrideAttrs (old: {
       nativeBuildInputs = (old.nativeBuildInputs or []) ++ extra-pkgs ;
     });
+
+  # convenient to re-export
+  hcandid = nixpkgs.haskell.lib.justStaticExecutables haskellPackages.candid;
 }
