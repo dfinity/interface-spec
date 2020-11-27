@@ -59,5 +59,7 @@ type ICManagement m =
         canister_id : principal;
       }) -> ();
       raw_rand : () -> (blob);
+
+      provisional_create_canister_with_cycles : (record { amount: opt nat }) -> (record {canister_id : principal});
     }
   |]

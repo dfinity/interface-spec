@@ -1162,7 +1162,7 @@ managementService ic00 =
 
 ic_create :: HasTestConfig => IC00 -> IO Blob
 ic_create ic00 = do
-  r <- managementService ic00 .! #create_canister $ ()
+  r <- managementService ic00 .! #provisional_create_canister_with_cycles $ #amount .== Nothing
   return (rawPrincipal (r .! #canister_id))
 
 ic_install :: HasTestConfig => IC00 -> InstallMode -> Blob -> Blob -> Blob -> IO ()

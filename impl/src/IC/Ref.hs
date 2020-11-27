@@ -458,6 +458,7 @@ invokeManagementCanister caller cid = \case
 managementCanister :: (CanReject m, ICM m) => EntityId -> CallId -> Rec (ICManagement (MaybeT m))
 managementCanister caller ctxt_id = empty
     .+ #create_canister .== icCreateCanister caller
+    .+ #provisional_create_canister_with_cycles .== icCreateCanister' caller
     .+ #install_code    .== icInstallCode caller
     .+ #set_controller  .== icSetController caller
     .+ #start_canister  .== icStartCanister caller
@@ -468,6 +469,14 @@ managementCanister caller ctxt_id = empty
 
 icCreateCanister :: (ICM m, CanReject m) => EntityId -> ICManagement m .! "create_canister"
 icCreateCanister caller _r = do
+    new_id <- gets (freshId . M.keys . canisters)
+    let currentTime = 0 -- ic-ref lives in the 70ies
+    createEmptyCanister new_id caller currentTime
+    return (#canister_id .== entityIdToPrincipal new_id)
+
+-- hack to run 0.10 tests on modern replica
+icCreateCanister' :: (ICM m, CanReject m) => EntityId -> ICManagement m .! "provisional_create_canister_with_cycles"
+icCreateCanister' caller _r = do
     new_id <- gets (freshId . M.keys . canisters)
     let currentTime = 0 -- ic-ref lives in the 70ies
     createEmptyCanister new_id caller currentTime
