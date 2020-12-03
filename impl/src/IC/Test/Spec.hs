@@ -908,8 +908,8 @@ icTests = withTestConfig $ testGroup "Public Spec acceptance tests"
                 [ "request_type" =: GText "call"
                 , "sender" =: GBlob defaultUser
                 , "canister_id" =: GBlob ""
-                , "method_name" =: GText "create_canister"
-                , "arg" =: GBlob "DIDL\0\0"
+                , "method_name" =: GText "provisional_create_canister_with_cycles"
+                , "arg" =: GBlob "DIDL\x02\x6c\x01\xd8\xa3\x8c\xa8\x0d\x01\x6e\x7d\x01\x00\x00"
                 ]
           _reply <- submitCBOR req >>= isReply
           let status_req = rec
