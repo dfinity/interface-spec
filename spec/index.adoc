@@ -1684,12 +1684,7 @@ anonymous_id : Principal
 anonymous_id = 0x04
 ....
 
-The predicate describing the principals used for subnets is unspecified:
-....
-is_subnet_id : Principal -> Bool
-....
-
-These functions, predicates and constants are mutually disjoint.
+These function domains and fixed values are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
 ....
