@@ -6,6 +6,7 @@
 
 * Spec: The cleanup callback is introduced
 * Spec: Ingress rate limiting
+* Spec: The default `memory_allocation` becomes unspecified
 
 [#0_14_0]
 === 0.14.0 (2020-11-18)
