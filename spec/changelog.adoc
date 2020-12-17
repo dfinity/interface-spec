@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_15_0]
+=== 0.15.0 (2020-12-17)
+
+* Spec: Support for raw Ed25519 keys is removed
+
 [#0_14_1]
 === 0.14.1 (2020-12-08)
 

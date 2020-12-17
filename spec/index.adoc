@@ -1,6 +1,6 @@
 = Public specification of the Internet Computer
 Joachim Breitner <joachim@dfinity.org>
-0.14.1
+0.15.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
@@ -212,7 +212,7 @@ The IC supports plain signatures as well as signatures generated via web authent
 +
 The signature is calculated by signing the concatenation of the domain separator and the message.
 +
- * Allowed encodings for the public key are DER for Ed25519 and ECDSA, or raw bytes for Ed25519; the verifier will detect the right encoding.
+ * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER. 
    See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
    See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
  * The signatures are encoded as raw bytes.
@@ -251,8 +251,6 @@ A DER wrapping of a COSE key is shown below. It can be parsed via the command `s
 ....
 The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[in an online ASN.1 JavaScript decoder].
 ====
-
-NOTE: Raw bytes for Ed25519 will be removed in a future version of the spec.
 
 [#state-tree]
 == The system state tree
