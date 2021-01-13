@@ -6,6 +6,10 @@
 
 * Spec: The cleanup callback is introduced
 * Spec: Ingress rate limiting
+
+[#0_15_0]
+=== 0.15.0 (2020-12-17)
+
 * Spec: Support for raw Ed25519 keys is removed
 
 [#0_14_1]
