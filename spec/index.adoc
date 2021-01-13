@@ -222,7 +222,8 @@ The signature is calculated by signing the concatenation of the domain separator
  * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
 +
 The signature is calculated by using the concatenation of the domain separator and the message as the challenge in the web authentication assertion.
-The signature is checked by verifying that the request id appears in base64url encoding (see https://tools.ietf.org/html/rfc4648#section-5[RFC 4648]) in the `challenge` field of `clientDataJSON`, and that `signature` verifies on `authenticatorData || SHA-256(clientDataJSON)`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
++
+The signature is checked by verifying that the `challenge` field contains the https://tools.ietf.org/html/rfc4648#section-5[base64url encoding] of the concatenation of the domain separator and the message, and that `signature` verifies on `authenticatorData · SHA-256(utf8(clientDataJSON))`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
 +
  * The public key is encoded as DER-wrapped COSE key as detailed below.
  * The signature is a CBOR encoding of a map with three mandatory fields:
