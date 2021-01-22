@@ -6,6 +6,7 @@
 
 * Spec: The cleanup callback is introduced
 * Spec: Ingress rate limiting
+* Spec: Add ECDSA signatures on curve secp256k1
 
 [#0_15_0]
 === 0.15.0 (2020-12-17)
