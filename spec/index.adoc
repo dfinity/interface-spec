@@ -1,59 +1,34 @@
 = Public specification of the Internet Computer
-Joachim Breitner <joachim@dfinity.org>
+DFINITY Foundation
 0.15.0
 :toc2:
 :toclevels: 3
 :stem: latexmath
 :icons: font
 
-== Preamble
-
-This document describes the public interface of the Internet Computer. It is the authoritative source for interface details (request and function names, parameters, encodings). The goal is to have a document that is authoritative, and provides a place and a language to discuss public features of the Internet Computer in a hopefully concrete way. It could also be a document that we can publish to users of the Internet Computer.
-
-Because of its focus on the externally visible behavior of the Internet Computer, it will also help uncover abstraction leaks. Because it aims to describe the full behavior, it helps to show which designs are unexpectedly complicated or don’t go well together. But as it intentionally does not address _how_ to implement this behaviour, it cannot be used as an implementation spec.
-
-=== Status
-
-The `master` version of this document, which claims version number `∞`, corresponds to a collection of finished and approved designs, but typically reflect neither the current status nor target of implementation.
-
-The released versions, which can be found at https://docs.dfinity.systems/public/v/, are targetted by the production implementations (e.g. `replica`, `dfx`). Implementations do not necessarily target the latest released version; chosing an implementation target is a deliberate step coordinated between the involved parties.
-
-See the https://github.com/dfinity-lab/ic-ref/blob/master/README.md[README file of the repository] for more information on versioning and release process.
-
-Please skim the https://github.com/dfinity-lab/ic-ref/pulls?q=is%3Apr+is%3Aopen+%22Public+Spec%22+in%3Atitle[list of open PRs] against this document, to get an overview of ongoing discussions.
-
-=== Process
-
-This document is maintained by its editors (currently Joachim, Jens, Björn). The editors drive its evolution, make sure the right process is followed and try to keep tabs on relevant design discussions happening. Nevertheless, everyone is invited to contribute.
-
-A proposed change of this document should take the form of a Pull Request on GitHub, be titled “Public Spec: _title_”, and its description should answer the following questions:
-
- 1. Which parties (Replica, Languages, SDK, Research) are affected by this change, and why?
- 2. Is this a a breaking change or not (important for versioning)
- 3. If design slides are required: Which design slides is this based on, and – if not immediate – why do these slides imply the present change. This may initially refer to not-yet-approved slides, if the slides and the interface of a feature are developed side-by-side.
-
-Changes will be merged into `master` when the design is finished. The editors will apply common sense to determine if all stakeholders have been heared and the design is complete.
-
-Generally, PRs should be merged using “squash merge”.
-
-Draft PRs can be used for experimentation and exploration without any process requirement.
-
 == Introduction
 
-Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood, a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the Internet Computer to run their applications and those who use these applications.
+Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the Internet Computer to run their applications and those who use these applications.
+
+=== Target audience
+
+This documents describes this _external_ view of the Internet Computer, i.e. the low-level interfaces it provides to application developers and users, and what will happen when they use these interfaces.
+
+NOTE: While this document describes the public interface and behavior of the Internet Computer, it is not end-user or end-developer documentation. Most developers will interact with the Internet Computer through additional tooling like the SDK, Canister Development Kits and Motoko. Please see https://sdk.dfinity.org/ for suitable documentation.
+
+The target audience of this document are
+
+* those who use the these low-level interfaces (e.g. implement agents, canister developments kits, emulators, other tooling).
+* those who implement these low-level interfaces (e.g. developers of the Internet Computer implementation)
+* those who want to understand the intricacies of the Internet Computer’s behaviour in great detail (e.g. to do a security analysis)
+
+WARNING: This document is a rigorous, technically dense reference. It is not an introduction to the Internet Computer, and as such most useful to those who understand the high-level concepts. Please see more high-level documentation first.
 
 === Scope of this document
 
-This documents describes this external view of the Internet Computer:
-Which interfaces it provides to application developers and users, and what will happen when you use these interfaces.
+If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based service hosting service, then this document describes exclusively the service hosting aspect of it. To the extent possible, this document will _not_ talk about blockchains, consensus protocols, nodes, subnets, orthogonal persistence or governance.
 
-WARNING: While this document describes the public interface and behavior of the Internet Computer, it is not the primary end-user documentation. The creators of the Internet Computer provide further tools, such as the Motoko programming language, the IDL tooling and the SDK tools, to make programming and using the Internet Computer even more convenient.
-
-If you think of the Internet Computer as a distributed execution engine that _provides_ a WebAssembly-based application hosting service, then this document describes exclusively the latter aspect of it. So to the extent possible, this document will _not_ talk about blockchain, consensus protocols, nodes, subnets and orthogonal persistence.
-
-This document tries to be implementation agnostic: If we decide to re-do the implementation of the Internet Computer from scratch at some point in the future, then this document would (ideally) still be valid as is.
-
-This implies that this document does not speak of the interface of the Internet Computer towards its engineers and administrators, as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
+This document tries to be implementation agnostic: It would apply just as well to a (hypothetical) compatible reimplementation of the Internet Computer. This implies that this document does not cover interfaces towards those running the Internet Computer (e.g. data center operators, protocol developers, governance users), as topics like node update, monitoring, logging are inherently tied to the actual _implementation_ and its architecture.
 
 === Overview of the Internet Computer
 
@@ -362,9 +337,9 @@ State transitions may be instantaneous and not always externally visible. For ex
 
 All gray states are _not_ explicitly represented in the system state, and are indistinguishable from “request does not exist”.
 
-The crucial property of the `Received` state is that the request has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) request again. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+The characteristic property of the `Received` state is that the request has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) request again. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
-The crucial property of the `Processing` state is _the initial effect of the request has or will happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+The characteristic property of the `Processing` state is _the initial effect of the request has or will happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
 
 A request may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
 
@@ -391,8 +366,6 @@ The following API endpoints are provided:
 /api/v1/submit
 /api/v1/read
 ....
-
-NOTE: Should we add features that _change the state_ but are node-specific (e.g., “restart”), then these would go through a new endpoint like `/api/v1/command`.
 
 For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is an CBOR value containing the request object.
 
@@ -710,20 +683,15 @@ As long as you talk to one (honest) node only, the observed behavior is nicely s
 
 If you then (quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
-A related problem is that some reads are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result, which is easier if the all queries run against the same state.
+A related problem is that query calls are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result. However, it is (currently) not possible to query a _specific_ state.
 
-Both problems can be solved if read requests can specify the desired state to query, either at-least-this-state (to solve the first problem) or an exactly-this-future-state (to solve the second). This requires some way of identifying states (abstract state counters, timestamps, block heights).
-
-NOTE: Even without this feature, applications can work around these problems. For the first problem, the query result could be such that the user can tell if the query has been received or not. For the second problem, if replies are monotonic in some sense the user can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the user can get assurance in those events returned by many nodes).
-
+NOTE: Applications can work around these problems. For the first problem, the query result could be such that the user can tell if the update has been received or not. For the second problem, even if using <<system-api-certified-data,certified data>> is not possible, if replies are monotonic in some sense the user can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the user can get assurance in those events that are reported by many nodes).
 
 
 [#canister-module-format]
 == Canister module format
 
 A canister module is simply a https://webassembly.github.io/spec/core/index.html[WebAssembly module] in binary format (typically `.wasm`).
-
-WARNING: This may need refinement for features like multiple modules, shared linked libraries and possibly static assets. In that case we might go for a zip-file-with-metadata approach.
 
 [#system-api]
 == Canister interface (System API)
@@ -745,8 +713,6 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
-* No floating point instructions are used in the module. (This will be allowed in the future.)
-* No floating point local or global variables are used in the module. (This will be allowed in the future.)
 
 === Interpretation of numbers
 
@@ -1042,7 +1008,7 @@ After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `
 
 Each canister maintains a balance of _cycles_, the utility token used to pay for platform usage.
 
-NOTE: This specification currently does not go into details about which actions cost how many cycles and/or when. In general, assume that the canister’s cycle balance can change arbitrarily between method executions, and during each system function API call, unless explicitly mentioned otherwise.
+NOTE: This specification currently does not go into details about which actions cost how many cycles and/or when. In general, you must assume that the canister’s cycle balance can change arbitrarily between method executions, and during each system function API call, unless explicitly mentioned otherwise.
 
 * `ic0.canister_cycle_balance : () -> i64`
 +
@@ -1566,7 +1532,7 @@ lookup_path(["e"],      pruned_tree) = Absent
 [#public-spec]
 == Abstract public behavior
 
-The previous sections describe the interfaces, i.e. outer edges of the Internet Computer, but give only intuitive and vague information about what these interfaces actually do.
+The previous sections describe the interfaces, i.e. outer edges of the Internet Computer, but give only intuitive and vague information in prose about what these interfaces actually do.
 
 The present section aims to address that question with great precision, by describing the _abstract state_ of the whole Internet Computer, and how this state can change in response to API function calls, or spontaneously (modeling asynchronous, distributed or non-deterministic execution).
 
@@ -1574,7 +1540,7 @@ The design of this abstract specification (e.g. how and where pending messages a
 
 === Notation
 
-We specify the behavior of the system using pseudo-code.
+We specify the behavior of the system using ad hoc pseudocode.
 
 The manipulated values are primitive values (numbers, text, binary blobs), aggregate values (lists, unordered lists a.k.a. bags, partial maps, records with fixed fields, named constructors) and functions.
 
@@ -1586,7 +1552,7 @@ NOTE: All values are immutable! State change is specified by describing the new 
 
 Record fields are accessed using dot-notation (e.g. `S.request_id > 0`). To create a new record from an existing record `R` with some fields changed, the syntax `R where field = new_value` is used. This syntax can also be used to create new records with some deeply nested field changed: `R where some_map[key].field = new_value`.
 
-In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be followed for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
+In the state transitions, upper-case variables (`S`, `C`, `Req_id`) are free variables: The state transition may be taken for any possible value of these variables. `S` always refers to the state of the system before. A state transition often comes with a list of _conditions_, which may restrict the values of these free variables. The _state after_ is usually described using the record update syntax by starting with `S where`.
 
 For example, the condition `S.messages = Older_messages · M · Younger_messages` says that `M` is some message in field `messages` of the record `S`, and that `Younger_messages` and `Older_messages` are the other messages in the system. If the “state after” specifies `S with messages = Older_messages · Younger_messages`, then the message `M` is removed from the state.
 
