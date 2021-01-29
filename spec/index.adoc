@@ -188,9 +188,10 @@ The IC supports plain signatures as well as signatures generated via web authent
 The signature is calculated by signing the concatenation of the domain separator and the message.
 +
  * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER. 
-   See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
-   See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
-   For curve `secp256k1`, the OID 1.3.132.0.10 is used.
+   - See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
+   - See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
+     For curve `secp256k1`, the OID 1.3.132.0.10 is used.
+     The points must be specified in uncompressed form (i.e. `0x04` followed by the big-endian 32byte encodings of `x` and `y`).
  * The signatures are encoded as the concatenation of the 32 byte big endian encodings of the two values _r_ and _s_.
 
 - The only allowed signature scheme for web authentication is
