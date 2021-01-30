@@ -3095,7 +3095,7 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
     sysenv
     cycles_received = refund;
   }
-  let (func_id, env, params) = match response with
+  let (fun, env, params) = match response with
     Reply data ->
       (callbacks.on_reply.fun, callbacks.on_reply.env,
         { params0 with data})
