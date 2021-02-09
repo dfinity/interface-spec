@@ -2,7 +2,7 @@
 == Changelog
 
 [#0_15_1]
-=== 0.15.1 (UNRELEASED)
+=== 0.15.1 (2021-02-09)
 
 * The document is renamed to “Internet Computer Interface Spec”
 

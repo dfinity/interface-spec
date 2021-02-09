@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.15.0
+0.15.1
 :toc2:
 :toclevels: 3
 :stem: latexmath
