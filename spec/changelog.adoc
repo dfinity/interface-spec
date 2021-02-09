@@ -8,6 +8,11 @@
 * Spec: Ingress rate limiting
 * Spec: Add ECDSA signatures on curve secp256k1
 
+[#0_15_1]
+=== 0.15.1 (2021-02-09)
+
+* The document is renamed to “Internet Computer Interface Spec”
+
 [#0_15_0]
 === 0.15.0 (2020-12-17)
 
