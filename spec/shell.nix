@@ -1,2 +1,2 @@
 { system ? builtins.currentSystem }:
-(import ../default.nix {inherit system;}).public-spec
+(import ../default.nix {inherit system;}).interface-spec
