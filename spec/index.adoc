@@ -1,4 +1,4 @@
-= Public specification of the Internet Computer
+= The Internet Computer Interface Specification
 DFINITY Foundation
 ∞ (unreleased)
 :toc2:
@@ -16,7 +16,7 @@ Welcome to the Internet Computer! We speak of “the” Internet Computer, becau
 
 This documents describes this _external_ view of the Internet Computer, i.e. the low-level interfaces it provides to application developers and users, and what will happen when they use these interfaces.
 
-NOTE: While this document describes the public interface and behavior of the Internet Computer, it is not end-user or end-developer documentation. Most developers will interact with the Internet Computer through additional tooling like the SDK, Canister Development Kits and Motoko. Please see https://sdk.dfinity.org/ for suitable documentation.
+NOTE: While this document describes the external interface and behavior of the Internet Computer, it is not end-user or end-developer documentation. Most developers will interact with the Internet Computer through additional tooling like the SDK, Canister Development Kits and Motoko. Please see https://sdk.dfinity.org/ for suitable documentation.
 
 The target audience of this document are
 
@@ -34,9 +34,9 @@ This document tries to be implementation agnostic: It would apply just as well t
 
 === Overview of the Internet Computer
 
-If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,public HTTP interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format, what a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,HTTP interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format, what a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
 
-Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,public HTTP interface>> to interact with the canister according to the <<system-api,System API>>.
+Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,HTTP interface>> to interact with the canister according to the <<system-api,System API>>.
 
 The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of a canister.
 
@@ -60,7 +60,7 @@ return "Hello world!"
 User <-- IC : "Hello World!"
 ....
 
-Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<public-spec,more formal description>> of the Internet Computer that describes its abstract behavior with more rigor.
+Sections “<<http-interface>>” and “<<system-api>>” describe these interfaces, together with a brief description of what they do. Afterwards, you will find a <<abstract-behavior,more formal description>> of the Internet Computer that describes its abstract behavior with more rigor.
 
 === Nomenclature
 
@@ -126,7 +126,7 @@ These have the form `H(|registering_principal| · registering_principal · deriv
 +
 These ids are treated specially when an id needs to be registered. In such a request, whoever requests an id can provide a `derivation_nonce`. By hashing that together with the principal of the caller, every principal has a space of ids that only they can register ids from.
 +
-NOTE: Derived IDs are currently not explicitly used in the public interface of the system, but they may be used internally or in the future.
+NOTE: Derived IDs are currently not explicitly used in this document, but they may be used internally or in the future.
 
 4. _Anonymous id_
 +
@@ -1589,8 +1589,8 @@ lookup_path(["e"],      pruned_tree) = Absent
 ....
 
 
-[#public-spec]
-== Abstract public behavior
+[#abstract-behavior]
+== Abstract behavior
 
 The previous sections describe the interfaces, i.e. outer edges of the Internet Computer, but give only intuitive and vague information in prose about what these interfaces actually do.
 
