@@ -233,7 +233,7 @@ The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YN
 [#state-tree]
 == The system state tree
 
-Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or, eventually, certified variables) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
+Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or <<system-api-certified-data>>) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
 
 Conceptually, the system state is a tree with labeled children, and values in the leaves. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
 
