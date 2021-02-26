@@ -7,6 +7,7 @@
 * Spec: The cleanup callback is introduced
 * Spec: Ingress rate limiting
 * Spec: Add ECDSA signatures on curve secp256k1
+* Spec: Expose module hash and controller via `read_state`
 
 [#0_15_1]
 === 0.15.1 (2021-02-09)
