@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_15_3]
+=== 0.15.3 (2021-02-26)
+
+* Spec: Expose module hash and controller via `read_state`
+
 [#0_15_2]
 === 0.15.2 (2021-02-09)
 

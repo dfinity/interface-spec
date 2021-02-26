@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.15.2
+0.15.3
 :stem: latexmath
 :icons: font
 // the following are ways to make this document work both in antora and stand alone
@@ -286,6 +286,21 @@ NOTE: Request statuses will not actually be kept around indefinitely, and eventu
 +
 The certified data of the canister with the given id, see <<system-api-certified-data>>.
 
+[#state-tree-canister-information]
+=== Canister information
+
+Users have the ability to learn about the hash of the canister's module and its current controller in a certified way.
+
+* `/canister/<canister_id>/module_hash` (blob):
++
+If the canister is empty, this path does not exist.
+If the canister is not empty, it exists and contains the SHA256 hash of the currently installed canister module. Cf. <<ic-canister_status>>.
+
+
+* `/canister/<canister_id>/controller` (blob):
++
+The current controller of the canister, as a principal in its binary form.
+
 [#http-interface]
 == HTTPS Interface
 
@@ -482,6 +497,8 @@ All requested paths must have one of the following paths as prefix:
  * `/time`. Can be requested by anyone.
  * `/subnet`. Can be requested by anyone.
  * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`.
+ * `/canisters/<canister_id>/module_hash`. Can be requested by anyone.
+ * `/canisters/<canister_id>/controller`. Can be requested by anyone.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -1229,7 +1246,7 @@ Only the current controller of the canister can change the controller.
 Indicates various information about the canister. It contains:
 
 * The status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
-* A hash of the module installed on the canister. This is `null` if no code is installed.
+* A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 * The controller of the canister.
 * The memory size taken by this canister.
 * The balances of this canister. It includes Cycles and ICPTs.
@@ -2850,6 +2867,8 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
   then RS.sender = R.sender
   else True
+may_read_path(S, _, ["canister", _, "module_hash"]) = True
+may_read_path(S, _, ["canister", _, "controller"]) = True
 may_read_path(S, _, _) = False
 ....
 
@@ -2862,6 +2881,11 @@ where `state_tree` constructs the a labeled tree from the system state `S` and t
 state_tree(S) = {
   "time": S.system_time;
   "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
+  "canister":
+    { canister_id :
+	{ "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
+	{ "controller" : S.controllers[canister_id] }
+    | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
 
