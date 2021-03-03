@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.15.3
+0.15.4
 :stem: latexmath
 :icons: font
 // the following are ways to make this document work both in antora and stand alone
@@ -182,14 +182,16 @@ The IC supports plain signatures as well as signatures generated via web authent
 - Plain signatures are supported for the schemes
 +
  * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
- * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
+ * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function, as well as on the Koblitz curve `secp256k1`.
 +
 The signature is calculated by signing the concatenation of the domain separator and the message.
 +
  * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER. 
-   See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
-   See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
- * The signatures are encoded as raw bytes.
+   - See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
+   - See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
+     For curve `secp256k1`, the OID 1.3.132.0.10 is used.
+     The points must be specified in uncompressed form (i.e. `0x04` followed by the big-endian 32byte encodings of `x` and `y`).
+ * The signatures are encoded as the concatenation of the 32 byte big endian encodings of the two values _r_ and _s_.
 
 - The only allowed signature scheme for web authentication is
 +
@@ -230,7 +232,7 @@ The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YN
 [#state-tree]
 == The system state tree
 
-Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or, eventually, certified variables) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
+Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or <<system-api-certified-data>>) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
 
 Conceptually, the system state is a tree with labeled children, and values in the leaves. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
 
@@ -727,6 +729,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
+* If it exports a function called `canister_inspect_message`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 
@@ -741,6 +744,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_init` and type `+() -> ()+`.
 * The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
+* The canister may export functions named `canister_inspect_message` with type `+() -> ()+`.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
@@ -794,10 +798,10 @@ In the reply callback of a <<system-api-call,inter-canister method call>>, the a
 The following sections describe various system imports, which we summarize here.
 
 ....
-ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry
-ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry
-ic0.msg_caller_size : () -> i32;                                            // I G U Q
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q
+ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry F
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry F
+ic0.msg_caller_size : () -> i32;                                            // I G U Q F
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q F
 ic0.msg_reject_code : () -> i32;                                            // Ry Rt
 ic0.msg_reject_msg_size : () -> i32;                                        // Rt
 ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
@@ -814,6 +818,10 @@ ic0.canister_self_size : () -> i32;                                         // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_status : () -> i32;                                            // *
+
+ic0.msg_method_name_size : () -> i32                                        // F
+ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
+ic0.accept_message : () -> ();                                              // F
 
 ic0.call_new :                                                              // U Ry Rt
   ( callee_src  : i32,
@@ -854,7 +862,8 @@ The comment after each function lists from where these functions may be invoked:
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
 * `s`: the `(start)` module initialization function
-* `*` = `I U Q Ry Rt` (NB: Not `(start)`)
+* `F`: from `canister_inspect_message`
+* `*` = `I G U Q Ry Rt F` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -939,6 +948,19 @@ The other end will receive this reject with reject code `CANISTER_REJECT`, see <
 Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
 +
 See <<system-api-cycles>> for how this interacts with cycles available on this call.
+
+[#system-api-inspect-message]
+=== Ingress message inspection
+
+A canister can inspect ingress messages before executing them. When the IC receives an update call from a user, the IC will use the canister method `canister_inspect_message` to determine whether the message shall be accepted.
+If the canister does not implement `canister_inspect_message`, then no ingress message inspection is applied and the canister will receive the update calls.
+
+In `canister_inspect_message`, the canister can accept the message by invoking
+`ic0.accept_message : () -> ()`.
+This function traps if invoked twice.
+If the canister traps in `canister_inspect_message` or does not call `ic0.accept_message`, then the access is denied.
+
+NOTE: The `canister_inspect_message` is _not_ invoked for query calls, inter-canister calls or calls to the management canister.
 
 [#system-api-canister-self]
 === Self-identification
@@ -1220,6 +1242,8 @@ Until code is installed, the canister behaves like one with no public methods.
 This method installs code into a canister.
 
 Only the _controller_ of the canister can install code.
+
+For `mode = install`, then the canister must be empty before; for `mode = upgrade`, the caniser must _not_ be empty before. For `mode = reinstall`, either works.
 
 If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
 
@@ -1668,6 +1692,7 @@ CanisterModule = {
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
+  inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
 ....
 
@@ -1928,12 +1953,16 @@ Due to this check, the envelope is discarded after this point.
 
 Requests that have expired are dropped here.
 
+Ingress message inspection is applied, and message that are not accepted by the canister are dropped.
+
 Submitted request:: `E : Envelope`
 Conditions::
 ....
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
+    Arg = { data = E.content.data; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
+    C.module.inspect_message (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
 ....
 State after::
 ....
@@ -1961,8 +1990,6 @@ S with
 ==== Initiating canister calls
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
-
-This is only allowed if the request has not expired.
 
 The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `hash_of_map` for this purpose, but this formulation is more abstract.
 
@@ -2946,6 +2973,7 @@ Params = {
   reject_message : Text;
   sysenv : Env;
   cycles_refundend : Nat;
+  method_name : Text;
 }
 ExecutionState = {
   wasm_state : WasmState;
@@ -2958,6 +2986,7 @@ ExecutionState = {
   pending_call : MethodCall | NoPendingCall;
   calls : List MethodCall;
   new_certified_data : NoCertifiedData | Blob;
+  ingress_filter : Accept | Reject;
 }
 ....
 
@@ -2994,6 +3023,7 @@ empty_execution_state = {
   pending_call = NoPendingCall;
   calls = [];
   new_certified_data = NoCertifiedData;
+  ingress_filter = Reject;
 }
 ....
 
@@ -3019,6 +3049,7 @@ init = λ (self_id, arg, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state
 ....
 +
@@ -3044,6 +3075,7 @@ pre_upgrade = λ (old_state, caller, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state.stable_mem
 ....
 
@@ -3069,6 +3101,7 @@ post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state
 ....
 
@@ -3083,6 +3116,7 @@ update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
       cycles_available = arg.cycles;
     }
   try func<es>() with Trap then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
@@ -3104,6 +3138,7 @@ query_methods[method] = λ (arg, sysenv) → λ wasm_state →
   try func<es>() with Trap then Trap
   if es.cycles_accepted ≠ 0 then Trap
   if es.calls ≠ () then Trap
+  if es.ingress_filter ≠ Reject then Trap
   if es.response = NoResponse then Trap
   Return es.response;
 ....
@@ -3132,20 +3167,33 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
   let func = es.wasm_state.store.table[fun]
   if typeof(func) ≠ func (i32) -> () then Trap
 
+* The `inspect_message` field of the `CanisterModule` is defined as follows.
++
+If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
++
+....
+inspect_message = λ (method_name, wasm_state, arg, sysenv) →
+  Return Accept
+....
+Otherwise, if the WebAssembly module exports a function `func` under the name `canister_inspect_message`, it is
++
+....
+inspect_message = λ (method_name, wasm_state, arg, sysenv) →
   let es = ref {empty_execution_state with
-    wasm_state = wasm_state;
-    params = params;
-    balance = balance;
-    cycles_available = available;
-  }
-  func<es>(env)
-  Return {
-    new_state = es.wasm_state;
-    new_calls = es.calls;
-    response = es.response;
-    balance = es.balance;
-    new_certified_data = es.certified_data;
-  }
+      wasm_state = wasm_state;
+      params = empty_params with {
+        data = arg.data;
+        caller = arg.caller;
+        method_name = arg.method_name;
+        sysenv
+      }
+      balance = sysenv.balance;
+      funds_available = no_funds; // ingress requests have no funds
+    }
+   try func<es>() with Trap then Trap
+   if es.calls ≠ () then Trap
+   if es.response ≠ NoResponse then Trap
+   Return es.ingress_filter;
 ....
 
 ==== Helper functions
@@ -3210,6 +3258,16 @@ ic0.msg_cycles_available<es>() : i64 =
 
 ic0.msg_cycles_refunded<es>() : i64 =
   return es.params.cycles_refundend
+
+ic0.accept_message<es>() =
+  if es.ingress_filter = Accept then Trap
+  es.ingress_filter = Accept
+
+ic0.msg_method_name_size<es>() : i32 =
+  return |es.method_name|
+
+ic0.msg_method_name_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+  copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
 ic0.msg_cycles_accept<es>( max_amount : i64 ) : i64 =
   let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)

@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_15_4]
+=== 0.15.4 (2021-03-03)
+
+* Spec: Ingress message filtering
+* Spec: Add ECDSA signatures on curve secp256k1
 * Spec: Clarify that the `ic0.data_certificate_present` system function may be
   called in all contexts.
 
