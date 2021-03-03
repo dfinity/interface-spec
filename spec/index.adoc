@@ -731,7 +731,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
-* If it exports functions called `canister_get_ingress_bucket` or `canister_get_ingress_limit_per_second`, the functions must have type `+() -> ()+`. It must export either both or none of these two functions.
+* If it exports a function called `canister_inspect_message`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 
@@ -746,7 +746,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_init` and type `+() -> ()+`.
 * The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
-* The canister may export functions named `canister_get_ingress_bucket` and `canister_get_ingress_limit_per_second` with type `+() -> ()+`. It must export none or both of these functions.
+* The canister may export functions named `canister_inspect_message` with type `+() -> ()+`.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
@@ -800,10 +800,10 @@ In the reply callback of a <<system-api-call,inter-canister method call>>, the a
 The following sections describe various system imports, which we summarize here.
 
 ....
-ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry Lb
-ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry Lb
-ic0.msg_caller_size : () -> i32;                                            // I G U Q Lb
-ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q Lb
+ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry F
+ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry F
+ic0.msg_caller_size : () -> i32;                                            // I G U Q F
+ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q F
 ic0.msg_reject_code : () -> i32;                                            // Ry Rt
 ic0.msg_reject_msg_size : () -> i32;                                        // Rt
 ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
@@ -812,7 +812,7 @@ ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U
 ic0.msg_reply : () -> ();                                                   // U Q Ry Rt
 ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
 
-ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry Lb
+ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
 ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 );           // U Rt Ry
 
@@ -821,14 +821,9 @@ ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_status : () -> i32;                                            // *
 
-ic0.ingress_rate_bucket_size : () -> i32;                                   // Ll
-ic0.ingress_rate_bucket_copy : (dst : i32, offset : i32, size : i32) -> (); // Ll
-ic0.return_ingress_bucket :
-  ( bucket_src : i32,
-    bucket_size : i32,
-    cost : i64
-  ) -> ();                                                                  // Lb
-ic0.return_ingress_limit_per_second : (limit : i64) -> ();                  // Ll
+ic0.msg_method_name_size : () -> i32                                        // F
+ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
+ic0.accept_message : () -> ();                                              // F
 
 ic0.call_new :                                                              // U Ry Rt
   ( callee_src  : i32,
@@ -871,9 +866,8 @@ The comment after each function lists from where these functions may be invoked:
 * `Rt`: from a reject callback
 * `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
-* `Lb`: from `canister_get_ingress_bucket`
-* `Ll`: from `canister_get_ingress_limit_per_second`
-* `*` = `I G U Q Ry Rt C Lb Ll` (NB: Not `(start)`)
+* `F`: from `canister_inspect_message`
+* `*` = `I G U Q Ry Rt C F` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -959,35 +953,18 @@ Possible reply data assembled using `ic0.msg_reply_data_append` is discarded.
 +
 See <<system-api-cycles>> for how this interacts with cycles available on this call.
 
-[#system-api-rate-limiting]
-=== Ingress message rate limiting
+[#system-api-inspect-message]
+=== Ingress message inspection
 
-A canister can apply a rate limiting mechanism to ingress messages. When the IC receives an update call from a user, the IC will use the canister methods `canister_get_ingress_bucket` and `canister_get_ingress_limit_per_second` to obtain rate limiting information from the canister, and will ensure that the specified rates are respected.
-If the canister does not implement `canister_get_ingress_bucket` and does not implement `canister_get_ingress_limit_per_second`, then no rate limiting is applied and the canister will receive the update calls.
+A canister can inspect ingress messages before executing them. When the IC receives an update call from a user, the IC will use the canister method `canister_inspect_message` to determine whether the message shall be accepted.
+If the canister does not implement `canister_inspect_message`, then no ingress message inspection is applied and the canister will receive the update calls.
 
-The function `canister_get_ingress_bucket` is called for each message, possibly (but not necessarily) even multiple times, on different canister states.
-The function `canister_get_ingress_limit_per_second` is called periodically (typically every few seconds) for buckets for which new messages arrive.
-This means, in particular, that the canister state on which `canister_get_ingress_bucket` is called for a message, and the state on which `canister_get_ingress_limit_per_second` is called for determining the rate limit affecting that same message, may differ.
+In `canister_inspect_message`, the canister can accept the message by invoking
+`ic0.accept_message : () -> ()`.
+This function traps if invoked twice.
+If the canister traps in `canister_inspect_message` or does not call `ic0.accept_message`, then the access is denied.
 
-* In `canister_get_ingress_bucket`, the canister can specify a bucket and a cost for the message by invoking
-+
-`ic0.return_ingress_bucket : ( bucket_src : i32, bucket_size : i32, cost : i64 ) -> ()`.
-+
-This function assigns to the message the bucket identified by the `bucket_*` parameters, and the cost specified by `cost`. All messages assigned to the same bucket are treated together during rate limiting, whereas messages in different buckets are handled independently. Buckets are identified by opaque blobs of size at most 64 bytes.
-+
-The unit of cost is completely up to the canister.
-+
-This function traps if invoked twice, or if `bucket_size` exceeds 64.
-+
-If the canister traps in `canister_get_ingress_bucket` or does not call `ic0.return_ingress_bucket`, then the access is denied.
-
-* In `canister_get_ingress_limit`, the canister obtains a blob of length at most 64 bytes (the bucket) as an argument, which can be retrieved via `ic0.ingress_rate_bucket_*`. The canister can specify a limit for the bucket by invoking
-+
-`ic0.return_ingress_limit_per_second : ( limit : i64 ) -> ()`.
-+
-The unit of limit (just like that of cost above) is completely up to the canister, but the platform guarantees that (possibly with a rolling average over a few seconds) the accumulated cost per second does not exceed limit.
-+
-This function traps if invoked twice. If the canister traps or the canister does not call `ic0.return_ingress_limit_per_second`, the canister does not receive any messages from that bucket.
+NOTE: The `canister_inspect_message` is _not_ invoked for query calls, inter-canister calls or calls to the management canister.
 
 [#system-api-canister-self]
 === Self-identification
@@ -1725,8 +1702,6 @@ QueryFunc = WasmState -> Trap | Return Response
 AvailableCycles = Nat
 RefundedCycles = Nat
 
-BucketCost = { bucket : Blob, cost : i64 }
-
 CanisterModule = {
   init : (CanisterId, Arg, Env) -> Trap | Return WasmState
   pre_upgrade : (WasmState, caller : Principal, Env) -> Trap | Return StableMemory
@@ -1734,8 +1709,7 @@ CanisterModule = {
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
-  get_ingress_bucket : (MethodName, WasmState, Arg, Env) -> Trap | Return (bucket : Blob, cost : i64)
-  get_ingress_limit_per_second : (WasmState, Timestamp, Env, bucket : Blob) -> Trap |  Return (NoLimit | limit : i64)
+  inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
 ....
 
@@ -1797,18 +1771,12 @@ Message
       data : Blob;
       transferred_cycles : Nat;
       queue : Queue;
-      bucket : None | Blob;
-      cost : i64;
-      rate_limit_time : None | Timestamp;
     }
   | FuncMessage {
       call_context : CallId;
       receiver : CanisterId;
       entry_point : EntryPoint;
       queue : Queue;
-      bucket : None | Blob;
-      cost : i64;
-      rate_limit_time : None | Timestamp;
     }
   | ResponseMessage {
       origin : CallOrigin;
@@ -2002,12 +1970,16 @@ Due to this check, the envelope is discarded after this point.
 
 Requests that have expired are dropped here.
 
+Ingress message inspection is applied, and message that are not accepted by the canister are dropped.
+
 Submitted request:: `E : Envelope`
 Conditions::
 ....
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
+    Arg = { data = E.content.data; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
+    C.module.inspect_message (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
 ....
 State after::
 ....
@@ -2036,8 +2008,6 @@ S with
 
 A first step in processing a canister update call is to create a `CallMessage` in the message queue.
 
-This is only allowed if the request has not expired and potential rate limiting is respected.
-
 The `request` field of the `FromUser` origin establishes the connection to the api message. One could use the corresponding `hash_of_map` for this purpose, but this formulation is more abstract.
 
 We do not make any guarantees about the order of incoming messages.
@@ -2047,10 +2017,6 @@ Conditions::
     S.requests[CanisterUpdateCall R] = Received
     S.system_time <= R.ingress_expiry
     C = S.canisters[R.canister_id]
-    Arg = { data = R.data; caller = R.sender; time = S.time[R.canister_id] }
-    C.module.get_ingress_bucket (R.method_name, C.wasm_state, Arg, S.balance[R.canister_id]) = Return (assigned_bucket, assigned_cost)
-    C.module.get_ingress_limit_per_second : (C.wasm_state, S.time[R.canister_id], assigned_bucket) = Return assigned_limit
-    assigned_limit = NoLimit || assigned_limit ≥ assigned_cost + bucket_cost(S, R.canister_id, assigned_bucket)
 ....
 State after::
 ....
@@ -2065,19 +2031,7 @@ S with
         arg = R.arg;
         transferred_cycles = 0;
         queue = Unordered;
-        bucket = assigned_bucket;
-        cost = assigned_cost;
-        rate_limit_timestamp = S.time[R.canister_id];
       } · S.messages
-....
-
-This uses the following helper function that sums up the cost of all in-flight messages in the same bucket and within the latest second:
-....
-bucket_cost(S, canister_id, bucket) =
-     ∑ [ M.cost | CallMessage M ∈ S.messages, M.receiver = canister_id,
-                   M.bucket = bucket, M.rate_limit_timestamp >= S.time[R.canister_id] - 1s ] +
-     ∑ [ M.cost | FuncMessage M ∈ S.messages, M.receiver = canister_id,
-                   M.bucket = bucket, M.rate_limit_timestamp >= S.time[R.canister_id] - 1s ]
 ....
 
 ==== Calls to stopped/stopping canisters are rejected
@@ -2129,9 +2083,6 @@ S with
         receiver = CM.callee;
         entry_point = PublicMethod CM.method_name CM.caller CM.data
         queue = CM.queue;
-        bucket = CM.bucket;
-        cost = CM.cost;
-        rate_limit_timestamp = CM.rate_limit_timestamp;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
@@ -2808,9 +2759,6 @@ S with
         receiver = C
         entry_point = Callback Callback FM.response RM.refunded_cycles
         queue = Unordered
-        bucket = None
-        cost = 0
-        rate_limit_timestamp = None
       } ·
       Younger_messages
 ....
@@ -3043,7 +2991,7 @@ Params = {
   reject_message : Text;
   sysenv : Env;
   cycles_refundend : Nat;
-  ingress_rate_bucket : NoBucket | Blob;
+  method_name : Text;
 }
 ExecutionState = {
   wasm_state : WasmState;
@@ -3056,8 +3004,7 @@ ExecutionState = {
   pending_call : MethodCall | NoPendingCall;
   calls : List MethodCall;
   new_certified_data : NoCertifiedData | Blob;
-  bucket_cost : NoBucket | BucketCost
-  rate_limit : NoLimit | i64
+  ingress_filter : Accept | Reject;
 }
 ....
 
@@ -3094,8 +3041,7 @@ empty_execution_state = {
   pending_call = NoPendingCall;
   calls = [];
   new_certified_data = NoCertifiedData;
-  bucket_cost = NoBucket;
-  rate_limit = NoLimit;
+  ingress_filter = Reject;
 }
 ....
 
@@ -3121,8 +3067,7 @@ init = λ (self_id, arg, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit ≠ NoLimit then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state
 ....
 +
@@ -3148,8 +3093,7 @@ pre_upgrade = λ (old_state, caller, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit ≠ NoLimit then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state.stable_mem
 ....
 
@@ -3175,8 +3119,7 @@ post_upgrade = λ (self_id, stable_mem, arg, sysenv) →
   try func<es>() with Trap then Trap
   if es.performed_calls ≠ [] then Trap
   if es.response ≠ NoResponse then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit ≠ NoLimit then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return es.wasm_state
 ....
 
@@ -3191,8 +3134,7 @@ update_methods[method] = λ (arg, sysenv, available) → λ wasm_state →
       cycles_available = arg.cycles;
     }
   try func<es>() with Trap then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit ≠ NoLimit then Trap
+  if es.ingress_filter ≠ Reject then Trap
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
@@ -3214,9 +3156,8 @@ query_methods[method] = λ (arg, sysenv) → λ wasm_state →
   try func<es>() with Trap then Trap
   if es.cycles_accepted ≠ 0 then Trap
   if es.calls ≠ () then Trap
+  if es.ingress_filter ≠ Reject then Trap
   if es.response = NoResponse then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit ≠ NoLimit then Trap
   Return es.response;
 ....
 +
@@ -3251,8 +3192,6 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
       cycles_available = available;
     }
     func<es>(env)
-    if es.bucket_cost ≠ NoBucket then Trap
-    if es.rate_limit ≠ NoLimit then Trap
     Return {
       new_state = es.wasm_state;
       new_calls = es.calls;
@@ -3281,23 +3220,24 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
 Note that if the initial callback handler traps, the cleanup callback (if
 present) is executed, and the canister has the chance to update its state.
 
-* The `get_ingress_bucket` field of the `CanisterModule` is defined as follows.
+* The `inspect_message` field of the `CanisterModule` is defined as follows.
 +
-If the WebAssembly module does not export a function called under the name `canister_get_ingress_bucket`, then access is always granted:
-+
-....
-get_ingress_bucket = λ (method_name, wasm_state, arg, sysenv) →
-  Return { bucket = None; cost = 0 }
-....
-Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_bucket`, it is
+If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
 +
 ....
-get_ingress_bucket = λ (method_name, wasm_state, arg, sysenv) →
+inspect_message = λ (method_name, wasm_state, arg, sysenv) →
+  Return Accept
+....
+Otherwise, if the WebAssembly module exports a function `func` under the name `canister_inspect_message`, it is
++
+....
+inspect_message = λ (method_name, wasm_state, arg, sysenv) →
   let es = ref {empty_execution_state with
       wasm_state = wasm_state;
       params = empty_params with {
         data = arg.data;
         caller = arg.caller;
+        method_name = arg.method_name;
         sysenv
       }
       balance = sysenv.balance;
@@ -3306,34 +3246,7 @@ get_ingress_bucket = λ (method_name, wasm_state, arg, sysenv) →
    try func<es>() with Trap then Trap
    if es.calls ≠ () then Trap
    if es.response ≠ NoResponse then Trap
-   if es.rate_limit ≠ NoLimit then Trap
-   if es.bucket_cost = NoBucket then Trap
-   Return es.bucket_cost;
-....
-
-* The `get_ingress_limit_per_second` field of the `CanisterModule` is defined as follows.
-+
-If the WebAssembly module does not export a function called under the name `canister_get_ingress_limit_per_second`, then access is always granted:
-+
-....
-get_ingress_limit_per_second = λ (wasm_state, time, sysenv, bucket) →
-  Return NoLimit
-....
-Otherwise, if the WebAssembly module exports a function `func` under the name `canister_get_ingress_limit_per_second`, it is
-+
-....
-get_ingress_limit_per_second = λ (wasm_state, time, sysenv, bucket) →
-  let es = ref {empty_execution_state with
-      wasm_state = wasm_state;
-      params = empty_params with { sysenv, ingress_rate_bucket = bucket };
-      balance = sysenv.balance;
-    }
-  try func<es>() with Trap then Trap
-  if es.calls ≠ () then Trap
-  if es.response ≠ NoResponse then Trap
-  if es.bucket_cost ≠ NoBucket then Trap
-  if es.rate_limit = NoLimit then Trap
-  Return es.rate_limit;
+   Return es.ingress_filter;
 ....
 
 ==== Helper functions
@@ -3399,21 +3312,15 @@ ic0.msg_cycles_available<es>() : i64 =
 ic0.msg_cycles_refunded<es>() : i64 =
   return es.params.cycles_refundend
 
-ic0.ingress_rate_bucket_size<es>() =
-  return |es.params.ingress_rate_bucket|
+ic0.accept_message<es>() =
+  if es.ingress_filter = Accept then Trap
+  es.ingress_filter = Accept
 
-ic0.ingress_rate_bucket_copy<es>(dst : i32, offset : i32, size : i32) =
-  copy_to_canister<es>(dst, offset, size, es.params.ingress_rate_bucket)
+ic0.msg_method_name_size<es>() : i32 =
+  return |es.method_name|
 
-ic0.return_ingress_bucket<es>(bucket_src : i32, bucket_size : i32, cost : i64) =
-  if es.bucket_cost ≠ NoBucket then Trap
-  if bucket_size > 64 then Trap
-  es.bucket_cost.bucket = copy_from_canister<es>(bucket_src, bucket_size)
-  es.bucket_cost.cost = cost
-
-ic0.return_ingress_limit_per_second(limit : i64) =
-  if es.rate_limit ≠ NoLimit then Trap
-  es.rate_limit = limit
+ic0.msg_method_name_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+  copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
 ic0.msg_cycles_accept<es>( max_amount : i64 ) : i64 =
   let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
@@ -3468,9 +3375,6 @@ ic0.call_new<es>(
       on_reject = Closure { fun = reject_fun; env = reject_env }
       on_cleanup = NoClosure
     };
-    bucket = None;
-    cost = 0;
-    rate_limit_time = None
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
