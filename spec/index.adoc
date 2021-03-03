@@ -835,9 +835,9 @@ ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
 
 ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt
-ic0.data_certificate_present : () -> i32                                    // Q
-ic0.data_certificate_size : () -> i32                                       // Q
-ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // Q
+ic0.data_certificate_present : () -> i32                                    // *
+ic0.data_certificate_size : () -> i32                                       // *
+ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
 ic0.time : () -> (timestamp : i64);                                         // *
 
@@ -1141,9 +1141,9 @@ When executing a query method via a query call (i.e. in non-replicated state), t
 +
 returns `1` if a certificate is present, and `0` otherwise.
 +
-This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
+This will return `1` when called from a query method when invoked via a query call.
 +
-NOTE: In the future, this may also return `0` for query calls if the system executes query calls on not-yet-certified states.
+This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
 
 * {blank}
 +
