@@ -5,7 +5,7 @@
 === ∞ (unreleased)
 
 * Spec: The cleanup callback is introduced
-* Spec: Ingress rate limiting
+* Spec: Ingress message filtering
 * Spec: Add ECDSA signatures on curve secp256k1
 * Spec: Expose module hash and controller via `read_state`
 
