@@ -8,9 +8,16 @@
 * Spec: Ingress rate limiting
 * Spec: Add ECDSA signatures on curve secp256k1
 * Spec: Expose module hash and controller via `read_state`
+* Spec: Clarify that the `ic0.data_certificate_present` system function may be
+  called in all contexts.
 
-[#0_15_1]
-=== 0.15.1 (2021-02-09)
+[#0_15_3]
+=== 0.15.3 (2021-02-26)
+
+* Spec: Expose module hash and controller via `read_state`
+
+[#0_15_2]
+=== 0.15.2 (2021-02-09)
 
 * The document is renamed to “Internet Computer Interface Spec”
 

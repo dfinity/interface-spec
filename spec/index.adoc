@@ -1,10 +1,11 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-∞ (unreleased)
-:toc2:
-:toclevels: 3
+0.15.3
 :stem: latexmath
 :icons: font
+// the following are ways to make this document work both in antora and stand alone
+:example: example$
+:partial: partial$
 
 WARNING: You are looking at the `master` version of the document! If you are looking for implementation specification or documentation, look at one of the versions at https://docs.dfinity.systems/public/v/.
 
@@ -671,11 +672,11 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 [#api-cddl]
 === CDDL description of requests and responses
 
-The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:./requests.cddl[download the file].
+The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:{attachmentsdir}/requests.cddl[download the file].
 
 [source,bash]
 ----
-include::requests.cddl[]
+include::{example}requests.cddl[]
 ----
 
 === Ordering guarantees
@@ -850,9 +851,9 @@ ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
 
 ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt
-ic0.data_certificate_present : () -> i32                                    // Q
-ic0.data_certificate_size : () -> i32                                       // Q
-ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // Q
+ic0.data_certificate_present : () -> i32                                    // *
+ic0.data_certificate_size : () -> i32                                       // *
+ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
 ic0.time : () -> (timestamp : i64);                                         // *
 
@@ -1202,9 +1203,9 @@ When executing a query method via a query call (i.e. in non-replicated state), t
 +
 returns `1` if a certificate is present, and `0` otherwise.
 +
-This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
+This will return `1` when called from a query method when invoked via a query call.
 +
-NOTE: In the future, this may also return `0` for query calls if the system executes query calls on not-yet-certified states.
+This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
 
 * {blank}
 +
@@ -1259,9 +1260,9 @@ The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 [#ic-candid]
 === Interface overview
 
-The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:./ic.did[download the file].
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:{attachmentsdir}/ic.did[download the file].
 ----
-include::ic.did[]
+include::{example}ic.did[]
 ----
 
 The binary encoding of arguments and results are as per Candid specification.
@@ -1525,11 +1526,11 @@ where `root_public_key` is the a priori known root key of the Internet Computer 
 
 === Encoding of certificates
 
-The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:./certificates.cddl[download the file].
+The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:{attachmentsdir}/certificates.cddl[download the file].
 
 [source,bash]
 ----
-include::certificates.cddl[]
+include::{example}certificates.cddl[]
 ----
 
 The values in the <<state-tree>> are encoded to blobs as follows:
@@ -3561,4 +3562,4 @@ ic0.trap<es>(src : i32, size : i32) =
 
 
 
-include::changelog.adoc[]
+include::{partial}changelog.adoc[]
