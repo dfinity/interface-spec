@@ -3167,6 +3167,22 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
   let func = es.wasm_state.store.table[fun]
   if typeof(func) ≠ func (i32) -> () then Trap
 
+  let es = ref {empty_execution_state with
+    wasm_state = wasm_state;
+    params = params;
+    balance = balance;
+    cycles_available = available;
+  }
+  func<es>(env)
+  Return {
+    new_state = es.wasm_state;
+    new_calls = es.calls;
+    response = es.response;
+    balance = es.balance;
+    new_certified_data = es.certified_data;
+  }
+....
+
 * The `inspect_message` field of the `CanisterModule` is defined as follows.
 +
 If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
