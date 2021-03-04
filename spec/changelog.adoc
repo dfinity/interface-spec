@@ -2,7 +2,7 @@
 == Changelog
 
 [#0_15_4]
-=== 0.15.4 (2021-03-03)
+=== 0.15.4 (2021-03-04)
 
 * Spec: Ingress message filtering
 * Spec: Add ECDSA signatures on curve secp256k1
