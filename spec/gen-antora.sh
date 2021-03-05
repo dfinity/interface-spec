@@ -11,13 +11,12 @@
 
 if [ -z "$2" ];
 then
-  echo "Usage $0 version out/"
+  echo "Usage $0 out/"
   exit 1
 fi
 
 in="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
-version="$1"
-out="$2"
+out="$1"
 
 if [ -e "$out" ];
 then
@@ -40,7 +39,7 @@ __END__
 
 cat >> "$out/antora.yml" <<__END__
 name: docs
-version: '$version'
+version: master
 __END__
 
 
