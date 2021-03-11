@@ -9,7 +9,7 @@
 # the result of this to branch public-antora
 #
 
-if [ -z "$2" ];
+if [ -z "$1" ];
 then
   echo "Usage $0 out/"
   exit 1
