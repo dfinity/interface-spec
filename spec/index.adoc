@@ -1315,7 +1315,7 @@ Only the _controller_ of the canister can delete it and the canister must alread
 
 This method deposits the cycles included in this call into the specified canister.
 
-Only the controller of the canister can deposit cycles.
+There is no restriction on who can invoke this method.
 
 [#ic-raw_rand]
 === IC method `raw_rand`
@@ -2630,7 +2630,6 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'deposit_cycles'
     M.arg = candid(A)
-    M.caller = S.controllers[A.canister_id]
     Cycle_cost ≤ S.balances[A.canister_id] + M.transferred_cycles
 ....
 State after::

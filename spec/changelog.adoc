@@ -5,6 +5,7 @@
 === ∞ (unreleased)
 
 * Spec: The cleanup callback is introduced
+* Spec: deposit_cycles(): any caller allowed
 
 [#0_15_4]
 === 0.15.4 (2021-03-04)
