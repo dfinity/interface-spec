@@ -1117,34 +1117,26 @@ Canisters have the ability to store and retrieve data from a secondary memory. T
 
 The stable memory is initially empty.
 
-* {blank}
-+
-  ic0.stable_size : () -> (page_count : i32)
+* `ic0.stable_size : () -> (page_count : i32)`
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64Ki bytes.)
 
-* {blank}
-+
-  ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)
+* `ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
-
++
 If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
 
-* {blank}
-+
-  ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()
+* `ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()`
 +
 copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
-
++
 This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
-* {blank}
-+
-  ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()
+* `ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()`
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
-
++
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
 [#system-api-time]
