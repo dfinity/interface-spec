@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_15_5]
+=== 0.15.5 (2021-03-11)
+
+* Spec: deposit_cycles(): any caller allowed
+
 [#0_15_4]
 === 0.15.4 (2021-03-04)
 
