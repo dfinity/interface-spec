@@ -224,7 +224,7 @@ A DER wrapping of a COSE key is shown below. It can be parsed via the command `s
     ED0A 7F6F 0009 2876 5B83 1816 2CFD 80A9
     4E52 5A6A 368C 2363 063D 04E6 ED
 ....
-The same, on https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[in an online ASN.1 JavaScript decoder].
+You can also view the wrapping in https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[an online ASN.1 JavaScript decoder].
 ====
 
 [#state-tree]
@@ -447,7 +447,7 @@ If delegation is used, then the `sender_delegation` field contains an array of d
    - `pubkey` (`blob`): Public key as described in <<signatures>>.
    - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
    - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list.
- * `signature` (`blob`): Signature on the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the the domain separator.
+ * `signature` (`blob`): Signature on the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 +
 For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
 
