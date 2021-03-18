@@ -2,9 +2,11 @@
 ; types in one file (to shared common definitions), but CDDL requires a single
 ; root type. So we just list the types defined here. This is a common CDDL idiom.
 start =
-  async-request /
-  sync-request /
-  response
+  call-request /
+  read-state-request /
+  query-request /
+  read-state-response /
+  query-response
 
 ; common wrappers
 
@@ -18,12 +20,9 @@ envelope<t> = tagged<{
 }>
 
 
-; A request as submitted to /api/v1/submit
-async-request = envelope<async-content>
-async-content =
-  call-request
-
-call-request = {
+; A request as submitted to /api/v2/.../call
+call-request = envelope<call-request-content>
+call-request-content = {
   request_type: "call"
   ? nonce : bytes
   ingress_expiry : timestamp
@@ -33,13 +32,9 @@ call-request = {
   arg : bytes
 }
 
-; A request as submitted to /api/v1/read
-sync-request = envelope<sync-content>
-sync-content =
-  read-state-request /
-  query-request
-
-read-state-request = {
+; A request as submitted to /api/v2/.../read_state
+read-state-request = envelope<read-state-content>
+read-state-content = {
   request_type: "read_state"
   ? nonce : bytes
   ingress_expiry : timestamp
@@ -50,7 +45,14 @@ read-state-request = {
 state-path = [* path-label]
 path-label = bytes
 
-query-request = {
+; The response, as returned from /api/v2/.../read_state
+read-state-response = tagged<{
+  certificate: bytes
+}>
+
+; A request as submitted to /api/v2/.../query
+query-request = envelope<query-content>
+query-content = {
   request_type: "query"
   ? nonce : bytes
   ingress_expiry : timestamp
@@ -60,29 +62,21 @@ query-request = {
   arg : bytes
 }
 
-; The response, as returned from /api/v1/read
-
-response = tagged<response-content>
-response-content =
-  read-state-response /
-  query-response
-
-read-state-response = {
-  certificate: bytes
-}
-
-query-response = {
+; The response, as returned from /api/v2/.../query
+query-response = tagged<{
   status: "replied"
   reply: call-reply
   //
   status: "rejected"
   reject_code: unsigned
   reject_message: text
-}
+}>
 
 call-reply = {
   arg : bytes
 }
+
+; subnet delegations
 
 signed-delegation = {
   delegation: {
