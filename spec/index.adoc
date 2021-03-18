@@ -232,7 +232,7 @@ You can also view the wrapping in https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQ
 [#state-tree]
 == The system state tree
 
-Parts of the system state are publicly exposed (e.g. via <<api-request-read-state>> or <<system-api-certified-data>>) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
+Parts of the system state are publicly exposed (e.g. via <<http-read-state>> or <<system-api-certified-data>>) in a verified way (see <<certification>> for the machinery for certifying). This section describes the content of the system state abstractly.
 
 Conceptually, the system state is a tree with labeled children, and values in the leaves. Equivalently, the system state is a mapping from paths (sequences of labels) to values, where the domain is prefix-free.
 
@@ -259,11 +259,11 @@ The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
 [#state-tree-request-status]
 === Request status
 
-For each asynchronous request known to the system, its status is in a subtree at `/request_status/<request_id>`. Please see <<async-requests>> for more details on how asynchronous requests work.
+For each asynchronous request known to the system, its status is in a subtree at `/request_status/<request_id>`. Please see <<http-call-overview>> for more details on how asynchronous requests work.
 
 * `/request_status/<request_id>/status` (text)
 +
-One of `received`, `processing`, `replied`, `rejected` or `done`, see <<async-requests>> for more details on what each status means.
+One of `received`, `processing`, `replied`, `rejected` or `done`, see <<http-call-overview>> for more details on what each status means.
 
 * `/request_status/<request_id>/reply` (blob)
 +
@@ -306,28 +306,42 @@ The current controller of the canister, as a principal in its binary form.
 [#http-interface]
 == HTTPS Interface
 
-The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes two endpoints to handle the requests, plus one for diagnostics.
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions with the internet computer, plus one for diagnostics:
 
-[#async-requests]
-=== Asynchronous requests
+* At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, state-changing) calls.
+* At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various sytem information. In particular, they can poll for the status of a call here.
+* At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls
+* At `/api/v2/status` the user can get additional information about the network
 
-Certain interactions change the state of the Internet Computer. By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+In these paths, the `<effective_canister_id>` is the <<http-effective-canister-id,_effective_ canister id>>.
 
-1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the request. (Although as part of the HTTP interface the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing and set its status to `received`.  This indicates that the system as a whole has received the request and plans on processing it (although it may still not get processed if the system is under high load).  Further, the user should also be able to ask any endpoint (for the canister) about the status of the pending request.
-4. Once it is clear that the request will be acted upon (sufficient resources, request not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
-5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
+Request to `/api/v2/<effective_canister_id>/call`, `/api/v2/<effective_canister_id>/read_state` and `/api/v2/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per <<authentication>>) and request-specific content as described below.
+
+NOTE: This document does not yet explain how to find the location and port of the Internet Computer.
+
+[#http-call-overview]
+=== Overview of canister calling
+
+Users interact with the Internet Computer by calling canisters.
+By the very nature of a distributed implementation, they cannot be acted upon immediately, but only with a delay.
+Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
+This implies the following high-level workflow:
+
+1. A user submits a call via the <<http-interface>>. No useful information is returned from the node (as such information cannot be trustworthy anyways).
+2. For a certain amount of time, the system behaves as if it does not know about the call.
+3. At some point, the system may accept the call for processing and set its status to `received`. This indicates that the system as a whole has received the call and plans on processing it (although it may still not get processed if the system is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
+4. Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
+5. Now the system is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
 6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
-7. In the case that the response has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the request as `done`, to prevent a replay.
-8. Once the expiry time is past, the system can prune the request and its response, and completely forget about it.
+7. In the case that the call has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the call as `done`, to prevent a replay attack.
+8. Once the expiry time is past, the system can prune the call and its response, and completely forget about it.
 
 
 This yields the following interaction diagram:
 
 [plantuml]
 ....
-(*) --> "User creates request" #DDDDDD
+(*) --> "User creates call" #DDDDDD
    --> "Submitted to node\n(with 202 response)" as submit #DDDDDD
    --> "received"
    --> "processing"
@@ -349,83 +363,126 @@ if "" as X then
 endif
 ....
 
-State transitions may be instantaneous and not always externally visible. For example, the system may move from `Received` via `Processing` to `Replied` in one go. Similarly, the system may not implement the `Done` state at all, and keep requests in the previous state until they are dropped.
+State transitions may be instantaneous and not always externally visible. For example, the system may move from `received` via `processing` to `replied` in one go. Similarly, the system may not implement the `done` state at all, and keep calls in state `replied`/`rejected` until they are pruned.
 
-All gray states are _not_ explicitly represented in the system state, and are indistinguishable from “request does not exist”.
+All gray states are _not_ explicitly represented in the system state, and are indistinguishable from “call does not exist”.
 
-The characteristic property of the `Received` state is that the request has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) request again. Before reaching that state, submitting the identical request to further nodes might be a useful safeguard against a malicious or misbehaving node.
+The characteristic property of the `received` state is that the call has made it past the (potentionally malicious) endpoint _into to the system_. It is now pointless (but harmless) to submit the (identical) call again. Before reaching that state, submitting the identical call to further nodes might be a useful safeguard against a malicious or misbehaving node.
 
-The characteristic property of the `Processing` state is _the initial effect of the request has or will happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a request to call `inc`. If the user sees request status `Processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
+The characteristic property of the `processing` state is _the initial effect of the call has or will happen_. This is best explained by an example: Consider a counter canister. It exports a method `inc` that increases the counter. Assume that the canister is bug free, and is not going to be forcibly removed. A user submits a call to call `inc`. If the user sees request status `processing`, the state change is guaranteed to happen, and the user can stop monitoring the status and does not have to retry submitting.
 
-A request may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the request has happened.
+A call may be rejected by the system or the canister. In either case, there is no guarantee about how much processing of the call has happened.
 
-To avoid replay attacks, the transition from `done` or `received` to `pruned` must happen no earlier than the request’s `ingress_expiry` field.
+To avoid replay attacks, the transition from `done` or `received` to `pruned` must happen no earlier than the call’s `ingress_expiry` field.
 
-Requests must stay in `Replied` or `Rejected` long enough for polling clients to catch the response.
+Calls must stay in `replied` or `rejected` long enough for polling clients to catch the response.
 
-When asking the system about the state or response of a request, the user uses the request id (see <<api-request-id>>) to read the request status (see <<state-tree-request-status>>) from the state tree (see <<api-request-read-state>>).
+When asking the system about the state or call of a request, the user uses the request id (see <<request-id>>) to read the request status (see <<state-tree-request-status>>) from the state tree (see <<http-read-state>>).
 
-=== Synchronous requests
+[#http-call]
+=== Request: Call
 
-Other interactions do not change the state of the system, but only _read_ from it. These may either be untrustworthy, in the sense that a malicious node can make up stuff (e.g. query calls to canisters), or certified, in the sense that the node can prove to the user that this is indeed the system's view of things (e.g. reading request statuses, reading account balances). All these reads go through the `read` endpoint.
+In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
-We use the term _request_ both for the asynchronous requests that passed to `submit`, as well as for the parameters of a _read_, so that common operations like signing can be done in the same way.
+* `request_type` (`text`): Always `call`
+* `sender`, `nonce`, `ingress_expiry`: See <<authentication>>
+* `canister_id` (`blob`): The principal of the canister to call.
+* `method_name` (`text`): Name of the canister method to call
+* `arg` (`blob`): Argument to pass to the canister method
+
+The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
+
+This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response.
+
+NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
 
 
-[#api-endpoints]
-=== Request Endpoints
+[#http-read-state]
+=== Request: Read state
 
-NOTE: This document does not yet explain how to find the location and port of a running Internet Computer Node, nor how to find out which node(s) to talk to for a given canister.
+In order to read parts fo the <<state-tree>>, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
-The following API endpoints are provided:
-....
-/api/v1/submit
-/api/v1/read
-....
+* `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
 
-For these endpoints, the user performs a POST request over HTTPS with `Content-type: application/cbor`. The body is a CBOR value containing the request object.
+The HTTP response to this request consists of a CBOR map with the following fields:
 
-* The `/api/v1/submit` endpoint accepts the _asynchronous_ requests. Upon successful submission, a (code 202) HTTP response without a body is returned; the user can read the state tree (see <<api-request-read-state>>) to determine the response.
-* The `/api/v1/read` endpoint accepts the _synchronous_ requests. It returns a response (a CBOR value) as the body of the (code 200) HTTP response.
+* `certificate` (`blob`): A certificate (see <<certification>>).
 
-In both cases, the usual HTTP errors (e.g. 503) may occur. In particular, if the server can determine already that the request is invalid (e.g. too large, wrong or missing fields, invalid signatures) and has no chance to reach the `received` state, it can respond with a suitable 4xx code (e.g. 413 if the request is too large).
+The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
-[#field-types]
-=== Field types
+All requested paths must have one of the following paths as prefix:
 
-The requests supported by the system are expressed as records, i.e. fields with names and values. The fields are typed and can have one of these types:
+ * `/time`. Can be requested by anyone.
+ * `/subnet`. Can be requested by anyone.
+ * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`, and the effective canister id of the original request matches the `<effective_canister_id>` (see <<http-effective-canister-id>>) in this HTTP request’s path.
+ * `/canisters/<canister_id>/module_hash`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/controller`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
 
-* `nat`: A (possibly unbounded) natural number (non-negative integer, zero is permitted)
-* `text`: Human readable text (e.g. sequence of Unicode codepoints)
-* `blob`: Arbitrary binary data
-* sequences (i.e. arrays, lists) of values
+Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
-For readability, we use the following type synonyms:
-....
-type Principal = blob
-type CanisterId = Principal
-type UserId = Principal
-....
+See <<state-tree>> for details on the state tree.
 
-NOTE: Of course, user ids and canister ids are _not_ just arbitrary binary blobs, but have structure. Some of that structure is documented in <<id-classes>>. But since that structure is meant to be extensible without breaking existing code (especially running canisters), the interfaces are phrased in terms of arbitrary blobs.
+[#http-query]
+=== Request: Query call
 
-All requests coming in via the HTTP interface need to be _authenticated_ using a cryptographic signature. To that end, the following fields are added to these requests:
+A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “query methods” by the canister can be called this way.
 
-The following fields are common among all requests:
+In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
-* `request_type` (`text`): Indicates the type of request, and is one of the values specified in <<request-types>>.
-* The fields `nonce` and `ingress_expiry`, as specified in <<authentication>>.
+* `request_type` (`text`): Always `query`
+* `sender`, `nonce`, `ingress_expiry`: See <<authentication>>
+* `canister_id` (`blob`): The principal of the canister to call.
+* `method_name` (`text`): Name of the canister method to call
+* `arg` (`blob`): Argument to pass to the canister method
+
+If the call resulted in a reply, the response is a CBOR map with the following fields:
+
+* `status` (`text`): `replied`
+* `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
+
+If the call resulted in a reject, the response is a CBOR map with the following fields:
+
+* `status` (`text`): `rejected`
+* `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+* `reject_message` (`text`): a textual diagnostic message.
+
+Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
+
+[#http-effective-canister-id]
+=== Effective canister id
+
+The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
+
+* If the call is to the Management Canister (`aaaaa-aa`), and the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+
+* If the call is to the `raw_rand` method of the Management Canister (`aaaaa-aa`), then there is no effective canister id. This implies that this method cannot be called by users, only via canisters.
+
+* If the call is to the `provisional_create_canister_with_cycles` method of the Management Canister (`aaaaa-aa`), any principal is a valid effective canister id for this call.
++
+[NOTE]
+====
+Production instances do not support `provisional_create_canister_with_cycles` anyways. This means that using an effective canister id that could be an existing canister would lead to the request being routed by the edge component to a node the corresponding subnet and produce an error response there, while using an effective canister id that cannot be an existing canister id would cause an error response from the edge component -- either is fine.
+
+In non-production, multi-subnet instances (e.g. testnets), users with priviledged access to `provisional_create_canister_with_cycles` (or possibly similar, internal methods) and knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
+
+In local, single-subnet instances, the effective canister id is ignored by the single instance, and thus `aaaaa-aa` can be used.
+====
+
+* Else, the effective canister id must be the `canister_id` in the request.
+
+NOTE: The expecation is that user-side agent code shields users and developers from this concept, in analogy to how the system interface shields canister developers from worrying about routing.
+
 
 [#authentication]
 === Authentication
 
-All requests coming in via the HTTP interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are added to all request records (next to `request_type`):
+All requests coming in via the HTTP interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 * `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `signature_expiry`).
 * `sender` (`Principal`, required): The user who issued the request.
 
-Furthermore, the whole request record is wrapped in a envelope record with these fields:
+The envelope, i.e. the overall request, has the following keys:
 
 * `content` (`record`): the actual request content
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may in the future have more than one key, this field tells the system which key is used.
@@ -438,7 +495,7 @@ The public key must authenticate the `sender` principal:
 * The fields `sender_pubkey`, `sender_sig`, and `sender_delegation` must be omitted if the `sender` field is the anonymous principal.
   The fields `sender_pubkey` and `sender_sig` must be set if the `sender` field is not the anonymous principal.
 
-The request id (see <<api-request-id>>) is calculated from the content record. This allows the signature to be based on the request id, and implies that signature and public key are not semantically relevant.
+The request id (see <<request-id>>) is calculated from the content record. This allows the signature to be based on the request id, and implies that signature and public key are not semantically relevant.
 
 The field `sender_pubkey` contains a public key supported by one of the schemes described in <<signatures>>.
 
@@ -449,81 +506,15 @@ If delegation is used, then the `sender_delegation` field contains an array of d
    - `pubkey` (`blob`): Public key as described in <<signatures>>.
    - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
    - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list.
- * `signature` (`blob`): Signature on the 32-byte <<api-hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
+ * `signature` (`blob`): Signature on the 32-byte <<hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 +
 For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
 
-The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<api-request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
+The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
 
 The delegation field, if present, must not contain more than four delegations.
 
-[#request-types]
-=== Request types
-
-The following subsections list all supported requests.
-
-[#api-update]
-==== Canister update call
-
-The maybe most important request type is calling an exported method of a canister.
-
-Synchronicity:: asynchronous
-Request type:: `call`
-Request fields::
-* `canister_id` (`CanisterId`): The id of the canister to call.
-* `method_name` (`text`): Name of the canister method to call
-* `arg` (`blob`): Argument to pass to the canister method
-Response fields::
-None, the server returns no body and HTTP status 202 (or an HTTP error code if declining the request).
-
-This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the likely faster and cheaper <<api-query>> below, if they want to get a _certified_ response.
-
-The response will be represented in the state tree, as described in <<state-tree-request-status>>, and can be read using <<api-request-read-state>>.
-
-NOTE: The system functionality exposed via the <<ic-management-canister>> can be used this way.
-
-[#api-request-read-state]
-==== State tree reads
-
-Synchronicity:: synchronous
-Request type:: `read_state`
-Request fields::
-* `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
-Response fields::
-* `certificate` (`blob`): A certificate (see <<certification>>).
-
-The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
-
-All requested paths must have one of the following paths as prefix:
-
- * `/time`. Can be requested by anyone.
- * `/subnet`. Can be requested by anyone.
- * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`.
- * `/canisters/<canister_id>/module_hash`. Can be requested by anyone.
- * `/canisters/<canister_id>/controller`. Can be requested by anyone.
-
-Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
-
-See <<state-tree>> for details on the state tree.
-
-[#api-query]
-==== Canister query call
-
-Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
-
-Synchronicity:: synchronous
-Request type:: `query`
-Request fields::
-* `canister_id` (`CanisterId`): The id of the canister to query.
-* `method_name` (`text`): Name of the canister query method to call
-* `arg` (`blob`): Argument to pass to the canister method
-Response fields::
-* `status` (`text`): One of `replied` or `rejected`
-* `reply`: If the status is `replied`, then this member contains the call reply, just as specified in <<api-update>>.
-* `reject_code` (`nat`): If the status is `rejected`, then this member contains the reject code (see <<reject-codes>>).
-* `reject_message` (`text`): If the status is `rejected`, then this member contains a textual diagnostic message.
-
-[#api-hash-of-map]
+[#hash-of-map]
 === Representation-independent hashing of structured data
 
 Structured data, such as (recursive) maps, are authenticated by signing a representation-independent hash of the data.
@@ -545,14 +536,12 @@ The following encodings of field values as blobs are used
 * Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
 * Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
 
-[#api-request-id]
+[#request-id]
 === Request ids
 
-When querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is an object hash of the request's `content`, calculated using the following steps. The hash operation is always SHA-256.
+When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which the <<hash-of-map, representation-independent hash>> of the `content` map of the original request.
 
-The request id is computed as the <<api-hash-of-map, representation-independent hash>> of `content`.
-
-NOTE: The request id is independent of the representation of the request (JSON, CBOR, something else), and does not change if the specification adds further optional field to a request type.
+NOTE: The request id is independent of the representation of the request (currenly only CBOR), and does not change if the specification adds further optional field to a request type.
 
 NOTE: The recommended textual representation of a request id is a hexadecimal string with lower-case letters prefixed with '0x'.
 E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`.
@@ -610,7 +599,7 @@ When canisters explicitly reject a message (see <<system-api-requests>>), they c
 
 Additionally, the Internet Computer provides an API endpoint to obtain various status fields at
 ....
-/api/v1/status
+/api/v2/status
 ....
 
 For this endpoint, the user performs a GET request, and receives a CBOR value with the following fields. The Internet Computer may include additional implementation-specific fields.
@@ -781,7 +770,7 @@ To define a public method of name `name`, a WebAssembly module exports a functio
 
 NOTE: The space in `canister_update <name>` resp. `canister_query <name>` is intentional. There is exactly one space between `canister_update/canister_query` and the `<name>`.
 
-The argument of the call (e.g. the content of the `arg` field in the <<api-update,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
+The argument of the call (e.g. the content of the `arg` field in the <<http-call,API request to call a canister method>>) is copied into the canister on demand using the System functions shown below.
 
 Eventually, a method will want to send a response, using `ic0.reply` or `ic0.reject`
 
@@ -1356,7 +1345,7 @@ This mechanism is used in the `read_state` request type, and eventually also for
 
 === Root of trust
 
-The root of trust is the _root public key_, which must be known to the client a priori. For temporary instances of the internet computer, e.g. during local development, the key can be fetched via the <<api-status,`/api/v1/status`>> endpoint.
+The root of trust is the _root public key_, which must be known to the client a priori. For temporary instances of the internet computer, e.g. during local development, the key can be fetched via the <<api-status,`/api/v2/status`>> endpoint.
 
 === Certificate
 
@@ -1636,6 +1625,11 @@ anonymous_id : Principal
 anonymous_id = 0x04
 ....
 
+The principal of the management canister is the empty blob (i.e. `aaaaa-aa`):
+....
+ic_principal : Principal = ""
+....
+
 These function domains and fixed values are mutually disjoint.
 
 Method names can be arbitrary pieces of text:
@@ -1781,7 +1775,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 ==== API requests
 
-We distinguish between the _asynchronous_ API requests passed to `/api/v1/submit`, which may be present in the system state, and the _synchronous_ API requests passed to `/api/v1/read`, which are only ephemeral.
+We distinguish between the _asynchronous_ API requests passed to `/api/v2/…/call`, which may be present in the system state, and the _synchronous_ API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
 ....
 Envelope = {
@@ -1802,7 +1796,7 @@ Request
   }
 ....
 
-The evolution of a `Request` goes through these states, as explained in <<async-requests>>:
+The evolution of a `Request` goes through these states, as explained in <<http-call-overview>>:
 ....
 RequestStatus
   = Received
@@ -1832,7 +1826,7 @@ APIReadRequest
   }
 ....
 
-A `Path` may refer to a request by way of a _request id_, as specified in <<api-request-id>>:
+A `Path` may refer to a request by way of a _request id_, as specified in <<request-id>>:
 ....
 Request = Blob
 hash_of_map: Request -> Request
@@ -1910,9 +1904,9 @@ for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using 
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API requests that are submitted via `/api/v1/submit`. These transitions describes checks that the request must pass to be considered received.
+ * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describes checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
- * Responses to reads (i.e. `/api/v1/read`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
+ * Responses to reads (i.e. `/api/v2/…/read_state`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
@@ -1921,11 +1915,6 @@ We model the <<ic-management-canister>> with one state transition per method. Th
 candid : Value -> Blob
 ....
 that represents Candid encoding; this is implicitly taking the method types, as declared in <<ic-candid>>, into account. We model the parsing of Candid values in the  “Conditions” section using `candid` as well, by treating it as a non-deterministic function.
-
-The principal of the management ic canister is the empty blob (i.e. `aaaaa-aa`):
-....
-ic_principal : principal = ""
-....
 
 ==== Envelope Authentication
 
@@ -1951,9 +1940,29 @@ delegation_targets(DS)
     else D.targets
 ....
 
+==== Effective canister ids
+
+A `Request` has an effective canister id accoridng to the rules in <<#http-effective-canister-id>>:
+
+....
+is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
+is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(CanisterUpdateCall {canister_id = p, …}, p), if p ≠ ic_principal
+....
+
+=== State transitions
+
+Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
+
+ * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describes checks that the request must pass to be considered received.
+ * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
+ * Responses to synchronous requests (i.e. `/api/v2/…/query`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
+
+The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
+
 ==== API Request submission
 
-After a node accepts a request via `/api/v1/submit`, it gets added to the system in the `Received` state.
+After a node accepts a request via `/api/v2/canister/<ECID>/call`, it gets added to the system in the `Received` state.
 
 This may only happen if the signature is valid and is created with a correct key.
 Due to this check, the envelope is discarded after this point.
@@ -1968,6 +1977,7 @@ Conditions::
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
+    is_effective_canister_id(E.content, ECID)
     Arg = { data = E.content.data; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
     C.module.inspect_message (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
 ....
@@ -2343,7 +2353,7 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.callee = ic_princpal
+    M.callee = ic_principal
     M.method_name = 'install_code'
     M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
@@ -2829,9 +2839,9 @@ S with
     system_time = T1
 ....
 
-==== Read: query call
+==== Query call
 
-Canister query calls can be executed directly.  They can only be executed against canisters which are `Running`.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which are `Running`.
 
 During the execution of a query call, a certificate is provided to the canister that is valid, is current (or “recent enough”; the specification is currently vague about how old the certificate may be) and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
@@ -2840,6 +2850,7 @@ Conditions::
 ....
   E.content = CanisterQuery Q
   Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
+  is_effective_canister_id(E.content, ECID)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
   S.canister_status[Q.canister_id] = Running
@@ -2876,9 +2887,9 @@ Read response::
 {status: success; reply: { arg :  <R> } }
 ....
 
-==== Read: Certified state reads
+==== Certified state reads
 
-The user can read elements of the _state tree_, using a `read_state` request.
+The user can read elements of the _state tree_, using a `read_state` request to `/api/v2/canister/<ECID>/read_state`.
 
 Submitted request:: `E`
 Conditions::
@@ -2893,15 +2904,15 @@ Read response::
 A record with
 * `{certificate: C}`
 
-The predicate `may_read_path` is defined as follows, implementing the access control outlined in <<api-request-read-state>>:
+The predicate `may_read_path` is defined as follows, implementing the access control outlined in <<http-read-state>>:
 ....
 may_read_path(S, _, ["time"]) = True
 may_read_path(S, _, ["request_status", Rid] · _) =
   if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
-  then RS.sender = R.sender
+  then RS.sender == R.sender ∧ is_effective_canister_id(R, ECID)
   else True
-may_read_path(S, _, ["canister", _, "module_hash"]) = True
-may_read_path(S, _, ["canister", _, "controller"]) = True
+may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
+may_read_path(S, _, ["canister", cid, "controller"]) = cid == ECID
 may_read_path(S, _, _) = False
 ....
 
