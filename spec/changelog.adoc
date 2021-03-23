@@ -5,6 +5,7 @@
 === 0.15.6 (TBD)
 
 * Spec: No ingress messages towards empty canisters are accepted
+* Spec: A memory allocation of `0` means “best effort”
 
 [#0_15_5]
 === 0.15.5 (2021-03-11)

@@ -1252,7 +1252,7 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 
 The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
 
-The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If absent, an implementation-defined default applies. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected.
+The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory is guaranteed to the canister in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected. If absent, or if it is 0, then memory growth of the canister will be best-effort and subject to the available memory on the network. 
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin (or admin tooling) does that separately.
 
