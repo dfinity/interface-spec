@@ -751,7 +751,7 @@ If the execution of any of these entry points traps for any reason, then all cha
 
 
 [#system-api-init]
-==== Canister initializaion
+==== Canister initialization
 
 If `canister_init` is present, then this is the first exported WebAssembly function invoked by the system. The argument that was passed along with the canister initialization call (see <<ic-install_code>>) is available to the canister via `ic0.msg_arg_data_size/copy`.
 
@@ -951,7 +951,8 @@ See <<system-api-cycles>> for how this interacts with cycles available on this c
 === Ingress message inspection
 
 A canister can inspect ingress messages before executing them. When the IC receives an update call from a user, the IC will use the canister method `canister_inspect_message` to determine whether the message shall be accepted.
-If the canister does not implement `canister_inspect_message`, then no ingress message inspection is applied and the canister will receive the update calls.
+If the canister is empty (i.e. does not have a Wasm module), then the ingress message will be rejected.
+If the canister is not empty and does not implement `canister_inspect_message`, then the ingress message will be accepted.
 
 In `canister_inspect_message`, the canister can accept the message by invoking
 `ic0.accept_message : () -> ()`.
@@ -1960,7 +1961,9 @@ Conditions::
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
     Arg = { data = E.content.data; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
-    C.module.inspect_message (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
+    S.canisters[E.content.canister_id] ≠ EmptyCanister
+    S.canisters[E.content.canister_id].module.inspect_message
+        (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
 ....
 State after::
 ....

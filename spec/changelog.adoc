@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_15_6]
+=== 0.15.6 (TBD)
+
+* Spec: No ingress messages towards empty canisters are accepted
+
 [#0_15_5]
 === 0.15.5 (2021-03-11)
 
