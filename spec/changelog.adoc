@@ -1,6 +1,8 @@
 [#changelog]
 == Changelog
 
+* Spec: A memory allocation of `0` means “best effort”
+
 [#unreleased]
 === ∞ (unreleased)
 
