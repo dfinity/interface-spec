@@ -1,11 +1,11 @@
 [#changelog]
 == Changelog
 
-* Spec: A memory allocation of `0` means “best effort”
-
 [#unreleased]
 === ∞ (unreleased)
 
+* Spec: No ingress messages towards empty canisters are accepted
+* Spec: A memory allocation of `0` means “best effort”
 * Spec: The cleanup callback is introduced
 * Spec: deposit_cycles(): any caller allowed
 * Spec: New http v2 API that allows for stateless boundary nodes
