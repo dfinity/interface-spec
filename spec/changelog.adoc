@@ -2,7 +2,7 @@
 == Changelog
 
 [#0_15_6]
-=== 0.15.6 (TBD)
+=== 0.15.6 (2021-03-25)
 
 * Spec: The system may impose limits on the number of globals and functions
 * Spec: No ingress messages towards empty canisters are accepted
