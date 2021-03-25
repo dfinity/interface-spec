@@ -1,6 +1,8 @@
 [#changelog]
 == Changelog
 
+* Spec: The system may impose limits on the number of globals and functions
+
 [#unreleased]
 === ∞ (unreleased)
 
