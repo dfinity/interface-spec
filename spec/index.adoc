@@ -184,7 +184,7 @@ The IC supports plain signatures as well as signatures generated via web authent
 +
 The signature is calculated by signing the concatenation of the domain separator and the message.
 +
- * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER. 
+ * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER.
    - See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
    - See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
      For curve `secp256k1`, the OID 1.3.132.0.10 is used.
@@ -313,13 +313,13 @@ Certain interactions change the state of the Internet Computer. By the very natu
 
 1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
 2. For a certain amount of time, the system behaves as if it does not know about the request. (Although as part of the HTTP interface the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
-3. At some point, the system may accept the request for processing and set its status to `received`.  This indicates that the system as a whole has received the request and plans on processing it (although it may still not get processed if the system is under high load).  Further, the user should also be able to ask any endpoint (for the canister) about the status of the pending request.
-4. Once it is clear that the request will be acted upon (sufficient resources, request not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
-5. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
-6. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
-7. In the case that the response has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the request as `done`, to prevent a replay.
-8. Once the expiry time is past, the system can prune the request and its response, and completely forget about it.
-
+3. The system asks the targetted canister if it is willing to to accept this message and be charged for the expense of processing it. This uses the <<system-api-inspect-message>> API for normal calls. For calls to the management canister, the rules in <<ic-management-canister>> apply.
+4. At some point, the system may accept the request for processing and set its status to `received`.  This indicates that the system as a whole has received the request and plans on processing it (although it may still not get processed if the system is under high load).  Further, the user should also be able to ask any endpoint (for the canister) about the status of the pending request.
+5. Once it is clear that the request will be acted upon (sufficient resources, request not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
+6. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
+7. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
+8. In the case that the response has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the request as `done`, to prevent a replay.
+9. Once the expiry time is past, the system can prune the request and its response, and completely forget about it.
 
 This yields the following interaction diagram:
 
@@ -1216,6 +1216,8 @@ NOTE: The _IC management canister_ is just a facade; it does not actually exist 
 
 The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 
+It is possible to use the management canister via external requests (a.k.a. ingress messages). The cost of processing that request is charged to the canister that is being managed. Most methods only permit the controller to call them. Calls to `raw_rand` and `deposit_cycles` are never accepted as ingress messages.
+
 [#ic-candid]
 === Interface overview
 
@@ -1252,7 +1254,7 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 
 The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
 
-The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory is guaranteed to the canister in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected. If absent, or if it is 0, then memory growth of the canister will be best-effort and subject to the available memory on the network. 
+The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory is guaranteed to the canister in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected. If absent, or if it is 0, then memory growth of the canister will be best-effort and subject to the available memory on the network.
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin (or admin tooling) does that separately.
 
@@ -1960,10 +1962,19 @@ Conditions::
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
     E.content ∉ requests
     S.system_time <= E.content.ingress_expiry
-    Arg = { data = E.content.data; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
-    S.canisters[E.content.canister_id] ≠ EmptyCanister
-    S.canisters[E.content.canister_id].module.inspect_message
+    ( E.content.canister_id = ic_principal
+      E.content.arg = candid({canister_id = CanisterId, …})
+      E.content.sender = S.controllers[CanisterId]
+      E.content.method_name ∈
+        { "install_code", "set_controller", "start_canister", "stop_canister",
+	  "canister_status", "delete_canister" }
+    ) ∨ (
+      E.content.canister_id ≠ ic_principal
+      S.canisters[E.content.canister_id] ≠ EmptyCanister
+      Arg = { data = E.content.arg; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
+      S.canisters[E.content.canister_id].module.inspect_message
         (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
+   )
 ....
 State after::
 ....
@@ -1971,7 +1982,7 @@ S with
     requests[E.content] = Received
 ....
 
-NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once it has entered the system like this, it will be acted upon.
+NOTE: This is not instantaneous (the system takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once the request has entered the system like this, it will be acted upon.
 
 ==== Request rejection
 
@@ -3204,7 +3215,7 @@ inspect_message = λ (method_name, wasm_state, arg, sysenv) →
         sysenv
       }
       balance = sysenv.balance;
-      funds_available = no_funds; // ingress requests have no funds
+      cycles_available = 0; // ingress requests have no funds
     }
    try func<es>() with Trap then Trap
    if es.calls ≠ () then Trap
