@@ -4,6 +4,7 @@
 [#0_15_6]
 === 0.15.6 (TBD)
 
+* Spec: The system may impose limits on the number of globals and functions
 * Spec: No ingress messages towards empty canisters are accepted
 * Spec: No ingress messages towards `raw_rand` and `deposit_cycles` are accepted
 * Spec: A memory allocation of `0` means “best effort”
