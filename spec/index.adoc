@@ -327,16 +327,15 @@ By the very nature of a distributed implementation, they cannot be acted upon im
 Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 This implies the following high-level workflow:
 
-1. A user submits a call via the <<http-interface>>. No useful information is returned from the node (as such information cannot be trustworthy anyways).
-2. For a certain amount of time, the system behaves as if it does not know about the call.
+1. A user submits a request via the <<http-interface>>. No useful information is returned from the node (as it would not be trustworthy anyways).
+2. For a certain amount of time, the system behaves as if it does not know about the request. (Although as part of the HTTP interface the receiving endpoint gives an untrusted acknowledgment of receipt or an untrusted declination of the request.)
 3. The system asks the targetted canister if it is willing to to accept this message and be charged for the expense of processing it. This uses the <<system-api-inspect-message>> API for normal calls. For calls to the management canister, the rules in <<ic-management-canister>> apply.
-4. At some point, the system may accept the call for processing and set its status to `received`. This indicates that the system as a whole has received the call and plans on processing it (although it may still not get processed if the system is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
-5. Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
-6. Now the system is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
+4. At some point, the system may accept the request for processing and set its status to `received`.  This indicates that the system as a whole has received the request and plans on processing it (although it may still not get processed if the system is under high load).  Further, the user should also be able to ask any endpoint (for the canister) about the status of the pending request.
+5. Once it is clear that the request will be acted upon (sufficient resources, request not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect (e.g. in the case of a canister call, that it will reach the canister).
+6. Now the system is processing the request. For some requests this may be atomic, for others this involves multiple internal steps.
 7. Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
-8. In the case that the call has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the call as `done`, to prevent a replay attack.
-9. Once the expiry time is past, the system can prune the call and its response, and completely forget about it.
-
+8. In the case that the response has been retained for long enough, but the request has not expired yet, the system can forget the response data and only remember the request as `done`, to prevent a replay.
+9. Once the expiry time is past, the system can prune the request and its response, and completely forget about it.
 
 This yields the following interaction diagram:
 

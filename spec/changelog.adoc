@@ -1,16 +1,19 @@
 [#changelog]
 == Changelog
 
-* Spec: The system may impose limits on the number of globals and functions
-
 [#unreleased]
 === ∞ (unreleased)
 
+* Spec: The cleanup callback is introduced
+* Spec: New http v2 API that allows for stateless boundary nodes
+
+[#0_15_6]
+=== 0.15.6 (2021-03-25)
+
+* Spec: The system may impose limits on the number of globals and functions
 * Spec: No ingress messages towards empty canisters are accepted
 * Spec: No ingress messages towards `raw_rand` and `deposit_cycles` are accepted
 * Spec: A memory allocation of `0` means “best effort”
-* Spec: The cleanup callback is introduced
-* Spec: New http v2 API that allows for stateless boundary nodes
 
 [#0_15_5]
 === 0.15.5 (2021-03-11)
