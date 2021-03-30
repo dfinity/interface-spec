@@ -77,7 +77,7 @@ Internally, a call or a response is transmitted as a _message_ from a _sender_ t
 
 External _users_ interact with the system by issuing _requests_ on the HTTPS interface. Requests have responses which can either be replies or rejects. Some requests cause internal messages to be created.
 
-Canisters, users, etc. are identified by a _principal_, sometimes also called an _id_.
+Canisters and users are identified by a _principal_, sometimes also called an _id_.
 
 == Unspecified constants and limits
 
@@ -93,9 +93,9 @@ Maximum canister cycle balance. Any excess is discarded. Less than 2^64^.
 
 == Principals
 
-Principals, like canister, user and subnet ids, are – as far as most uses of the system are concerned – binary blobs with a length between 0 and 29 bytes. There is, however, some structure to them to encode specific authentication and authorization behavior.
+Principal are generic identifiers for canisters, users and possibly other concepts in the future. As far as most uses of the system are concerned they are _opaque_ binary blobs with a length between 0 and 29 bytes, and there is intentionally no mechanism to tell canister id and users ids apart.
 
-
+There is, however, some structure to them to encode specific authentication and authorization behavior.
 
 [#id-classes]
 === Special forms of IDs
