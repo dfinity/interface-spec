@@ -1,6 +1,11 @@
 [#changelog]
 == Changelog
 
+[#0_16_1]
+=== 0.16.1 (2021-04-14)
+
+* Spec: The cleanup callback is introduced
+
 [#0_16_0]
 === 0.16.0 (2021-03-25)
 
