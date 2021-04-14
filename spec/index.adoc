@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.16.0
+0.16.1
 // the following are ways to make this document work both in antora and stand alone
 :example: example$
 :partial: partial$
@@ -821,6 +821,7 @@ ic0.call_new :                                                              // U
     reject_fun : i32,
     reject_env : i32
   ) -> ();
+ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
 ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt
 ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt
@@ -849,9 +850,10 @@ The comment after each function lists from where these functions may be invoked:
 * `Q`: from `canister_query …`
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
+* `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
-* `*` = `I G U Q Ry Rt F` (NB: Not `(start)`)
+* `*` = `I G U Q Ry Rt C F` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
 
@@ -1003,8 +1005,21 @@ The reply callback is executed upon successful completion of the method call, wh
 
 The reject callback is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
+--
+
+* {blank}
++
+--
+  ic0.call_on_cleanup : (fun : i32, env : i32) -> ()
+
+If the a cleanup callback is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
+
+During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
+
+If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
+
+There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
 --
 
 * `+ic0.call_data_append : (src : i32, size : i32)+`
@@ -2974,6 +2989,7 @@ Closure = {
 Callback = {
   on_reply : Closure;
   on_reject : Closure;
+  on_cleanup : Closure | NoClosure;
 }
 ....
 
@@ -3177,26 +3193,45 @@ callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
     Reject (reject_code, reject_message)->
       (callbacks.on_reject.fun, callbacks.on_reject.env,
         { params0 with reject_code; reject_message})
+  try
+    if fun > |es.wasm_state.store.table| then Trap
+    let func = es.wasm_state.store.table[fun]
+    if typeof(func) ≠ func (i32) -> () then Trap
 
-  if fun > |es.wasm_state.store.table| then Trap
-  let func = es.wasm_state.store.table[fun]
-  if typeof(func) ≠ func (i32) -> () then Trap
+    let es = ref {empty_execution_state with
+      wasm_state = wasm_state;
+      params = params;
+      balance = sysenv.balance;
+      cycles_available = available;
+    }
+    func<es>(env)
+    Return {
+      new_state = es.wasm_state;
+      new_calls = es.calls;
+      response = es.response;
+      cycles_accepted = es.cycles_accepted;
+      new_certified_data = es.certified_data;
+    }
+  with Trap
+    if callbacks.on_cleanup = NoClosure then Trap
+    if callbacks.on_cleanup.fun > |es.wasm_state.store.table| then Trap
+    let func = es.wasm_state.store.table[callbacks.on_cleanup.fun]
+    if typeof(func) ≠ func (i32) -> () then Trap
 
-  let es = ref {empty_execution_state with
-    wasm_state = wasm_state;
-    params = params;
-    balance = balance;
-    cycles_available = available;
-  }
-  func<es>(env)
-  Return {
-    new_state = es.wasm_state;
-    new_calls = es.calls;
-    response = es.response;
-    balance = es.balance;
-    new_certified_data = es.certified_data;
-  }
+    let es = ref { empty_execution_state with
+      wasm_state;
+    }
+    func<es>(callbacks.on_cleanup.env)
+    Return {
+      new_state = es.wasm_state;
+      new_calls = [];
+      response = NoResponse;
+      cycles_accepted = 0;
+    }
 ....
++
+Note that if the initial callback handler traps, the cleanup callback (if
+present) is executed, and the canister has the chance to update its state.
 
 * The `inspect_message` field of the `CanisterModule` is defined as follows.
 +
@@ -3351,12 +3386,20 @@ ic0.call_new<es>(
     callback = Callback {
       on_reply = Closure { fun = reply_fun; env = reply_env }
       on_reject = Closure { fun = reject_fun; env = reject_env }
+      on_cleanup = NoClosure
     };
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
   if es.pending_call = NoPendingCall then Trap
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
+
+ic0.call_on_cleanup<es> (fun : i32, env : i32) =
+  if fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if es.pending_call = NoPendingCall then Trap
+  if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
+  es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
 ic0.call_cycles_add<es>(amount : i32) =
   if es.pending_call = NoPendingCall then Trap
