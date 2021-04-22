@@ -236,39 +236,45 @@ This status is orthogonal to the question of whether a canister is empty or not:
 
 Digital signature schemes are used for authenticating messages in various parts of the IC infrastructure.
 Signatures are domain separated, which means that every message is prefixed with a byte string that is unique to the purpose of the signature.
-The IC supports plain signatures as well as signatures generated via web authentication.
 
-- Plain signatures are supported for the schemes
-+
- * https://ed25519.cr.yp.to/index.html[*Ed25519*] or
- * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function, as well as on the Koblitz curve `secp256k1`.
-+
-The signature is calculated by signing the concatenation of the domain separator and the message.
-+
- * Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER.
-   - See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
-   - See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
-     For curve `secp256k1`, the OID 1.3.132.0.10 is used.
-     The points must be specified in uncompressed form (i.e. `0x04` followed by the big-endian 32byte encodings of `x` and `y`).
- * The signatures are encoded as the concatenation of the 32 byte big endian encodings of the two values _r_ and _s_.
+The IC supports multiple signature schemes, with details given in the following subsections. For each scheme, we specify the data encoded in the public key (which is always DER-encoded, and indicates the scheme to use) as well as the form of the signatures (which are opaque blobs for the purposes of the rest of this specification).
 
-- The only allowed signature scheme for web authentication is
-+
- * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
-+
-The signature is calculated by using the concatenation of the domain separator and the message as the challenge in the web authentication assertion.
-+
-The signature is checked by verifying that the `challenge` field contains the https://tools.ietf.org/html/rfc4648#section-5[base64url encoding] of the concatenation of the domain separator and the message, and that `signature` verifies on `authenticatorData · SHA-256(utf8(clientDataJSON))`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
-+
- * The public key is encoded as DER-wrapped COSE key as detailed below.
- * The signature is a CBOR encoding of a map with three mandatory fields:
-   - `authenticator_data` (`blob`): WebAuthn authenticator data.
-   - `client_data_json` (`text`): WebAuthn client data in JSON representation.
-   - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
+In all cases, the signed _payload_ is the concatenation of the domain separator and the message. All uses of signatures in this specification indicate a domain separator, to uniquely identify the purpose of the signature. The domain separators are prefix-free by construction, as their first byte indicates their length.
 
+[#ed25519]
+[#ecdsa]
+=== Ed25519 and ECDSA signatures
+
+Plain signatures are supported for the schemes
+
+* https://ed25519.cr.yp.to/index.html[*Ed25519*] or
+* https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function, as well as on the Koblitz curve `secp256k1`.
+
+* Public keys must be valid for signature schemes Ed25519 or ECDSA and are encoded as DER.
++
+ - See https://tools.ietf.org/html/rfc8410[RFC 8410] for DER encoding of Ed25519 public keys.
+ - See https://tools.ietf.org/rfc/rfc5480[RFC 5480] for DER encoding of ECDSA public keys; the DER encoding must not specify a hash function.
+   For curve `secp256k1`, the OID 1.3.132.0.10 is used.
+   The points must be specified in uncompressed form (i.e. `0x04` followed by the big-endian 32byte encodings of `x` and `y`).
+
+* The signatures are encoded as the concatenation of the 32 byte big endian encodings of the two values _r_ and _s_.
+
+[#webauthn]
+=== Web Authentication
+
+The only allowed signature scheme for web authentication is
+
+* https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
+
+The signature is calculated by using the payload as the challenge in the web authentication assertion.
+
+The signature is checked by verifying that the `challenge` field contains the https://tools.ietf.org/html/rfc4648#section-5[base64url encoding] of the payload, and that `signature` verifies on `authenticatorData · SHA-256(utf8(clientDataJSON))`, as specified in the https://www.w3.org/TR/webauthn/#op-get-assertion[WebAuthn w3c recommendation].
+
+* The public key is encoded as a DER-wrapped COSE key.
++
+--
 [#oid-der-wrapped-cose]
-
-The DER-wrapped COSE format uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
+It uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.1 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.der-wrapped-cose). The `BIT STRING` field `subjectPublicKey` contains the COSE encoding.
 See https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples[WebAuthn w3c recommendation] or https://tools.ietf.org/html/rfc8152#section-13.1[RFC 8152] for details on the COSE encoding.
 
 [TIP]
@@ -287,6 +293,45 @@ A DER wrapping of a COSE key is shown below. It can be parsed via the command `s
 ....
 You can also view the wrapping in https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt[an online ASN.1 JavaScript decoder].
 ====
+--
+
+* The signature is a CBOR value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a map with three mandatory fields:
+  - `authenticator_data` (`blob`): WebAuthn authenticator data.
+  - `client_data_json` (`text`): WebAuthn client data in JSON representation.
+  - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
+
+[#canister-signatures]
+=== Canister signatures
+
+The IC also supports a scheme where a canister can sign a payload by declaring a special “certified variable”.
+
+This section makes forward references to other concepts in this document, in particular the section <<certification>>.
+
+* The public key is a DER-wrapped structure that indicates the _signing canister_, and includes a freely choosable seed. Each choice of seed yields a distinct public key for the canister, and the canister can chose to encode information, such as a user id, in the seed.
++
+More concretely, it uses the `SubjectPublicKeyInfo` type used for other types of public keys (see, e.g., https://tools.ietf.org/html/rfc8410#section-4[RFC 8410, Section 4]), with OID 1.3.6.1.4.1.56387.1.2 (iso.org.dod.internet.private.enterprise.dfinity.mechanisms.canister-signature).
++
+The `BIT STRING` field `subjectPublicKey` is the blob `|signing_canister_id| · signing_canister_id · seed`, where `|signing_canister_id|` is the one-byte encoding of the the length of the `signing_canister_id` and `·` denotes blob concatenation.
+
+* The signature is a CBOR value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a map with two mandatory fields:
++
+--
+- `certificate` (`blob`): A CBOR-encoded certificate as per <<certification-encoding>>.
+- `tree` (`hash-tree`): A hash tree as per <<certification-encoding>>.
+
+The `certificate` must be a valid certificate as described in <<certification>>, with
+
+  lookup(/canister/<signing_canister_id>/certified_data, certificate.tree) = Found (reconstruct(tree))
+
+where `signing_canister_id` is the id of the signing canister.
+
+The `tree` must be a `well_formed` tree with
+
+  lookup(/sig/<s>/<m>, tree) = Found ""
+
+where `<s>` is the SHA-256 hash of the `seed` used in the public key and `m` is the SHA-256 hash of the payload to be signed.
+--
+
 
 [#state-tree]
 == The system state tree
@@ -1587,6 +1632,7 @@ check_delegations(Delegation d) : public_bls_key =
 ....
 where `root_public_key` is the a priori known root key of the Internet Computer instance.
 
+[#certification-encoding]
 === Encoding of certificates
 
 The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:{attachmentsdir}/certificates.cddl[download the file].
