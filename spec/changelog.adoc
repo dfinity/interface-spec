@@ -8,6 +8,7 @@
 * Spec clarification: the signature in the WebAuthn scheme is prefixed by the CBOR self-identifying tag
 * Spec: Cycle-depleted canisters are forcibly uninstalled
 * Spec: Canister settings in `create_canister` and `update_settings`. `install_code` no longer takes allocation settings.
+* Spec: A freezing threshold can be configured via the canister settings
 
 [#0_16_1]
 === 0.16.1 (2021-04-14)
