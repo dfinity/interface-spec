@@ -4,7 +4,8 @@
 [#unreleased]
 === ∞ (unreleased)
 
-* None yet
+* Spec: Canister Signatures are introduced
+* Spec clarification: the signature in the WebAuthn scheme is prefixed by the CBOR self-identifying tag
 
 [#0_16_1]
 === 0.16.1 (2021-04-14)
