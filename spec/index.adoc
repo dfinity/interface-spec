@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.16.1
+0.17.0
 // the following are ways to make this document work both in antora and stand alone
 :example: example$
 :partial: partial$
