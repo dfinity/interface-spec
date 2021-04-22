@@ -27,5 +27,4 @@ delegation = {
 tagged<t> = #6.55799(t) ; the CBOR tag
 
 hash = bytes
-pubkey = bytes
 signature = bytes
