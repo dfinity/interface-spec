@@ -1293,9 +1293,36 @@ The binary encoding of arguments and results are as per Candid specification.
 
 Before deploying a canister, the administrator of the canister first has to register it with the system, to get a canister id (with an empty canister behind it), and then separately install the code.
 
-A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can be changed using <<ic-set_controller,the `set_controller` method>>
+The optional `settings` parameter can be used to set the following settings:
+
+* `controller` (`principal`)
++
+A canister has an attribute _controller_.
++
+Default value: The caller of the `create_canister` call
+
+* `compute_allocation` (`nat`)
++
+Must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate.
+If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
++
+Default value: 0
+
+* `memory_allocation` (`nat`)
++
+Must be a number between 0 and 2^48 (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
+If set to 0, then memory growth of the canister will be best-effort and subject to the available memory on the network.
++
+Default value: 0
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
+
+[#ic-update_settings]
+=== IC method `update_settings`
+
+Only the _controller_ of the canister can update settings. See <<ic-create_canister>> for a description of settings.
+
+Not including a setting in the `settings` record means not changing that field. The defaults described above are only relevant during canister creation.
 
 [#ic-install_code]
 === IC method `install_code`
@@ -1314,10 +1341,6 @@ Note that this is different from `uninstall_code` followed by `install_code`, as
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
-The optional field `compute_allocation`, if present, must be a number between 0 and 100, inclusively. It indicates how much compute power should be guaranteed to this canister, expressed as a percentage of the maximum compute power that a single canister can allocate. If absent, it is treated like an allocation of 0. If the system cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected.
-
-The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory is guaranteed to the canister in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected. If absent, or if it is 0, then memory growth of the canister will be best-effort and subject to the available memory on the network.
-
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
 
 [#ic-uninstall_code]
@@ -1332,13 +1355,6 @@ Uninstalling a canister’s code will reject all calls that the canister has not
 The canister is now <<canister-lifecycle,empty>>. In particular, any incoming or queued calls will be rejected.
 
 A canister after _uninstalling_ retains its _cycles_ balance, _controller_, status, and allocations.
-
-[#ic-set_controller]
-=== IC method `set_controller`
-
-Initially, the user or canister that created a canister is its _controller_, but control can be yielded to another user or canister.
-
-Only the current controller of the canister can change the controller.
 
 [#ic-canister_status]
 === IC method `canister_status`
@@ -2402,6 +2418,9 @@ The system chooses an appropriate canister id and instantiates a new empty canis
 
 This is also when the System Time of the new canister starts ticking.
 
+The `compute_allocation` and `memory_allocation` settings are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2417,7 +2436,10 @@ State after::
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
-    controllers[CanisterId] = M.caller
+    if A.settings.controller is not null:
+      controllers[CanisterId] = A.settings.controller
+    else:
+      controllers[CanisterId] = M.caller
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
@@ -2440,6 +2462,34 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
  * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
+
+==== IC Management Canister: Changing settings
+
+Only the controller of the given canister can update the canister settings.
+
+The `compute_allocation` and `memory_allocation` settings are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'update_settings'
+    M.arg = candid(A)
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    if A.settings.controller is not null:
+      controllers[A.canister_id] = A.settings.controller
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+        refunded_cycles = M.transferred_cycles
+      }
+....
 
 ==== IC Management Canister: Canister status
 
@@ -2480,8 +2530,6 @@ S with
 
 Only the controller of the given canister can install code. This transition installs new code over a canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed.
 
-The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
-
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2521,8 +2569,6 @@ S with
 ==== IC Management Canister: Code upgrade
 
 Only the controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
-
-The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
 Conditions::
 ....
@@ -2604,32 +2650,6 @@ S with
           call_contexts[Ctxt_id].deleted := true
           call_contexts[Ctxt_id].responded := true
           call_contexts[Ctxt_id].available_cycles := 0
-....
-
-
-==== IC Management Canister: Setting controllers
-
-Only the controller of the given canister can modify the controller field.
-
-Conditions::
-....
-    S.messages = Older_messages · CallMessage M · Younger_messages
-    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-    M.callee = ic_principal
-    M.method_name = 'set_controller'
-    M.arg = candid(A)
-    M.caller = S.controllers[A.canister_id]
-....
-State after::
-....
-S with
-    controllers[A.canister_id] = A.new_controller
-    messages = Older_messages · Younger_messages ·
-      ResponseMessage {
-        origin = M.origin
-        response = Accepted (candid())
-        refunded_cycles = M.transferred_cycles
-      }
 ....
 
 ==== IC Management Canister: Stopping a canister
