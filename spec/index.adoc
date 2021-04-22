@@ -1151,7 +1151,7 @@ This call concludes assembling the call. It queues the call message to the given
 +
 If the system returns `0` as the `err_code`, the system was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callback will be executed.
 +
-If the system returns a non-zero value, the call cannot (and will not be) performed.
+If the system returns a non-zero value, the call cannot (and will not be) performed. This can happen due to a lack of system internal resources, but also if it would reduce the current cycle balance to a level below where the canister would be frozen.
 +
 After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap
 
@@ -1363,6 +1363,17 @@ If set to 0, then memory growth of the canister will be best-effort and subject 
 Default value: 0
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
+
+* `freezing_threshold` (`nat`)
++
+Must be a number between 0 and 2^64-1, inclusively, and indicates a length of time in seconds.
++
+A canister is considered frozen whenever the system estimates that the canister would be depleted of cycles before `freezing_threshold` seconds pass, given the canister’s current size and the system’s current cost for storage.
++
+Calls to a frozen canister will be rejected (like for a stopping canister). Additionally, a canister cannot perform calls if that would, due the cost of the call and transferred cycles, would push the balance into frozen territory; these calls fail with `ic0.call_perform` returning a non-zero error code.
++
+Default value: 2592000 (approximately 30 days).
+
 
 [#ic-update_settings]
 === IC method `update_settings`
@@ -1804,6 +1815,7 @@ Timestamp = Nat;
 Env = {
   time : Timestamp
   balance : Nat;
+  freezing_limit : Nat;
   certificate : NoCertificate | Blob
   status : Running | Stopping | Stopped
 }
@@ -2006,6 +2018,7 @@ S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
   controllers : CanisterId ↦ Principal;
+  freezing_threshold : CanisterId ↦ Nat;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
@@ -2035,6 +2048,7 @@ The initial state of the system is
   requests = ();
   canisters = ();
   controllers = ();
+  freezing_threshold = ();
   time = ();
   balances = ();
   system_time = T;
@@ -2156,7 +2170,7 @@ Conditions::
       E.content.sender = S.controllers[CanisterId]
       E.content.method_name ∈
         { "install_code", "set_controller", "start_canister", "stop_canister",
-	  "canister_status", "delete_canister" }
+          "canister_status", "delete_canister" }
     ) ∨ (
       E.content.canister_id ≠ ic_principal
       S.canisters[E.content.canister_id] ≠ EmptyCanister
@@ -2218,15 +2232,18 @@ S with
       } · S.messages
 ....
 
-==== Calls to non-running canisters are rejected
 
-A call to a canister which is not `Running`, or does not have sufficient cycles to execute a call is automatically rejected.
+==== Calls to stopped/stopping/frozen canisters are rejected
+
+A call to a canister which is stopping, stopped, or frozen is automatically rejected.
+
+The (unspecified) function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`, given it’s currrent memory footprint, storage cost, memory and compute allocation, and current `freezing_threshold` setting.
 
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-    S.canister_status[CM.callee] ≠ Running
+    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping or balances[CM.callee] < freezing_limit(S, CM.callee)
 ....
 
 State after::
@@ -2239,6 +2256,7 @@ State after::
       }
 ....
 
+
 ==== Call context creation
 
 Before invoking a message to a public entry point, some bookkeeping is required:
@@ -2250,11 +2268,14 @@ The position of the message in the queue is unchanged.
 
 This only happens for “real” canisters, not the IC management canister.
 
+This “bookkeeping transition” must be immediately followed by the corresponding <<rule-message-execution,“Message execution” transition>>.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
     S.canister_status[CM.callee] = Running
+    balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom S.call_contexts
 ....
 State after::
@@ -2276,9 +2297,12 @@ S with
       deleted = false;
       available_cycles = CM.transferred_cycles;
     }
+    balances[CM.callee] = balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 ....
 
 We can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
+
+Note that new messages are executed only if the canister is Running and is not frozen.
 
 [#rule-message-execution]
 ==== Message execution
@@ -2294,12 +2318,10 @@ Conditions::
 
     Is_response = M.entry_point == Callback _ _
 
-    Visible_balance | Is_response = S.balances[M.receiver]
-                    | otherwise   = S.balances[M.receiver] - MAX_CYCLES_PER_MESSAGE
-
     Env = {
       time = S.time[M.receiver];
-      balance = Visible_balance;
+      balance = S.balances[M.receiver]
+      freezing_limit = freezing_limit(S, M.receiver);
       certificate = NoCertificate;
       status = S.status[M.receiver];
     }
@@ -2324,10 +2346,15 @@ if
   R = Return res
   Cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
-  Cycles_used
-     + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
-     ≤ S.balances[M.receiver] + res.cycles_accepted
-       + (if Is_response then MAX_CYCLES_PER_RESPONSE else 0)
+  New_balance =
+      min(
+        S.balances[M.receiver]
+        + res.cycles_accepted
+        + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+        - Cycles_used
+        - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
+      , MAX_CANISTER_BALANCE)
+  New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
   (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
 then
   S with
@@ -2364,24 +2391,19 @@ then
     if res.new_certified_data ≠ NoCertifiedData:
       certified_data[M.receiver] = res.new_certified_data
 
-    balances[M.receiver] =
-      min(
-        S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else 0)
-        - Cycles_used
-        - ∑ [ MAX_CYCLES_PER_MESSAGE + call.transferred_cycles | call ∈ res.new_calls ]
-      , MAX_CANISTER_BALANCE)
+    balances[M.receiver] = New_balance
 else
   S with
     messages = Older_messages · Younger_messages
-    balances[M.receiver] = S.balances[M.receiver] - Cycles_used
+    balances[M.receiver] =
+      S.balances[M.receiver]
+      + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - Cycles_used
 ....
 
 The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable.
 
-The cycle accounting differs for call messages and for response messages:
-
-* For call messages, the `MAX_CYCLES_PER_MESSAGE` cycles are deducted here.
-* For response messages, cycles have already been set aside before. The unused portion of the `MAX_CYCLES_PER_RESPONSE` cycles are refunded afterwards.
+Depending whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
 
 This transition detects certain behaviour that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -2462,7 +2484,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new empty canister identified by this id. The issuer of the request is set to be the controller of newly created canister. All cycles on this call are now the canister's initial cycles.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The controller is set to the sender of this request, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -2531,6 +2553,8 @@ State after::
 S with
     if A.settings.controller is not null:
       controllers[A.canister_id] = A.settings.controller
+    if A.settings.freezing_threshold exists:
+      freezing_threshold[A.canister_id] = A.settings.freezing_threshold
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -2562,7 +2586,7 @@ S with
         origin = M.origin
         response = candid({
           status = S.canister_status[A.canister_id];
-	  module_hash =
+          module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
             else opt (SHA-265(S.canisters[A.canister_id].raw_module));
@@ -2596,6 +2620,7 @@ Conditions::
     Env = {
       time = S.time[M.receiver];
       balance = S.balances[M.receiver];
+      freezing_limit = freezing_limit(S, M.receiver);
       certificate = NoCertificate;
       status = S.status[M.receiver];
     }
@@ -2634,6 +2659,7 @@ Conditions::
     Env = {
       time = S.time[M.receiver];
       balance = S.balances[M.receiver];
+      freezing_limit = freezing_limit(S, M.receiver);
       certificate = NoCertificate;
       status = S.status[M.receiver];
     }
@@ -2763,8 +2789,8 @@ State after::
             response = Accepted (candid())
             refunded_cycles = C
           }
-	| (O, C) ∈ Origins
-	]
+        | (O, C) ∈ Origins
+        ]
 ....
 
 NOTE: Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success), but is otherwise a no-op:
@@ -2844,8 +2870,8 @@ S with
             response = Reject (CANISTER_REJECT, 'Canister has been restarted')
             refunded_cycles = C
           }
-	| (O, C) ∈ Origins
-	]
+        | (O, C) ∈ Origins
+        ]
 ....
 
 ==== IC Management Canister: Canister deletion
@@ -3178,6 +3204,7 @@ Conditions::
   Env = {
     time = S.time[Q.receiver];
     balance = S.balances[Q.canister_id];
+    freezing_limit = freezing_limit(S, Q.canister_id);
     certificate = Cert;
     status = S.status[Q.receiver];
   }
@@ -3239,8 +3266,8 @@ state_tree(S) = {
   "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
   "canister":
     { canister_id :
-	{ "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
-	{ "controller" : S.controllers[canister_id] }
+        { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
+        { "controller" : S.controllers[canister_id] }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
@@ -3668,7 +3695,7 @@ ic0.call_new<es>(
   ) =
   discard_pending_call<es>()
 
-  if MAX_CYCLES_PER_RESPONSE > es.balance then Trap
+  if es.balance < MAX_CYCLES_PER_RESPONSE then Trap
   es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
 
   callee := copy_from_canister<es>(callee_src, callee_size);
@@ -3705,7 +3732,7 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
 
 ic0.call_cycles_add<es>(amount : i32) =
   if es.pending_call = NoPendingCall then Trap
-  if amount > es.balance then Trap
+  if es.balance < amount then Trap
 
   es.balance := es.balance - amount
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -3713,7 +3740,9 @@ ic0.call_cycles_add<es>(amount : i32) =
 ic0.call_peform<es>() : ( err_code : i32 ) =
   if es.pending_call = NoPendingCall then Trap
 
-  if arbitrary()
+  // are we below the threezing threshold?
+  // Or maybe the system has other reasons to not perform this
+  if es.balance < es.env.freezing_limit or system_cannot_do_this_call_now()
   then
     discard_pending_call<es>()
     return 1
