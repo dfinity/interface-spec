@@ -12,11 +12,12 @@ service ic : {
     compute_allocation : opt nat;
     memory_allocation : opt nat;
   }) -> ();
+  uninstall_code : (record {canister_id : canister_id}) -> ();
   set_controller : (record {canister_id : canister_id; new_controller : principal}) -> ();
   start_canister : (record {canister_id : canister_id}) -> ();
   stop_canister : (record {canister_id : canister_id}) -> ();
   canister_status : (record {canister_id : canister_id}) -> (record {
-      status : variant { running; stopping; stopped };
+      status : variant { running; stopping; stopped; };
       module_hash: opt blob;
       controller: principal;
       memory_size: nat;
