@@ -79,7 +79,11 @@ External _users_ interact with the system by issuing _requests_ on the HTTPS int
 
 Canisters and users are identified by a _principal_, sometimes also called an _id_.
 
-== Unspecified constants and limits
+== Pervasive concepts
+
+Before going into the details of the four public interfaces describes in this document (namely the agent-facing <<http-interface,HTTPS interface>>, the canister-facing <<system-api,System API>>, the <<ic-management-canister,virtual Management canister>> and the <<state-tree,System State Tree>>), this section introduces some concepts that transcend multiple interfaces.
+
+=== Unspecified constants and limits
 
 This specification may refer to certain constants and limits without specifying their concrete value (yet), i.e. they are implementation defined. Many are resource limits which are relevant only to specify the error-handling behaviour of the system (which, as mentioned above, is also not yet precisely described in this document). This list is not complete.
 
@@ -87,18 +91,23 @@ This specification may refer to certain constants and limits without specifying 
 +
 Amount of cycles that a canister has to have before a message is attempted to be executed, which is deducted from the canister balance before message execution. See <<rule-message-execution>>.
 
+* `MAX_CYCLES_PER_RESPONSE`
++
+Amount of cycles that the system sets aside when a canister performs a call. This is used to pay for processing the response message, and unused cycles after the execution of the response are refunded. See <<rule-message-execution>>.
+
 * `MAX_CANISTER_BALANCE`
 +
 Maximum canister cycle balance. Any excess is discarded. Less than 2^64^.
 
-== Principals
+[#principal]
+=== Principals
 
 Principal are generic identifiers for canisters, users and possibly other concepts in the future. As far as most uses of the system are concerned they are _opaque_ binary blobs with a length between 0 and 29 bytes, and there is intentionally no mechanism to tell canister id and users ids apart.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
 [#id-classes]
-=== Special forms of IDs
+==== Special forms of Principals
 
 In this section, `H` denotes SHA-224, `·` denotes blob concatenation and `|p|` denotes the length of `p` in bytes, encoded as a single byte.
 
@@ -133,7 +142,7 @@ When the system creates a _fresh_ id, it never creates a self-authenticating id,
 
 
 [#textual-ids]
-=== Textual representation of principals
+==== Textual representation of principals
 
 NOTE: This textual representation does not actually show up in the interface (which always deals with blobs), so it is merely a recommended convention.
 
@@ -170,8 +179,60 @@ function textual_decode() {
 ....
 =====
 
+[#canister-lifecycle]
+=== Canister lifecycle
+
+Services on the Internet Computer are called _canisters_. Conceptually, they consist of the following pieces of state:
+
+ * A canister id (a <<principal,principal>>)
+ * Their _controller_ (also a <<principal,principal>>)
+ * A cycle balance
+ * The _canister status_, which is one of `running`, `stopping` or `stopped`.
+ * Resource reservations
+
+A canister can be _empty_ (e.g. directly after creation) or _non-empty_. A non-empty canister also has
+
+ * code, in the form of a canister module
+ * state (memories, globals etc.)
+ * possibly further system-internal data (e.g. queues)
+
+Canisters are empty after creation and uninstallation, and become non-empty through <<ic-install_code,code installation>>.
+
+If an empty canister receives a response, that response is dropped, as if the canister trapped when processing the response. The cycles set aside for its processing and the cycles carried on the responses are added to the canister's _cycles_ balance.
+
+[#canister-cycles]
+==== Canister cycles
+
+The IC relies on _cycles_, a utility token, to manage its resources. A canister pays for the resources it uses from its _cycle balance_.
+
+When the cycle balance of a canister falls to zero, the canister is _deallocated_. This has the same effect as
+
+* uninstalling the caniser (as described in <<ic-uninstall_code>>)
+* setting all resource reservations to zero
+
+Afterwards the canister is empty. It can be reinstalled after topping up its balance.
+
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, and _controller_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+
+[#canister-status]
+==== Canister status
+
+The canister status can be used to control whether the canister is processing calls:
+
+* In status `running`, calls to the canister are processed as normal.
+* In status `stopping`, calls to the canister are rejected by the system, but responses to the canister are processed as normal.
+* In status `stopped`, calls to the canister are rejected by the system, and there are no outstanding responses.
+
+In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
+
+The controller of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_caniser`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
+
+NOTE:
+This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
+
+
 [#signatures]
-== Signatures
+=== Signatures
 
 Digital signature schemes are used for authenticating messages in various parts of the IC infrastructure.
 Signatures are domain separated, which means that every message is prefixed with a byte string that is unique to the purpose of the signature.
@@ -1005,6 +1066,8 @@ The reply callback is executed upon successful completion of the method call, wh
 
 The reject callback is executed if the method calls fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
+This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
+
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 --
 
@@ -1232,7 +1295,7 @@ Before deploying a canister, the administrator of the canister first has to regi
 
 A canister has an attribute _controller_; initially, the user who has registered the canister is the controller, but this can be changed using <<ic-set_controller,the `set_controller` method>>
 
-Until code is installed, the canister behaves like one with no public methods.
+Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
 [#ic-install_code]
 === IC method `install_code`
@@ -1241,11 +1304,13 @@ This method installs code into a canister.
 
 Only the _controller_ of the canister can install code.
 
-For `mode = install`, then the canister must be empty before; for `mode = upgrade`, the caniser must _not_ be empty before. For `mode = reinstall`, either works.
+* If `mode = install`, the canister must be empty before. This will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister.
 
-If `mode = install` or `mode = reinstall`, this will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister. Upon replacing an existing canister, all state (including the stable memory) is cleared.
+* If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
++
+Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all unresponded calls.
 
-If `mode = upgrade`, this will perform an upgrade of an existing canister module as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` system method of the new instance.
+* If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` system method of the new instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -1253,7 +1318,20 @@ The optional field `compute_allocation`, if present, must be a number between 0 
 
 The optional field `memory_allocation`, if present, must be a number between 0 and 2^48^ (i.e 256TB), inclusively. It indicates how much memory is guaranteed to the canister in total. Any attempt to grow memory usage beyond this allocation will fail. If the system cannot provide the requested allocation, for example because it is oversubscribed, the request will be rejected. If absent, or if it is 0, then memory growth of the canister will be best-effort and subject to the available memory on the network.
 
-NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks. It is expected that the canister admin (or admin tooling) does that separately.
+NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
+
+[#ic-uninstall_code]
+=== IC method `uninstall_code`
+
+This method removes a canister’s code and state, making the canister _empty_ again.
+
+Only the _controller_ of the canister can uninstall code.
+
+Uninstalling a canister’s code will reject all calls that the canister has not yet responded to, and drop the canister’s code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
+
+The canister is now <<canister-lifecycle,empty>>. In particular, any incoming or queued calls will be rejected.
+
+A canister after _uninstalling_ retains its _cycles_ balance, _controller_, status, and allocations.
 
 [#ic-set_controller]
 === IC method `set_controller`
@@ -1267,32 +1345,32 @@ Only the current controller of the canister can change the controller.
 
 Indicates various information about the canister. It contains:
 
-* The status of the canister. It could be one of `Running`, `Stopping` or `Stopped`.
+* The status of the canister. It could be one of `running`, `stopping` or `stopped`.
 * A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 * The controller of the canister.
-* The memory size taken by this canister.
-* The balances of this canister. It includes Cycles and ICPTs.
+* The memory size taken by the canister.
+* The cycle balance of the canister.
 
-Only the current controller of the canister can request its status.
+Only the controller of the canister can request its status.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
 
 The controller of a canister may stop a canister (e.g., to prepare for a canister upgrade).
 
-Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `Stopping` (unless the canister is already stopped).
+Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped).
 The system will reject all calls to a stopping canister, indicating that the canister is stopping.
 Responses to a stopping canister are processed as usual.
-When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `Stopped` and the management canister responds to the caller of the `stop_canister` request.
+When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
 [#ic-start_canister]
 === IC method `start_canister`
 A canister may be started by its controller.
 
-If the canister status was 'Stopped' or `Stopping` then the canister status is simply set to `Running`.
+If the canister status was `stopped` or `stopping` then the canister status is simply set to `running`.
 In the latter case all `stop_canister` calls which are processing fail (and are rejected).
 
-If the canister was already `Running` then the status stays unchanged.
+If the canister was already `running` then the status stays unchanged.
 
 [#ic-delete_canister]
 === IC method `delete_canister`
@@ -1724,6 +1802,7 @@ CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
   responded : bool;
+  deleted : bool;
   available_cycles : Nat;
 }
 CallId = (abstract)
@@ -1902,11 +1981,39 @@ The initial state of the system is
 ....
 for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using `()` to denote the empty map or bag.
 
+=== Invariants
+
+The following is an incomplete list of invariants that should hold for the abstract state `S`, and are not already covered by the type annotations in this section.
+
+* Deleted call contexts have been responded to:
++
+....
+∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+  if Ctxt.deleted then Ctxt.responded
+....
+
+* Responded call contexts have no available_cycles left:
++
+....
+∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+  if Ctxt.responded then Ctxt.available_cycles = 0
+....
+
+* Referenced call contexts exists:
++
+....
+∀ CallMessage M ∈ S.messages.  M.origin.calling_context ∈ S.call_contexts
+∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ∈ S.call_contexts
+∀ _ ↦ Ctxt ∈ S.call_contexts:
+  if Ctx.responded = false:
+     Ctxt.origin.calling_context ∈ S.call_contexts
+....
+
 === State transitions
 
 Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
 
- * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describes checks that the request must pass to be considered received.
+ * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
  * Responses to reads (i.e. `/api/v2/…/read_state`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
 
@@ -2047,15 +2154,15 @@ S with
       } · S.messages
 ....
 
-==== Calls to stopped/stopping canisters are rejected
+==== Calls to non-running canisters are rejected
 
-A call to a canister which is stopping or stopped is automatically rejected.
+A call to a canister which is not `Running`, or does not have sufficient cycles to execute a call is automatically rejected.
 
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _
+    S.canister_status[CM.callee] ≠ Running
 ....
 
 State after::
@@ -2063,7 +2170,7 @@ State after::
     S.messages = Older_messages · Younger_messages  ·
       ResponseMessage {
           origin = S.call_contexts[CM.call_context].origin
-          response = Reject (CANISTER_ERROR, "canister stopped");
+          response = Reject (CANISTER_ERROR, "canister not running");
           refunded_cycles = CM.transferred_cycles;
       }
 ....
@@ -2102,6 +2209,7 @@ S with
       canister = CM.callee;
       origin = CM.origin;
       responded = false;
+      deleted = false;
       available_cycles = CM.transferred_cycles;
     }
 ....
@@ -2120,7 +2228,11 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Visible_balance = S.balances[M.receiver] - MAX_CYCLES_PER_MESSAGE
+    Is_response = M.entry_point == Callback _ _
+
+    Visible_balance | Is_response = S.balances[M.receiver]
+                    | otherwise   = S.balances[M.receiver] - MAX_CYCLES_PER_MESSAGE
+
     Env = {
       time = S.time[M.receiver];
       balance = Visible_balance;
@@ -2146,10 +2258,12 @@ State after::
 ....
 if
   R = Return res
-  Cycles_used ≤ Max_cycles
+  Cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
-  Cycles_used + ∑ [ call.transferred_cycles | call ∈ res.new_calls ]
+  Cycles_used
+     + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
      ≤ S.balances[M.receiver] + res.cycles_accepted
+       + (if Is_response then MAX_CYCLES_PER_RESPONSE else 0)
   (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
 then
   S with
@@ -2188,8 +2302,9 @@ then
 
     balances[M.receiver] =
       min(
-        S.balances[M.receiver] + res.cycles_accepted
-        - Cycles_used - ∑ [ call.transferred_cycles | call ∈ res.new_calls ]
+        S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else 0)
+        - Cycles_used
+        - ∑ [ MAX_CYCLES_PER_MESSAGE + call.transferred_cycles | call ∈ res.new_calls ]
       , MAX_CANISTER_BALANCE)
 else
   S with
@@ -2197,7 +2312,12 @@ else
     balances[M.receiver] = S.balances[M.receiver] - Cycles_used
 ....
 
-The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable. The maximum number of cycles to consume is also unspecified, and expressed as `Max_cycles`.
+The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable.
+
+The cycle accounting differs for call messages and for response messages:
+
+* For call messages, the `MAX_CYCLES_PER_MESSAGE` cycles are deducted here.
+* For response messages, cycles have already been set aside before. The unused portion of the `MAX_CYCLES_PER_RESPONSE` cycles are refunded afterwards.
 
 This transition detects certain behaviour that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -2278,7 +2398,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The issuer of the request is set to be the controller of newly created canister. The canister status is set to 'Running'. All cycles on this call are now the canister's initial cycles.
+The system chooses an appropriate canister id and instantiates a new empty canister identified by this id. The issuer of the request is set to be the controller of newly created canister. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -2323,7 +2443,7 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
 
 ==== IC Management Canister: Canister status
 
-The controller of a canister can check for its status (i.e. one of Running, Stopping, or Stopped).
+The controller of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
@@ -2347,7 +2467,7 @@ S with
 	  module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
-            else ?(SHA-265(S.canisters[A.canister_id].raw_module));
+            else opt (SHA-265(S.canisters[A.canister_id].raw_module));
           controller = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
@@ -2358,7 +2478,7 @@ S with
 
 ==== IC Management Canister: Code installation
 
-Only the controller of the given canister can install code. This transition installs new code over an empty or existing canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed and must not invoke other methods.
+Only the controller of the given canister can install code. This transition installs new code over a canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed.
 
 The `compute_allocation` and `memory_allocation` are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -2442,6 +2562,50 @@ S with
         refunded_cycles = M.transferred_cycles
       }
 ....
+
+[#rule-uninstall]
+==== IC Management Canister: Code uninstallation
+
+Upon uninstallation, the canister is reverted to an empty canister, and all outstanding call contexts are rejected and marked as deleted.
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'uninstall_code'
+    M.arg = candid(A)
+    M.caller = S.controllers[A.canister_id]
+....
+State after::
+....
+S with
+    canisters[A.canister_id] = EmptyCanister
+    certified_data[A.canister_id] = ""
+
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Accepted (candid())
+        refunded_cycles = M.transferred_cycles
+      } ·
+      [ ResponseMessage {
+          origin = Ctxt.origin
+          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          refunded_cycles = Ctxt.available_cycles
+        }
+      | Ctxt_id ↦ Ctxt ∈ S.call_contexts
+      , Ctxt.canister = A.canister_id
+      , Ctxt.responded = false
+      ]
+
+      for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+        if Ctxt.canister = A.canister_id:
+          call_contexts[Ctxt_id].deleted := true
+          call_contexts[Ctxt_id].responded := true
+          call_contexts[Ctxt_id].available_cycles := 0
+....
+
 
 ==== IC Management Canister: Setting controllers
 
@@ -2560,7 +2724,7 @@ S with
 
 ==== IC Management Canister: Starting a canister
 
-The controller of a canister can start a stopped canister. If the canister is already running, the command has no effect on the canister.
+The controller of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister.
 
 Conditions::
 ....
@@ -2585,7 +2749,7 @@ S with
 ....
 
 
-If the status of the canister was 'Stopping', then the canister status is set to `Running`. The pending `stop_canister` request(s) are rejected.
+If the status of the canister was 'stopping', then the canister status is set to `running`. The pending `stop_canister` request(s) are rejected.
 
 Conditions::
 ....
@@ -2625,7 +2789,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'delete_canister'
     M.arg = candid(A)
-    S.canister_status[A.canister_id] = Stopped
+    S.canister_status[A.canister_id] = stopped
     M.caller = S.controllers[A.canister_id]
 ....
 State after::
@@ -2743,12 +2907,11 @@ S with
     balances[CanisterId] = min(balances[CanisterId] + A.amount, MAX_CANISTER_BALANCE)
 ....
 
-
 ==== Callback invocation
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
-This “bookkeeping transition” must be immediately followed by the corresponding “Message execution” transition.
+This “bookkeeping transition” must be immediately followed by the corresponding <<rule-message-execution,“Message execution” transition>>.
 
 Conditions::
 ....
@@ -2757,6 +2920,7 @@ Conditions::
         call_context = Ctxt_id
         callback = Callback
       }
+    not S.call_contexts[Ctxt_id].deleted
 ....
 State after::
 ....
@@ -2773,6 +2937,27 @@ S with
         queue = Unordered
       } ·
       Younger_messages
+....
+
+If the responded call context does not exist anymore, because the canister has been uninstalled since, the refundend cycles are still added to the canister balance, but
+no function invocation is enqueued:
+
+Conditions::
+....
+    S.messages = Older_messages · ResponseMessage RM · Younger_messages
+    RM.origin = FromCanister {
+        call_context = Ctxt_id
+        callback = Callback
+      }
+    S.call_contexts[Ctxt_id].deleted
+....
+State after::
+....
+S with
+    balances[S.call_contexts[Ctxt_id].canister] =
+      min(balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE,
+          MAX_CANISTER_BALANCE)
+    messages = Older_messages · Younger_messages
 ....
 
 ==== Respond to user request
@@ -2824,7 +3009,40 @@ S with
     requests[M] = (deleted)
 ....
 
-==== Time progressing
+==== Canister out of cyles
+
+Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstall>>) and the allocations are set to zero (NB: allocations are currently not modeled in the formal model):
+
+Conditions::
+....
+    S.balances[CanisterId] = 0
+....
+State after::
+....
+S with
+    canisters[CanisterId] = EmptyCanister
+    certified_data[A.canister_id] = ""
+
+    messages = Older_messages · Younger_messages ·
+      [ ResponseMessage {
+          origin = Ctxt.origin
+          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          refunded_cycles = Ctxt.available_cycles
+        }
+      | Ctxt_id ↦ Ctxt ∈ S.call_contexts
+      , Ctxt.canister = A.canister_id
+      , Ctxt.responded = false
+      ]
+
+    for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+      if Ctxt.canister = A.canister_id:
+        call_contexts[Ctxt_id].deleted := true
+        call_contexts[Ctxt_id].responded := true
+        call_contexts[Ctxt_id].available_cycles := 0
+....
+
+
+==== Time progressing and cycle consumption
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -2837,6 +3055,19 @@ State after::
 ....
 S with
     time[CanisterId] = T1
+....
+
+The canister cycle balance similarly depletes at an unspecified rate, but stays non-negative:
+
+Conditions::
+....
+    B0 = S.balances[CanisterId]
+    0 ≤ B1 < B0
+....
+State after::
+....
+S with
+    balances[CanisterId] = B1
 ....
 
 Similarly, the system time, used to expire requests, progresses:
@@ -3369,6 +3600,9 @@ ic0.call_new<es>(
   ) =
   discard_pending_call<es>()
 
+  if MAX_CYCLES_PER_RESPONSE > es.balance then Trap
+  es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
+
   callee := copy_from_canister<es>(callee_src, callee_size);
   method_name := copy_from_canister<es>(name_src, name_size);
 
@@ -3423,7 +3657,7 @@ ic0.call_peform<es>() : ( err_code : i32 ) =
 // helper function
 discard_pending_call<es>() =
   if es.pending_call ≠ NoPendingCall then
-    es.balance := min(es.balance + es.pending_call.transferred_cycles, MAX_CANISTER_BALANCE)
+    es.balance := min(es.balance + MAX_CYCLES_PER_RESPONSE + es.pending_call.transferred_cycles, MAX_CANISTER_BALANCE)
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
