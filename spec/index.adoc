@@ -245,7 +245,7 @@ In all cases, the signed _payload_ is the concatenation of the domain separator 
 
 [#ed25519]
 [#ecdsa]
-=== Ed25519 and ECDSA signatures
+==== Ed25519 and ECDSA signatures
 
 Plain signatures are supported for the schemes
 
@@ -262,7 +262,7 @@ Plain signatures are supported for the schemes
 * The signatures are encoded as the concatenation of the 32 byte big endian encodings of the two values _r_ and _s_.
 
 [#webauthn]
-=== Web Authentication
+==== Web Authentication
 
 The only allowed signature scheme for web authentication is
 
@@ -303,7 +303,7 @@ You can also view the wrapping in https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQ
   - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
 
 [#canister-signatures]
-=== Canister signatures
+==== Canister signatures
 
 The IC also supports a scheme where a canister can sign a payload by declaring a special “certified variable”.
 
