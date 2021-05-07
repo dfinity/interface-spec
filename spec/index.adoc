@@ -512,6 +512,8 @@ NOTE: The system functionality exposed via the <<ic-management-canister>> can be
 
 In order to read parts of the <<state-tree>>, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
+* `request_type` (`text`): Always `read_state`
+* `sender`, `nonce`, `ingress_expiry`: See <<authentication>>
 * `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
 
 The HTTP response to this request consists of a CBOR map with the following fields:
