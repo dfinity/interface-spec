@@ -209,7 +209,7 @@ The IC relies on _cycles_, a utility token, to manage its resources. A canister 
 
 When the cycle balance of a canister falls to zero, the canister is _deallocated_. This has the same effect as
 
-* uninstalling the caniser (as described in <<ic-uninstall_code>>)
+* uninstalling the canister (as described in <<ic-uninstall_code>>)
 * setting all resource reservations to zero
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
@@ -227,7 +227,7 @@ The canister status can be used to control whether the canister is processing ca
 
 In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
 
-The controller of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_caniser`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
+The controller of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
 
 NOTE:
 This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
