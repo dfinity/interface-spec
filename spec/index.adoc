@@ -185,7 +185,7 @@ function textual_decode() {
 Services on the Internet Computer are called _canisters_. Conceptually, they consist of the following pieces of state:
 
  * A canister id (a <<principal,principal>>)
- * Their _controller_ (also a <<principal,principal>>)
+ * Their _controllers_ (a possibly empty list of <<principal,principal>>)
  * A cycle balance
  * The _canister status_, which is one of `running`, `stopping` or `stopped`.
  * Resource reservations
@@ -212,7 +212,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, and _controller_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, and _controllers_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
@@ -225,7 +225,7 @@ The canister status can be used to control whether the canister is processing ca
 
 In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
 
-The controller of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
+The controllers of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
 
 NOTE:
 This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
@@ -399,7 +399,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module and its current controller in a certified way.
+Users have the ability to learn about the hash of the canister's module and its current controllers in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -407,9 +407,9 @@ If the canister is empty, this path does not exist.
 If the canister is not empty, it exists and contains the SHA256 hash of the currently installed canister module. Cf. <<ic-canister_status>>.
 
 
-* `/canister/<canister_id>/controller` (blob):
+* `/canister/<canister_id>/controllers` (blob):
 +
-The current controller of the canister, as a principal in its binary form.
+The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`)
 
 [#http-interface]
 == HTTPS Interface
@@ -526,7 +526,7 @@ All requested paths must have one of the following paths as prefix:
  * `/subnet`. Can be requested by anyone.
  * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`, and the effective canister id of the original request matches the `<effective_canister_id>` (see <<http-effective-canister-id>>) in this HTTP request’s path.
  * `/canisters/<canister_id>/module_hash`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
- * `/canisters/<canister_id>/controller`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/controllers`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`. The order is system-defined.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -1327,7 +1327,7 @@ NOTE: The _IC management canister_ is just a facade; it does not actually exist 
 
 The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 
-It is possible to use the management canister via external requests (a.k.a. ingress messages). The cost of processing that request is charged to the canister that is being managed. Most methods only permit the controller to call them. Calls to `raw_rand` and `deposit_cycles` are never accepted as ingress messages.
+It is possible to use the management canister via external requests (a.k.a. ingress messages). The cost of processing that request is charged to the canister that is being managed. Most methods only permit the controllers to call them. Calls to `raw_rand` and `deposit_cycles` are never accepted as ingress messages.
 
 [#ic-candid]
 === Interface overview
@@ -1346,11 +1346,11 @@ Before deploying a canister, the administrator of the canister first has to regi
 
 The optional `settings` parameter can be used to set the following settings:
 
-* `controller` (`principal`)
+* `controllers` (`vec principal`)
 +
-A canister has an attribute _controller_.
+A list of principles. Must be between 0 and 10 in size. This value is assigned to the _controllers_ attribute of the canister.
 +
-Default value: The caller of the `create_canister` call
+Default value: A list containing only the caller of the `create_canister` call
 
 * `compute_allocation` (`nat`)
 +
@@ -1382,7 +1382,7 @@ Default value: 2592000 (approximately 30 days).
 [#ic-update_settings]
 === IC method `update_settings`
 
-Only the _controller_ of the canister can update settings. See <<ic-create_canister>> for a description of settings.
+Only _controllers_ of the canister can update settings. See <<ic-create_canister>> for a description of settings.
 
 Not including a setting in the `settings` record means not changing that field. The defaults described above are only relevant during canister creation.
 
@@ -1391,7 +1391,7 @@ Not including a setting in the `settings` record means not changing that field. 
 
 This method installs code into a canister.
 
-Only the _controller_ of the canister can install code.
+Only _controllers of the canister can install code.
 
 * If `mode = install`, the canister must be empty before. This will instantiate the canister module and invoke its `canister_init` system method (if present), as explained in Section “<<system-api-init>>”, passing the `arg` to the canister.
 
@@ -1410,13 +1410,13 @@ NOTE: Some canisters may not be able to make sense of callbacks after upgrades; 
 
 This method removes a canister’s code and state, making the canister _empty_ again.
 
-Only the _controller_ of the canister can uninstall code.
+Only _controllers of the canister can uninstall code.
 
 Uninstalling a canister’s code will reject all calls that the canister has not yet responded to, and drop the canister’s code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
 
 The canister is now <<canister-lifecycle,empty>>. In particular, any incoming or queued calls will be rejected.
 
-A canister after _uninstalling_ retains its _cycles_ balance, _controller_, status, and allocations.
+A canister after _uninstalling_ retains its _cycles_ balance, _controllers_, status, and allocations.
 
 [#ic-canister_status]
 === IC method `canister_status`
@@ -1425,16 +1425,16 @@ Indicates various information about the canister. It contains:
 
 * The status of the canister. It could be one of `running`, `stopping` or `stopped`.
 * A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
-* The controller of the canister.
+* The controllers of the canister.
 * The memory size taken by the canister.
 * The cycle balance of the canister.
 
-Only the controller of the canister can request its status.
+Only the controllers of the canister can request its status.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
 
-The controller of a canister may stop a canister (e.g., to prepare for a canister upgrade).
+The controllers of a canister may stop a canister (e.g., to prepare for a canister upgrade).
 
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped).
 The system will reject all calls to a stopping canister, indicating that the canister is stopping.
@@ -1443,7 +1443,7 @@ When all outstanding responses have been processed (so there are no open call co
 
 [#ic-start_canister]
 === IC method `start_canister`
-A canister may be started by its controller.
+A canister may be started by its controllers.
 
 If the canister status was `stopped` or `stopping` then the canister status is simply set to `running`.
 In the latter case all `stop_canister` calls which are processing fail (and are rejected).
@@ -1455,7 +1455,7 @@ If the canister was already `running` then the status stays unchanged.
 
 This method deletes a canister from the IC.
 
-Only the _controller_ of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
+Only _controllers of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
 
 [#ic-deposit_cycles]
 === IC method `deposit_cycles`
@@ -2021,7 +2021,7 @@ Finally, we can describe the state of the Internet Computer as a record having t
 S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
-  controllers : CanisterId ↦ Principal;
+  controllers : CanisterId ↦ Set Principal;
   freezing_threshold : CanisterId ↦ Nat;
   canister_status: CanisterId ↦ CanStatus;
   time : CanisterId ↦ Timestamp;
@@ -2171,7 +2171,7 @@ Conditions::
     is_effective_canister_id(E.content, ECID)
     ( E.content.canister_id = ic_principal
       E.content.arg = candid({canister_id = CanisterId, …})
-      E.content.sender = S.controllers[CanisterId]
+      E.content.sender ∈ S.controllers[CanisterId]
       E.content.method_name ∈
         { "install_code", "set_controller", "start_canister", "stop_canister",
           "canister_status", "delete_canister" }
@@ -2488,7 +2488,7 @@ S with
 
 ==== IC Management Canister: Canister creation
 
-The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The controller is set to the sender of this request, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
+The system chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The _controllers_ are set such that the sender of this request is the only controller, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -2510,10 +2510,10 @@ State after::
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
-    if A.settings.controller is not null:
-      controllers[CanisterId] = A.settings.controller
+    if A.settings.controllers is not null:
+      controllers[CanisterId] = A.settings.controllers
     else:
-      controllers[CanisterId] = M.caller
+      controllers[CanisterId] = [M.caller] 
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
@@ -2539,7 +2539,7 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
 
 ==== IC Management Canister: Changing settings
 
-Only the controller of the given canister can update the canister settings.
+Only the controllers of the given canister can update the canister settings.
 
 The `compute_allocation` and `memory_allocation` settings are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
@@ -2550,13 +2550,13 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'update_settings'
     M.arg = candid(A)
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
 S with
-    if A.settings.controller is not null:
-      controllers[A.canister_id] = A.settings.controller
+    if A.settings.controllers is not null:
+      controllers[A.canister_id] = A.settings.controllers
     if A.settings.freezing_threshold exists:
       freezing_threshold[A.canister_id] = A.settings.freezing_threshold
     messages = Older_messages · Younger_messages ·
@@ -2569,7 +2569,7 @@ S with
 
 ==== IC Management Canister: Canister status
 
-The controller of a canister can obtain information about the canister.
+The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
@@ -2580,7 +2580,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'canister_status'
     M.arg = candid(A)
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2594,7 +2594,7 @@ S with
             if S.canisters[A.canister_id] = EmptyCanister
             then null
             else opt (SHA-265(S.canisters[A.canister_id].raw_module));
-          controller = S.controllers[A.canister_id];
+          controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
         })
@@ -2604,7 +2604,7 @@ S with
 
 ==== IC Management Canister: Code installation
 
-Only the controller of the given canister can install code. This transition installs new code over a canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed.
+Only the controllers of the given canister can install code. This transition installs new code over a canister. This involves invoking the `canister_init` system method (see <<system-api-init>>), which must succeed.
 
 Conditions::
 ....
@@ -2616,7 +2616,7 @@ Conditions::
     Mod = parse_wasm_mod(A.wasm_module)
       (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
     or A.mode = reinstall
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
     Arg = {
       data = A.arg;
       caller = M.caller;
@@ -2645,7 +2645,7 @@ S with
 
 ==== IC Management Canister: Code upgrade
 
-Only the controller of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
+Only the controllers of the given canister can install new code. This changes the code of an _existing_ canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` system method on the old and `canister_post_upgrade` system method on the new canister, which must succeed and must not invoke other methods.
 
 Conditions::
 ....
@@ -2658,7 +2658,7 @@ Conditions::
 
     A.mode = upgrade
     S.canisters[A.canister_id] ≠ EmptyCanister
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
     Env = {
       time = S.time[M.receiver];
@@ -2699,7 +2699,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'uninstall_code'
     M.arg = candid(A)
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2732,7 +2732,7 @@ S with
 
 ==== IC Management Canister: Stopping a canister
 
-The controller of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
+The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
 
 We encode this behavior via three (types of) transitions:
 
@@ -2748,7 +2748,7 @@ Conditions::
     M.method_name = 'stop_canister'
     M.arg = candid(A)
     S.canister_status[A.canister_id] = Running
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2767,7 +2767,7 @@ Conditions::
     M.method_name = 'stop_canister'
     M.arg = candid(A)
     S.canister_status[A.canister_id] = Stopping Origins
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2807,7 +2807,7 @@ Conditions::
     M.method_name = 'stop_canister'
     M.arg = candid(A)
     S.canister_status[A.canister_id] = Stopped
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2822,7 +2822,7 @@ S with
 
 ==== IC Management Canister: Starting a canister
 
-The controller of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister.
+The controllers of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister.
 
 Conditions::
 ....
@@ -2832,7 +2832,7 @@ Conditions::
     M.method_name = 'start_canister'
     M.arg = candid(A)
     S.status[A.canister_id] = Running or S.status[A.canister_id] = Stopped
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2857,7 +2857,7 @@ Conditions::
     M.method_name = 'start_canister'
     M.arg = candid(A)
     S.status[A.canister_id] = Stopping Origins
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2888,7 +2888,7 @@ Conditions::
     M.method_name = 'delete_canister'
     M.arg = candid(A)
     S.canister_status[A.canister_id] = stopped
-    M.caller = S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
@@ -2948,7 +2948,6 @@ Conditions::
 State after::
 ....
 S with
-    controllers[A.canister_id] = A.new_controller
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -2976,7 +2975,7 @@ State after::
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
-    controllers[CanisterId] = M.caller
+    controllers[CanisterId] = [M.caller]
     balances[CanisterId] = min(A.amount, MAX_CANISTER_BALANCE)
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
@@ -3255,7 +3254,7 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   then RS.sender == R.sender ∧ is_effective_canister_id(R, ECID)
   else True
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
-may_read_path(S, _, ["canister", cid, "controller"]) = cid == ECID
+may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
 may_read_path(S, _, _) = False
 ....
 
@@ -3271,7 +3270,7 @@ state_tree(S) = {
   "canister":
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
-        { "controller" : S.controllers[canister_id] }
+        { "controllers" : CBOR(S.controllers[canister_id]) }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
