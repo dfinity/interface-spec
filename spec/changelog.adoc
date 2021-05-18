@@ -6,6 +6,11 @@
 
 * None yet
 
+[#0_18_0]
+=== 0.18.0 (2021-05-18)
+
+* Spec: A canister has a set of controllers, instead of always one
+
 [#0_17_0]
 === 0.17.0 (2021-04-22)
 
