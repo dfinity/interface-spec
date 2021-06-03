@@ -9,7 +9,7 @@ WARNING: You are looking at the `master` version of the document! If you are loo
 
 == Introduction
 
-Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Much, if not all, of the advanced and complex machinery is hidden from those that use the Internet Computer to run their applications and those who use these applications.
+Welcome to the Internet Computer! We speak of “the” Internet Computer, because although under the hood a large number of physical computers are working together in non-trivial ways, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Developers who want to build applications that run on the Internet Computer and end-users who want to use those applications need to know very little, if anything, about the underlying complexity of how the Internet Computer works. However, knowing some details about the interfaces that the Internet Computer exposes can interested developers and architects take fuller advantages of the unique features that the Internet Computer provides.
 
 === Target audience
 
