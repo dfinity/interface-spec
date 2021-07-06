@@ -831,6 +831,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
 * If it exports a function called `canister_inspect_message`, the function must have type `+() -> ()+`.
+* If it exports a function called `canister_heartbeat`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * The system may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals.
@@ -847,6 +848,7 @@ The canister provides entry points which are invoked by the system under various
 * The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
 * The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
 * The canister may export functions named `canister_inspect_message` with type `+() -> ()+`.
+* The canister may export a function named `canister_heartbeat` with type `+() -> ()+`.
 * The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
@@ -887,6 +889,14 @@ The argument of the call (e.g. the content of the `arg` field in the <<http-call
 
 Eventually, a method will want to send a response, using `ic0.reply` or `ic0.reject`
 
+==== Heartbeat
+
+For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. If present, the system will invoke this function at regular intervals. The exact interval is implementation-defined. For each heartbeat invocation, the system guarantees that the time, as returned by <<system-api-time,`ic0.time`>>, is monotonically increasing.
+
+`canister_heartbeat` is triggered by the system, and therefore has no arguments, no caller, and cannot reply or reject.
+
+NOTE: While an implementation will likely try to keep the interval between `canister_heartbeat` invocations to within a few seconds, this is not formally part of this specification.
+
 ==== Callbacks
 
 Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
@@ -925,7 +935,7 @@ ic0.msg_method_name_size : () -> i32                                        // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
 ic0.accept_message : () -> ();                                              // F
 
-ic0.call_new :                                                              // U Ry Rt
+ic0.call_new :                                                              // U Ry Rt H
   ( callee_src  : i32,
     callee_size : i32,
     name_src : i32,
@@ -935,17 +945,17 @@ ic0.call_new :                                                              // U
     reject_fun : i32,
     reject_env : i32
   ) -> ();
-ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt
-ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt
-ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt
-ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt
+ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
+ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
+ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt H
+ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
 
 ic0.stable_size : () -> (page_count : i32);                                 // *
 ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
 ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
 
-ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt
+ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt H
 ic0.data_certificate_present : () -> i32                                    // *
 ic0.data_certificate_size : () -> i32                                       // *
 ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
@@ -968,6 +978,7 @@ The comment after each function lists from where these functions may be invoked:
 * `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
+* `H`: from `canister_heartbeat`
 * `*` = `I G U Q Ry Rt C F` (NB: Not `(start)`)
 
 If the canister invokes a system import from somewhere else, it will trap.
@@ -1870,6 +1881,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
+  heartbeat : (Env) -> Trap | Return NoResponse
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
@@ -1912,6 +1924,7 @@ CallOrigin
       calling_context : CallId;
       callback: Callback
     }
+  | FromHeartbeat
 ....
 
 ==== Calls and Messages
@@ -1920,10 +1933,11 @@ Calls into and within the Internet Computer are implemented as messages passed b
 
 Therefore, a message can have different shapes:
 ....
-Queue = Unordered | Queue { from : CanisterId; to : CanisterId }
+Queue = Unordered | Queue { from : System | CanisterId; to : CanisterId }
 EntryPoint
   = PublicMethod MethodName Principal Blob
   | Callback Callback Response RefundedCycles
+  | Heartbeat
 
 Message
   = CallMessage {
@@ -2281,18 +2295,20 @@ State after::
 
 ==== Call context creation
 
-Before invoking a message to a public entry point, some bookkeeping is required:
-
- * A call context is created, and the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
-The canister must be running (so not stopped, or stopping).
-
-The position of the message in the queue is unchanged.
-
-This only happens for “real” canisters, not the IC management canister.
+Before invoking a heartbeat or a message to a public entry point, a call context is created for bookkeeping purposes.
+For these invocations the canister must be running (so not stopped, or stopping).
+Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
 This “bookkeeping transition” must be immediately followed by the corresponding <<rule-message-execution,“Message execution” transition>>.
 
+* Call context creation: Public entry points
++
+For a message to a public entry point, the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
++
+The position of the message in the queue is unchanged.
++
 Conditions::
++
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
@@ -2300,7 +2316,9 @@ Conditions::
     balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom S.call_contexts
 ....
++
 State after::
++
 ....
 S with
     messages =
@@ -2320,6 +2338,41 @@ S with
       available_cycles = CM.transferred_cycles;
     }
     balances[CM.callee] = balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
+....
+
+* Call context creation: Heartbeat
++
+If canister `C` exports a method with name `canister_heartbeat`, the system will add a message to the head of the queue for invoking `canister_heartbeat` and create the corresponding call context.
++
+Conditions::
++
+....
+    S.canisters[C] ≠ EmptyCanister
+    S.canister_status[C] = Running
+    balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+    Ctxt_id ∉ dom S.call_contexts
+....
++
+State after::
++
+....
+S with
+    messages =
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = C;
+        entry_point = Heartbeat;
+        queue = Queue { from = System; to = C }; 
+      }
+      · S.messages 
+    call_contexts[Ctxt_id] = {
+      canister = C;
+      origin = FromHeartbeat;
+      responded = false;
+      deleted = false;
+      available_cycles = 0;
+    }
+    balances[C] = balances[C] - MAX_CYCLES_PER_MESSAGE
 ....
 
 We can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
@@ -2358,6 +2411,10 @@ Conditions::
     or
     ( M.entry_point = Callback Callback Response
       F = Mod.callbacks(Callback, Response, Env, Available)
+    )
+    or
+    ( M.entry_point = Heartbeat
+      F = Mod.heartbeat(Env)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -2459,11 +2516,12 @@ Note that by construction, a query function will either trap or return with a re
 [#rule-starvation]
 ==== Call context starvation
 
-If there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
+If the call context is not for heartbeat and there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the system has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
 Conditions::
 ....
     S.call_contexts[Ctxt_id].responded = false
+    S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
@@ -2486,11 +2544,17 @@ S with
 
 ==== Call context removal
 
-If there is no call, downstream calling context or response that references a call context, and the call context has been replied to, then the call context can be removed.
+If there is no call, downstream calling context, or response that references a call context, and the call context has been replied to or the call context corresponds to a heartbeat that had already been executed, then the call context can be removed.
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].responded = true
+    (
+      S.call_contexts[Ctxt_id].responded = true
+    ) or
+    (
+      S.call_contexts[Ctxt_id].origin = FromHeartbeat
+      ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
+    )
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
@@ -3524,6 +3588,22 @@ query_methods[method] = λ (arg, sysenv) → λ wasm_state →
 This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
+
+* The partial map `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
++
+....
+heartbeat = λ (sysenv) → λ wasm_state →
+  let es = ref {empty_execution_state with
+    wasm_state = wasm_state;
+    params = empty_params with { data = NoData; caller = NoCaller; sysenv }
+    balance = sysenv.balance
+  }
+  try func<es>() with Trap then Trap
+  if es.cycles_accepted ≠ 0 then Trap
+  if es.ingress_filter ≠ Reject then Trap
+  if es.response ≠ NoResponse then Trap
+  Return NoResponse;
+....
 
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
