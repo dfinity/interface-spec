@@ -33,11 +33,11 @@ This document tries to be implementation agnostic: It would apply just as well t
 
 === Overview of the Internet Computer
 
-If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,HTTP interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format, what a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
+If you want to use the Internet Computer as an application developer, you first create a _canister module_ that contains the WebAssembly code and configuration for your application, and deploy it using the <<http-interface,HTTPS interface>>. You can create canisters using the Motoko language and the SDK, which is more convenient. If you want to use your own tooling, however, then this document describes <<canister-module-format, what a canister module looks like>> and how the <<system-api,WebAssembly code can interact with the system>>.
 
-Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,HTTP interface>> to interact with the canister according to the <<system-api,System API>>.
+Once your application is running on the Internet Computer, it is a _canister_, and users can interact with it. They can use the <<http-interface,HTTPS interface>> to interact with the canister according to the <<system-api,System API>>.
 
-The user can also use the HTTP interface to issue read-only queries, which are faster, but cannot change the state of a canister.
+The user can also use the HTTPS interface to issue read-only queries, which are faster, but cannot change the state of a canister.
 
 .A typical use of the Internet Computer. (This is a simplified view; some of the arrows represent multiple interaction steps or polling.)
 [plantuml]
@@ -588,7 +588,7 @@ NOTE: The expectation is that user-side agent code shields users and developers 
 [#authentication]
 === Authentication
 
-All requests coming in via the HTTP interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
+All requests coming in via the HTTPS interface need to be either _anonymous_ or _authenticated_ using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
 
 * `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 * `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like <<system-api-time,ic0.time()>>). This avoids replay attacks: The system will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The system may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `signature_expiry`).
@@ -792,7 +792,7 @@ More precisely:
    to the same canister, they are queued in the order of invocations to `ic0.call_perform`.
  * Responses (including replies with `ic0.msg_reply`, explicit rejects with `ic0.msg_reject` and system-generated error responses) do _not_ have any ordering guarantee relative to each other or to method calls.
  * There is no particular order guarantee for ingress messages submitted via
-   the HTTP interface.
+   the HTTPS interface.
 
 === Synchronicity across nodes
 
@@ -2173,16 +2173,6 @@ is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, arg = c
 is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
 is_effective_canister_id(CanisterUpdateCall {canister_id = p, …}, p), if p ≠ ic_principal
 ....
-
-=== State transitions
-
-Based on this abstract notion of the state, we can describe the behavior of the system. There are three classes of behaviors:
-
- * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describes checks that the request must pass to be considered received.
- * Spontaneous transitions that model the internal behavior of the system, by describing conditions on the state that allow the transition to happen, and the state after.
- * Responses to synchronous requests (i.e. `/api/v2/…/query`). By definition, these do _not_ change the state of the system, and merely describe the response based on the read request and the current system state.
-
-The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
 ==== API Request submission
 
