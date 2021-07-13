@@ -1126,7 +1126,7 @@ When handling an update call (or a callback), a canister can do further calls to
 
 Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
 
-The system records two mandatory callback functions, represented by a table entry index `fun` and some additional value `env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+` and passed the corresponding `env` value.
+The system records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+`, and passed the corresponding `*_env` value.
 
 The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
 
@@ -1142,7 +1142,7 @@ Subsequent calls to the following functions set further attributes of that call,
 --
   ic0.call_on_cleanup : (fun : i32, env : i32) -> ()
 
-If a cleanup callback is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
+If a cleanup callback (of type `+(env : i32) -> ()+`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 
 During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
 
@@ -1172,7 +1172,7 @@ If the system returns `0` as the `err_code`, the system was able to enqueue the 
 +
 If the system returns a non-zero value, the call cannot (and will not be) performed. This can happen due to a lack of system internal resources, but also if it would reduce the current cycle balance to a level below where the canister would be frozen.
 +
-After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap
+After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap.
 
 [#system-api-cycles]
 === Cycles
