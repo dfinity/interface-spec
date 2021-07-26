@@ -4,7 +4,7 @@
 [#unreleased]
 === ∞ (unreleased)
 
-* None yet
+* Support RSA PKCSv1.5 signatures in web authentication
 
 [#0_18_0]
 === 0.18.0 (2021-05-18)
