@@ -264,9 +264,10 @@ Plain signatures are supported for the schemes
 [#webauthn]
 ==== Web Authentication
 
-The only allowed signature scheme for web authentication is
+The allowed signature schemes for web authentication are
 
 * https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[*ECDSA*] on curve P-256 (also known as `secp256r1`), using SHA-256 as hash function.
+* https://datatracker.ietf.org/doc/html/rfc8017#section-8.2[*RSA PKCS#1v1.5 (RSASSA-PKCS1-v1_5)*], using SHA-256 as hash function.
 
 The signature is calculated by using the payload as the challenge in the web authentication assertion.
 
