@@ -4,7 +4,14 @@
 [#unreleased]
 === ∞ (unreleased)
 
-* Support RSA PKCSv1.5 signatures in web authentication
+* Spec: Canister heartbeat
+* Spec: Canister access to performance metrics
+
+[#0_18_1]
+=== 0.18.1 (2021-08-04)
+
+* Spec: Support RSA PKCS#1 v1.5 signatures in web authentication
+* Spec clarification: Fix various typos and improve textual clarity
 
 [#0_18_0]
 === 0.18.0 (2021-05-18)
