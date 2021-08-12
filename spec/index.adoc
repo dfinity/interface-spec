@@ -956,6 +956,10 @@ ic0.stable_size : () -> (page_count : i32);                                 // *
 ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
 ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
+ic0.stable_size64 : () -> (page_count : i64);                               // *
+ic0.stable_grow64 : (new_pages : i64) -> (old_page_count : i64);           // *
+ic0.stable_write64 : (offset : i64, src : i64, size : i64) -> ();           // *
+ic0.stable_read64 : (dst : i64, offset : i64, size : i64) -> ();            // *
 
 ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt H
 ic0.data_certificate_present : () -> i32                                    // *
@@ -1238,23 +1242,49 @@ The stable memory is initially empty.
 
 * `ic0.stable_size : () -> (page_count : i32)`
 +
-returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64Ki bytes.)
+returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
++
+This system call is deprecated and traps if the size of stable memory exceeds 65536 pages.
 
 * `ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 +
 If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
++
+This system call is deprecated and traps if the original number of pages exceeds 65536 (without growing the memory).
 
 * `ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()`
 +
 copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 +
-This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
+This system call is deprecated and traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
 
 * `ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()`
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
++
+This system call is deprecated and traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
+
+* `ic0.stable_size64 : () -> (page_count : i64)`
++
+returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
+
+* `ic0.stable_grow64 : (new_pages : i64) -> (old_page_count : i64)`
++
+tries to grow the memory by `new_pages` many pages containing zeroes.
++
+If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
+
+* `ic0.stable_write64 : (offset : i64, src : i64, size : i64) -> ()`
++
+Copies the data from location [src, src+size) of the canister memory to location [offset, offset+size) in the stable memory.
++
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
+
+* `ic0.stable_read64 : (dst : i64, offset : i64, size : i64) -> ()`
++
+Copies the data from location [offset, offset+size) of the stable memory to the location [dst, dst+size) in the canister memory.
 +
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
@@ -3851,9 +3881,38 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
-  return |es.wasm_state.stable_mem| / 64k
+  page_count := |es.wasm_state.stable_mem| / 64k
+  if page_count > 2^16 then Trap
+  return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
+  if arbitrary()
+  then return -1
+  else
+    old_size := |es.wasm_state.stable_mem| / 64k
+    if old_size > 2^16 then Trap
+    es.wasm_state.stable_mem :=
+      es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
+    return old_size
+
+ic0.stable_write<es>(offset : i32, src : i32, size : i32)
+  if src+size > |es.wasm_state.store.mem| then Trap
+  if offset+size > |es.wasm_state.stable_mem| then Trap
+  if offset+size > 2^32 then Trap
+
+  es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
+
+ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
+  if offset+size > |es.wasm_state.stable_mem| then Trap
+  if dst+size > |es.wasm_state.store.mem| then Trap
+  if offset+size > 2^32 then Trap
+
+  es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
+
+ic0.stable_size64<es>() : (page_count : i64) =
+  return |es.wasm_state.stable_mem| / 64k
+
+ic0.stable_grow64<es>(new_pages : i64) : (old_page_count : i64) =
   if arbitrary()
   then return -1
   else
@@ -3862,13 +3921,13 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
       es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
     return old_size
 
-ic0.stable_write<es>(offset : i32, src : i32, size : i32)
+ic0.stable_write64<es>(offset : i64, src : i64, size : i64)
   if src+size > |es.wasm_state.store.mem| then Trap
   if offset+size > |es.wasm_state.stable_mem| then Trap
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
-ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
+ic0.stable_read64<es>(dst : i64, offset : i64, size : i64)
   if offset+size > |es.wasm_state.stable_mem| then Trap
   if dst+size > |es.wasm_state.store.mem| then Trap
 

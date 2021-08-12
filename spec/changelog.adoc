@@ -4,6 +4,7 @@
 [#unreleased]
 === ∞ (unreleased)
 
+* Support for 64-bit stable memory
 * Spec: Canister heartbeat
 * Spec: Canister access to performance metrics
 
