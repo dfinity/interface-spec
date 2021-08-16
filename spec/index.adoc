@@ -332,6 +332,8 @@ The `BIT STRING` field `subjectPublicKey` is the blob `|signing_canister_id| · 
 
 where `signing_canister_id` is the id of the signing canister and `reconstruct` is a function that computes a root-hash for the tree.
 
+- If the `certificate` includes subnet delegations (possibly nested), then the `signing_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
+
 - The `tree` must be a `well_formed` tree with
 
   lookup(/sig/<s>/<m>, tree) = Found ""
@@ -366,6 +368,20 @@ The state tree contains information about the topology of the Internet Computer.
 * `/subnet/<subnet_id>/public_key` (blob)
 +
 The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
+
+* `/subnet/<subnet_id>/canister_ranges` (blob)
++
+The set of canister ids assigned to this subnet, represented as a list of closed intervals of canister ids, ordered lexicographically, and encoded as CBOR according to this CDDL:
++
+....
+canister_ranges = tagged<[*canister_range]>
+canister_range = [principal principal]
+principal = bytes .size (0..29)
+tagged<t> = #6.55799(t) ; the CBOR tag
+....
++
+NOTE: Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the _end_, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
+
 
 [#state-tree-request-status]
 === Request status
@@ -520,6 +536,8 @@ In order to read parts of the <<state-tree>>, the user makes a POST request to `
 The HTTP response to this request consists of a CBOR map with the following fields:
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
++
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -1347,6 +1365,8 @@ Copies the certificate for the current value of the certified data to the canist
 +
 The certificate is a blob as described in <<certification>> that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of <<state-tree>>.
 +
+If this `certificate` includes subnet delegations (possibly nested), then the id of the current canister will be included in each delegation’s canister id range.
++
 This traps if `ic0.data_certificate_present()` returns `0`.
 
 
@@ -1698,6 +1718,9 @@ check_delegations(Delegation d) : public_bls_key =
   return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
 where `root_public_key` is the a priori known root key of the Internet Computer instance.
+
+Delegation are _scoped_, i.e. they indicate which set of canister ids the delegatee subnet may certify for. This set can be obtained from a a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
+
 
 [#certification-encoding]
 === Encoding of certificates
