@@ -4,6 +4,7 @@
 [#unreleased]
 === ∞ (unreleased)
 
+* Spec: New System API which uses 128-bit values to represent the amount of cycles
 * Spec: Subnet delegations include a canister id scope
 * Support for 64-bit stable memory
 * Spec: Canister heartbeat
