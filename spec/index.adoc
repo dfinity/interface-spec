@@ -1327,7 +1327,7 @@ The stable memory is initially empty.
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
 +
-This system call is deprecated and traps if the size of stable memory exceeds 65536 pages.
+This system call traps if the size of stable memory exceeds 65536 pages.
 
 * `ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)`
 +
@@ -1335,41 +1335,49 @@ tries to grow the memory by `new_pages` many pages containing zeroes.
 +
 If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
 +
-This system call is deprecated and traps if the original number of pages exceeds 65536 (without growing the memory).
+This system call traps if the original number of pages exceeds 65536 (without growing the memory).
 
 * `ic0.stable_write : (offset : i32, src : i32, size : i32) -> ()`
 +
 copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 +
-This system call is deprecated and traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
 
 * `ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ()`
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 +
-This system call is deprecated and traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
+This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory or exceeds 2^32.
 
 * `ic0.stable_size64 : () -> (page_count : i64)`
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable_grow64 : (new_pages : i64) -> (old_page_count : i64)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 +
 If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable_write64 : (offset : i64, src : i64, size : i64) -> ()`
 +
 Copies the data from location [src, src+size) of the canister memory to location [offset, offset+size) in the stable memory.
 +
 This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable_read64 : (dst : i64, offset : i64, size : i64) -> ()`
 +
 Copies the data from location [offset, offset+size) of the stable memory to the location [dst, dst+size) in the canister memory.
 +
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 [#system-api-time]
 === System time
