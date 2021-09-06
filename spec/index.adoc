@@ -980,10 +980,10 @@ ic0.stable_size : () -> (page_count : i32);                                 // *
 ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
 ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
 ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
-ic0.stable_size64 : () -> (page_count : i64);                               // *
-ic0.stable_grow64 : (new_pages : i64) -> (old_page_count : i64);           // *
-ic0.stable_write64 : (offset : i64, src : i64, size : i64) -> ();           // *
-ic0.stable_read64 : (dst : i64, offset : i64, size : i64) -> ();            // *
+ic0.stable64_size : () -> (page_count : i64);                               // *
+ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64);            // *
+ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();           // *
+ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();            // *
 
 ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt H
 ic0.data_certificate_present : () -> i32                                    // *
@@ -1355,13 +1355,13 @@ This system call traps if the size of the stable memory exceeds 2^32 bytes.
 +
 It also traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory
 
-* `ic0.stable_size64 : () -> (page_count : i64)`
+* `ic0.stable64_size : () -> (page_count : i64)`
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
 +
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
-* `ic0.stable_grow64 : (new_pages : i64) -> (old_page_count : i64)`
+* `ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 +
@@ -1369,7 +1369,7 @@ If successful, returns the _previous_ size of the memory (in pages). Otherwise, 
 +
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
-* `ic0.stable_write64 : (offset : i64, src : i64, size : i64) -> ()`
+* `ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ()`
 +
 Copies the data from location [src, src+size) of the canister memory to location [offset, offset+size) in the stable memory.
 +
@@ -1377,7 +1377,7 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory 
 +
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
-* `ic0.stable_read64 : (dst : i64, offset : i64, size : i64) -> ()`
+* `ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ()`
 +
 Copies the data from location [offset, offset+size) of the stable memory to the location [dst, dst+size) in the canister memory.
 +
@@ -4011,10 +4011,10 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
 
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
-ic0.stable_size64<es>() : (page_count : i64) =
+ic0.stable64_size<es>() : (page_count : i64) =
   return |es.wasm_state.stable_mem| / 64k
 
-ic0.stable_grow64<es>(new_pages : i64) : (old_page_count : i64) =
+ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
   if arbitrary()
   then return -1
   else
@@ -4023,13 +4023,13 @@ ic0.stable_grow64<es>(new_pages : i64) : (old_page_count : i64) =
       es.wasm_state.stable_mem · repeat(0x00, new_pages * 64k)
     return old_size
 
-ic0.stable_write64<es>(offset : i64, src : i64, size : i64)
+ic0.stable64_write<es>(offset : i64, src : i64, size : i64)
   if src+size > |es.wasm_state.store.mem| then Trap
   if offset+size > |es.wasm_state.stable_mem| then Trap
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
-ic0.stable_read64<es>(dst : i64, offset : i64, size : i64)
+ic0.stable64_read<es>(dst : i64, offset : i64, size : i64)
   if offset+size > |es.wasm_state.stable_mem| then Trap
   if dst+size > |es.wasm_state.store.mem| then Trap
 
