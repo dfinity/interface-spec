@@ -6,9 +6,14 @@
 
 * Spec: New System API which uses 128-bit values to represent the amount of cycles
 * Spec: Subnet delegations include a canister id scope
-* Spec: Support for 64-bit stable memory
-* Spec: Canister heartbeat
 * Spec: Canister access to performance metrics
+
+[#0_18_2]
+=== 0.18.2 (2021-09-29)
+
+* Spec: Canister heartbeat
+* Spec: Terminology changes
+* Spec: Support for 64-bit stable memory
 
 [#0_18_1]
 === 0.18.1 (2021-08-04)
