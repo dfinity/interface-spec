@@ -860,6 +860,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
+[#entry-points]
 === Entry points
 
 The canister provides entry points which are invoked by the IC under various circumstances:
@@ -1404,9 +1405,9 @@ NOTE: While an implementation will likely try to keep the time returned by `ic0.
 [#system-api-performance-counter]
 === Performance counter
 
-The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister performed since the beginning of the message execution.
+The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done since the beginning of the current execution.
 
-The counter is reset each time a new message is passed to the canister for execution.
+The counter is reset as the system invokes one of the <<entry-points>>.
 
 The exact semantics of the counter is implementation-defined and can depend on:
 
