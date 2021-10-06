@@ -419,7 +419,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module and its current controllers in a certified way.
+Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -430,6 +430,12 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 * `/canister/<canister_id>/controllers` (blob):
 +
 The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`).
+
+* `/canister/<canister_id>/metadata/<name>` (blob):
++
+If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
++
+It is recommended for the canister to have a custom section called "icp:public candid", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
 
 [#http-interface]
 == HTTPS Interface
@@ -549,6 +555,7 @@ All requested paths must have one of the following paths as prefix:
  * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`, and the effective canister id of the original request matches the `<effective_canister_id>` (see <<http-effective-canister-id>>) in this HTTP request’s path.
  * `/canisters/<canister_id>/module_hash`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
+ * `/canisters/<canister_id>/metadata/<name>`. Can be read by anyone if `<canister_id>` matches `<effective_canister_id>`, and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be read if this `read_state` request was signed by one of the controllers of the canister.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -854,7 +861,9 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * It may not export other methods the names of which start with the prefix `canister_` besides the methods allowed above.
-* The IC may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals.
+* It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
+* It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
+* The IC may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals or more than 16 custom sections whose names start with the prefix `icp:`.
 
 === Interpretation of numbers
 
@@ -2204,6 +2213,8 @@ CanState
   wasm_state : WasmState;
   module : CanisterModule;
   raw_module : Blob;
+  public_custom_sections: Text ↦ Blob;
+  private_custom_sections: Text ↦ Blob;
 }
 CanStatus
   = Running
@@ -3462,6 +3473,12 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   else True
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
+may_read_path(S, _, ["canister", cid, "metadata", name]) =
+  if name ∈ S.canisters[cid].public_custom_sections
+  then cid == ECID
+  else if name ∈ S.canisters[cid].private_custom_sections
+  then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
+  else False
 may_read_path(S, _, _) = False
 ....
 
@@ -3477,7 +3494,8 @@ state_tree(S) = {
   "canister":
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
-        { "controllers" : CBOR(S.controllers[canister_id]) }
+        { "controllers" : CBOR(S.controllers[canister_id]) } ∪
+        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
