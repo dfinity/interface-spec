@@ -874,13 +874,13 @@ WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be
 
 The canister provides entry points which are invoked by the IC under various circumstances:
 
-* The canister may export a function named `canister_init` and type `+() -> ()+`.
-* The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
-* The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
-* The canister may export functions named `canister_inspect_message` with type `+() -> ()+`.
-* The canister may export a function named `canister_heartbeat` with type `+() -> ()+`.
-* The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
-* The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
+* The canister may export a function with name `canister_init` and type `+() -> ()+`.
+* The canister may export a function with name `canister_pre_upgrade` and type `+() -> ()+`.
+* The canister may export a function with name `canister_post_upgrade` and type `+() -> ()+`.
+* The canister may export functions with name `canister_inspect_message` with type `+() -> ()+`.
+* The canister may export a function with name `canister_heartbeat` with type `+() -> ()+`.
+* The canister may export functions with name `canister_update <name>` and type `+() -> ()+`.
+* The canister may export functions with name `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
@@ -921,7 +921,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 ==== Heartbeat
 
-For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. If present, the IC will invoke this function at regular intervals. The exact interval is implementation-defined. For each heartbeat invocation, the IC guarantees that the time, as returned by <<system-api-time,`ic0.time`>>, is monotonically increasing.
+For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined. For each heartbeat invocation, the IC guarantees that the time, as returned by <<system-api-time,`ic0.time`>>, is monotonically increasing.
 
 `canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
 
@@ -1019,7 +1019,7 @@ The comment after each function lists from where these functions may be invoked:
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
 * `H`: from `canister_heartbeat`
-* `*` = `I G U Q Ry Rt C F` (NB: Not `(start)`)
+* `*` = `I G U Q Ry Rt C F H` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -1083,7 +1083,7 @@ Appends data it to the (initially empty) data reply.
 +
 NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-This traps if the current call already has been responded to.
+This traps if the current call already has been or does not need to be responded to.
 
 * `+ic0.msg_reply : () -> ()+`
 +
@@ -1097,7 +1097,7 @@ See <<system-api-cycles>> for how this interacts with cycles available on this c
 +
 Rejects the call. The data referred to by `src`/`size` is used for the diagnostic message.
 +
-This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`size` is not valid UTF8.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been or does not need to be responded to, or if the data referred to by `src`/`size` is not valid UTF8.
 +
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
@@ -1567,7 +1567,7 @@ Only _controllers of the canister can install code.
 
 * If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
 +
-Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all unresponded calls.
+Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all calls awaiting a response.
 
 * If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` method of the new instance.
 
@@ -2049,13 +2049,13 @@ The concrete mapping of this abstract `CanisterModule` to actual WebAssembly con
 
 The Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
 
-To ensure that only one response is generated, and also to detect when no response can be generated any more, the IC maintains a _call context_. The `responded` field is set to `true` once the call has received a response. Further attempts to respond will now fail.
+To ensure that only one response is generated, and also to detect when no response can be generated any more, the IC maintains a _call context_. The `needs_to_respond` field is set to `false` once the call has received a response. Further attempts to respond will now fail.
 
 ....
 CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
-  responded : bool;
+  needs_to_respond : bool;
   deleted : bool;
   available_cycles : Nat;
 }
@@ -2245,18 +2245,18 @@ for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using 
 
 The following is an incomplete list of invariants that should hold for the abstract state `S`, and are not already covered by the type annotations in this section.
 
-* Deleted call contexts have been responded to:
+* Deleted call contexts were not awaiting a response:
 +
 ....
 ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-  if Ctxt.deleted then Ctxt.responded
+  if Ctxt.deleted then Ctxt.needs_to_respond = false
 ....
 
 * Responded call contexts have no available_cycles left:
 +
 ....
 ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-  if Ctxt.responded then Ctxt.available_cycles = 0
+  if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
 * Referenced call contexts exists:
@@ -2265,7 +2265,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 ∀ CallMessage M ∈ S.messages.  M.origin.calling_context ∈ S.call_contexts
 ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ∈ S.call_contexts
 ∀ _ ↦ Ctxt ∈ S.call_contexts:
-  if Ctx.responded = false:
+  if Ctx.needs_to_respond:
      Ctxt.origin.calling_context ∈ S.call_contexts
 ....
 
@@ -2469,7 +2469,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = CM.callee;
       origin = CM.origin;
-      responded = false;
+      needs_to_respond = true;
       deleted = false;
       available_cycles = CM.transferred_cycles;
     }
@@ -2478,7 +2478,7 @@ S with
 
 * Call context creation: Heartbeat
 +
-If canister `C` exports a method with name `canister_heartbeat`, the IC will add a message to the head of the queue for invoking `canister_heartbeat` and create the corresponding call context.
+If canister `C` exports a method with name `canister_heartbeat`, the IC will create the corresponding call context.
 +
 Conditions::
 +
@@ -2504,7 +2504,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = C;
       origin = FromHeartbeat;
-      responded = false;
+      needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
     }
@@ -2570,7 +2570,7 @@ if
         - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
       , MAX_CANISTER_BALANCE)
   New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
-  (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
+  (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
     canisters[M.receiver].wasm_state = res.new_state;
@@ -2600,7 +2600,7 @@ then
     if res.response = NoResponse:
        call_contexts[M.call_context].available_cycles = Available - res.cycles_accepted
     else
-       call_contexts[M.call_context].responded = true
+       call_contexts[M.call_context].needs_to_respond = false
        call_contexts[M.call_context].available_cycles = 0
 
     if res.new_certified_data ≠ NoCertifiedData:
@@ -2622,7 +2622,7 @@ Depending whether this is a call message and a response messages, we have either
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
- * Responding if the present call context has already been responded to
+ * Responding if the present call context does not need to be responded to
  * Accepting more cycles than are available on the call context
  * Sending out more cycles than available to the canister
  * Consuming more cycles than allowed (and reserved)
@@ -2656,18 +2656,18 @@ If the call context is not for heartbeat and there is no call, downstream callin
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].responded = false
+    S.call_contexts[Ctxt_id].needs_to_respond = true
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].responded = false
+        S.call_contexts[ctxt_ids].needs_to_respond
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
 S with
-    call_contexts[Ctxt_id].responded = true
+    call_contexts[Ctxt_id].needs_to_respond = false
     call_contexts[Ctxt_id].available_cycles = 0
     messages =
       S.messages ·
@@ -2685,7 +2685,7 @@ If there is no call, downstream calling context, or response that references a c
 Conditions::
 ....
     (
-      S.call_contexts[Ctxt_id].responded = true
+      S.call_contexts[Ctxt_id].needs_to_respond = false
     ) or
     (
       S.call_contexts[Ctxt_id].origin = FromHeartbeat
@@ -2694,7 +2694,7 @@ Conditions::
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].responded = false
+        S.call_contexts[ctxt_ids].needs_to_respond = true
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
 State after::
@@ -2938,13 +2938,13 @@ S with
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
-      , Ctxt.responded = false
+      , Ctxt.needs_to_respond = true
       ]
 
       for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
         if Ctxt.canister = A.canister_id:
           call_contexts[Ctxt_id].deleted := true
-          call_contexts[Ctxt_id].responded := true
+          call_contexts[Ctxt_id].needs_to_respond := false
           call_contexts[Ctxt_id].available_cycles := 0
 ....
 
@@ -3346,13 +3346,13 @@ S with
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
-      , Ctxt.responded = false
+      , Ctxt.needs_to_respond = true
       ]
 
     for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
       if Ctxt.canister = A.canister_id:
         call_contexts[Ctxt_id].deleted := true
-        call_contexts[Ctxt_id].responded := true
+        call_contexts[Ctxt_id].needs_to_respond := false
         call_contexts[Ctxt_id].available_cycles := 0
 ....
 
