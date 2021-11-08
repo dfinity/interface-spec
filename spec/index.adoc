@@ -953,17 +953,17 @@ ic0.msg_reply : () -> ();                                                   // U
 ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
 
 ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
-ic0.msg_cycles_available128 : () -> (high : i64, low : i64);                // U Rt Ry
+ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
-ic0.msg_cycles_refunded128 : () -> (high : i64, low: i64);                  // Rt Ry
+ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
 ic0.msg_cycles_accept : ( max_amount : i64) -> ( amount : i64 );            // U Rt Ry
-ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low: i64)
-                       -> ( amount_high : i64, amount_low: i64 );           // U Rt Ry
+ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low: i64, dst : i32)
+                       -> ();                                               // U Rt Ry
 
 ic0.canister_self_size : () -> i32;                                         // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
-ic0.canister_cycle_balance128 : () -> (high : i64, low : i64);              // *
+ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
 ic0.canister_status : () -> i32;                                            // *
 
 ic0.msg_method_name_size : () -> i32                                        // F
@@ -1224,37 +1224,41 @@ After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `
 [#system-api-cycles]
 === Cycles
 
-Each canister maintains a balance of _cycles_, the utility token used to pay for platform usage.
+Each canister maintains a balance of _cycles_, which are used to pay for platform usage. Cycles are represented by 128-bit values.
 
 NOTE: This specification currently does not go into details about which actions cost how many cycles and/or when. In general, you must assume that the canister’s cycle balance can change arbitrarily between method executions, and during each System API function call, unless explicitly mentioned otherwise.
 
 * `ic0.canister_cycle_balance : () -> i64`
 +
-indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
+Indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 +
 NOTE: This call is deprecated and traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
 
-* `ic0.canister_cycle_balance128 : () -> (high : i64, low : i64)`
+* `ic0.canister_cycle_balance128 : ( dst : i32 ) -> ()`
 +
-indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
+Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory.
+It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`.
+After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 +
-NOTE: Cycles are represented by 128-bit values. The amount of cycles that the canister's balance holds can be obtained by combining the return values: high * 2^64^ + low.
-
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
++
 * `ic0.msg_cycles_available : () -> i64`
 +
-returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
+Returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
 +
 Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
 +
 NOTE: This call is deprecated and traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
 
-* `ic0.msg_cycles_available128 : () -> ( high: i64, low : i64)`
+* `ic0.msg_cycles_available128 : ( dst : i32 ) -> ()`
 +
-returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
+Indicates the number of cycles transferred by the caller of the current call, still available in this message.
+The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
 +
-Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
+Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will report 0 cycles.
 +
-NOTE: Cycles are represented by 128-bit values. The amount of cycles transferred can be obtained by combining the return values: high * 2^64^ + low.
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
++
 
 * `ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 )`
 +
@@ -1279,7 +1283,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 =====
 --
 
-* `ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low : i64 ) -> ( amount_high : i64, amount_low : i64 )`
+* `ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low : i64, dst : i32 ) -> ()`
 +
 --
 This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
@@ -1292,10 +1296,12 @@ This moves cycles from the call to the canister balance. It moves as many cycles
 
 It can be called multiple times, each time possibly adding more cycles to the balance.
 
-The amount of cycles that were actually moved can be obtained by combining the return values: amount_high * 2^64^ + amount_low.
-
-This does not trap.
+This call also copies the amount of cycles that were actually moved starting at the location `dst` in the canister memory.
 --
++
+This does not trap.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 * `ic0.call_cycles_add : ( amount : i64 ) -> ()`
 +
 This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1313,18 +1319,20 @@ The amount of cycles it moves is represented by a 128-bit value which can be obt
 The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 +
 This traps if trying to transfer more cycles than are in the current balance of the canister.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.msg_cycles_refunded : () -> i64`
 +
-this can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
+This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
 NOTE: This call is deprecated and traps if the amount of cycles refunded does not fit into a 64-bit value. Please use `ic0.msg_cycles_refunded128` instead.
 
-* `ic0.msg_cycles_refunded128 : () -> ( high : i64, low : i64 )`
+* `ic0.msg_cycles_refunded128 : ( dst : i32 ) -> ()`
 +
-this can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
-
-NOTE: Cycles are represented by 128-bit values. The amount of cycles refunded can be obtained by combining the return values: high * 2^64^ + low.
+This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 [#system-api-stable-memory]
 === Stable memory
