@@ -956,8 +956,8 @@ ic0.msg_cycles_available : () -> i64;                                       // U
 ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
 ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-ic0.msg_cycles_accept : ( max_amount : i64) -> ( amount : i64 );            // U Rt Ry
-ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low: i64, dst : i32)
+ic0.msg_cycles_accept : (max_amount : i64) -> ( amount : i64 );            // U Rt Ry
+ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                        -> ();                                               // U Rt Ry
 
 ic0.canister_self_size : () -> i32;                                         // *
@@ -982,8 +982,8 @@ ic0.call_new :                                                              // U
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
-ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt H
-ic0.call_cycles_add128 : ( amount_high : i64, amount_low: i64 ) -> ();      // U Ry Rt H
+ic0.call_cycles_add : (amount : i64) -> ();                               // U Ry Rt H
+ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();      // U Ry Rt H
 ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
 
 ic0.stable_size : () -> (page_count : i32);                                 // *
@@ -1199,7 +1199,7 @@ This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
 * `+ic0.call_cycles_add : (amount : i64) -> ()+`
 +
-(deprecated) This adds cycles onto a call. See <<system-api-cycles>>.
+This adds cycles onto a call. See <<system-api-cycles>>.
 +
 This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
@@ -1232,9 +1232,9 @@ NOTE: This specification currently does not go into details about which actions 
 +
 Indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 +
-NOTE: This call is deprecated and traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
+NOTE: This call traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
 
-* `ic0.canister_cycle_balance128 : ( dst : i32 ) -> ()`
+* `ic0.canister_cycle_balance128 : (dst : i32) -> ()`
 +
 Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory.
 It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`.
@@ -1248,9 +1248,9 @@ Returns the amount of cycles that were transferred by the caller of the current 
 +
 Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
 +
-NOTE: This call is deprecated and traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
+NOTE: This call traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
 
-* `ic0.msg_cycles_available128 : ( dst : i32 ) -> ()`
+* `ic0.msg_cycles_available128 : (dst : i32) -> ()`
 +
 Indicates the number of cycles transferred by the caller of the current call, still available in this message.
 The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
@@ -1260,7 +1260,7 @@ Initially, in the update method entry point, this is the amount that the caller 
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 +
 
-* `ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 )`
+* `ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64)`
 +
 --
 This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
@@ -1275,7 +1275,7 @@ It can be called multiple times, each time possibly adding more cycles to the ba
 
 The return value indicates how many cycles were actually moved.
 
-This system call is deprecated and does not trap.
+This system call does not trap.
 
 [TIP]
 =====
@@ -1283,7 +1283,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 =====
 --
 
-* `ic0.msg_cycles_accept128 : ( max_amount_high : i64, max_amount_low : i64, dst : i32 ) -> ()`
+* `ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low : i64, dst : i32) -> ()`
 +
 --
 This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
@@ -1302,15 +1302,15 @@ This call also copies the amount of cycles that were actually moved starting at 
 This does not trap.
 +
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-* `ic0.call_cycles_add : ( amount : i64 ) -> ()`
+* `ic0.call_cycles_add : (amount : i64) -> ()`
 +
 This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
 +
 The cycles are deducted from the balance as shown by `ic0.canister_cycle_balance` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 +
-This system call is deprecated and traps if trying to transfer more cycles than are in the current balance of the canister.
+This system call traps if trying to transfer more cycles than are in the current balance of the canister.
 
-* `ic0.call_cycles_add128 : ( amount_high : i64, amount_low : i64 ) -> ()`
+* `ic0.call_cycles_add128 : (amount_high : i64, amount_low : i64) -> ()`
 +
 This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
 +
@@ -1326,9 +1326,9 @@ This system call is experimental. It may be changed or removed in the future. Ca
 +
 This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
-NOTE: This call is deprecated and traps if the amount of cycles refunded does not fit into a 64-bit value. Please use `ic0.msg_cycles_refunded128` instead.
+NOTE: This call traps if the amount of cycles refunded does not fit into a 64-bit value. Please use `ic0.msg_cycles_refunded128` instead.
 
-* `ic0.msg_cycles_refunded128 : ( dst : i32 ) -> ()`
+* `ic0.msg_cycles_refunded128 : (dst : i32) -> ()`
 +
 This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 +
@@ -3853,6 +3853,14 @@ copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
 copy_from_canister<es>(src : i32, size : i32) blob =
   if src+size > |es.wasm_state.store.mem| then Trap
   return es.wasm_state.store.mem[src..src+size]
+
+Cycles are represented by 128-bit values so they require 16 bytes of memory.
+
+copy_cycles_to_canister<es>(dst : i32, data : blob) =
+ let size = 16;
+ if dst+size > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+size] := data[0..size]
+
 ....
 
 ==== System imports
@@ -3898,10 +3906,20 @@ ic0.msg_reject<es>(src : i32, size : i32) =
   es.cycles_available := 0
 
 ic0.msg_cycles_available<es>() : i64 =
+  if es.cycles_available >= 2^64 then Trap
   return es.cycles_available
 
+ic0.msg_cycles_available128<es>(dst : i32) =
+  let amount = es.cycles_available
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
+
 ic0.msg_cycles_refunded<es>() : i64 =
-  return es.params.cycles_refundend
+  if es.params.cycles_refunded >= 2^64 then Trap
+  return es.params.cycles_refunded
+
+ic0.msg_cycles_refunded128<es>(dst : i32) =
+  let amount = es.params.cycles_refunded
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.accept_message<es>() =
   if es.ingress_filter = Accept then Trap
@@ -3910,15 +3928,23 @@ ic0.accept_message<es>() =
 ic0.msg_method_name_size<es>() : i32 =
   return |es.method_name|
 
-ic0.msg_method_name_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
   copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
-ic0.msg_cycles_accept<es>( max_amount : i64 ) : i64 =
+ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
   es.balance := es.balance + amount
   return amount
+
+ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
+  let max_amount = max_amount_high * 2^64 + max_amount_low
+  let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
+  es.cycles_available := es.cycles_available - amount
+  es.cycles_accepted := es.cycles_accepted + amount
+  es.balance := es.balance + amount
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_self_size<es>() : i32 =
   return |es.wasm_state.self_id|
@@ -3927,7 +3953,12 @@ ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
+  if es.balance >= 2^64 then Trap
   return es.balance
+
+ic0.canister_cycles_balance128<es>(dst : i32) =
+  let amount = es.balance
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_status<es>() : i32 =
   match es.params.sysenv.canister_status with
@@ -3982,7 +4013,15 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
-ic0.call_cycles_add<es>(amount : i32) =
+ic0.call_cycles_add<es>(amount : i64) =
+  if es.pending_call = NoPendingCall then Trap
+  if es.balance < amount then Trap
+
+  es.balance := es.balance - amount
+  es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
+
+ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
+  let amount = amount_high * 2^64 + amount_low
   if es.pending_call = NoPendingCall then Trap
   if es.balance < amount then Trap
 
