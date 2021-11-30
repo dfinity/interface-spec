@@ -1816,7 +1816,7 @@ check_delegations(Delegation d) : public_bls_key =
 ....
 where `root_public_key` is the a priori known root key.
 
-Delegation are _scoped_, i.e. they indicate which set of canister ids the delegatee subnet may certify for. This set can be obtained from a a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
+Delegation are _scoped_, i.e. they indicate which set of canister ids the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
 
 
 [#certification-encoding]
