@@ -1,0 +1,12 @@
+name: "Build"
+on:
+  push:
+jobs:
+  nix-build:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - uses: cachix/install-nix-action@v15
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+    - run: nix-build
