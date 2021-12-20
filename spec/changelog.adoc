@@ -8,6 +8,7 @@
 * Spec: Subnet delegations include a canister id scope
 * Spec: Canister access to performance metrics
 * Spec: Expose Wasm custom sections in the state tree
+* Spec: User delegations include a principal scope
 
 [#0_18_2]
 === 0.18.2 (2021-09-29)
