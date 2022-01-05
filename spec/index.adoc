@@ -1002,7 +1002,7 @@ ic0.data_certificate_size : () -> i32                                       // *
 ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
 ic0.time : () -> (timestamp : i64);                                         // *
-ic0.performance_counter : () -> (counter : i64);                            // * s
+ic0.performance_counter : (type : i32) -> (counter : i64);                  // * s
 
 ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
 ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1425,13 +1425,15 @@ NOTE: While an implementation will likely try to keep the time returned by `ic0.
 
 The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done since the beginning of the current execution.
 
-The counter is reset as the system invokes one of the <<entry-points>>.
+`+ic0.performance_counter : (type : i32) -> i64+`
 
-The exact semantics of the counter is implementation-defined and can depend on:
+The argument `type` decides which performance counter to return:
 
-  * The number of WebAssembly instructions executed so far.
-  * The number of canister linear memory pages dirtied.
-  * The number of bytes copied to and from the IC state.
+* 0 : instruction counter. The number of WebAssembly instructions the system has determined that the canister has executed.
+
+In the future, we might expose more performance counters.
+
+The system resets the counter at the beginning of each <<entry-points>> invocation.
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
@@ -4128,7 +4130,7 @@ ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
   if es.params.sysenv.certificate = NoCertificate then Trap
   copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
-ic0.performance_counter<es>() : i64 =
+ic0.performance_counter<es>(type : i32) : i64 =
   arbitrary()
 
 ic0.debug_print<es>(src : i32, size : i32) =
