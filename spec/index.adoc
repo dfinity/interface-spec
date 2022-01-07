@@ -864,7 +864,11 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may not export other methods the names of which start with the prefix `canister_` besides the methods allowed above.
 * It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
 * It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
-* The IC may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals or more than 16 custom sections whose names start with the prefix `icp:`.
+* The IC may reject WebAssembly modules that
+  + declare more than 6000 functions, or
+  + declare more than 200 globals, or
+  + declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
+  + the total size of the exported custom sections exceeds 1MiB
 
 === Interpretation of numbers
 
