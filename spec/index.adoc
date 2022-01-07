@@ -435,7 +435,7 @@ The current controllers of the canister. The value consists of a CBOR data item 
 +
 If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
 +
-It is recommended for the canister to have a custom section called "icp:public candid", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
+It is recommended for the canister to have a custom section called "icp:public candid:service", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
 
 [#http-interface]
 == HTTPS Interface
