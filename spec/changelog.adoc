@@ -1,6 +1,12 @@
 [#changelog]
 == Changelog
 
+[#0_18_3]
+=== 0.18.3 (2022-01-10)
+
+* Spec: New System API which uses 128-bit values to represent the amount of cycles
+* Spec: Subnet delegations include a canister id scope
+
 [#0_18_2]
 === 0.18.2 (2021-09-29)
 

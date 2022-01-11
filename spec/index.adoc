@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.18.2
+0.18.3
 // the following are ways to make this document work both in antora and stand alone
 :example: example$
 :partial: partial$
@@ -331,6 +331,8 @@ The `BIT STRING` field `subjectPublicKey` is the blob `|signing_canister_id| · 
 
 where `signing_canister_id` is the id of the signing canister and `reconstruct` is a function that computes a root-hash for the tree.
 
+- If the `certificate` includes subnet delegations (possibly nested), then the `signing_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
+
 - The `tree` must be a `well_formed` tree with
 
   lookup(/sig/<s>/<m>, tree) = Found ""
@@ -365,6 +367,20 @@ The state tree contains information about the topology of the Internet Computer.
 * `/subnet/<subnet_id>/public_key` (blob)
 +
 The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
+
+* `/subnet/<subnet_id>/canister_ranges` (blob)
++
+The set of canister ids assigned to this subnet, represented as a list of closed intervals of canister ids, ordered lexicographically, and encoded as CBOR according to this CDDL:
++
+....
+canister_ranges = tagged<[*canister_range]>
+canister_range = [principal principal]
+principal = bytes .size (0..29)
+tagged<t> = #6.55799(t) ; the CBOR tag
+....
++
+NOTE: Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the _end_, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
+
 
 [#state-tree-request-status]
 === Request status
@@ -519,6 +535,8 @@ In order to read parts of the <<state-tree>>, the user makes a POST request to `
 The HTTP response to this request consists of a CBOR map with the following fields:
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
++
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -834,23 +852,30 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
 * It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 * It may not export other methods the names of which start with the prefix `canister_` besides the methods allowed above.
-* The IC may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals.
+* It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
+* It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
+* The IC may reject WebAssembly modules that
+  + declare more than 6000 functions, or
+  + declare more than 200 globals, or
+  + declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
+  + the total size of the exported custom sections exceeds 1MiB
 
 === Interpretation of numbers
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
+[#entry-points]
 === Entry points
 
 The canister provides entry points which are invoked by the IC under various circumstances:
 
-* The canister may export a function named `canister_init` and type `+() -> ()+`.
-* The canister may export a function named `canister_pre_upgrade` and type `+() -> ()+`.
-* The canister may export a function named `canister_post_upgrade` and type `+() -> ()+`.
-* The canister may export functions named `canister_inspect_message` with type `+() -> ()+`.
-* The canister may export a function named `canister_heartbeat` with type `+() -> ()+`.
-* The canister may export functions named `canister_update <name>` and type `+() -> ()+`.
-* The canister may export functions named `canister_query <name>` and type `+() -> ()+`.
+* The canister may export a function with name `canister_init` and type `+() -> ()+`.
+* The canister may export a function with name `canister_pre_upgrade` and type `+() -> ()+`.
+* The canister may export a function with name `canister_post_upgrade` and type `+() -> ()+`.
+* The canister may export functions with name `canister_inspect_message` with type `+() -> ()+`.
+* The canister may export a function with name `canister_heartbeat` with type `+() -> ()+`.
+* The canister may export functions with name `canister_update <name>` and type `+() -> ()+`.
+* The canister may export functions with name `canister_query <name>` and type `+() -> ()+`.
 * The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
@@ -891,7 +916,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 ==== Heartbeat
 
-For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. If present, the IC will invoke this function at regular intervals. The exact interval is implementation-defined. For each heartbeat invocation, the IC guarantees that the time, as returned by <<system-api-time,`ic0.time`>>, is monotonically increasing.
+For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined.
 
 `canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
 
@@ -923,12 +948,17 @@ ic0.msg_reply : () -> ();                                                   // U
 ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
 
 ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
+ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
-ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 );           // U Rt Ry
+ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
+ic0.msg_cycles_accept : (max_amount : i64) -> ( amount : i64 );            // U Rt Ry
+ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
+                       -> ();                                               // U Rt Ry
 
 ic0.canister_self_size : () -> i32;                                         // *
 ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
+ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
 ic0.canister_status : () -> i32;                                            // *
 
 ic0.msg_method_name_size : () -> i32                                        // F
@@ -947,7 +977,8 @@ ic0.call_new :                                                              // U
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
-ic0.call_cycles_add : ( amount : i64 ) -> ();                               // U Ry Rt H
+ic0.call_cycles_add : (amount : i64) -> ();                               // U Ry Rt H
+ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();      // U Ry Rt H
 ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
 
 ic0.stable_size : () -> (page_count : i32);                                 // *
@@ -982,7 +1013,7 @@ The comment after each function lists from where these functions may be invoked:
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
 * `H`: from `canister_heartbeat`
-* `*` = `I G U Q Ry Rt C F` (NB: Not `(start)`)
+* `*` = `I G U Q Ry Rt C F H` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -1046,7 +1077,7 @@ Appends data it to the (initially empty) data reply.
 +
 NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
-This traps if the current call already has been responded to.
+This traps if the current call already has been or does not need to be responded to.
 
 * `+ic0.msg_reply : () -> ()+`
 +
@@ -1060,7 +1091,7 @@ See <<system-api-cycles>> for how this interacts with cycles available on this c
 +
 Rejects the call. The data referred to by `src`/`size` is used for the diagnostic message.
 +
-This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been responded to, or if the data referred to by `src`/`size` is not valid UTF8.
+This system call traps if `src+size` exceeds the size of the WebAssembly memory, or if the current call already has been or does not need to be responded to, or if the data referred to by `src`/`size` is not valid UTF8.
 +
 The other end will receive this reject with reject code `CANISTER_REJECT`, see <<reject-codes>>.
 +
@@ -1166,6 +1197,14 @@ This adds cycles onto a call. See <<system-api-cycles>>.
 +
 This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
+
+* `+ic0.call_cycles_add128 : (amount_high : i64, amount_low : i64) -> ()+`
++
+This adds cycles onto a call. See <<system-api-cycles>>.
++
+This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
+
+
 * `+ic0.call_perform  : () -> ( err_code : i32 )+`
 +
 This concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
@@ -1179,23 +1218,43 @@ After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `
 [#system-api-cycles]
 === Cycles
 
-Each canister maintains a balance of _cycles_, the utility token used to pay for platform usage.
+Each canister maintains a balance of _cycles_, which are used to pay for platform usage. Cycles are represented by 128-bit values.
 
 NOTE: This specification currently does not go into details about which actions cost how many cycles and/or when. In general, you must assume that the canister’s cycle balance can change arbitrarily between method executions, and during each System API function call, unless explicitly mentioned otherwise.
 
 * `ic0.canister_cycle_balance : () -> i64`
 +
-indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
+Indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 +
-NOTE: Should a future version of this specification allow `MAX_CANISTER_BALANCE` >= 2^64^, then this call will report 2^64^-1 if the balance exceeds 2^64^. A new, wider System API will then be provided for canisters that need to deal precisely with large canister balances.
+NOTE: This call traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
 
+* `ic0.canister_cycle_balance128 : (dst : i32) -> ()`
++
+Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory.
+It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`.
+After execution of the message, the IC may add unused cycles from the reserve back to the balance.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
++
 * `ic0.msg_cycles_available : () -> i64`
 +
-returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
+Returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
 +
-Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept`), this reports less cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
+Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will return 0.
++
+NOTE: This call traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
 
-* `ic0.msg_cycles_accept : ( max_amount : i64 ) -> ( amount : i64 )`
+* `ic0.msg_cycles_available128 : (dst : i32) -> ()`
++
+Indicates the number of cycles transferred by the caller of the current call, still available in this message.
+The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
++
+Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will report 0 cycles.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
++
+
+* `ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64)`
 +
 --
 This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
@@ -1210,7 +1269,7 @@ It can be called multiple times, each time possibly adding more cycles to the ba
 
 The return value indicates how many cycles were actually moved.
 
-This system call is deprecated and does not trap.
+This system call does not trap.
 
 [TIP]
 =====
@@ -1218,17 +1277,56 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 =====
 --
 
-* `ic0.call_cycles_add : ( amount : i64 ) -> ()`
+* `ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low : i64, dst : i32) -> ()`
++
+--
+This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
+
+* It moves no more cycles than the amount obtained by combining `max_amount_high` and `max_amount_low`. Cycles are represented by 128-bit values.
+
+* It moves no more cycles than available according to `ic0.msg_cycles_available128`, and
+
+* The canister balance afterwards does not exceed `MAX_CANISTER_BALANCE` minus any possible outstanding balances. The precise logic of this limit is not yet specified here.
+
+It can be called multiple times, each time possibly adding more cycles to the balance.
+
+This call also copies the amount of cycles that were actually moved starting at the location `dst` in the canister memory.
+--
++
+This does not trap.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
+* `ic0.call_cycles_add : (amount : i64) -> ()`
 +
 This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
 +
 The cycles are deducted from the balance as shown by `ic0.canister_cycle_balance` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 +
+This system call traps if trying to transfer more cycles than are in the current balance of the canister.
+
+* `ic0.call_cycles_add128 : (amount_high : i64, amount_low : i64) -> ()`
++
+This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
++
+The amount of cycles it moves is represented by a 128-bit value which can be obtained by combining the `amount_high` and `amount_low` parameters.
++
+The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
++
 This traps if trying to transfer more cycles than are in the current balance of the canister.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.msg_cycles_refunded : () -> i64`
 +
-this can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
+This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
+
+NOTE: This call traps if the amount of cycles refunded does not fit into a 64-bit value. In general, it is recommended to use `ic0.msg_cycles_refunded128` instead.
+
+* `ic0.msg_cycles_refunded128 : (dst : i32) -> ()`
++
+This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
++
+This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 [#system-api-stable-memory]
 === Stable memory
@@ -1343,6 +1441,8 @@ Copies the certificate for the current value of the certified data to the canist
 +
 The certificate is a blob as described in <<certification>> that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of <<state-tree>>.
 +
+If this `certificate` includes subnet delegations (possibly nested), then the id of the current canister will be included in each delegation’s canister id range.
++
 This traps if `ic0.data_certificate_present()` returns `0`.
 
 
@@ -1454,7 +1554,7 @@ Only _controllers of the canister can install code.
 
 * If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
 +
-Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all unresponded calls.
+Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all calls awaiting a response.
 
 * If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` method of the new instance.
 
@@ -1531,7 +1631,7 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `MAX_CANISTER_BALANCE` if `amount = null`, else capping the balance at `MAX_CANISTER_BALANCE`).
 
-Cycles added to this call via `ic0.call_cycles_add` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
 
 This method is only available in local development instances.
 
@@ -1540,7 +1640,7 @@ This method is only available in local development instances.
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount` (implicitly capping it at `MAX_CANISTER_BALANCE`).
 
-Cycles added to this call via `ic0.call_cycles_add` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
 
 Any user can top-up any canister this way.
 
@@ -1694,6 +1794,8 @@ check_delegations(Delegation d) : public_bls_key =
   return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
 where `root_public_key` is the a priori known root key.
+
+Delegations are _scoped_, i.e., they indicate which set of canister principals the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
 
 
 [#certification-encoding]
@@ -1934,13 +2036,13 @@ The concrete mapping of this abstract `CanisterModule` to actual WebAssembly con
 
 The Internet Computer provides certain messaging guarantees: If a user or a canister calls another canister, it will eventually get a single response (a reply or a rejection), even if some canister code along the way fails.
 
-To ensure that only one response is generated, and also to detect when no response can be generated any more, the IC maintains a _call context_. The `responded` field is set to `true` once the call has received a response. Further attempts to respond will now fail.
+To ensure that only one response is generated, and also to detect when no response can be generated any more, the IC maintains a _call context_. The `needs_to_respond` field is set to `false` once the call has received a response. Further attempts to respond will now fail.
 
 ....
 CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
-  responded : bool;
+  needs_to_respond : bool;
   deleted : bool;
   available_cycles : Nat;
 }
@@ -2128,18 +2230,18 @@ for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using 
 
 The following is an incomplete list of invariants that should hold for the abstract state `S`, and are not already covered by the type annotations in this section.
 
-* Deleted call contexts have been responded to:
+* Deleted call contexts were not awaiting a response:
 +
 ....
 ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-  if Ctxt.deleted then Ctxt.responded
+  if Ctxt.deleted then Ctxt.needs_to_respond = false
 ....
 
 * Responded call contexts have no available_cycles left:
 +
 ....
 ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-  if Ctxt.responded then Ctxt.available_cycles = 0
+  if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
 * Referenced call contexts exists:
@@ -2148,7 +2250,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 ∀ CallMessage M ∈ S.messages.  M.origin.calling_context ∈ S.call_contexts
 ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ∈ S.call_contexts
 ∀ _ ↦ Ctxt ∈ S.call_contexts:
-  if Ctx.responded = false:
+  if Ctx.needs_to_respond:
      Ctxt.origin.calling_context ∈ S.call_contexts
 ....
 
@@ -2352,7 +2454,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = CM.callee;
       origin = CM.origin;
-      responded = false;
+      needs_to_respond = true;
       deleted = false;
       available_cycles = CM.transferred_cycles;
     }
@@ -2361,7 +2463,7 @@ S with
 
 * Call context creation: Heartbeat
 +
-If canister `C` exports a method with name `canister_heartbeat`, the IC will add a message to the head of the queue for invoking `canister_heartbeat` and create the corresponding call context.
+If canister `C` exports a method with name `canister_heartbeat`, the IC will create the corresponding call context.
 +
 Conditions::
 +
@@ -2387,7 +2489,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = C;
       origin = FromHeartbeat;
-      responded = false;
+      needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
     }
@@ -2453,7 +2555,7 @@ if
         - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
       , MAX_CANISTER_BALANCE)
   New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
-  (res.response = NoResponse) or (S.call_contexts[M.call_context].responded = false)
+  (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
     canisters[M.receiver].wasm_state = res.new_state;
@@ -2483,7 +2585,7 @@ then
     if res.response = NoResponse:
        call_contexts[M.call_context].available_cycles = Available - res.cycles_accepted
     else
-       call_contexts[M.call_context].responded = true
+       call_contexts[M.call_context].needs_to_respond = false
        call_contexts[M.call_context].available_cycles = 0
 
     if res.new_certified_data ≠ NoCertifiedData:
@@ -2505,7 +2607,7 @@ Depending whether this is a call message and a response messages, we have either
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
- * Responding if the present call context has already been responded to
+ * Responding if the present call context does not need to be responded to
  * Accepting more cycles than are available on the call context
  * Sending out more cycles than available to the canister
  * Consuming more cycles than allowed (and reserved)
@@ -2539,18 +2641,18 @@ If the call context is not for heartbeat and there is no call, downstream callin
 
 Conditions::
 ....
-    S.call_contexts[Ctxt_id].responded = false
+    S.call_contexts[Ctxt_id].needs_to_respond = true
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].responded = false
+        S.call_contexts[ctxt_ids].needs_to_respond
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
 S with
-    call_contexts[Ctxt_id].responded = true
+    call_contexts[Ctxt_id].needs_to_respond = false
     call_contexts[Ctxt_id].available_cycles = 0
     messages =
       S.messages ·
@@ -2568,7 +2670,7 @@ If there is no call, downstream calling context, or response that references a c
 Conditions::
 ....
     (
-      S.call_contexts[Ctxt_id].responded = true
+      S.call_contexts[Ctxt_id].needs_to_respond = false
     ) or
     (
       S.call_contexts[Ctxt_id].origin = FromHeartbeat
@@ -2577,7 +2679,7 @@ Conditions::
     ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].responded = false
+        S.call_contexts[ctxt_ids].needs_to_respond = true
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
 State after::
@@ -2821,13 +2923,13 @@ S with
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
-      , Ctxt.responded = false
+      , Ctxt.needs_to_respond = true
       ]
 
       for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
         if Ctxt.canister = A.canister_id:
           call_contexts[Ctxt_id].deleted := true
-          call_contexts[Ctxt_id].responded := true
+          call_contexts[Ctxt_id].needs_to_respond := false
           call_contexts[Ctxt_id].available_cycles := 0
 ....
 
@@ -3229,13 +3331,13 @@ S with
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
-      , Ctxt.responded = false
+      , Ctxt.needs_to_respond = true
       ]
 
     for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
       if Ctxt.canister = A.canister_id:
         call_contexts[Ctxt_id].deleted := true
-        call_contexts[Ctxt_id].responded := true
+        call_contexts[Ctxt_id].needs_to_respond := false
         call_contexts[Ctxt_id].available_cycles := 0
 ....
 
@@ -3721,6 +3823,14 @@ copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
 copy_from_canister<es>(src : i32, size : i32) blob =
   if src+size > |es.wasm_state.store.mem| then Trap
   return es.wasm_state.store.mem[src..src+size]
+
+Cycles are represented by 128-bit values so they require 16 bytes of memory.
+
+copy_cycles_to_canister<es>(dst : i32, data : blob) =
+ let size = 16;
+ if dst+size > |es.wasm_state.store.mem| then Trap
+  es.wasm_state.store.mem[dst..dst+size] := data[0..size]
+
 ....
 
 ==== System imports
@@ -3766,10 +3876,20 @@ ic0.msg_reject<es>(src : i32, size : i32) =
   es.cycles_available := 0
 
 ic0.msg_cycles_available<es>() : i64 =
+  if es.cycles_available >= 2^64 then Trap
   return es.cycles_available
 
+ic0.msg_cycles_available128<es>(dst : i32) =
+  let amount = es.cycles_available
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
+
 ic0.msg_cycles_refunded<es>() : i64 =
-  return es.params.cycles_refundend
+  if es.params.cycles_refunded >= 2^64 then Trap
+  return es.params.cycles_refunded
+
+ic0.msg_cycles_refunded128<es>(dst : i32) =
+  let amount = es.params.cycles_refunded
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.accept_message<es>() =
   if es.ingress_filter = Accept then Trap
@@ -3778,15 +3898,23 @@ ic0.accept_message<es>() =
 ic0.msg_method_name_size<es>() : i32 =
   return |es.method_name|
 
-ic0.msg_method_name_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
   copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
-ic0.msg_cycles_accept<es>( max_amount : i64 ) : i64 =
+ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
   es.balance := es.balance + amount
   return amount
+
+ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
+  let max_amount = max_amount_high * 2^64 + max_amount_low
+  let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
+  es.cycles_available := es.cycles_available - amount
+  es.cycles_accepted := es.cycles_accepted + amount
+  es.balance := es.balance + amount
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_self_size<es>() : i32 =
   return |es.wasm_state.self_id|
@@ -3795,7 +3923,12 @@ ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
+  if es.balance >= 2^64 then Trap
   return es.balance
+
+ic0.canister_cycles_balance128<es>(dst : i32) =
+  let amount = es.balance
+  copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_status<es>() : i32 =
   match es.params.sysenv.canister_status with
@@ -3850,7 +3983,15 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
-ic0.call_cycles_add<es>(amount : i32) =
+ic0.call_cycles_add<es>(amount : i64) =
+  if es.pending_call = NoPendingCall then Trap
+  if es.balance < amount then Trap
+
+  es.balance := es.balance - amount
+  es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
+
+ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
+  let amount = amount_high * 2^64 + amount_low
   if es.pending_call = NoPendingCall then Trap
   if es.balance < amount then Trap
 
