@@ -1,11 +1,9 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-∞
+0.18.3
 // the following are ways to make this document work both in antora and stand alone
 :example: example$
 :partial: partial$
-
-WARNING: You are looking at the `master` version of the document! If you are looking for implementation specification or documentation, look at one of the versions at https://docs.dfinity.systems/public/v/.
 
 == Introduction
 
@@ -419,7 +417,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
+Users have the ability to learn about the hash of the canister's module and its current controllers in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -430,12 +428,6 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 * `/canister/<canister_id>/controllers` (blob):
 +
 The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`).
-
-* `/canister/<canister_id>/metadata/<name>` (blob):
-+
-If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
-+
-It is recommended for the canister to have a custom section called "icp:public candid", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
 
 [#http-interface]
 == HTTPS Interface
@@ -555,7 +547,6 @@ All requested paths must have one of the following paths as prefix:
  * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`, and the effective canister id of the original request matches the `<effective_canister_id>` (see <<http-effective-canister-id>>) in this HTTP request’s path.
  * `/canisters/<canister_id>/module_hash`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
- * `/canisters/<canister_id>/metadata/<name>`. Can be read by anyone if `<canister_id>` matches `<effective_canister_id>`, and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be read if this `read_state` request was signed by one of the controllers of the canister.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -863,7 +854,11 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may not export other methods the names of which start with the prefix `canister_` besides the methods allowed above.
 * It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
 * It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
-* The IC may reject WebAssembly modules that declare more than 6000 functions or more than 200 globals or more than 16 custom sections whose names start with the prefix `icp:`.
+* The IC may reject WebAssembly modules that
+  + declare more than 6000 functions, or
+  + declare more than 200 globals, or
+  + declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
+  + the total size of the exported custom sections exceeds 1MiB
 
 === Interpretation of numbers
 
@@ -921,7 +916,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 ==== Heartbeat
 
-For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined. For each heartbeat invocation, the IC guarantees that the time, as returned by <<system-api-time,`ic0.time`>>, is monotonically increasing.
+For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined.
 
 `canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
 
@@ -1001,7 +996,6 @@ ic0.data_certificate_size : () -> i32                                       // *
 ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
 ic0.time : () -> (timestamp : i64);                                         // *
-ic0.performance_counter : () -> (counter : i64);                            // * s
 
 ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
 ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1236,8 +1230,8 @@ NOTE: This call traps if the current balance does not fit into a 64-bit value. C
 
 * `ic0.canister_cycle_balance128 : (dst : i32) -> ()`
 +
-Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory.
-It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`.
+Indicates the current cycle balance of the canister by copying the value to the location `dst` in the canister memory.
+The value is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`.
 After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 +
 This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
@@ -1253,7 +1247,7 @@ NOTE: This call traps if the amount of cycles available does not fit into a 64-b
 * `ic0.msg_cycles_available128 : (dst : i32) -> ()`
 +
 Indicates the number of cycles transferred by the caller of the current call, still available in this message.
-The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
+The amount of cycles is represented by a 128-bit value. This call copies this value starting to the location `dst` in the canister memory.
 +
 Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will report 0 cycles.
 +
@@ -1314,7 +1308,7 @@ This system call traps if trying to transfer more cycles than are in the current
 +
 This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
 +
-The amount of cycles it moves is represented by a 128-bit value which can be obtained by combining `amount_high` and `amount_low` parameters.
+The amount of cycles it moves is represented by a 128-bit value which can be obtained by combining the `amount_high` and `amount_low` parameters.
 +
 The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 +
@@ -1326,7 +1320,7 @@ This system call is experimental. It may be changed or removed in the future. Ca
 +
 This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
-NOTE: This call traps if the amount of cycles refunded does not fit into a 64-bit value. Please use `ic0.msg_cycles_refunded128` instead.
+NOTE: This call traps if the amount of cycles refunded does not fit into a 64-bit value. In general, it is recommended to use `ic0.msg_cycles_refunded128` instead.
 
 * `ic0.msg_cycles_refunded128 : (dst : i32) -> ()`
 +
@@ -1415,24 +1409,9 @@ The time is given as nanoseconds since 1970-01-01. The IC guarantees that
  * the time, as observed by the canister, is monotonically increasing, even across canister upgrades.
  * within an invocation of one entry point, the time is constant.
 
-The times observed by different canisters are unrelated, and calls from one canister to another may appear to travel “backwards in time”.
+The system times of different canisters are unrelated, and calls from one canister to another may appear to travel “backwards in time”.
 
-NOTE: While an implementation will likely try to keep the time returned by `ic0.time` close to the real time, this is not formally part of this specification.
-
-[#system-api-performance-counter]
-=== Performance counter
-
-The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done since the beginning of the current execution.
-
-The counter is reset as the system invokes one of the <<entry-points>>.
-
-The exact semantics of the counter is implementation-defined and can depend on:
-
-  * The number of WebAssembly instructions executed so far.
-  * The number of canister linear memory pages dirtied.
-  * The number of bytes copied to and from the IC state.
-
-The main purpose of this counter is to facilitate in-canister performance profiling.
+NOTE: While an implementation will likely try to keep the System Time close to the real time, this is not formally part of this specification.
 
 [#system-api-certified-data]
 === Certified data
@@ -1816,7 +1795,7 @@ check_delegations(Delegation d) : public_bls_key =
 ....
 where `root_public_key` is the a priori known root key.
 
-Delegation are _scoped_, i.e. they indicate which set of canister ids the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
+Delegations are _scoped_, i.e., they indicate which set of canister principals the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in <<state-tree-subnet>>. The various applications of certificates describe if and how the subnet scope comes into play.
 
 
 [#certification-encoding]
@@ -2221,8 +2200,6 @@ CanState
   wasm_state : WasmState;
   module : CanisterModule;
   raw_module : Blob;
-  public_custom_sections: Text ↦ Blob;
-  private_custom_sections: Text ↦ Blob;
 }
 CanStatus
   = Running
@@ -3481,12 +3458,6 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   else True
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
-may_read_path(S, _, ["canister", cid, "metadata", name]) =
-  if name ∈ S.canisters[cid].public_custom_sections
-  then cid == ECID
-  else if name ∈ S.canisters[cid].private_custom_sections
-  then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
-  else False
 may_read_path(S, _, _) = False
 ....
 
@@ -3502,8 +3473,7 @@ state_tree(S) = {
   "canister":
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
-        { "controllers" : CBOR(S.controllers[canister_id]) } ∪
-        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
+        { "controllers" : CBOR(S.controllers[canister_id]) }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
@@ -4120,8 +4090,6 @@ ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
   if es.params.sysenv.certificate = NoCertificate then Trap
   copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
-ic0.performance_counter<es>() : i64 =
-  arbitrary()
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return
