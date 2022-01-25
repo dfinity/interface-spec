@@ -1654,6 +1654,22 @@ There is no restriction on who can invoke this method.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
+[#ic-get_ecdsa_public_key]
+=== IC method `get_ecdsa_public_key`
+
+This method returns the threshold ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The derivation path is a vector of bytes.
+
+This call requires that the ecdsa feature is enabled and working properly, and the `canister_id` meets the requirement of a canister id.
+Otherwise it will be rejected.
+
+[#ic-sign_with_ecdsa]
+=== IC method `sign_with_ecdsa`
+
+This method returns a new threshold ECDSA signature of the given `message_hash` that can be separately verified against the caller's ECDSA public key derived from the given derivation path.
+
+This call requires that the ecdsa feature is enabled and working properly, the caller is a canister, and `message_hash` is of 32-bytes long.
+Otherwise it will be rejected.
+
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 

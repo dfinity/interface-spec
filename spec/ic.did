@@ -44,6 +44,16 @@ service ic : {
   deposit_cycles : (record {canister_id : canister_id}) -> ();
   raw_rand : () -> (blob);
 
+  // Threshold ECDSA signature
+  get_ecdsa_public_key : (record {
+    canister_id : opt canister_id;
+    derivation_path : vec blob;
+  }) -> (blob);
+  sign_with_ecdsa : (record {
+    message_hash : blob;
+    derivation_path : vec blob;
+  }) -> (blob);
+
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
     amount: opt nat;
