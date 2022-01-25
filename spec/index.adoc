@@ -1674,6 +1674,96 @@ Any user can top-up any canister this way.
 
 This method is only available in local development instances.
 
+
+[#ic-bitcoin-canisters]
+== The IC bitcoin canisters
+
+Similar to the <<ic-management-canister,management canister>>, the Bitcoin functionality is also exposed through a facade, which we refer to as the "Bitcoin canisters".
+There are two Bitcoin canisters differing only in that one operates on the real Bitcoin blockchain whereas the other only works with the Bitcoin testnet.
+The Bitcoin canisters can be accessed using their addresses:
+
+- The canister address of the Bitcoin canister that uses the real Bitcoin blockchain is `TBD`.
+- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `TBD`.
+
+It is *not* possible to interact with either Bitcoin canister via external requests (i.e., ingress messages).
+
+Information about Bitcoin can be found in the https://developer.bitcoin.org/devguide/[Bitcoin developer guides].
+
+[#ic-bitcoin-candid]
+=== Interface overview
+
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:{attachmentsdir}/bitcoin.did[download the file].
+----
+include::{example}bitcoin.did[]
+----
+
+The binary encoding of arguments and results are as per Candid specification.
+
+[#ic-bitcoin_get_utxos]
+=== IC method `get_utxos`
+
+Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address as part of the
+`GetUtxosRequest` , the function returns all unspent transaction outputs (UTXOs) associated with the
+provided address based on the current view of the Bitcoin blockchain available to the Bitcoin canister.
+
+If the call fails, e.g., because the address is malformed, a `GetUtxosError` variant is returned,
+indicating the reason for the failed call.
+
+The optional `min_confirmations` parameter can be used to limit the returned UTXOs to those with at
+least the provided number of confirmations, i.e., transactions with fewer than this number of
+confirmations are not considered.
+If this parameter is not used, the default value is 0.
+
+The optional `offset` parameter can be used to specify a starting offset in the list of UTXOs.
+Since a response will contain at most `TBD` `Utxo` records, this parameter is useful for addresses
+with many UTXOs.
+There is no guarantee that the set of UTXOs will remain unchanged between function calls with different
+offsets, i.e., every call will return the UTXOs starting from the provided offset based on the
+current view.
+If this parameter is not used, the default value is 0.
+
+[#ic-bitcoin_get_balance]
+=== IC method `get_balance`
+
+Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address as part of the
+`GetBalanceRequest` , the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin).
+
+If the call fails, e.g., because the address is malformed, a `GetBalanceError` variant is returned,
+indicating the reason for the failed call.
+
+The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs
+for the calculation of the balance to those with at least the provided number of confirmations.
+
+Given an address and the optional `min_confirmations` parameter, `get_balance` iterates over
+all UTXOs returned by `get_utxos` for the same two parameters and returns the sum of 
+UTXO values.
+Since the function is executed on the replica, there is no pagination limit, i.e., `get_balance`
+will iterate over all relevant UTXOs.
+
+[#ic-send_transaction]
+=== IC method `send_transaction`
+
+Given a `blob` of a Bitcoin transaction, several checks are performed:
+
+- The transaction is well formed.
+- The transaction only consumes unspent outputs.
+- All signatures are correct.
+- There is a positive transaction fee.
+- The transaction does not create dust, i.e., an output that holds a smaller Bitcoin amount
+than it costs to spend the Bitcoin in the output, making the output worthless.
+
+If at least one of these checks fails, a `SendTransactionError` is returned,
+indicating the reason for the failed call.
+
+If the transaction passes these tests, the transaction is forwarded to the
+Bitcoin adapter, which offers it to all connected Bitcoin nodes.
+
+The Bitcoin canister periodically forwards the transaction to the Bitcoin adapter
+until the transaction appears in a block appended to the blockchain or the transaction
+times out after 24 hours. As soon as it appears in a block or expires,
+the Bitcoin canister drops the transaction.
+
+
 [#certification]
 == Certification
 
@@ -2520,9 +2610,9 @@ S with
         call_context = Ctxt_id;
         receiver = C;
         entry_point = Heartbeat;
-        queue = Queue { from = System; to = C }; 
+        queue = Queue { from = System; to = C };
       }
-      · S.messages 
+      · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
       origin = FromHeartbeat;
@@ -2753,7 +2843,7 @@ S with
     if A.settings.controllers is not null:
       controllers[CanisterId] = A.settings.controllers
     else:
-      controllers[CanisterId] = [M.caller] 
+      controllers[CanisterId] = [M.caller]
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
