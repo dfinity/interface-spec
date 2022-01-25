@@ -39,7 +39,7 @@ type SendTransactionError = variant {
   // More error types to be added here.
 };
 
-service bitcoin: (InitPayload) -> {
+service bitcoin : {
 
   get_balance: (GetBalanceRequest) -> (variant {
     Ok : Satoshi;
