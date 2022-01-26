@@ -1756,7 +1756,7 @@ If at least one of these checks fails, a `SendTransactionError` is returned,
 indicating the reason for the failed call.
 
 If the transaction passes these tests, the transaction is forwarded to the
-Bitcoin adapter, which offers it to all connected Bitcoin nodes.
+Bitcoin network.
 
 The Bitcoin canister periodically forwards the transaction to the Bitcoin adapter
 until the transaction appears in a block appended to the blockchain or the transaction
