@@ -1735,7 +1735,7 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 for the calculation of the balance to those with at least the provided number of confirmations.
 
 Given an address and the optional `min_confirmations` parameter, `get_balance` iterates over
-all UTXOs returned by `get_utxos` for the same two parameters and returns the sum of 
+all UTXOs returned by `get_utxos` for the same two parameters and returns the sum of
 UTXO values.
 Since the function is executed on the replica, there is no pagination limit, i.e., `get_balance`
 will iterate over all relevant UTXOs.
@@ -1758,7 +1758,7 @@ indicating the reason for the failed call.
 If the transaction passes these tests, the transaction is forwarded to the
 Bitcoin network.
 
-The Bitcoin canister periodically forwards the transaction to the Bitcoin adapter
+The Bitcoin canister periodically forwards the transaction
 until the transaction appears in a block appended to the blockchain or the transaction
 times out after 24 hours. As soon as it appears in a block or expires,
 the Bitcoin canister drops the transaction.
