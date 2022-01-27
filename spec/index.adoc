@@ -1657,7 +1657,34 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 [#ic-http_request]
 === IC method `http_request`
 
-This method makes an HTTP request.
+This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
+
+For security, the request is executed by multiple IC replicas (usually the entire subnet) and therefore must be _idempotent_. This means that the request must not change state at the remote server, or that the remote server has means to identify duplicated requests and return the same response to all of them.
+
+The responses for all the requests must be, eventually, identical. However, it is possible that a web service would return slightly different responses for the same idempotent request. For example, it may include some unique identification or a timestamp that would vary across responses.
+
+For this reason, the calling canister can supply a transformation function, which is used by the IC to let the canister sanitize the responses from such unique values, and therefore eventually agree on an identical response. The transformation function is executed separately by each replica on the corresponding response it has received for the request. The final response will only be available to the calling canister if enough replicas have agreed on an identical response.
+
+Currently, only GET method is supported for HTTP requests.
+
+For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
+
+The cost of each call to the `http_request` method is `TBD` (the `transform` should also be charged).
+
+The follwing paramters should be supplied for the call:
+
+- `url` - the requested URL
+- `method` - currently only GET is supported
+- `headers` - list of HTTP request headers and their corresponding values
+- `transform` - an optional function that transforms raw responses to sanitized responses. This must be a function exported by the canister itself (and not another canister).
+
+The returned response (and the response provided to the `transform` function, if specified), contains the following fields:
+
+- `status` - the response status (e.g., 200, 404)
+- `headers` - list of HTTP response headers and their corresponding values
+- `body` - the response's body
+
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
 
 // TODO: Flesh out the documentation. Some information you might want to include:
 // * Can you make any HTTP request? What are the constraints?
