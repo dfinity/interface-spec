@@ -1654,6 +1654,13 @@ There is no restriction on who can invoke this method.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
+[#ic-http_request]
+=== IC method `http_request`
+
+This method makes an HTTP request.
+
+// TODO: Flesh out the documentation
+
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 
