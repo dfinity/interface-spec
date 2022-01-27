@@ -1659,7 +1659,13 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 This method makes an HTTP request.
 
-// TODO: Flesh out the documentation
+// TODO: Flesh out the documentation. Some information you might want to include:
+// * Can you make any HTTP request? What are the constraints?
+//
+// * Is there a cost associated with this call? If we know we'll charge for it, but don't know
+//   the exact amount, adding a placeholder would be sufficient in the first draft.
+//
+// * The `func` in the `transform` parameter must be a function exported by the canister itself (and not another canister).
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
