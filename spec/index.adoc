@@ -1671,6 +1671,11 @@ For security reasons, only HTTPS connections are allowed (URLs must start with `
 
 The cost of each call to the `http_request` method is `TBD` (the `transform` should also be charged).
 
+The maximal size of a request URL is 2048 bytes.
+
+The maximal size of a response is `TBD`. If a response is larger than this size, only the first `TBD` bytes will be returned. This size limit also applies to the value returned by the `transform` function.
+// NOTE: the size above should be up to 2MB which is the maximal size of a message in the consensus queue
+
 The follwing paramters should be supplied for the call:
 
 - `url` - the requested URL
