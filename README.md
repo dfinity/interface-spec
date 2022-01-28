@@ -1,6 +1,6 @@
 # Internet Computer Reference
 
-This repository contains the source files of the [Interface Spec], which describes the externally visible behaviour of the Internet Computer.
+This repository contains the source files of the [Interface Spec](https://smartcontracts.org/docs/interface-spec/index.html), which describes the externally visible behaviour of the Internet Computer.
 
 It used to contain a reference implementation and acceptance test suite; these can now be found at <https://github.com/dfinity/ic-hs>.
 
