@@ -28,6 +28,7 @@ type http_request_error = variant {
   no_consensus;
   timeout;
   bad_tls;
+  invalid_url;
 };
 
 service ic : {

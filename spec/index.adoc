@@ -1659,7 +1659,7 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
-For security, the request is executed by multiple IC replicas (usually the entire subnet) and therefore must be _idempotent_. This means that the request must not change state at the remote server, or that the remote server has means to identify duplicated requests and return the same response to all of them.
+For security, the request is executed by multiple IC replicas (usually the entire subnet) and therefore must be _idempotent_. This means that the request must not change state at the remote server, or that the remote server has means to identify duplicated requests.
 
 The responses for all the requests must be, eventually, identical. However, it is possible that a web service would return slightly different responses for the same idempotent request. For example, it may include some unique identification or a timestamp that would vary across responses.
 
@@ -1676,7 +1676,7 @@ The maximal size of a request URL is 2048 bytes.
 The maximal size of a response is `TBD`. If a response is larger than this size, only the first `TBD` bytes will be returned. This size limit also applies to the value returned by the `transform` function.
 // NOTE: the size above should be up to 2MB which is the maximal size of a message in the consensus queue
 
-The follwing paramters should be supplied for the call:
+The following parameters should be supplied for the call:
 
 - `url` - the requested URL
 - `method` - currently only GET is supported
