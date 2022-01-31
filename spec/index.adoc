@@ -1711,7 +1711,9 @@ indicating the reason for the failed call.
 
 The optional `min_confirmations` parameter can be used to limit the returned UTXOs to those with at
 least the provided number of confirmations, i.e., transactions with fewer than this number of
-confirmations are not considered.
+confirmations are not considered. In other words, if the number of confirmations is `c`, an output
+is returned if it occurred in a transaction with at least `c` confirmations
+and there is no transaction that spends the same output with at least `c` confirmations.
 If this parameter is not used, the default value is 0.
 
 The optional `offset` parameter can be used to specify a starting offset in the list of UTXOs.
