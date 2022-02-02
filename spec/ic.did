@@ -29,6 +29,10 @@ type http_request_error = variant {
   timeout;
   bad_tls;
   invalid_url;
+  transform_error;
+  dns_error;
+  unreachable;
+  conn_timeout;
 };
 
 service ic : {
