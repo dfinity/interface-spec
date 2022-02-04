@@ -48,7 +48,7 @@ service ic : {
   get_ecdsa_public_key : (record {
     canister_id : opt canister_id;
     derivation_path : vec blob;
-  }) -> (blob);
+  }) -> (record { public_key: blob; chain_code: blob; });
   sign_with_ecdsa : (record {
     message_hash : blob;
     derivation_path : vec blob;
