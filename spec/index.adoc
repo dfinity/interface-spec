@@ -1657,8 +1657,10 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 [#ic-get_ecdsa_public_key]
 === IC method `get_ecdsa_public_key`
 
-This method returns the threshold ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The derivation path is a vector of variable length byte strings.
+This method returns the threshold ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
+The `derivation_path` is a vector of variable length byte strings.
 For https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032] compatibility, each byte string (`blob`) must be a 4-byte big-endian encoding of an unsigned integer less than 2^31^ (non-hardened).
+The only supported `key_id` value at the moment is `"seckp256k1"`.
 
 This call requires that the ECDSA feature is enabled and working properly, and the `canister_id` meets the requirement of a canister id.
 Otherwise it will be rejected.
@@ -1666,7 +1668,8 @@ Otherwise it will be rejected.
 [#ic-sign_with_ecdsa]
 === IC method `sign_with_ecdsa`
 
-This method returns a new threshold ECDSA signature of the given `message_hash` that can be separately verified against the caller's ECDSA public key derived from the caller's canister id and the given derivation path.
+This method returns a new threshold ECDSA signature of the given `message_hash` that can be separately verified against a derived ECDSA public key.
+This public key can be obtained by calling `get_ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
 This call requires that the ECDSA feature is enabled and working properly, the caller is a canister, and `message_hash` is of 32-bytes long.
 Otherwise it will be rejected.
