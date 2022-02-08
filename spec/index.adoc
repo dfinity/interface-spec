@@ -1657,7 +1657,7 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 [#ic-get_ecdsa_public_key]
 === IC method `get_ecdsa_public_key`
 
-This method returns the threshold ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
+This method returns the ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
 The `derivation_path` is a vector of variable length byte strings.
 For https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032] compatibility, each byte string (`blob`) must be a 4-byte big-endian encoding of an unsigned integer less than 2^31^ (non-hardened).
 The only supported `key_id` value at the moment is `"secp256k1"`.
