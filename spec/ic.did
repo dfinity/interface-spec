@@ -54,7 +54,7 @@ service ic : {
     message_hash : blob;
     derivation_path : vec blob;
     key_id : text;
-  }) -> (blob);
+  }) -> (record { signature : blob });
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
