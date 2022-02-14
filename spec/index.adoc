@@ -1812,9 +1812,9 @@ Delegation =
 A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
 
 ....
-check_delegations(NoDelegation) : public_bls_key =
+check_delegation(NoDelegation) : public_bls_key =
   return root_public_key
-check_delegations(Delegation d) : public_bls_key =
+check_delegation(Delegation d) : public_bls_key =
   verify_cert(d.certificate)
   return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
