@@ -1530,7 +1530,6 @@ The binary encoding of arguments and results are as per Candid specification.
 Before deploying a canister, the administrator of the canister first has to register it with the IC, to get a canister id (with an empty canister behind it), and then separately install the code.
 
 The optional `settings` parameter can be used to set the following settings:
-
 * `controllers` (`vec principal`)
 +
 A list of principals. Must be between 0 and 10 in size. This value is assigned to the _controllers_ attribute of the canister.
@@ -1659,45 +1658,34 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
-For security, the request is executed by multiple IC replicas (usually the entire subnet) and therefore must be _idempotent_. This means that the request must not change state at the remote server, or that the remote server has means to identify duplicated requests.
+The request must be _idempotent_, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests.
 
-The responses for all the requests must be, eventually, identical. However, it is possible that a web service would return slightly different responses for the same idempotent request. For example, it may include some unique identification or a timestamp that would vary across responses.
+The responses for all identical requests must match too. However, a web service would return slightly different responses for identical idempotent requests. For example, it may include some unique identification or a timestamp that would vary across responses.
 
-For this reason, the calling canister can supply a transformation function, which is used by the IC to let the canister sanitize the responses from such unique values, and therefore eventually agree on an identical response. The transformation function is executed separately by each replica on the corresponding response it has received for the request. The final response will only be available to the calling canister if enough replicas have agreed on an identical response.
+For this reason, the calling canister can supply a transformation function, which the IC uses to let the canister sanitize the responses from such unique values. The transformation function is executed separately on the corresponding response received for a request. The final response will only be available to the calling canister.
 
-Currently, only GET method is supported for HTTP requests.
+Currently, only the `GET` method is supported for HTTP requests.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-The cost of each call to the `http_request` method is `TBD` (the `transform` should also be charged).
-
 The maximal size of a request URL is 2048 bytes.
 
-The maximal size of a response is `TBD`. If a response is larger than this size, only the first `TBD` bytes will be returned. This size limit also applies to the value returned by the `transform` function.
-// NOTE: the size above should be up to 2MB which is the maximal size of a message in the consensus queue
+The maximal size of a response is `2MiB`. Therefore, only the first `2MiB` will be returned if a response is larger than this size. This size limit also applies to the value returned by the `transform` function.
 
 The following parameters should be supplied for the call:
 
 - `url` - the requested URL
-- `method` - currently only GET is supported
+- `method` - currently, only GET is supported
 - `headers` - list of HTTP request headers and their corresponding values
-- `transform` - an optional function that transforms raw responses to sanitized responses. This must be a function exported by the canister itself (and not another canister).
+- `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
 
-The returned response (and the response provided to the `transform` function, if specified), contains the following fields:
+The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
 - `status` - the response status (e.g., 200, 404)
 - `headers` - list of HTTP response headers and their corresponding values
 - `body` - the response's body
 
 The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
-
-// TODO: Flesh out the documentation. Some information you might want to include:
-// * Can you make any HTTP request? What are the constraints?
-//
-// * Is there a cost associated with this call? If we know we'll charge for it, but don't know
-//   the exact amount, adding a placeholder would be sufficient in the first draft.
-//
-// * The `func` in the `transform` parameter must be a function exported by the canister itself (and not another canister).
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
