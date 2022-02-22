@@ -1659,7 +1659,7 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
-The request must be _idempotent_, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests.
+The canister should aim to issue _idempotent_ requests, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests. Otherwise, the risk of failure increases.
 
 The responses for all identical requests must match too. However, a web service could return slightly different responses for identical idempotent requests. For example, it may include some unique identification or a timestamp that would vary across responses.
 
