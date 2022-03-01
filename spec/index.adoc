@@ -1718,15 +1718,14 @@ is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
 In the second case, a pagination record must be provided, specifying a block hash that constitutes
 the tip of the considered chain for this request and, optionally, an offset and a limit.
+A `GetUtxosRequest` without the optional `filter` results in a request that
+considers the full blockchain, which is equivalent to setting
+`MinConfirmations` to 0.
 
 The recommended workflow is to issue a request with the desired number of confirmations.
 If the `total_count` in the response is greater then the number of returned UTXOs, the
 tip (block) hash in the response can then be used for a subsequent pagination request to gather
 additional UTXOs, setting the offset to the number of received UTXOs.
-
-A `GetUtxosRequest` without the optional `filter` results in a request that
-considers the full blockchain, which is equivalent to setting
-`MinConfirmations` to 0.
 
 [#ic-bitcoin_get_balance]
 === IC method `get_balance`
