@@ -1,5 +1,7 @@
 type Satoshi = nat64;
 
+type BlockHash = blob;
+
 type OutPoint = record {
   txid : blob;
   vout : nat32
@@ -12,10 +14,10 @@ type Utxo = record {
 };
 
 type Pagination = record {
-  tip_hash : BlockHash;
+  tip_block_hash : BlockHash;
   offset: opt nat32;
   limit: opt nat32;
-}
+};
 
 type GetUtxosRequest = record {
   address : text;
@@ -27,7 +29,6 @@ type GetUtxosRequest = record {
 
 type GetUtxosError = variant {
   MalformedAddress;
-  // More error types to be added here.
 };
 
 type GetBalanceRequest = record {
@@ -37,12 +38,16 @@ type GetBalanceRequest = record {
 
 type GetBalanceError = variant {
   MalformedAddress;
-  // More error types to be added here.
+};
+
+type SendTransactionRequest = record {
+  transaction: blob;
 };
 
 type SendTransactionError = variant {
   MalformedTransaction;
-  // More error types to be added here.
+  NoFee;
+  InvalidInputs;
 };
 
 service bitcoin : {
@@ -56,14 +61,14 @@ service bitcoin : {
     Ok : record {
       utxos: vec Utxo;
       total_count: nat32;
-      tip_hash: BlockHash;
+      tip_block_hash: BlockHash;
       tip_height: nat32;
     };
     Err : opt GetUtxosError;
   });
 
-  send_transaction: (raw_transaction: blob) -> (variant {
-    Ok : null;
+  send_transaction: (SendTransactionRequest) -> (variant {
+    Ok;
     Err : opt SendTransactionError;
   });
 }
