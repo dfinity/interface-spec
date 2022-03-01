@@ -72,7 +72,7 @@ The public entry points of canisters are called _methods_. Methods can be declar
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
 External calls can be update calls, which can call both kinds of methods, and query calls, which can _only_ call query methods.
-Inter-canister calls can also call both kinds of methods. Note that calls from a canister to itself also count as "inter-canister". 
+Inter-canister calls can also call both kinds of methods. Note that calls from a canister to itself also count as "inter-canister".
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
@@ -1682,10 +1682,10 @@ Similar to the <<ic-management-canister,management canister>>, the Bitcoin funct
 There are two Bitcoin canisters differing only in that one operates on the real Bitcoin blockchain whereas the other only works with the Bitcoin testnet.
 The Bitcoin canisters can be accessed using their addresses:
 
-- The canister address of the Bitcoin canister that uses the real Bitcoin blockchain is `TBD`.
-- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `TBD`.
+- The canister address of the Bitcoin canister that uses the real Bitcoin blockchain is `u25tu-yqaaa-aaaaa-aaaaa-eai`.
+- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `jf4vc-xabaa-aaaaa-aaaaa-eai`.
 
-It is *not* possible to interact with either Bitcoin canister via external requests (i.e., ingress messages).
+Invoking functions on these canisters will cost cycles. The concrete costs for each function are yet to be determined.
 
 Information about Bitcoin can be found in the https://developer.bitcoin.org/devguide/[Bitcoin developer guides].
 
@@ -1709,20 +1709,24 @@ provided address based on the current view of the Bitcoin blockchain available t
 If the call fails, e.g., because the address is malformed, a `GetUtxosError` variant is returned,
 indicating the reason for the failed call.
 
-The optional `min_confirmations` parameter can be used to limit the returned UTXOs to those with at
-least the provided number of confirmations, i.e., transactions with fewer than this number of
+The optional `filter` parameter can be used to restrict the set of returned UTXOs, either providing a
+minimum number of confirmations or a pagination record.
+In the first case, only UTXOs with at least the provided number of confirmations
+are returned, i.e., transactions with fewer than this number of
 confirmations are not considered. In other words, if the number of confirmations is `c`, an output
 is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
-If this parameter is not used, the default value is 0.
+In the second case, a pagination record must be provided, specifying a block hash that constitutes
+the tip of the considered chain for this request and, optionally, an offset and a limit.
 
-The optional `offset` parameter can be used to specify a starting offset in the list of UTXOs.
-Since a response will contain at most `TBD` `Utxo` records, this parameter is useful for addresses
-with many UTXOs.
-There is no guarantee that the set of UTXOs will remain unchanged between function calls with different
-offsets, i.e., every call will return the UTXOs starting from the provided offset based on the
-current view.
-If this parameter is not used, the default value is 0.
+The recommended workflow is to issue a request with the desired number of confirmations.
+If the `total_count` in the response is greater then the number of returned UTXOs, the
+tip (block) hash in the response can then be used for a subsequent pagination request to gather
+additional UTXOs, setting the offset to the number of received UTXOs.
+
+A `GetUtxosRequest` without the optional `filter` results in a request that
+considers the full blockchain, which is equivalent to setting
+`MinConfirmations` to 0.
 
 [#ic-bitcoin_get_balance]
 === IC method `get_balance`
@@ -1734,13 +1738,13 @@ If the call fails, e.g., because the address is malformed, a `GetBalanceError` v
 indicating the reason for the failed call.
 
 The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs
-for the calculation of the balance to those with at least the provided number of confirmations.
+for the calculation of the balance to those with at least the provided number of confirmations
+in the same manner as for the `get_utxos` call.
 
 Given an address and the optional `min_confirmations` parameter, `get_balance` iterates over
-all UTXOs returned by `get_utxos` for the same two parameters and returns the sum of
-UTXO values.
-Since the function is executed on the replica, there is no pagination limit, i.e., `get_balance`
-will iterate over all relevant UTXOs.
+all UTXOs, i.e., the same balance is returned as when calling `get_utxos`
+for the same address and the same number of confirmations and, if necessary,
+using pagination to get all UTXOs for the same tip hash.
 
 [#ic-send_transaction]
 === IC method `send_transaction`
@@ -1748,11 +1752,9 @@ will iterate over all relevant UTXOs.
 Given a `blob` of a Bitcoin transaction, several checks are performed:
 
 - The transaction is well formed.
-- The transaction only consumes unspent outputs.
-- All signatures are correct.
+- The transaction only consumes unspent outputs with respect to the current (longest)
+blockchain, i.e., there is no block on the (longest) chain that consumes any of these outputs.
 - There is a positive transaction fee.
-- The transaction does not create dust, i.e., an output that holds a smaller Bitcoin amount
-than it costs to spend the Bitcoin in the output, making the output worthless.
 
 If at least one of these checks fails, a `SendTransactionError` is returned,
 indicating the reason for the failed call.
@@ -1764,7 +1766,8 @@ The Bitcoin canister periodically forwards the transaction
 until the transaction appears in a block appended to the blockchain or the transaction
 times out after 24 hours. As soon as it appears in a block or expires,
 the Bitcoin canister drops the transaction.
-
+It follows that the function does not provide any guarantees that a submitted
+transaction will ever appear in a block.
 
 [#certification]
 == Certification
