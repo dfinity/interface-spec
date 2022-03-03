@@ -1683,7 +1683,7 @@ There are two Bitcoin canisters differing only in that one operates on the real 
 The Bitcoin canisters can be accessed using their addresses:
 
 - The canister address of the Bitcoin canister that uses the real Bitcoin blockchain is `u25tu-yqaaa-aaaaa-aaaaa-eai`.
-- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `jf4vc-xabaa-aaaaa-aaaaa-eai`.
+- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `u54va-viaaa-aaaaa-aaaaq-eai`.
 
 Invoking functions on these canisters will cost cycles. The concrete costs for each function are yet to be determined.
 
