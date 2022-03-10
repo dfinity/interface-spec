@@ -98,9 +98,9 @@ Amount of cycles that a canister has to have before a message is attempted to be
 +
 Amount of cycles that the IC sets aside when a canister performs a call. This is used to pay for processing the response message, and unused cycles after the execution of the response are refunded. See <<rule-message-execution>>.
 
-* `MAX_CANISTER_BALANCE`
+* `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 +
-Maximum canister cycle balance. Any excess is discarded. Less than 2^128^.
+Amount of cycles allocated to a new canister by default, if not explicitly specified. See <<ic-provisional_create_canister_with_cycles>>.
 
 [#principal]
 === Principals
@@ -207,6 +207,7 @@ If an empty canister receives a response, that response is dropped, as if the ca
 ==== Canister cycles
 
 The IC relies on _cycles_, a utility token, to manage its resources. A canister pays for the resources it uses from its _cycle balance_.
+The _cycle_balance_ is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if _cycles_ are added to a canister that would bring its total balance beyond 2^128-1, then the balance will be capped at 2^128-1 and any additional cycles will be lost.
 
 When the cycle balance of a canister falls to zero, the canister is _deallocated_. This has the same effect as
 
@@ -1274,8 +1275,6 @@ This moves cycles from the call to the canister balance. It moves as many cycles
 
 * It moves no more cycles than available according to `ic0.msg_cycles_available`, and
 
-* The canister balance afterwards does not exceed `MAX_CANISTER_BALANCE` minus any possible outstanding balances. The precise logic of this limit is not yet specified here.
-
 It can be called multiple times, each time possibly adding more cycles to the balance.
 
 The return value indicates how many cycles were actually moved.
@@ -1296,8 +1295,6 @@ This moves cycles from the call to the canister balance. It moves as many cycles
 * It moves no more cycles than the amount obtained by combining `max_amount_high` and `max_amount_low`. Cycles are represented by 128-bit values.
 
 * It moves no more cycles than available according to `ic0.msg_cycles_available128`, and
-
-* The canister balance afterwards does not exceed `MAX_CANISTER_BALANCE` minus any possible outstanding balances. The precise logic of this limit is not yet specified here.
 
 It can be called multiple times, each time possibly adding more cycles to the balance.
 
@@ -1590,6 +1587,12 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
 
+The `wasm_module` field specifies the canister module to be installed.
+The system supports multiple encodings of the `wasm_module` field:
+
+  * If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`,  the system parses `wasm_module` as a raw WebAssembly binary.
+  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system decompresses the contents of `wasm_module` as a gzip stream according to https://datatracker.ietf.org/doc/html/rfc1952.html[RFC-1952] and then parses the output as a WebAssembly binary.
+
 [#ic-uninstall_code]
 === IC method `uninstall_code`
 
@@ -1679,10 +1682,44 @@ The signatures are encoded as the concatenation of the https://www.secg.org/sec2
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long.
 Otherwise it will be rejected.
 
+[#ic-http_request]
+=== IC method `http_request`
+
+This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
+
+The canister should aim to issue _idempotent_ requests, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests. Otherwise, the risk of failure increases.
+
+The responses for all identical requests must match too. However, a web service could return slightly different responses for identical idempotent requests. For example, it may include some unique identification or a timestamp that would vary across responses.
+
+For this reason, the calling canister can supply a transformation function, which the IC uses to let the canister sanitize the responses from such unique values. The transformation function is executed separately on the corresponding response received for a request. The final response will only be available to the calling canister.
+
+Currently, only the `GET` method is supported for HTTP requests.
+
+For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
+
+The maximal size of a request URL is 2048 bytes.
+
+The maximal size of a response is `2MiB`. Therefore, only the first `2MiB` will be returned if a response is larger than this size. This size limit also applies to the value returned by the `transform` function.
+
+The following parameters should be supplied for the call:
+
+- `url` - the requested URL
+- `method` - currently, only GET is supported
+- `headers` - list of HTTP request headers and their corresponding values
+- `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
+
+The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
+
+- `status` - the response status (e.g., 200, 404)
+- `headers` - list of HTTP response headers and their corresponding values
+- `body` - the response's body
+
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
+
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 
-As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `MAX_CANISTER_BALANCE` if `amount = null`, else capping the balance at `MAX_CANISTER_BALANCE`).
+As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`).
 
 Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
 
@@ -1691,7 +1728,7 @@ This method is only available in local development instances.
 [#ic-provisional_top_up_canister]
 === IC method `provisional_top_up_canister`
 
-As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount` (implicitly capping it at `MAX_CANISTER_BALANCE`).
+As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
 Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
 
@@ -2609,13 +2646,11 @@ if
   Cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
   New_balance =
-      min(
-        S.balances[M.receiver]
-        + res.cycles_accepted
-        + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-        - Cycles_used
-        - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
-      , MAX_CANISTER_BALANCE)
+      S.balances[M.receiver]
+      + res.cycles_accepted
+      + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - Cycles_used
+      - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
   New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
@@ -3186,7 +3221,7 @@ State after::
 ....
 S with
     balances[CanisterId] =
-      min(S.balances[A.canister_id] + M.transferred_cycles, MAX_CANISTER_BALANCE)
+      S.balances[A.canister_id] + M.transferred_cycles
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3241,7 +3276,7 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = [M.caller]
-    balances[CanisterId] = min(A.amount, MAX_CANISTER_BALANCE)
+    balances[CanisterId] = A.amount
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3266,7 +3301,7 @@ Conditions::
 State after::
 ....
 S with
-    balances[CanisterId] = min(balances[CanisterId] + A.amount, MAX_CANISTER_BALANCE)
+    balances[CanisterId] = balances[CanisterId] + A.amount
 ....
 
 ==== Callback invocation
@@ -3288,8 +3323,7 @@ State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      min(balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles,
-          MAX_CANISTER_BALANCE)
+      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles
     messages =
       Older_messages ·
       FuncMessage {
@@ -3317,8 +3351,7 @@ State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      min(balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE,
-          MAX_CANISTER_BALANCE)
+      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
     messages = Older_messages · Younger_messages
 ....
 
@@ -3971,7 +4004,7 @@ ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
   copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
 ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
-  let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
+  let amount = min(max_amount, es.cycles_available)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
   es.balance := es.balance + amount
@@ -3979,7 +4012,7 @@ ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
 
 ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
   let max_amount = max_amount_high * 2^64 + max_amount_low
-  let amount = min(max_amount, es.cycles_available, MAX_CANISTER_BALANCE - es.balance)
+  let amount = min(max_amount, es.cycles_available)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
   es.balance := es.balance + amount
@@ -4084,7 +4117,7 @@ ic0.call_peform<es>() : ( err_code : i32 ) =
 // helper function
 discard_pending_call<es>() =
   if es.pending_call ≠ NoPendingCall then
-    es.balance := min(es.balance + MAX_CYCLES_PER_RESPONSE + es.pending_call.transferred_cycles, MAX_CANISTER_BALANCE)
+    es.balance := es.balance + MAX_CYCLES_PER_RESPONSE + es.pending_call.transferred_cycles
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =

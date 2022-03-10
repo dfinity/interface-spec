@@ -16,6 +16,25 @@ type definite_canister_settings = record {
   freezing_threshold : nat;
 };
 
+type http_header = record { name: text; value: text };
+
+type http_response = record {
+  status: nat;
+  headers: vec http_header;
+  body: blob;
+};
+
+type http_request_error = variant {
+  no_consensus;
+  timeout;
+  bad_tls;
+  invalid_url;
+  transform_error;
+  dns_error;
+  unreachable;
+  conn_timeout;
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings
@@ -43,6 +62,15 @@ service ic : {
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();
   raw_rand : () -> (blob);
+  http_request : (record {
+    url : text;
+    method : variant { get };
+    headers: vec http_header;
+    body : opt blob;
+    transform : opt variant {
+      function: func (http_response) -> (http_response) query
+    };
+  }) -> (variant { Ok : http_response; Err: opt http_request_error });
 
   // Threshold ECDSA signature
   get_ecdsa_public_key : (record {
