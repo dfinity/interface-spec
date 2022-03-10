@@ -1657,8 +1657,8 @@ There is no restriction on who can invoke this method.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
-[#ic-get_ecdsa_public_key]
-=== IC method `get_ecdsa_public_key`
+[#ic-ecdsa_public_key]
+=== IC method `ecdsa_public_key`
 
 This method returns a https://www.secg.org/sec1-v2.pdf[SEC1] encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
 The `derivation_path` is a vector of variable length byte strings.
@@ -1675,7 +1675,7 @@ Otherwise it will be rejected.
 === IC method `sign_with_ecdsa`
 
 This method returns a new https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[ECDSA] signature of the given `message_hash` that can be separately verified against a derived ECDSA public key.
-This public key can be obtained by calling `get_ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
+This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
 The signatures are encoded as the concatenation of the https://www.secg.org/sec2-v2.pdf[SEC1] encodings of the two values r and s. For key_id="secp256k1", this corresponds to 32-byte big-endian encoding.
 

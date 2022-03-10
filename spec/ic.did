@@ -73,7 +73,7 @@ service ic : {
   }) -> (variant { Ok : http_response; Err: opt http_request_error });
 
   // Threshold ECDSA signature
-  get_ecdsa_public_key : (record {
+  ecdsa_public_key : (record {
     canister_id : opt canister_id;
     derivation_path : vec blob;
     key_id : text;
