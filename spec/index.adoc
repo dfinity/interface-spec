@@ -1706,6 +1706,13 @@ Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address 
 `GetUtxosRequest` , the function returns all unspent transaction outputs (UTXOs) associated with the
 provided address based on the current view of the Bitcoin blockchain available to the Bitcoin canister.
 
+The following address formats are supported:
+
+* Pay to public key hash (P2PKH)
+* Pay to script hash (P2SH)
+* Pay to witness public key hash (P2WPKH)
+* Pay to witness script hash (P2WSH)
+
 If the call fails, e.g., because the address is malformed, a `GetUtxosError` variant is returned,
 indicating the reason for the failed call.
 
@@ -1731,7 +1738,7 @@ additional UTXOs, setting the offset to the number of received UTXOs.
 === IC method `get_balance`
 
 Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address as part of the
-`GetBalanceRequest` , the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin).
+`GetBalanceRequest` , the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin). The same address formats as for link:#ic-bitcoin_get_utxos[`get_utxos`] are supported.
 
 If the call fails, e.g., because the address is malformed, a `GetBalanceError` variant is returned,
 indicating the reason for the failed call.
@@ -1741,7 +1748,7 @@ for the calculation of the balance to those with at least the provided number of
 in the same manner as for the `get_utxos` call.
 
 Given an address and the optional `min_confirmations` parameter, `get_balance` iterates over
-all UTXOs, i.e., the same balance is returned as when calling `get_utxos`
+all UTXOs, i.e., the same balance is returned as when calling link:#ic-bitcoin_get_utxos[`get_utxos`]
 for the same address and the same number of confirmations and, if necessary,
 using pagination to get all UTXOs for the same tip hash.
 
