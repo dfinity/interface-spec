@@ -440,13 +440,11 @@ It is recommended for the canister to have a custom section called "icp:public c
 
 * `/canister/<canister_id>/property/<name>` (blob):
 +
-The systems maintains for each canister a generic key-value store, called the “Canister properties”. The system does not interpret these keys and values, but other platform components (e.g. the HTTP gateway protocol or Internet Identity) can.
+The systems maintains for each canister a generic key-value store, called the “canister properties”. These properties are provided by canister aministrators and while the system does not interpret them other platform components (e.g. the HTTP gateway protocol or Internet Identity) may. In contrast, metadata is provided by canister developers and may be interpreted by the system.
 
 The system may impose a size limit on the properties; it allows at least 4KB of combined size of the keys keys and values. Values can be empty.
 
 These properties are configured and kept independently from installing or uninstalling code.
-* disable_ic0_app_service_worker
-* allow_internet_identity_aliases where (blob) is a comma separated of canister ids and/or domains.
 
 
 [#http-interface]
