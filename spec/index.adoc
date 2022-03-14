@@ -1571,9 +1571,9 @@ Calls to a frozen canister will be rejected (like for a stopping canister). Addi
 +
 Default value: 2592000 (approximately 30 days).
 
-* `properties` (`vec record { name: text; value: opt blob; }`)
+* `properties` (`vec record { name: text; value: blob; }`)
 +
-A set of arbitrary named properties with optional blob values.  The total size of the properties must be less than 4KB.
+A set of arbitrary named properties with arbitrary values. The names in the list must be free of duplicates. See `_state-tree-canister-information`.
 +
 Default value: The empty list.
 
