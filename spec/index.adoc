@@ -420,7 +420,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
+Users have the ability to learn about the hash of the canister's module, its current controllers, metadata and properties in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -437,6 +437,13 @@ The current controllers of the canister. The value consists of a CBOR data item 
 If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
 +
 It is recommended for the canister to have a custom section called "icp:public candid:service", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
+
+* `/canister/<canister_id>/property/<name>` (blob):
++
+Users can set arbitrary canister properties via settings, see <<ic-create_canister>> and <<ic-update_settings>>. The (blob) is optional. There is a maximum combined size limit for all properties of 4KB. Properties may be used to enable or disable system features, e.g.:
+* disable_ic0_app_service_worker
+* allow_internet_identity_aliases where (blob) is a comma separated of canister ids and/or domains.
+
 
 [#http-interface]
 == HTTPS Interface
@@ -1559,6 +1566,12 @@ A canister is considered frozen whenever the IC estimates that the canister woul
 Calls to a frozen canister will be rejected (like for a stopping canister). Additionally, a canister cannot perform calls if that would, due the cost of the call and transferred cycles, would push the balance into frozen territory; these calls fail with `ic0.call_perform` returning a non-zero error code.
 +
 Default value: 2592000 (approximately 30 days).
+
+* `properties` (`vec record { name: text; value: opt blob; }`)
++
+A set of arbitrary named properties with optional blob values.  The total size of the properties must be less than 4KB.
++
+Default value: The empty list.
 
 
 [#ic-update_settings]
