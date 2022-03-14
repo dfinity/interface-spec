@@ -440,7 +440,11 @@ It is recommended for the canister to have a custom section called "icp:public c
 
 * `/canister/<canister_id>/property/<name>` (blob):
 +
-Users can set arbitrary canister properties via settings, see <<ic-create_canister>> and <<ic-update_settings>>. The (blob) is optional. There is a maximum combined size limit for all properties of 4KB. Properties may be used to enable or disable system features, e.g.:
+The systems maintains for each canister a generic key-value store, called the “Canister properties”. The system does not interpret these keys and values, but other platform components (e.g. the HTTP gateway protocol or Internet Identity) can.
+
+The system may impose a size limit on the properties; it allows at least 4KB of combined size of the keys keys and values. Values can be empty.
+
+These properties are configured and kept independently from installing or uninstalling code.
 * disable_ic0_app_service_worker
 * allow_internet_identity_aliases where (blob) is a comma separated of canister ids and/or domains.
 
