@@ -2848,6 +2848,10 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
+A canister is considered low on cycles when the balance approaches the equivalent value in cycles of the freezing threshold.
+This means that soon the canister will start acting like a frozen one.
+For example, it may not be able to perform calls due to the cost of the call and transferred cycles which push the balance into frozen territory.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2872,6 +2876,10 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
+          low_on_cycles =
+            if S.balance[A.canister_id] < (freezing_limit(S, A.canister_id) + 100 * MAX_CYCLES_PER_MESSAGE)
+            then true
+            else false
         })
         refunded_cycles = M.transferred_cycles
       }
