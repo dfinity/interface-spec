@@ -1690,6 +1690,7 @@ The returned response (and the response provided to the `transform` function, if
 - `body` - the response's body
 
 The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
+When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
