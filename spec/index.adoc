@@ -1713,36 +1713,18 @@ Any user can top-up any canister this way.
 This method is only available in local development instances.
 
 
-[#ic-bitcoin-canisters]
-== The IC bitcoin canisters
+[#ic-bitcoin-api]
+== The IC Bitcoin API
 
-Similar to the <<ic-management-canister,management canister>>, the Bitcoin functionality is also exposed through a facade, which we refer to as the "Bitcoin canisters".
-There are two Bitcoin canisters differing only in that one operates on the real Bitcoin blockchain whereas the other only works with the Bitcoin testnet.
-The Bitcoin canisters can be accessed using their addresses:
-
-- The canister address of the Bitcoin canister that uses the real Bitcoin blockchain is `u25tu-yqaaa-aaaaa-aaaaa-eai`.
-- The canister address of the Bitcoin canister that uses the Bitcoin testnet is `u54va-viaaa-aaaaa-aaaaq-eai`.
-
-Invoking functions on these canisters will cost cycles. The concrete costs for each function are yet to be determined.
-
+The Bitcoin functionality is exposed via the management canister.
 Information about Bitcoin can be found in the https://developer.bitcoin.org/devguide/[Bitcoin developer guides].
-
-[#ic-bitcoin-candid]
-=== Interface overview
-
-The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the available functionality. You can also link:{attachmentsdir}/bitcoin.did[download the file].
-----
-include::{example}bitcoin.did[]
-----
-
-The binary encoding of arguments and results are as per Candid specification.
+Invoking the functions of the Bitcoin API will cost cycles. The concrete costs for each function are yet to be determined.
 
 [#ic-bitcoin_get_utxos]
-=== IC method `get_utxos`
+=== IC method `bitcoin_get_utxos`
 
-Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address as part of the
-`GetUtxosRequest` , the function returns all unspent transaction outputs (UTXOs) associated with the
-provided address based on the current view of the Bitcoin blockchain available to the Bitcoin canister.
+Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the
+provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component of the replica.
 
 The following address formats are supported:
 
@@ -1751,7 +1733,7 @@ The following address formats are supported:
 * Pay to witness public key hash (P2WPKH)
 * Pay to witness script hash (P2WSH)
 
-If the call fails, e.g., because the address is malformed, a `GetUtxosError` variant is returned,
+If the call fails, e.g., because the address is malformed, a `get_utxos_error` variant is returned,
 indicating the reason for the failed call.
 
 The optional `filter` parameter can be used to restrict the set of returned UTXOs, either providing a
@@ -1763,9 +1745,9 @@ is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
 In the second case, a pagination record must be provided, specifying a block hash that constitutes
 the tip of the considered chain for this request and, optionally, an offset and a limit.
-A `GetUtxosRequest` without the optional `filter` results in a request that
+A `get_utxos_request` without the optional `filter` results in a request that
 considers the full blockchain, which is equivalent to setting
-`MinConfirmations` to 0.
+`min_confirmations` to 0.
 
 The recommended workflow is to issue a request with the desired number of confirmations.
 If the `total_count` in the response is greater then the number of returned UTXOs, the
@@ -1773,43 +1755,43 @@ tip (block) hash in the response can then be used for a subsequent pagination re
 additional UTXOs, setting the offset to the number of received UTXOs.
 
 [#ic-bitcoin_get_balance]
-=== IC method `get_balance`
+=== IC method `bitcoin_get_balance`
 
-Given a https://en.bitcoin.it/wiki/Base58Check_encoding[base58-encoded] address as part of the
-`GetBalanceRequest` , the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin). The same address formats as for link:#ic-bitcoin_get_utxos[`get_utxos`] are supported.
+Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`] are supported.
 
-If the call fails, e.g., because the address is malformed, a `GetBalanceError` variant is returned,
+If the call fails, e.g., because the address is malformed, a `get_balance_error` variant is returned,
 indicating the reason for the failed call.
 
 The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs
 for the calculation of the balance to those with at least the provided number of confirmations
-in the same manner as for the `get_utxos` call.
+in the same manner as for the link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`] call.
 
-Given an address and the optional `min_confirmations` parameter, `get_balance` iterates over
-all UTXOs, i.e., the same balance is returned as when calling link:#ic-bitcoin_get_utxos[`get_utxos`]
+Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over
+all UTXOs, i.e., the same balance is returned as when calling
+link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`]
 for the same address and the same number of confirmations and, if necessary,
 using pagination to get all UTXOs for the same tip hash.
 
-[#ic-send_transaction]
-=== IC method `send_transaction`
+[#ic-bitcoin_send_transaction]
+=== IC method `bitcoin_send_transaction`
 
-Given a `blob` of a Bitcoin transaction, several checks are performed:
+Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
 
 - The transaction is well formed.
 - The transaction only consumes unspent outputs with respect to the current (longest)
 blockchain, i.e., there is no block on the (longest) chain that consumes any of these outputs.
 - There is a positive transaction fee.
 
-If at least one of these checks fails, a `SendTransactionError` is returned,
+If at least one of these checks fails, a `send_transaction_error` is returned,
 indicating the reason for the failed call.
 
 If the transaction passes these tests, the transaction is forwarded to the
-Bitcoin network.
+specified Bitcoin network.
 
-The Bitcoin canister periodically forwards the transaction
+The Bitcoin component of the replica periodically forwards the transaction
 until the transaction appears in a block appended to the blockchain or the transaction
 times out after 24 hours. As soon as it appears in a block or expires,
-the Bitcoin canister drops the transaction.
+the Bitcoin component drops the transaction.
 It follows that the function does not provide any guarantees that a submitted
 transaction will ever appear in a block.
 
