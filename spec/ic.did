@@ -35,6 +35,68 @@ type http_request_error = variant {
   conn_timeout;
 };
 
+type satoshi = nat64;
+
+type bitcoin_network = variant {
+  mainnet;
+  testnet;
+};
+
+type bitcoin_address = text;
+
+type block_hash = blob;
+
+type outpoint = record {
+  txid : blob;
+  vout : nat32
+};
+
+type utxo = record {
+  outpoint: outpoint;
+  value: satoshi;
+  height: nat32;
+};
+
+type pagination = record {
+  tip_block_hash : block_hash;
+  offset: opt nat32;
+  limit: opt nat32;
+};
+
+type get_utxos_request = record {
+  address : bitcoin_address;
+  network: bitcoin_network;
+  filter: opt variant {
+    min_confirmations: nat32;
+    pagination: pagination;
+  };
+};
+
+type get_utxos_error = variant {
+  MalformedAddress;
+};
+
+type get_balance_request = record {
+  address : bitcoin_address;
+  network: bitcoin_network;
+  min_confirmations: opt nat32;
+};
+
+type get_balance_error = variant {
+  MalformedAddress;
+};
+
+type send_transaction_request = record {
+  transaction: blob;
+  network: bitcoin_network;
+};
+
+type send_transaction_error = variant {
+  MalformedTransaction;
+  NoFee;
+  InvalidInputs;
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings
@@ -71,6 +133,27 @@ service ic : {
       function: func (http_response) -> (http_response) query
     };
   }) -> (variant { Ok : http_response; Err: opt http_request_error });
+
+  // bitcoin interface
+  bitcoin_get_balance: (get_balance_request) -> (variant {
+    Ok : satoshi;
+    Err: opt get_balance_error;
+  });
+
+  bitcoin_get_utxos: (get_utxos_request) -> (variant {
+    Ok : record {
+      utxos: vec utxo;
+      total_count: nat32;
+      tip_block_hash: block_hash;
+      tip_height: nat32;
+    };
+    Err : opt get_utxos_error;
+  });
+
+  bitcoin_send_transaction: (send_transaction_request) -> (variant {
+    Ok;
+    Err : opt send_transaction_error;
+  });
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
