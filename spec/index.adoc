@@ -1743,6 +1743,12 @@ are returned, i.e., transactions with fewer than this number of
 confirmations are not considered. In other words, if the number of confirmations is `c`, an output
 is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
+There is an upper bound of 144 on the minimum number of confirmations because only the 144 most recent
+blocks are cached and it is not possible to return the correct result based on the UTXO set.
+If a larger minimum number of confirmations is specified, a `MinConfirmationsTooLarge` error is returned.
+Note that this is not a severe restriction as the minimum number of confirmations is typically set
+to a value around 6 in practice.
+
 In the second case, a pagination record must be provided, specifying a block hash that constitutes
 the tip of the considered chain for this request and, optionally, an offset and a limit.
 A `get_utxos_request` without the optional `filter` results in a request that

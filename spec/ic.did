@@ -74,6 +74,10 @@ type get_utxos_request = record {
 
 type get_utxos_error = variant {
   MalformedAddress;
+  MinConfirmationsTooLarge: record {
+    given: nat32;
+    max: nat32;
+  };
 };
 
 type get_balance_request = record {
@@ -84,6 +88,10 @@ type get_balance_request = record {
 
 type get_balance_error = variant {
   MalformedAddress;
+  MinConfirmationsTooLarge: record {
+    given: nat32;
+    max: nat32;
+  };
 };
 
 type send_transaction_request = record {
