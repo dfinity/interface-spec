@@ -2849,7 +2849,7 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
-The `freezing_threshold_in_cycles` is the current estimate of the smallest amount of cycles the canister can have without entering the frozen state. The system uses the `freezing_threshold` setting to compute this field.
+The `freezing_threshold_in_cycles` is the current estimate of the smallest number of cycles the canister can have without entering the frozen state. The system uses the `freezing_threshold` setting to compute this field.
 
 Conditions::
 ....
