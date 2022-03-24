@@ -1,3 +1,5 @@
+Do not merge, example change only.
+
 # Internet Computer Reference
 
 This repository contains the source files of the [Interface Spec], which describes the externally visible behaviour of the Internet Computer.
