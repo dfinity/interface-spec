@@ -1748,6 +1748,12 @@ If a larger minimum number of confirmations is specified, a `MinConfirmationsToo
 Note that this is not a severe restriction as the minimum number of confirmations is typically set
 to a value around 6 in practice.
 
+It is important to note that the validity of transactions is not verified in the Bitcoin component. The Bitcoin component relies on the
+proof of work that goes into the blocks and the verification of the blocks in the Bitcoin network.
+For a newly discovered block, a regular Bitcoin (full) node therefore provides a higher level of security
+than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
+to gain confidence in the correctness of the returned UTXOs.
+
 In the second case, a pagination record must be provided, specifying a block hash that constitutes
 the tip of the considered chain for this request and, optionally, an offset and a limit.
 A `get_utxos_request` without the optional `filter` results in a request that
