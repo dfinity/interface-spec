@@ -1949,6 +1949,122 @@ lookup_path(["d"],      pruned_tree) = Found "morning"
 lookup_path(["e"],      pruned_tree) = Absent
 ....
 
+[#http-gateway]
+== The HTTP Gateway protocol
+
+This section specifies the _HTTP Gateway protocol_, which allows canisters to handle conventional HTTP requests.
+
+This feature involves the help of a _HTTP Gateway_ that translates between HTTP requests and the IC protocol. Such a gateway could be a stand-alone proxy, it could be implemented in a web browsers (natively, via plugin or via a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete Gateway, so that all Gateway implementations can be compatible.
+
+This protocol sits conceptually on top of the interface specified in the remainder of this document, as the involved parties (HTTP Gateway and canisters) are not part of the “system” described here. It is still included in this file due to its role in the Internet Computer ecosystem and due to the importance of keeping multiple Gateway implementations in sync.
+
+=== Overview
+
+A HTTP request by an HTTP client is handled by these steps:
+
+1. The Gateway resolves the Host of the request to a canister id.
+2. The Gateway Candid-encoded the HTTP request data.
+3. The Gateway invokes the canister via a query call to `http_request`.
+4. The canister handles the request and returns a HTTP response, encoded in Candid, together with additional metadata.
+5. If requested by the canister, the Gateway sends the request again via an update call to `http_request_update`.
+6. If applicable, the Gateway fetches futher body data via streaming query calls.
+7. If applicable, the Gateway validates the certificate of the response.
+8. The Gateway sends the response to the HTTP client.
+
+[#http-gateway-interface]
+=== Candid interface
+
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the expecte Canister interface. You can also link:{attachmentsdir}/http-gateway.did[download the file].
+----
+include::{example}http-gateway.did[]
+----
+
+This type signature is a type signature _scheme_, and the canister can choose any type for the token type `T` used for streaming. The Gateway handles that type generically.
+
+Only canisters that use the “Upgrade to update calls” feature need to provide the `http_request_update` method.
+
+NOTE: Canisters not using these upgrade these features can completeley leave out the `streaming_strategy` and/or `upgade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplifiy their code.
+
+[#http-gateway-name-resolution]
+=== Canister resolution
+
+The Gateway needs to know the canister id of the canister to talk to, and obtains that information from the hostname as follows:
+
+1. Check that the hostname, taken from the `Host` field of the HTTP request, is of the form `<name>.raw.ic0.app` or `<name>.ic0.app`, or fail.
+
+2. If the `<name>` is in the following table, use the given canister ids:
++
+.Canister hostname resolution
+|===
+|Hostname |Canister id
+|identity | rdmx6-jaaaa-aaaaa-aaadq-cai
+|nns | qoctq-giaaa-aaaaa-aaaea-cai
+|dscvr | h5aet-waaaa-aaaab-qaamq-cai
+|personhood | g3wsl-eqaaa-aaaan-aaaaa-cai
+
+3. Else, if `<name>` a valid textual encoding of a principal, use that principal as the canister ids.
+
+4. Else fail.
+
+If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app` it is a _raw_ hostname.
+
+=== Request encoding
+
+The HTTP request is encoded into the `HttpRequest` candid structure.
+
+The `method` field contains the HTTP methd (e.g. `HTTP`), in upper case.
+
+The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
+
+The `headers` field contains the headers of the HTTP request.
+
+The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
+
+=== Upgrade to update calls
+
+If the canister sets `update = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call, with the same argument, to `http_request_update`, and uses that response instead.
+
+The value of the `update` field returned from `http_request_update` is ignored.
+
+=== Response decoding and streaming
+
+The Gateway assembles the HTTP response from the given `HttpResponse` record.
+
+The HTTP response status code is taken from the `status_code` field.
+
+The HTTP response headers are taken from the `headers` field.
+
+The HTTP response body is initialized with the value of the `body` field.
+
+If the `streaming_strategy` field is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
+
+1. If the function reference in the `callback` field of the `streaming_strategy` is not a method of the given canister, the Gateway fails the request.
+
+2. Else, it makes a query call to the give method, passing the `token` value given in the `streaming_strategy` as the argument.
+
+3. That query method returns a `StreamingCallbackHttpResponse`. The `body` therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the `token` field, until that field is `null`.
+
+=== Response certification
+
+If the hostname was safe, the HTTP Gateway performs _certificate validation_:
+
+1. It searches for a response header called `Ic-Certificate` (case-insensitive).
+
+2. The value of the header must be a structured header according to RFC8941 with fields `certificate` and `tree`, both being byte sequences.
+
+3. The `certificate` must be a valid certificate as per <<certification>>, signed by the root key. If the certificate contains a subnet delegation, the delegation must be valid for the given canister. The timestamp in `/time` must be recent. The subnet state tree in the certificate must reveal the canister’s  <<state-tree-certified-data,certified data>>.
+
+4. The `tree` must be a hash trees as per <<certification-encoding>>.
+
+5. The root hash of that `tree` must match the canister’s certified data.
+
+6. The path `["http_assets",<url>]`, where `url` is the utf8-encoded `url` from the `HttpRequest` must exist and be a leaf.  Else, if it does not exist, `["http_assets","/index.html"]` must exist and be a leaf.
+
+7. That leaf must contain the SHA256 of the _decoded_ body.
++
+The decoded body is the body of the HTTP response (in particular, after assembling streaming chunks), decoded according to the `Content-Encoding` header, if present. Supported encodings for `Content-Encoding` are `gzip` and `deflate.`
+
+
 
 [#abstract-behavior]
 == Abstract behavior

@@ -1,0 +1,34 @@
+type HeaderField = record { text; text; };
+
+type HttpRequest = record {
+  method: text;
+  url: text;
+  headers: vec HeaderField;
+  body: blob;
+};
+
+type HttpResponse = record {
+  status_code: nat16;
+  headers: vec HeaderField;
+  body: blob;
+  upgrade : opt bool;
+  streaming_strategy: opt StreamingStrategy;
+};
+
+type StreamingCallbackHttpResponse = record {
+  body: blob;
+  token: opt T;
+};
+
+type StreamingStrategy = variant {
+  Callback: record {
+    callback: func (T) -> (opt StreamingCallbackHttpResponse) query;
+    token: T;
+  };
+};
+
+service : {
+  http_request: (request: HttpRequest) -> (HttpResponse) query;
+  http_request_update: (request: HttpRequest) -> (HttpResponse);
+}
+
