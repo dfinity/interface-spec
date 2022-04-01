@@ -190,6 +190,7 @@ Dapps on the Internet Computer are called _canisters_. Conceptually, they consis
  * A canister id (a <<principal,principal>>)
  * Their _controllers_ (a possibly empty list of <<principal,principal>>)
  * A cycle balance
+ * A <<system-api-generation,generation counter>>
  * The _canister status_, which is one of `running`, `stopping` or `stopped`.
  * Resource reservations
 
@@ -216,7 +217,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, and _controllers_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
@@ -950,6 +951,7 @@ ic0.msg_arg_data_size : () -> i32;                                          // I
 ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry F
 ic0.msg_caller_size : () -> i32;                                            // I G U Q F
 ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q F
+ic0.callback_generation : i64;                                              // Ry Rt
 ic0.msg_reject_code : () -> i32;                                            // Ry Rt
 ic0.msg_reject_msg_size : () -> i32;                                        // Rt
 ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
@@ -962,7 +964,7 @@ ic0.msg_cycles_available : () -> i64;                                       // U
 ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
 ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-ic0.msg_cycles_accept : (max_amount : i64) -> ( amount : i64 );            // U Rt Ry
+ic0.msg_cycles_accept : (max_amount : i64) -> ( amount : i64 );             // U Rt Ry
 ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                        -> ();                                               // U Rt Ry
 
@@ -971,6 +973,7 @@ ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
 ic0.canister_status : () -> i32;                                            // *
+ic0.canister_generation : () -> i64;                                        // *
 
 ic0.msg_method_name_size : () -> i32                                        // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
@@ -988,8 +991,8 @@ ic0.call_new :                                                              // U
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
-ic0.call_cycles_add : (amount : i64) -> ();                               // U Ry Rt H
-ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();      // U Ry Rt H
+ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt H
+ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt H
 ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
 
 ic0.stable_size : () -> (page_count : i32);                                 // *
@@ -1149,6 +1152,21 @@ returns the current status of the canister:
 Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 +
 Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
+
+[#system-api-generation]
+=== Canister generation counter
+
+For each canister, the system maintains a _generation counter_. Upon canister generation, it is set to 0, and it is incremented upon every successful code installation (see <<ic-install_code,code installation>>).
+
+* `ic0.canister_generation : () -> i64`
++
+returns the current value of the generation counter.
++
+During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
+
+* `ic0.callback_generation : () -> i64`
++
+returns the generation of canister at the time of invoking the `ic0.call_perform` that performed the call which response is handled right now. It allows canisters to recognize that there is been a canster upgrade or installation between issuing a call and handling the response. Will trap unless called from a reply or reject handler.
 
 [#system-api-call]
 === Inter-canister method calls
@@ -1584,6 +1602,8 @@ Note that this is different from `uninstall_code` followed by `install_code`, as
 * If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in <<system-api-upgrades>>, passing `arg` to the `canister_post_upgrade` method of the new instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
+
+If successful, the <<system-api-generation,canister generation counter>> is bumped.
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
 
@@ -2042,12 +2062,14 @@ Arg = {
 }
 
 Timestamp = Nat;
+Generation = Nat
 Env = {
   time : Timestamp
   balance : Nat;
   freezing_limit : Nat;
-  certificate : NoCertificate | Blob
-  status : Running | Stopping | Stopped
+  certificate : NoCertificate | Blob;
+  status : Running | Stopping | Stopped;
+  generation : Generation;
 }
 
 RejectCode = Nat
@@ -2058,6 +2080,7 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
+  generation : Generation;
 }
 
 UpdateFunc = WasmState -> Trap | Return {
@@ -2079,7 +2102,7 @@ CanisterModule = {
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
   heartbeat : (Env) -> Trap | Return NoResponse
-  callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
+  callbacks : (Callback, Generation, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
 ....
@@ -2119,7 +2142,8 @@ CallOrigin
     }
   | FromCanister {
       calling_context : CallId;
-      callback: Callback
+      callback : Callback;
+      generation : Generation;
     }
   | FromHeartbeat
 ....
@@ -2133,7 +2157,7 @@ Therefore, a message can have different shapes:
 Queue = Unordered | Queue { from : System | CanisterId; to : CanisterId }
 EntryPoint
   = PublicMethod MethodName Principal Blob
-  | Callback Callback Response RefundedCycles
+  | CallbackEntry Callback Generation Response RefundedCycles
   | Heartbeat
 
 Message
@@ -2257,6 +2281,7 @@ S = {
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
   certified_data: CanisterId ↦ Blob;
+  generations : CanisterId ↦ Generation;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -2587,7 +2612,7 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Is_response = M.entry_point == Callback _ _
+    Is_response = M.entry_point == CallbackEntry _ _ _ _
 
     Env = {
       time = S.time[M.receiver];
@@ -2595,6 +2620,7 @@ Conditions::
       freezing_limit = freezing_limit(S, M.receiver);
       certificate = NoCertificate;
       status = S.status[M.receiver];
+      generation = S.generation[M.receiver];
     }
 
     Available = S.call_contexts[M.call_contexts].available_cycles
@@ -2605,8 +2631,8 @@ Conditions::
       (F = as_update(Mod.query_methods[M.method_name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response
-      F = Mod.callbacks(Callback, Response, Env, Available)
+    ( M.entry_point = CallbackEntry Callback Generation Response _
+      F = Mod.callbacks(Callback, Generation, Response, Env, Available)
     )
     or
     ( M.entry_point = Heartbeat
@@ -2898,11 +2924,12 @@ Conditions::
       caller = M.caller;
     }
     Env = {
-      time = S.time[M.receiver];
-      balance = S.balances[M.receiver];
-      freezing_limit = freezing_limit(S, M.receiver);
+      time = S.time[A.canister_id];
+      balance = S.balances[A.canister_id];
+      freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
-      status = S.status[M.receiver];
+      status = S.status[A.canister_id];
+      generation = S.generations[A.canister_id] + 1;
     }
     Mod.init(A.canister_id, Arg, Env) = Return New_state
 ....
@@ -2911,6 +2938,7 @@ State after::
 S with
     canisters[A.canister_id] =
       { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
+    generations[A.canister_id] = generations[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -2937,24 +2965,31 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
     Env = {
-      time = S.time[M.receiver];
-      balance = S.balances[M.receiver];
-      freezing_limit = freezing_limit(S, M.receiver);
+      time = S.time[A.canister_id];
+      balance = S.balances[A.canister_id];
+      freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
-      status = S.status[M.receiver];
+      status = S.status[A.canister_id];
     }
-    Old_module.pre_upgrade(Old_State, M.caller, Env) = Return Stable_memory
+    Env1 = Env with {
+      generation = S.generations[A.canister_id];
+    }
+    Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return Stable_memory
+    Env2 = Env with {
+      generation = S.generations[A.canister_id] + 1;
+    }
     Arg = {
       data = A.arg;
       caller = M.caller;
     }
-    Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env) = Return New_state
+    Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env2) = Return New_state
 ....
 State after::
 ....
 S with
     canisters[A.canister_id] =
       { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
+    generations[A.canister_id] = generations[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3254,6 +3289,7 @@ S with
     controllers[CanisterId] = [M.caller]
     balances[CanisterId] = A.amount
     certified_data[CanisterId] = ""
+    generations[CanisterId] = 0
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3291,6 +3327,7 @@ Conditions::
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     RM.origin = FromCanister {
         call_context = Ctxt_id
+        generation = Gen
         callback = Callback
       }
     not S.call_contexts[Ctxt_id].deleted
@@ -3305,7 +3342,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id2
         receiver = C
-        entry_point = Callback Callback FM.response RM.refunded_cycles
+        entry_point = CallbackEntry Callback Gen FM.response RM.refunded_cycles
         queue = Unordered
       } ·
       Younger_messages
@@ -3484,6 +3521,7 @@ Conditions::
     freezing_limit = freezing_limit(S, Q.canister_id);
     certificate = Cert;
     status = S.status[Q.receiver];
+    generation = S.generations[Q.receiver];
   }
 ....
 Read response::
@@ -3612,6 +3650,7 @@ Params = {
   caller : NoCaller | Principal;
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
+  callback_generation : NoData | Generation;
   sysenv : Env;
   cycles_refundend : Nat;
   method_name : Text;
@@ -3650,6 +3689,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
+  callback_generation = NoData;
   cycles_refundend = 0;
 }
 
@@ -3807,10 +3847,11 @@ heartbeat = λ (sysenv) → λ wasm_state →
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
+callbacks = λ(callbacks, gen, response, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
     sysenv
     cycles_received = refund;
+    callback_generation = gen;
   }
   let (fun, env, params) = match response with
     Reply data ->
@@ -3933,6 +3974,9 @@ ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
 ic0.msg_reject_code<es>() : i32 =
   es.params.reject_code
 
+ic0.callback_generation<es>() : i64 =
+  return es.params.callback_generation
+
 ic0.msg_reject_msg_size<es>() : i32 =
   return |es.params.reject_msg|
 
@@ -4000,6 +4044,9 @@ ic0.canister_self_size<es>() : i32 =
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
+ic0.canister_generatoin<es>() : i64 =
+  return es.params.sysenv.generation
+
 ic0.canister_cycle_balance<es>() : i64 =
   if es.balance >= 2^64 then Trap
   return es.balance
@@ -4048,6 +4095,7 @@ ic0.call_new<es>(
       on_reject = Closure { fun = reject_fun; env = reject_env }
       on_cleanup = NoClosure
     };
+    generation = es.params.sysenv.generation;
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
