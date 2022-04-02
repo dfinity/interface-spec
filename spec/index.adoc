@@ -2026,8 +2026,7 @@ If the canister sets `update = opt true` in the `HttpResponse` reply from `http_
 
 The value of the `update` field returned from `http_request_update` is ignored.
 
-[#http-gateway-streaming]
-=== Response decoding and streaming
+=== Response decoding
 
 The Gateway assembles the HTTP response from the given `HttpResponse` record:
 
@@ -2038,7 +2037,7 @@ The Gateway assembles the HTTP response from the given `HttpResponse` record:
 * The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
 
 [#http-gateway-streaming]
-=== Response decoding and streaming
+=== Response body streaming
 
 The HTTP Gateway protocol has provisions transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is idependent of any possible streaming of data between the HTTP Gateway and the HTTP client. The gateway may assemble the response in whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the Gateway is <<http-gateway-certification,certifying the response>>, it must not pass on uncertified chunks.
 
