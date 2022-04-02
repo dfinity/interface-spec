@@ -1956,7 +1956,7 @@ This section specifies the _HTTP Gateway protocol_, which allows canisters to ha
 
 This feature involves the help of a _HTTP Gateway_ that translates between HTTP requests and the IC protocol. Such a gateway could be a stand-alone proxy, it could be implemented in a web browsers (natively, via plugin or via a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete Gateway, so that all Gateway implementations can be compatible.
 
-This protocol sits conceptually on top of the interface specified in the remainder of this document, as the involved parties (HTTP Gateway and canisters) are not part of the “system” described here. It is still included in this file due to its role in the Internet Computer ecosystem and due to the importance of keeping multiple Gateway implementations in sync.
+Conceptually, this protocol builds on top of the interface specifie d in the remainder of this document, and therefore is an “application-level” interface, not a feature of the core Internet Computer system described in the other sections, and could be a separate document. We nevertheless include this protocol in the Internet Computer Interface Specification because of its important role in the ecosystem and due to the importance of keeping multiple Gateway implementations in sync.
 
 === Overview
 
@@ -1967,7 +1967,7 @@ A HTTP request by an HTTP client is handled by these steps:
 3. The Gateway invokes the canister via a query call to `http_request`.
 4. The canister handles the request and returns a HTTP response, encoded in Candid, together with additional metadata.
 5. If requested by the canister, the Gateway sends the request again via an update call to `http_request_update`.
-6. If applicable, the Gateway fetches futher body data via streaming query calls.
+6. If applicable, the Gateway fetches further body data via streaming query calls.
 7. If applicable, the Gateway validates the certificate of the response.
 8. The Gateway sends the response to the HTTP client.
 
@@ -1983,7 +1983,7 @@ This type signature is a type signature _scheme_, and the canister can choose an
 
 Only canisters that use the “Upgrade to update calls” feature need to provide the `http_request_update` method.
 
-NOTE: Canisters not using these upgrade these features can completeley leave out the `streaming_strategy` and/or `upgade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplifiy their code.
+NOTE: Canisters not using these features can completely leave out the `streaming_strategy` and/or `upgade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplify their code.
 
 [#http-gateway-name-resolution]
 === Canister resolution
@@ -2022,21 +2022,27 @@ The `body` field contains the body of the HTTP request (without any content enco
 
 === Upgrade to update calls
 
-If the canister sets `update = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call, with the same argument, to `http_request_update`, and uses that response instead.
+If the canister sets `update = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses that response instead.
 
 The value of the `update` field returned from `http_request_update` is ignored.
 
+[#http-gateway-streaming]
 === Response decoding and streaming
 
-The Gateway assembles the HTTP response from the given `HttpResponse` record.
+The Gateway assembles the HTTP response from the given `HttpResponse` record:
 
-The HTTP response status code is taken from the `status_code` field.
+* The HTTP response status code is taken from the `status_code` field.
 
-The HTTP response headers are taken from the `headers` field.
+* The HTTP response headers are taken from the `headers` field.
 
-The HTTP response body is initialized with the value of the `body` field.
+* The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
 
-If the `streaming_strategy` field is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
+[#http-gateway-streaming]
+=== Response decoding and streaming
+
+The HTTP Gateway protocol has provisions transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is idependent of any possible streaming of data between the HTTP Gateway and the HTTP client. The gateway may assemble the response in whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the Gateway is <<http-gateway-certification,certifying the response>>, it must not pass on uncertified chunks.
+
+If the `streaming_strategy` field of the `HttpResponse` is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
 
 1. If the function reference in the `callback` field of the `streaming_strategy` is not a method of the given canister, the Gateway fails the request.
 
@@ -2044,6 +2050,7 @@ If the `streaming_strategy` field is set, the HTTP Gateway then uses further que
 
 3. That query method returns a `StreamingCallbackHttpResponse`. The `body` therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the `token` field, until that field is `null`.
 
+[#http-gateway-certification]
 === Response certification
 
 If the hostname was safe, the HTTP Gateway performs _certificate validation_:
@@ -2064,6 +2071,7 @@ If the hostname was safe, the HTTP Gateway performs _certificate validation_:
 +
 The decoded body is the body of the HTTP response (in particular, after assembling streaming chunks), decoded according to the `Content-Encoding` header, if present. Supported encodings for `Content-Encoding` are `gzip` and `deflate.`
 
+WARNING: The certification protocol only covers the mapping from request URL to response body. It completely ignores the request method and headers, and does not cover the response headers and status code.
 
 
 [#abstract-behavior]
