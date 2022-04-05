@@ -2645,8 +2645,15 @@ Conditions::
       E.content.canister_id ≠ ic_principal
       S.canisters[E.content.canister_id] ≠ EmptyCanister
       Arg = { data = E.content.arg; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
+      Env = {
+        time = S.time[E.content.canister_id];
+        balance = S.balances[E.content.canister_id]
+        freezing_limit = freezing_limit(S, E.content.canister_id);
+        certificate = NoCertificate;
+        status = S.status[E.content.canister_id];
+      }
       S.canisters[E.content.canister_id].module.inspect_message
-        (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
+        (E.content.method_name, C.wasm_state, Arg, Env) = Return Accept
    )
 ....
 State after::
