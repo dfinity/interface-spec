@@ -2015,8 +2015,6 @@ The HTTP request is encoded into the `HttpRequest` candid structure.
 * The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
 
 * The `headers` field contains the headers of the HTTP request.
-+
-NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-cookie` header.
 
 * The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
 
@@ -2033,6 +2031,8 @@ The Gateway assembles the HTTP response from the given `HttpResponse` record:
 * The HTTP response status code is taken from the `status_code` field.
 
 * The HTTP response headers are taken from the `headers` field.
++
+NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-cookie` header.
 
 * The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
 
