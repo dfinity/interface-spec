@@ -15,15 +15,22 @@ type HttpResponse = record {
   streaming_strategy: opt StreamingStrategy;
 };
 
+// Each canister that uses the streaming feature gets to choose their concrete
+// type; the HTTP Gateway will treat it as an opaque value that is only fed to
+// the callback method
+
+type StreamingToken = /* application-specific type */
+
+
 type StreamingCallbackHttpResponse = record {
   body: blob;
-  token: opt T;
+  token: opt StreamingToken;
 };
 
 type StreamingStrategy = variant {
   Callback: record {
-    callback: func (T) -> (opt StreamingCallbackHttpResponse) query;
-    token: T;
+    callback: func (StreamingToken) -> (opt StreamingCallbackHttpResponse) query;
+    token: StreamingToken;
   };
 };
 

@@ -1979,8 +1979,6 @@ The following interface description, in https://github.com/dfinity/candid/blob/m
 include::{example}http-gateway.did[]
 ----
 
-This type signature is a type signature _scheme_, and the canister can choose any type for the token type `T` used for streaming. The Gateway handles that type generically.
-
 Only canisters that use the “Upgrade to update calls” feature need to provide the `http_request_update` method.
 
 NOTE: Canisters not using these features can completely leave out the `streaming_strategy` and/or `upgade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplify their code.
@@ -2048,6 +2046,9 @@ If the `streaming_strategy` field of the `HttpResponse` is set, the HTTP Gateway
 2. Else, it makes a query call to the give method, passing the `token` value given in the `streaming_strategy` as the argument.
 
 3. That query method returns a `StreamingCallbackHttpResponse`. The `body` therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the `token` field, until that field is `null`.
+
+WARNING: The type of the `token` value is chosen by the canister; the HTTP Gateway obtains the Candid type from the encoded message from the canister, and use it when passing the token back to the canister. This generic use of Candid is no covered by the Candid specification, and may not be possible in some cases (e.g. when using “future types”). Canister authors may have to use “simple” types.
+
 
 [#http-gateway-certification]
 === Response certification
