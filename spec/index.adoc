@@ -1993,13 +1993,13 @@ The Gateway needs to know the canister id of the canister to talk to, and obtain
 2. If the `<name>` is in the following table, use the given canister ids:
 +
 .Canister hostname resolution
-|===
-| Hostname   | Canister id
-| identity   | rdmx6-jaaaa-aaaaa-aaadq-cai
-| nns        | qoctq-giaaa-aaaaa-aaaea-cai
-| dscvr      | h5aet-waaaa-aaaab-qaamq-cai
-| personhood | g3wsl-eqaaa-aaaan-aaaaa-cai
-|===
+|============================================
+| Hostname     | Canister id
+| `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
+| `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai`
+| `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai`
+| `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
+|============================================
 
 3. Else, if `<name>` a valid textual encoding of a principal, use that principal as the canister ids.
 
@@ -2035,8 +2035,10 @@ The Gateway assembles the HTTP response from the given `HttpResponse` record:
 +
 NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-cookie` header.
 +
-NOTE: HTTP Gateway may add addditional headers. In particular, the following headers may be set:
-+
+[NOTE]
+====
+HTTP Gateway may add addditional headers. In particular, the following headers may be set:
+
 ....
 access-control-allow-origin: *
 access-control-allow-methods: GET, POST, HEAD, OPTIONS
@@ -2044,6 +2046,7 @@ access-control-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,
 access-control-expose-headers: Content-Length,Content-Range
 x-cache-status: MISS
 ....
+====
 
 * The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
 
