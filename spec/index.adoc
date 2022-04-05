@@ -1999,6 +1999,7 @@ The Gateway needs to know the canister id of the canister to talk to, and obtain
 | nns        | qoctq-giaaa-aaaaa-aaaea-cai
 | dscvr      | h5aet-waaaa-aaaab-qaamq-cai
 | personhood | g3wsl-eqaaa-aaaan-aaaaa-cai
+|===
 
 3. Else, if `<name>` a valid textual encoding of a principal, use that principal as the canister ids.
 
