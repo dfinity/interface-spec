@@ -2033,6 +2033,16 @@ The Gateway assembles the HTTP response from the given `HttpResponse` record:
 * The HTTP response headers are taken from the `headers` field.
 +
 NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-cookie` header.
++
+NOTE: HTTP Gateway may add addditional headers. In particular, the following headers may be set:
++
+....
+access-control-allow-origin: *
+access-control-allow-methods: GET, POST, HEAD, OPTIONS
+access-control-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Cookie
+access-control-expose-headers: Content-Length,Content-Range
+x-cache-status: MISS
+....
 
 * The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
 
