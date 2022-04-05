@@ -2010,13 +2010,15 @@ If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it
 
 The HTTP request is encoded into the `HttpRequest` candid structure.
 
-The `method` field contains the HTTP methd (e.g. `HTTP`), in upper case.
+* The `method` field contains the HTTP methd (e.g. `HTTP`), in upper case.
 
-The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
+* The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
 
-The `headers` field contains the headers of the HTTP request.
+* The `headers` field contains the headers of the HTTP request.
++
+NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-cookie` header.
 
-The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
+* The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
 
 === Upgrade to update calls
 
