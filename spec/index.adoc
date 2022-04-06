@@ -2849,6 +2849,8 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
+The `freezing_threshold_in_cycles` is the current estimate of the smallest number of cycles the canister can have without entering the frozen state. The system uses the `freezing_threshold` setting to compute this field.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2873,6 +2875,8 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
+          freezing_threshold = S.freezing_threshold[A.canister_id];
+          freezing_threshold_in_cycles = freezing_limit(S, A.canister_id);
         })
         refunded_cycles = M.transferred_cycles
       }
