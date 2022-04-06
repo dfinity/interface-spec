@@ -35,6 +35,8 @@ type http_request_error = variant {
   conn_timeout;
 };
 
+type ecdsa_curve = variant { secp256k1; };
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings
@@ -76,12 +78,12 @@ service ic : {
   ecdsa_public_key : (record {
     canister_id : opt canister_id;
     derivation_path : vec blob;
-    key_id : text;
+    key_id : record { curve: ecdsa_curve; name: text };
   }) -> (record { public_key : blob; chain_code : blob; });
   sign_with_ecdsa : (record {
     message_hash : blob;
     derivation_path : vec blob;
-    key_id : text;
+    key_id : record { curve: ecdsa_curve; name: text };
   }) -> (record { signature : blob });
 
   // provisional interfaces for the pre-ledger world
