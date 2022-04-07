@@ -57,18 +57,12 @@ type utxo = record {
   height: nat32;
 };
 
-type pagination = record {
-  tip_block_hash : block_hash;
-  offset: opt nat32;
-  limit: opt nat32;
-};
-
 type get_utxos_request = record {
   address : bitcoin_address;
   network: bitcoin_network;
   filter: opt variant {
     min_confirmations: nat32;
-    pagination: pagination;
+    page: blob;
   };
 };
 
@@ -151,9 +145,9 @@ service ic : {
   bitcoin_get_utxos: (get_utxos_request) -> (variant {
     Ok : record {
       utxos: vec utxo;
-      total_count: nat32;
       tip_block_hash: block_hash;
       tip_height: nat32;
+	    next_page: opt blob;
     };
     Err : opt get_utxos_error;
   });
@@ -162,6 +156,8 @@ service ic : {
     Ok;
     Err : opt send_transaction_error;
   });
+
+  bitcoin_get_current_fees: () -> (vec float32);
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
