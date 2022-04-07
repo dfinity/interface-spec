@@ -16,7 +16,7 @@ type definite_canister_settings = record {
   freezing_threshold : nat;
 };
 
-type http_header = record { name: text; value: blob };
+type http_header = record { name: text; value: text };
 
 type http_response = record {
   status: nat;
