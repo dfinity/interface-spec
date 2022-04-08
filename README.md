@@ -17,7 +17,7 @@ The Interface Spec is versioned, using a three-component version like
 Releases from this repository are tagged using a three-component _code
 version_ number:
 
-    0.8.1
+    0.8.3
     ┬ ┬ ┬
     │ │ └ The third component is bumped upon non-breaking changes to the spec.
     │ └ The second component is bumped with a breaking change to the spec
