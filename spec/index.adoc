@@ -1725,6 +1725,7 @@ Invoking the functions of the Bitcoin API will cost cycles. The concrete costs f
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the
 provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component of the replica.
+The UTXOs are returned sorted by block height in descending order.
 
 The following address formats are supported:
 
