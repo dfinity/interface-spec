@@ -5,8 +5,11 @@
 === ∞ (unreleased)
 
 * Canister access to performance metrics
-* Expose Wasm custom sections in the state tree
-* User delegations include a principal scope
+* Expose Wasm custom sections as metadata in the state tree
+* User delegations include a principal scope (`senders`)
+* Canister cycle balances are represnted by 128 bits, and no system-defined upper limit exists anymore
+* Canister modules can be gzip-encoded
+* Canisters can make HTTP requests via the `http_request` method of the management canister
 
 [#0_18_3]
 === 0.18.3 (2022-01-10)
