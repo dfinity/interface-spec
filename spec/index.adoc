@@ -1716,6 +1716,7 @@ The returned response (and the response provided to the `transform` function, if
 - `body` - the response's body
 
 The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
+When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
@@ -1878,9 +1879,9 @@ Delegation =
 A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
 
 ....
-check_delegations(NoDelegation) : public_bls_key =
+check_delegation(NoDelegation) : public_bls_key =
   return root_public_key
-check_delegations(Delegation d) : public_bls_key =
+check_delegation(Delegation d) : public_bls_key =
   verify_cert(d.certificate)
   return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
@@ -2874,6 +2875,8 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
+The `freezing_threshold_in_cycles` is the current estimate of the smallest number of cycles the canister can have without entering the frozen state. The system uses the `freezing_threshold` setting to compute this field.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2898,6 +2901,8 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
+          freezing_threshold = S.freezing_threshold[A.canister_id];
+          freezing_threshold_in_cycles = freezing_limit(S, A.canister_id);
         })
         refunded_cycles = M.transferred_cycles
       }
