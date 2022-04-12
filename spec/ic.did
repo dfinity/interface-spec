@@ -24,17 +24,6 @@ type http_response = record {
   body: blob;
 };
 
-type http_request_error = variant {
-  no_consensus;
-  timeout;
-  bad_tls;
-  invalid_url;
-  transform_error;
-  dns_error;
-  unreachable;
-  conn_timeout;
-};
-
 type ecdsa_curve = variant { secp256k1; };
 
 service ic : {
