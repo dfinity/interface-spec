@@ -2666,7 +2666,7 @@ then
             call_context = M.call_context;
             callback = call.callback
           };
-          caller = C.callee;
+          caller = M.receiver;
           callee = call.callee;
           method_name = call.method_name;
           arg = call.arg;
