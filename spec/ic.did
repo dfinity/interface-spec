@@ -48,7 +48,7 @@ service ic : {
       memory_size: nat;
       cycles: nat;
       freezing_threshold: nat;
-      freezing_threshold_in_cycles: nat;
+      idle_cycles_burned_per_second: float64;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();
