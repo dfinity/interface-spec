@@ -2613,7 +2613,7 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Is_response = M.entry_point == Callback _ _
+    Is_response = M.entry_point == Callback _ _ _
 
     Env = {
       time = S.time[M.receiver];
@@ -2631,8 +2631,8 @@ Conditions::
       (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response
-      F = Mod.callbacks(Callback, Response, Env, Available)
+    ( M.entry_point = Callback Callback Response Cycles
+      F = Mod.callbacks(Callback, Response, Cycles, Env, Available)
     )
     or
     ( M.entry_point = Heartbeat
