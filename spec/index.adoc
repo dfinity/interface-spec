@@ -2626,7 +2626,7 @@ Conditions::
     Available = S.call_contexts[M.call_contexts].available_cycles
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
-      (F = M.update_methods[Name](Arg, Env, Available)
+      (F = Mod.update_methods[Name](Arg, Env, Available)
       or
       (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
