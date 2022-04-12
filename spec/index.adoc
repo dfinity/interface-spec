@@ -2104,7 +2104,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
-  heartbeat : (Env) -> Trap | Return NoResponse
+  heartbeat : (Env) -> WasmState -> Trap | Return WasmState
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
@@ -2628,7 +2628,7 @@ Conditions::
       Arg = { data = Data; caller = Caller }
       (F = M.update_methods[Name](Arg, Env, Available)
       or
-      (F = as_update(Mod.query_methods[Name], Arg, Env))
+      (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
     ( M.entry_point = Callback Callback Response
@@ -2636,7 +2636,7 @@ Conditions::
     )
     or
     ( M.entry_point = Heartbeat
-      F = Mod.heartbeat(Env)
+      F = heartbeat_as_update(Mod.heartbeat, Env)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -2718,15 +2718,26 @@ If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would require a (unique) call to `ic0.reply`.
 Note also that the state changes are persisted even when the IC is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<rule-starvation>>).
 
-The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
+The functions `query_as_update` and `heartbeat_as_update` turns a query function resp the heartbeat into an update function; this is merely a notational trick to simplify the rule:
 ....
-as_update(f, arg, env) = λ wasm_state →
+query_as_update(f, arg, env) = λ wasm_state →
   match f(arg, env)(wasm_state) with
     Trap → Trap
     Return res → Return {
       new_state = wasm_state;
       new_calls = [];
       response = res;
+      cycles_accepted = 0;
+      new_certified_data = NoCertifiedData;
+    }
+
+heartbeat_as_update(f, env) = λ wasm_state →
+  match f(env)(wasm_state) with
+    Trap → Trap
+    Return wasm_state → Return {
+      new_state = wasm_state;
+      new_calls = [];
+      response = NoResponse;
       cycles_accepted = 0;
       new_certified_data = NoCertifiedData;
     }
@@ -3818,7 +3829,7 @@ This formulation checks afterwards that the system call `ic0.call_perform` was n
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
-* The partial map `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
+* The function `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
 +
 ....
 heartbeat = λ (sysenv) → λ wasm_state →
@@ -3831,7 +3842,11 @@ heartbeat = λ (sysenv) → λ wasm_state →
   if es.cycles_accepted ≠ 0 then Trap
   if es.ingress_filter ≠ Reject then Trap
   if es.response ≠ NoResponse then Trap
-  Return NoResponse;
+  Return es.wasm_state;
+....
+otherwise it is
+....
+heartbeat = λ (sysenv) → λ wasm_state → Trap
 ....
 
 * The function `callbacks` of the `CanisterModule` is defined  as follows
