@@ -2613,7 +2613,7 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Is_response = M.entry_point == Callback _ _
+    Is_response = M.entry_point == Callback _ _ _
 
     Env = {
       time = S.time[M.receiver];
@@ -2626,13 +2626,13 @@ Conditions::
     Available = S.call_contexts[M.call_contexts].available_cycles
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
-      (F = M.update_methods[Name](Arg, Env, Available)
+      (F = Mod.update_methods[Name](Arg, Env, Available)
       or
       (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response
-      F = Mod.callbacks(Callback, Response, Env, Available)
+    ( M.entry_point = Callback Callback Response Cycles
+      F = Mod.callbacks(Callback, Response, Cycles, Env, Available)
     )
     or
     ( M.entry_point = Heartbeat
