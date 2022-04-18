@@ -4089,7 +4089,7 @@ ic0.canister_self_size<es>() : i32 =
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
-ic0.canister_generatoin<es>() : i64 =
+ic0.canister_generation<es>() : i64 =
   return es.params.sysenv.generation
 
 ic0.canister_cycle_balance<es>() : i64 =
