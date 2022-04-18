@@ -1166,7 +1166,7 @@ During the canister upgrade process, `canister_pre_upgrade` sees the old counter
 
 * `ic0.callback_generation : () -> i64`
 +
-returns the generation of canister at the time of invoking the `ic0.call_perform` that performed the call which response is handled right now. It allows canisters to recognize that there is been a canster upgrade or installation between issuing a call and handling the response. Will trap unless called from a reply or reject handler.
+returns the generation counter value of the canister at the time of invoking the `ic0.call_perform` for the call that led to the response that is handled right now. It allows canisters to recognize that there is been a canster upgrade or installation between issuing a call and handling the response. Will trap unless called from a reply or reject handler.
 
 [#system-api-call]
 === Inter-canister method calls
