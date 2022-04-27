@@ -406,6 +406,10 @@ If the status is `rejected`, then this path contains the reject code (see <<reje
 +
 If the status is `rejected`, then this path contains a textual diagnostic message, else it is not present.
 
+* `/request_status/<request_id>/error_code` (text)
++
+If the status is `rejected`, then this path contains an implementation-specific error code (see <<error-codes>>), else it is not present.
+
 NOTE: Immediately after submitting a request, the request may not show up yet as the Internet Computer is still working on accepting the request as pending.
 
 NOTE: Request statuses will not actually be kept around indefinitely, and eventually the Internet Computer forgets about the request. This will happen no sooner than the request’s expiry time, so that replay attacks are prevented.
@@ -585,6 +589,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 * `status` (`text`): `rejected`
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
+* `error_code` (text): an implementation-specific textual error code (see <<error-codes>>).
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
@@ -734,6 +739,13 @@ The symbolic names of this enumeration are used throughout this specification, b
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
 When canisters explicitly reject a message (see <<system-api-requests>>), they can specify the reject message, but _not_ the reject code; it is always `CANISTER_REJECT`. In this sense, the reject code is trustworthy: If the IC responds with a `SYS_FATAL` reject, then it really was the IC issuing this reject.
+
+[#error-codes]
+=== Error codes
+
+Implementations of the API can provide additional details for rejected messages in the form of a textual label identifying the error condition.
+API clients can use these labels to handle errors programmatically or suggest recovery paths to the user.
+The specification reserves error codes matching the regular expression `IC[0-9]+` (e.g., `IC502`) for the DFINITY implementation of the API.
 
 [#api-status]
 === Status endpoint
@@ -3531,12 +3543,12 @@ Read response::
 * If `F(Arg, Env) = Trap` then
 +
 ....
-{status: failed; error: "Query execution trapped"}
+{status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>}
 ....
 * Else if `F(Arg, Env) = Return (Reject (code, msg))` then
 +
 ....
-{status: rejected; reject_code: <code>: reject_message: <msg>}
+{status: rejected; reject_code: <code>: reject_message: <msg>, error_code: <implementation-specific>}
 ....
 * Else if `F(Arg, Env) = Return (Reply R)` then
 +
@@ -3602,7 +3614,7 @@ request_status_tree(Received) =
 request_status_tree(Processing) =
   { "status": "processing" }
 request_status_tree(Rejected (code,msg)) =
-  { "status": "rejected"; "reject_code": code; "reject_message": msg }
+  { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
 request_status_tree(Replied arg) =
   { "status": "replied"; "reply": arg }
 request_status_tree(Done) =

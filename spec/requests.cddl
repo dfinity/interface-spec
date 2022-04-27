@@ -70,6 +70,7 @@ query-response = tagged<{
   status: "rejected"
   reject_code: unsigned
   reject_message: text
+  error_code: text
 }>
 
 call-reply = {
