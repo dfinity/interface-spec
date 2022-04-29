@@ -1734,8 +1734,7 @@ The following address formats are supported:
 * Pay to witness public key hash (P2WPKH)
 * Pay to witness script hash (P2WSH)
 
-If the call fails, e.g., because the address is malformed, a `get_utxos_error` variant is returned,
-indicating the reason for the failed call.
+If the address is malformed, the call is rejected.
 
 The optional `filter` parameter can be used to restrict the set of returned UTXOs, either providing a
 minimum number of confirmations or a page reference when pagination is used for addresses with many UTXOs.
@@ -1745,7 +1744,7 @@ confirmations are not considered. In other words, if the number of confirmations
 is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
 There is an upper bound of 144 on the minimum number of confirmations.
-If a larger minimum number of confirmations is specified, a `MinConfirmationsTooLarge` error is returned.
+If a larger minimum number of confirmations is specified, the call is rejected.
 Note that this is not a severe restriction as the minimum number of confirmations is typically set
 to a value around 6 in practice.
 
@@ -1771,8 +1770,7 @@ In that case, the `page` field should be set to the `next_page` bytes in the sub
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`] are supported.
 
-If the call fails, e.g., because the address is malformed, a `get_balance_error` variant is returned,
-indicating the reason for the failed call.
+If the address is malformed, the call is rejected.
 
 The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs
 for the calculation of the balance to those with at least the provided number of confirmations
@@ -1794,8 +1792,7 @@ Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin tra
 blockchain, i.e., there is no block on the (longest) chain that consumes any of these outputs.
 - There is a positive transaction fee.
 
-If at least one of these checks fails, a `send_transaction_error` is returned,
-indicating the reason for the failed call.
+If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the
 specified Bitcoin network.
