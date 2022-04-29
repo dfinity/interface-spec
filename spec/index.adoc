@@ -408,7 +408,7 @@ If the status is `rejected`, then this path contains a textual diagnostic messag
 
 * `/request_status/<request_id>/error_code` (text)
 +
-If the status is `rejected`, then this path contains an implementation-specific error code (see <<error-codes>>), else it is not present.
+If the status is `rejected`, then this path might be present and contain an implementation-specific error code (see <<error-codes>>), else it is not present.
 
 NOTE: Immediately after submitting a request, the request may not show up yet as the Internet Computer is still working on accepting the request as pending.
 
@@ -589,7 +589,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 * `status` (`text`): `rejected`
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
-* `error_code` (text): an implementation-specific textual error code (see <<error-codes>>).
+* `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
