@@ -7,6 +7,7 @@
 * Spec: Canister access to performance metrics
 * Spec: Expose Wasm custom sections in the state tree
 * Spec: User delegations include a principal scope
+* Spec: Include the HTTP Gateway Protocol in this spec
 
 [#0_18_3]
 === 0.18.3 (2022-01-10)
