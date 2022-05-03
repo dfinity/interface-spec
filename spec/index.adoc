@@ -3344,7 +3344,7 @@ S with
     messages =
       Older_messages ·
       FuncMessage {
-        call_context = Ctxt_id2
+        call_context = Ctxt_id
         receiver = C
         entry_point = Callback Callback FM.response RM.refunded_cycles
         queue = Unordered
@@ -3654,7 +3654,7 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   sysenv : Env;
-  cycles_refundend : Nat;
+  cycles_refunded : Nat;
   method_name : Text;
 }
 ExecutionState = {
@@ -3691,7 +3691,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
-  cycles_refundend = 0;
+  cycles_refunded = 0;
 }
 
 empty_execution_state = {
