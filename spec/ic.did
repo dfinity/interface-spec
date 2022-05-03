@@ -24,16 +24,7 @@ type http_response = record {
   body: blob;
 };
 
-type http_request_error = variant {
-  no_consensus;
-  timeout;
-  bad_tls;
-  invalid_url;
-  transform_error;
-  dns_error;
-  unreachable;
-  conn_timeout;
-};
+type ecdsa_curve = variant { secp256k1; };
 
 type satoshi = nat64;
 
@@ -108,6 +99,8 @@ service ic : {
       module_hash: opt blob;
       memory_size: nat;
       cycles: nat;
+      freezing_threshold: nat;
+      idle_cycles_burned_per_second: float64;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();
@@ -120,7 +113,19 @@ service ic : {
     transform : opt variant {
       function: func (http_response) -> (http_response) query
     };
-  }) -> (variant { Ok : http_response; Err: opt http_request_error });
+  }) -> (http_response);
+
+  // Threshold ECDSA signature
+  ecdsa_public_key : (record {
+    canister_id : opt canister_id;
+    derivation_path : vec blob;
+    key_id : record { curve: ecdsa_curve; name: text };
+  }) -> (record { public_key : blob; chain_code : blob; });
+  sign_with_ecdsa : (record {
+    message_hash : blob;
+    derivation_path : vec blob;
+    key_id : record { curve: ecdsa_curve; name: text };
+  }) -> (record { signature : blob });
 
   // bitcoin interface
   bitcoin_get_balance: (get_balance_request) -> (satoshi);

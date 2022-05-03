@@ -1657,6 +1657,32 @@ There is no restriction on who can invoke this method.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
+[#ic-ecdsa_public_key]
+=== IC method `ecdsa_public_key`
+
+This method returns a https://www.secg.org/sec1-v2.pdf[SEC1] encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
+The `derivation_path` is a vector of variable length byte strings.
+The `key_id` is a struct specifying both a curve and a name.
+The availability of a particular `key_id` depends on implementation.
+
+For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see https://ia.cr/2021/1330[ia.cr/2021/1330, Appendix D]). To derive (non-hardened) https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032]-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2^31^.
+
+The return result is an extended public key consisting of an ECDSA `public_key`, encoded in https://www.secg.org/sec2-v2.pdf[SEC1] compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+
+This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id.
+Otherwise it will be rejected.
+
+[#ic-sign_with_ecdsa]
+=== IC method `sign_with_ecdsa`
+
+This method returns a new https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[ECDSA] signature of the given `message_hash` that can be separately verified against a derived ECDSA public key.
+This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
+
+The signatures are encoded as the concatenation of the https://www.secg.org/sec2-v2.pdf[SEC1] encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
+
+This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long.
+Otherwise it will be rejected.
+
 [#ic-http_request]
 === IC method `http_request`
 
@@ -1955,9 +1981,9 @@ Delegation =
 A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
 
 ....
-check_delegations(NoDelegation) : public_bls_key =
+check_delegation(NoDelegation) : public_bls_key =
   return root_public_key
-check_delegations(Delegation d) : public_bls_key =
+check_delegation(Delegation d) : public_bls_key =
   verify_cert(d.certificate)
   return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 ....
@@ -2050,6 +2076,146 @@ lookup_path(["bb"],     pruned_tree) = Unknown
 lookup_path(["d"],      pruned_tree) = Found "morning"
 lookup_path(["e"],      pruned_tree) = Absent
 ....
+
+[#http-gateway]
+== The HTTP Gateway protocol
+
+This section specifies the _HTTP Gateway protocol_, which allows canisters to handle conventional HTTP requests.
+
+This feature involves the help of a _HTTP Gateway_ that translates between HTTP requests and the IC protocol. Such a gateway could be a stand-alone proxy, it could be implemented in a web browsers (natively, via plugin or via a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete Gateway, so that all Gateway implementations can be compatible.
+
+Conceptually, this protocol builds on top of the interface specified in the remainder of this document, and therefore is an “application-level” interface, not a feature of the core Internet Computer system described in the other sections, and could be a separate document. We nevertheless include this protocol in the Internet Computer Interface Specification because of its important role in the ecosystem and due to the importance of keeping multiple Gateway implementations in sync.
+
+=== Overview
+
+A HTTP request by an HTTP client is handled by these steps:
+
+1. The Gateway resolves the Host of the request to a canister id.
+2. The Gateway Candid-encodes the HTTP request data.
+3. The Gateway invokes the canister via a query call to `http_request`.
+4. The canister handles the request and returns a HTTP response, encoded in Candid, together with additional metadata.
+5. If requested by the canister, the Gateway sends the request again via an update call to `http_request_update`.
+6. If applicable, the Gateway fetches further body data via streaming query calls.
+7. If applicable, the Gateway validates the certificate of the response.
+8. The Gateway sends the response to the HTTP client.
+
+[#http-gateway-interface]
+=== Candid interface
+
+The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the expected Canister interface. You can also link:{attachmentsdir}/http-gateway.did[download the file].
+----
+include::{example}http-gateway.did[]
+----
+
+Only canisters that use the “Upgrade to update calls” feature need to provide the `http_request_update` method.
+
+NOTE: Canisters not using these features can completely leave out the `streaming_strategy` and/or `upgrade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplify their code.
+
+[#http-gateway-name-resolution]
+=== Canister resolution
+
+The Gateway needs to know the canister id of the canister to talk to, and obtains that information from the hostname as follows:
+
+1. Check that the hostname, taken from the `Host` field of the HTTP request, is of the form `<name>.raw.ic0.app` or `<name>.ic0.app`, or fail.
+
+2. If the `<name>` is in the following table, use the given canister ids:
++
+.Canister hostname resolution
+|============================================
+| Hostname     | Canister id
+| `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
+| `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai`
+| `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai`
+| `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
+|============================================
+
+3. Else, if `<name>` is a valid textual encoding of a principal, use that principal as the canister id.
+
+4. Else fail.
+
+If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app` it is a _raw_ hostname.
+
+=== Request encoding
+
+The HTTP request is encoded into the `HttpRequest` Candid structure.
+
+* The `method` field contains the HTTP method (e.g. `HTTP`), in upper case.
+
+* The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
+
+* The `headers` field contains the headers of the HTTP request.
+
+* The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
+
+=== Upgrade to update calls
+
+If the canister sets `update = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses that response instead.
+
+The value of the `update` field returned from `http_request_update` is ignored.
+
+=== Response decoding
+
+The Gateway assembles the HTTP response from the given `HttpResponse` record:
+
+* The HTTP response status code is taken from the `status_code` field.
+
+* The HTTP response headers are taken from the `headers` field.
++
+NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-Cookie` header.
++
+[NOTE]
+====
+HTTP Gateways may add additional headers. In particular, the following headers may be set:
+
+....
+access-control-allow-origin: *
+access-control-allow-methods: GET, POST, HEAD, OPTIONS
+access-control-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Cookie
+access-control-expose-headers: Content-Length,Content-Range
+x-cache-status: MISS
+....
+====
+
+* The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
+
+[#http-gateway-streaming]
+=== Response body streaming
+
+The HTTP Gateway protocol has provisions to transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is independent of any possible streaming of data between the HTTP Gateway and the HTTP client. The gateway may assemble the response in whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the Gateway is <<http-gateway-certification,certifying the response>>, it must not pass on uncertified chunks.
+
+If the `streaming_strategy` field of the `HttpResponse` is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
+
+1. If the function reference in the `callback` field of the `streaming_strategy` is not a method of the given canister, the Gateway fails the request.
+
+2. Else, it makes a query call to the given method, passing the `token` value given in the `streaming_strategy` as the argument.
+
+3. That query method returns a `StreamingCallbackHttpResponse`. The `body` therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the `token` field, until that field is `null`.
+
+WARNING: The type of the `token` value is chosen by the canister; the HTTP Gateway obtains the Candid type of the encoded message from the canister, and uses it when passing the token back to the canister. This generic use of Candid is not covered by the Candid specification, and may not be possible in some cases (e.g. when using “future types”). Canister authors may have to use “simple” types.
+
+
+[#http-gateway-certification]
+=== Response certification
+
+If the hostname was safe, the HTTP Gateway performs _certificate validation_:
+
+1. It searches for a response header called `Ic-Certificate` (case-insensitive).
+
+2. The value of the header must be a structured header according to RFC 8941 with fields `certificate` and `tree`, both being byte sequences.
+
+3. The `certificate` must be a valid certificate as per <<certification>>, signed by the root key. If the certificate contains a subnet delegation, the delegation must be valid for the given canister. The timestamp in `/time` must be recent. The subnet state tree in the certificate must reveal the canister’s <<state-tree-certified-data,certified data>>.
+
+4. The `tree` must be a hash tree as per <<certification-encoding>>.
+
+5. The root hash of that `tree` must match the canister’s certified data.
+
+6. The path `["http_assets",<url>]`, where `url` is the utf8-encoded `url` from the `HttpRequest` must exist and be a leaf.  Else, if it does not exist, `["http_assets","/index.html"]` must exist and be a leaf.
+
+7. That leaf must contain the SHA-256 hash of the _decoded_ body.
++
+The decoded body is the body of the HTTP response (in particular, after assembling streaming chunks), decoded according to the `Content-Encoding` header, if present. Supported encodings for `Content-Encoding` are `gzip` and `deflate.`
+
+WARNING: The certification protocol only covers the mapping from request URL to response body. It completely ignores the request method and headers, and does not cover the response headers and status code.
 
 
 [#abstract-behavior]
@@ -2180,7 +2346,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
-  heartbeat : (Env) -> Trap | Return NoResponse
+  heartbeat : (Env) -> WasmState -> Trap | Return WasmState
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, Env) -> Trap | Return (Accept | Reject)
 }
@@ -2689,7 +2855,7 @@ Conditions::
     S.canisters[M.receiver] ≠ EmptyCanister
     Mod = S.canisters[M.receiver].module
 
-    Is_response = M.entry_point == Callback _ _
+    Is_response = M.entry_point == Callback _ _ _
 
     Env = {
       time = S.time[M.receiver];
@@ -2702,17 +2868,17 @@ Conditions::
     Available = S.call_contexts[M.call_contexts].available_cycles
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
-      (F = M.update_methods[M.method_name](Arg, Env, Available)
+      (F = Mod.update_methods[Name](Arg, Env, Available)
       or
-      (F = as_update(Mod.query_methods[M.method_name], Arg, Env))
+      (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response
-      F = Mod.callbacks(Callback, Response, Env, Available)
+    ( M.entry_point = Callback Callback Response RefundedCycles
+      F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
     )
     or
     ( M.entry_point = Heartbeat
-      F = Mod.heartbeat(Env)
+      F = heartbeat_as_update(Mod.heartbeat, Env)
     )
 
     R = F(S.canisters[M.receiver].wasm_state)
@@ -2742,7 +2908,7 @@ then
             call_context = M.call_context;
             callback = call.callback
           };
-          caller = C.callee;
+          caller = M.receiver;
           callee = call.callee;
           method_name = call.method_name;
           arg = call.arg;
@@ -2794,15 +2960,26 @@ If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would require a (unique) call to `ic0.reply`.
 Note also that the state changes are persisted even when the IC is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<rule-starvation>>).
 
-The function `as_update` turns a query function into an update function, this is merely a notational trick to simplify the rule
+The functions `query_as_update` and `heartbeat_as_update` turns a query function resp the heartbeat into an update function; this is merely a notational trick to simplify the rule:
 ....
-as_update(f, arg, env) = λ wasm_state →
+query_as_update(f, arg, env) = λ wasm_state →
   match f(arg, env)(wasm_state) with
     Trap → Trap
     Return res → Return {
       new_state = wasm_state;
       new_calls = [];
       response = res;
+      cycles_accepted = 0;
+      new_certified_data = NoCertifiedData;
+    }
+
+heartbeat_as_update(f, env) = λ wasm_state →
+  match f(env)(wasm_state) with
+    Trap → Trap
+    Return wasm_state → Return {
+      new_state = wasm_state;
+      new_calls = [];
+      response = NoResponse;
       cycles_accepted = 0;
       new_certified_data = NoCertifiedData;
     }
@@ -2951,6 +3128,8 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
+The `idle_cycles_burned_per_second` is the idle consumption of resources in cycles per second. Therefore, the freezing threshold in cycles can be obtained using the following formula: `freezing_threshold` (in seconds) * `idle_cycles_burned_per_second`.
+
 Conditions::
 ....
     S.messages = Older_messages · CallMessage M · Younger_messages
@@ -2975,6 +3154,8 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
+          freezing_threshold = S.freezing_threshold[A.canister_id];
+          idle_cycles_burned_per_second = freezing_limit(S, A.canister_id) / freezing_threshold;
         })
         refunded_cycles = M.transferred_cycles
       }
@@ -3405,7 +3586,7 @@ S with
     messages =
       Older_messages ·
       FuncMessage {
-        call_context = Ctxt_id2
+        call_context = Ctxt_id
         receiver = C
         entry_point = Callback Callback FM.response RM.refunded_cycles
         queue = Unordered
@@ -3715,7 +3896,7 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   sysenv : Env;
-  cycles_refundend : Nat;
+  cycles_refunded : Nat;
   method_name : Text;
 }
 ExecutionState = {
@@ -3752,7 +3933,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
-  cycles_refundend = 0;
+  cycles_refunded = 0;
 }
 
 empty_execution_state = {
@@ -3890,7 +4071,7 @@ This formulation checks afterwards that the system call `ic0.call_perform` was n
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
-* The partial map `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
+* The function `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
 +
 ....
 heartbeat = λ (sysenv) → λ wasm_state →
@@ -3903,16 +4084,20 @@ heartbeat = λ (sysenv) → λ wasm_state →
   if es.cycles_accepted ≠ 0 then Trap
   if es.ingress_filter ≠ Reject then Trap
   if es.response ≠ NoResponse then Trap
-  Return NoResponse;
+  Return es.wasm_state;
+....
+otherwise it is
+....
+heartbeat = λ (sysenv) → λ wasm_state → Trap
 ....
 
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
+callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
     sysenv
-    cycles_received = refund;
+    cycles_refunded = refund_cycles;
   }
   let (fun, env, params) = match response with
     Reply data ->
@@ -4003,9 +4188,11 @@ copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
 copy_from_canister<es>(src : i32, size : i32) blob =
   if src+size > |es.wasm_state.store.mem| then Trap
   return es.wasm_state.store.mem[src..src+size]
+....
 
 Cycles are represented by 128-bit values so they require 16 bytes of memory.
 
+....
 copy_cycles_to_canister<es>(dst : i32, data : blob) =
  let size = 16;
  if dst+size > |es.wasm_state.store.mem| then Trap
