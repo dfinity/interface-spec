@@ -2631,8 +2631,8 @@ Conditions::
       (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
-    ( M.entry_point = Callback Callback Response Cycles
-      F = Mod.callbacks(Callback, Response, Cycles, Env, Available)
+    ( M.entry_point = Callback Callback Response RefundedCycles
+      F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
     )
     or
     ( M.entry_point = Heartbeat
@@ -3852,10 +3852,10 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
 * The function `callbacks` of the `CanisterModule` is defined  as follows
 +
 ....
-callbacks = λ(callbacks, response, sysenv, available) → λ wasm_state →
+callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
   let params0 = { empty_params with
     sysenv
-    cycles_received = refund;
+    cycles_refunded = refund_cycles;
   }
   let (fun, env, params) = match response with
     Reply data ->
