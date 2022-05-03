@@ -3946,9 +3946,11 @@ copy_to_canister<es>(dst : i32, offset : i32, size : i32, data : blob) =
 copy_from_canister<es>(src : i32, size : i32) blob =
   if src+size > |es.wasm_state.store.mem| then Trap
   return es.wasm_state.store.mem[src..src+size]
+....
 
 Cycles are represented by 128-bit values so they require 16 bytes of memory.
 
+....
 copy_cycles_to_canister<es>(dst : i32, data : blob) =
  let size = 16;
  if dst+size > |es.wasm_state.store.mem| then Trap
