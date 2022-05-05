@@ -14,7 +14,7 @@ ic0.msg_cycles_available : () -> i64;                                       // U
 ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
 ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
 ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-ic0.msg_cycles_accept : (max_amount : i64) -> ( amount : i64 );             // U Rt Ry
+ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
 ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                        -> ();                                               // U Rt Ry
 
@@ -24,7 +24,7 @@ ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
 ic0.canister_status : () -> i32;                                            // *
 
-ic0.msg_method_name_size : () -> i32                                        // F
+ic0.msg_method_name_size : () -> i32;                                       // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
 ic0.accept_message : () -> ();                                              // F
 
@@ -53,10 +53,10 @@ ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64);            // *
 ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();           // *
 ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();            // *
 
-ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt H
-ic0.data_certificate_present : () -> i32                                    // *
-ic0.data_certificate_size : () -> i32                                       // *
-ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
+ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt H
+ic0.data_certificate_present : () -> i32;                                   // *
+ic0.data_certificate_size : () -> i32;                                      // *
+ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // *
 
 ic0.time : () -> (timestamp : i64);                                         // *
 ic0.performance_counter : (type : i32) -> (counter : i64);                  // * s
