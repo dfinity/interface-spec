@@ -947,7 +947,7 @@ The following sections describe various System API functions, also referred to a
 
 [source,rust]
 ----
-include::{example}ic0.rs[]
+include::{example}ic0.txt[]
 ----
 
 The comment after each function lists from where these functions may be invoked:
