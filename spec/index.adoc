@@ -2954,7 +2954,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'create_canister'
-    M.arg = candid()
+    M.arg = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
