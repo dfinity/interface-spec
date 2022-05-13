@@ -4,9 +4,10 @@
 [#unreleased]
 === ∞ (unreleased)
 
-* Canister access to performance metrics
-* Expose Wasm custom sections as metadata in the state tree
-* User delegations include a principal scope (`senders`)
+* Spec: Canister access to performance metrics
+* Spec: Expose Wasm custom sections in the state tree
+* Spec: User delegations include a principal scope
+* Spec: Include the HTTP Gateway Protocol in this spec
 * Canister cycle balances are represnted by 128 bits, and no system-defined upper limit exists anymore
 * Canister modules can be gzip-encoded
 * Canisters can make HTTP requests via the `http_request` method of the management canister
