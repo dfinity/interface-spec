@@ -1759,6 +1759,7 @@ The following address formats are supported:
 * Pay to script hash (P2SH)
 * Pay to witness public key hash (P2WPKH)
 * Pay to witness script hash (P2WSH)
+* Pay to taproot (P2TR)
 
 If the address is malformed, the call is rejected.
 
@@ -1769,6 +1770,7 @@ are returned, i.e., transactions with fewer than this number of
 confirmations are not considered. In other words, if the number of confirmations is `c`, an output
 is returned if it occurred in a transaction with at least `c` confirmations
 and there is no transaction that spends the same output with at least `c` confirmations.
+
 There is an upper bound of 144 on the minimum number of confirmations.
 If a larger minimum number of confirmations is specified, the call is rejected.
 Note that this is not a severe restriction as the minimum number of confirmations is typically set
@@ -1779,6 +1781,9 @@ proof of work that goes into the blocks and the verification of the blocks in th
 For a newly discovered block, a regular Bitcoin (full) node therefore provides a higher level of security
 than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
 to gain confidence in the correctness of the returned UTXOs.
+
+There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently large UTXOs,
+the partial set of the address' UTXOs are returned along with a page reference.
 
 In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin functionality in the replica to
 collect UTXOs starting from the corresponding "page".
