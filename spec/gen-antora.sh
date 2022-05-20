@@ -50,7 +50,7 @@ __END__
 
 cp -v "$in/index.adoc" "$out/modules/interface-spec/pages/index.adoc"
 cp -v "$in/changelog.adoc" "$out/modules/interface-spec/partials/changelog.adoc"
-cp -v "$in"/*.did "$in"/*.cddl "$out/modules/interface-spec/attachments"
-cp -v "$in"/*.did "$in"/*.cddl "$out/modules/interface-spec/examples"
+cp -v "$in"/*.did "$in"/*.cddl "$in"/*.txt "$out/modules/interface-spec/attachments"
+cp -v "$in"/*.did "$in"/*.cddl "$in"/*.txt "$out/modules/interface-spec/examples"
 
 
