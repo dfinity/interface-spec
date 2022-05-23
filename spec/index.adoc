@@ -1637,7 +1637,7 @@ For security reasons, only HTTPS connections are allowed (URLs must start with `
 
 The maximal size of a request URL is 2048 bytes.
 
-Each request should specify the maximal expected size for the response. The maximal size of a response is `2MiB`. Therefore, only the first number of bytes as specified in the request (up to 2MiB), will be returned if a response is larger than these limits. The 2MiB size limit also applies to the value returned by the `transform` function.
+Each request should specify the maximal expected size for the response. The upper limit on the size of a response is `2MiB`. Therefore, only the first number of bytes as specified in the request (up to 2MiB), will be returned if a response is larger than these limits. The 2MiB size limit also applies to the value returned by the `transform` function.
 
 
 The following parameters should be supplied for the call:
