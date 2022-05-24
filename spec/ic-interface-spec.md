@@ -755,7 +755,7 @@ Rejection codes are member of the following enumeration:
 
 -   `CANISTER_REJECT` (4): Explicit reject by the canister.
 
--   `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
+-   `CANISTER_ERROR`{#CANISTER-ERROR} (5): Canister error (e.g., trap, no response)
 
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
@@ -2839,7 +2839,7 @@ If message execution [*traps* (in the sense of a Wasm function)](#define-wasm-fn
 
 If message execution [*returns* (in the sense of a Wasm function)](#define-wasm-fn), the state is updated and possible outbound calls and responses are enqueued.
 
-Note that returning does *not* imply that the call associated with this message now *succeeds* in the sense defined in [section responding](#responding); that would require a (unique) call to `ic0.reply`. Note also that the state changes are persisted even when the IC is set to synthesize a [CANISTER_ERROR](#CANISTER_ERROR) reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see [Call context starvation](#rule-starvation)).
+Note that returning does *not* imply that the call associated with this message now *succeeds* in the sense defined in [section responding](#responding); that would require a (unique) call to `ic0.reply`. Note also that the state changes are persisted even when the IC is set to synthesize a [CANISTER_ERROR](#CANISTER-ERROR) reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see [Call context starvation](#rule-starvation)).
 
 The functions `query_as_update` and `heartbeat_as_update` turns a query function resp the heartbeat into an update function; this is merely a notational trick to simplify the rule:
 
