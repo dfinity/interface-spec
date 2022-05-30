@@ -1635,8 +1635,8 @@ Currently, only the `GET` method is supported for HTTP requests.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-Each request can specify the maximal expected size for the response. The upper limit on the size of a response is `2MiB`.
-If the response is larger than the specified size, or than `2MiB` if no maxmial size is specified, an error will be returned.
+Each request can specify the maximal expected size for the response. The upper limit on the size of a response is `2MiB` if no maximal size value is specified.
+An error will be returned when the response is larger than the maximal size. 
 The `2MiB` size limit also applies to the value returned by the `transform` function.
 
 The following parameters should be supplied for the call:
