@@ -1699,7 +1699,7 @@ Invoking the functions of the Bitcoin API will cost cycles. The concrete costs f
 === IC method `bitcoin_get_utxos`
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the
-provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component of the replica.
+provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component.
 The UTXOs are returned sorted by block height in descending order.
 
 The following address formats are supported:
@@ -1730,7 +1730,7 @@ For a newly discovered block, a regular Bitcoin (full) node therefore provides a
 than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
 to gain confidence in the correctness of the returned UTXOs.
 
-In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin functionality in the replica to
+In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to
 collect UTXOs starting from the corresponding "page".
 
 A `get_utxos_request` without the optional `filter` results in a request that
@@ -1775,7 +1775,7 @@ indicating the reason for the failed call.
 If the transaction passes these tests, the transaction is forwarded to the
 specified Bitcoin network.
 
-The Bitcoin component of the replica periodically forwards the transaction
+The Bitcoin component periodically forwards the transaction
 until the transaction appears in a block appended to the blockchain or the transaction
 times out after 24 hours. As soon as it appears in a block or expires,
 the Bitcoin component drops the transaction.
