@@ -3738,7 +3738,7 @@ Params = {
   reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
   reject_message : Text;
   sysenv : Env;
-  cycles_refundend : Nat;
+  cycles_refunded : Nat;
   method_name : NoData | Text;
 }
 ExecutionState = {
