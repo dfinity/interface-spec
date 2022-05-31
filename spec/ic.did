@@ -57,13 +57,13 @@ type get_utxos_request = record {
   };
 };
 
-type get_utxos_error = variant {
-  MalformedAddress;
-  MinConfirmationsTooLarge: record {
-    given: nat32;
-    max: nat32;
-  };
+type get_utxos_response = record {
+  utxos: vec utxo;
+  tip_block_hash: block_hash;
+  tip_height: nat32;
+  next_page: opt blob;
 };
+
 
 type get_balance_request = record {
   address : bitcoin_address;
@@ -71,23 +71,9 @@ type get_balance_request = record {
   min_confirmations: opt nat32;
 };
 
-type get_balance_error = variant {
-  MalformedAddress;
-  MinConfirmationsTooLarge: record {
-    given: nat32;
-    max: nat32;
-  };
-};
-
 type send_transaction_request = record {
   transaction: blob;
   network: bitcoin_network;
-};
-
-type send_transaction_error = variant {
-  MalformedTransaction;
-  NoFee;
-  InvalidInputs;
 };
 
 service ic : {
@@ -142,26 +128,9 @@ service ic : {
   }) -> (record { signature : blob });
 
   // bitcoin interface
-  bitcoin_get_balance: (get_balance_request) -> (variant {
-    Ok : satoshi;
-    Err: opt get_balance_error;
-  });
-
-  bitcoin_get_utxos: (get_utxos_request) -> (variant {
-    Ok : record {
-      utxos: vec utxo;
-      tip_block_hash: block_hash;
-      tip_height: nat32;
-	    next_page: opt blob;
-    };
-    Err : opt get_utxos_error;
-  });
-
-  bitcoin_send_transaction: (send_transaction_request) -> (variant {
-    Ok;
-    Err : opt send_transaction_error;
-  });
-
+  bitcoin_get_balance: (get_balance_request) -> (satoshi);
+  bitcoin_get_utxos: (get_utxos_request) -> (get_utxos_response);
+  bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fees: () -> (vec float32);
 
   // provisional interfaces for the pre-ledger world
