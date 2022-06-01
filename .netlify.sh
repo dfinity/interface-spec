@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 
 #
-# Deploy a preview of the interface specification to netlify
+# Build an ic portal preview using md files
 #
 
-set -e
+git clone https://github.com/dfinity/portal _portal
+cd _portal
 
-export NP_GIT=$(which git)
+git submodule update --init --remote
 
-wget -nv https://github.com/DavHau/nix-portable/releases/download/v009/nix-portable
-chmod +x nix-portable
+npm i
 
-./nix-portable nix-build -A interface-spec default.nix
+cp ../spec/ic-interface-spec.md ./docs/references/
+cp ../spec/interface-spec-changelog.md ./docs/references/
 
-# The "result" symlink only valid inside the nix-portable sandbox, so use nix-shell
-./nix-portable nix-shell -p bash --run "cp -rL result/spec/ _netlify-deploy"
-
-chmod -R u+w _netlify-deploy
+npm run build
