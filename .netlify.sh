@@ -5,9 +5,10 @@
 #
 
 git clone https://github.com/dfinity/portal _portal
-git submodule update --init --recursive
-
 cd _portal
+
+git submodule update --init --remote
+
 npm i
 
 cp ../spec/ic-interface-spec.md ./docs/references/
