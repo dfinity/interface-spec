@@ -64,7 +64,6 @@ type get_utxos_response = record {
   next_page: opt blob;
 };
 
-
 type get_balance_request = record {
   address : bitcoin_address;
   network: bitcoin_network;
@@ -74,6 +73,15 @@ type get_balance_request = record {
 type send_transaction_request = record {
   transaction: blob;
   network: bitcoin_network;
+};
+
+type bitcoin_fee_percentiles_unit = variant {
+  millisatoshi_per_byte
+};
+
+type get_current_fee_percentiles_response = record {
+  percentiles: vec nat64;
+  unit: bitcoin_fee_percentiles_unit;
 };
 
 service ic : {
@@ -131,7 +139,7 @@ service ic : {
   bitcoin_get_balance: (get_balance_request) -> (satoshi);
   bitcoin_get_utxos: (get_utxos_request) -> (get_utxos_response);
   bitcoin_send_transaction: (send_transaction_request) -> ();
-  bitcoin_get_current_fees: () -> (vec float32);
+  bitcoin_get_current_fee_percentiles: () -> (get_current_fee_percentiles_response);
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
