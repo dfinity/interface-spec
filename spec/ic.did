@@ -75,14 +75,7 @@ type send_transaction_request = record {
   network: bitcoin_network;
 };
 
-type bitcoin_fee_percentiles_unit = variant {
-  millisatoshi_per_byte
-};
-
-type get_current_fee_percentiles_response = record {
-  percentiles: vec nat64;
-  unit: bitcoin_fee_percentiles_unit;
-};
+type millisatoshi_per_byte = nat64;
 
 service ic : {
   create_canister : (record {
@@ -139,7 +132,7 @@ service ic : {
   bitcoin_get_balance: (get_balance_request) -> (satoshi);
   bitcoin_get_utxos: (get_utxos_request) -> (get_utxos_response);
   bitcoin_send_transaction: (send_transaction_request) -> ();
-  bitcoin_get_current_fee_percentiles: () -> (get_current_fee_percentiles_response);
+  bitcoin_get_current_fee_percentiles: () -> (vec millisatoshi_per_byte);
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
