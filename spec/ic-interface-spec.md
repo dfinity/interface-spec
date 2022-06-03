@@ -1041,7 +1041,7 @@ The following sections describe various System API functions, also referred to a
     ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
     ic0.time : () -> (timestamp : i64);                                         // *
-    ic0.performance_counter : (type : i32) -> (counter : i64);                  // * s
+    ic0.performance_counter : (counter_type : i32) -> (counter : i64);                  // * s
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -2944,7 +2944,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'create_canister'
-M.arg = candid()
+M.arg = candid(A)
 is_system_assigned CanisterId
 CanisterId ∉ dom S.canisters
 ```
@@ -4445,7 +4445,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.params.sysenv.certificate = NoCertificate then Trap
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
-    ic0.performance_counter<es>(type : i32) : i64 =
+    ic0.performance_counter<es>(counter_type : i32) : i64 =
       arbitrary()
 
     ic0.debug_print<es>(src : i32, size : i32) =
