@@ -1139,7 +1139,7 @@ Subsequent calls to the following functions set further attributes of that call,
 --
   ic0.call_on_cleanup : (fun_src : i32, fun_size : i32, env : i64) -> ()
 
-This trap if the blob indicated by `fun_src/_size` is not a valid utf8-encoded name.
+This traps if the blob indicated by `fun_src/_size` is not a valid utf8-encoded name.
 
 If a cleanup callback (of type `+(env : i32) -> ()+`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 
