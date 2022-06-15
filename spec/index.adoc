@@ -3083,7 +3083,7 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
-The `idle_cycles_burned_per_day` is the idle consumption of resources in cycles per day. Therefore, the freezing threshold in cycles can be obtained using the following formula: `freezing_threshold` (in seconds) * `idle_cycles_burned_per_day` /  (24 * 3600) (seconds).
+The `idle_cycles_burned_per_day` is the idle consumption of resources in cycles per day. Therefore, the freezing threshold in cycles can be obtained using the following formula: `freezing_threshold` (in seconds) * `idle_cycles_burned_per_day` /  (3600 * 24) (seconds).
 
 Conditions::
 ....

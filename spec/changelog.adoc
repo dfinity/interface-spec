@@ -4,7 +4,7 @@
 [#unreleased]
 === ∞ (unreleased)
 
-* Spec: Idle consumption of resources in cycles per hour can be obtain via `canister_status` method of the management canister
+* Spec: Idle consumption of resources in cycles per day can be obtain via `canister_status` method of the management canister
 * Spec: Canister access to performance metrics
 * Spec: Expose Wasm custom sections in the state tree
 * Spec: User delegations include a principal scope
