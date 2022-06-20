@@ -6,6 +6,7 @@
 
 * Canister cycle balances are represented by 128 bits, and no system-defined upper limit exists anymore
 * Canister modules can be gzip-encoded
+* Expose Wasm custom sections in the state tree
 
 [#0_18_3]
 === 0.18.3 (2022-01-10)
