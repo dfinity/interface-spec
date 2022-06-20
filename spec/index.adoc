@@ -3083,7 +3083,7 @@ The controllers of a canister can obtain information about the canister.
 
 The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
 
-The `idle_cycles_burned_per_second` is the idle consumption of resources in cycles per second. Therefore, the freezing threshold in cycles can be obtained using the following formula: `freezing_threshold` (in seconds) * `idle_cycles_burned_per_second`.
+The `idle_cycles_burned_per_day` is the idle consumption of resources in cycles per day. Therefore, the freezing threshold in cycles can be obtained using the following formula: `freezing_threshold` (in seconds) * `idle_cycles_burned_per_day` /  (3600 * 24) (seconds).
 
 Conditions::
 ....
@@ -3110,7 +3110,7 @@ S with
           memory_size = Memory_size;
           cycles = S.balance[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
-          idle_cycles_burned_per_second = freezing_limit(S, A.canister_id) / freezing_threshold;
+          idle_cycles_burned_per_day = freezing_limit(S, A.canister_id) / freezing_threshold * 3600 * 24;
         })
         refunded_cycles = M.transferred_cycles
       }
