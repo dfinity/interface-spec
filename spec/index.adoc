@@ -1497,6 +1497,12 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
 
+The `wasm_module` field specifies the canister module to be installed.
+The system supports multiple encodings of the `wasm_module` field:
+
+  * If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`,  the system parses `wasm_module` as a raw WebAssembly binary.
+  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system decompresses the contents of `wasm_module` as a gzip stream according to https://datatracker.ietf.org/doc/html/rfc1952.html[RFC-1952] and then parses the output as a WebAssembly binary.
+
 [#ic-uninstall_code]
 === IC method `uninstall_code`
 

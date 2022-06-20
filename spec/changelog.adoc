@@ -5,6 +5,7 @@
 === 0.18.4 (2022-06-20)
 
 * Canister cycle balances are represented by 128 bits, and no system-defined upper limit exists anymore
+* Canister modules can be gzip-encoded
 
 [#0_18_3]
 === 0.18.3 (2022-01-10)
