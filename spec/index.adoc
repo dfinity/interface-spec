@@ -1574,6 +1574,36 @@ There is no restriction on who can invoke this method.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
+[#ic-ecdsa_public_key]
+=== IC method `ecdsa_public_key`
+
+NOTE: The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+This method returns a https://www.secg.org/sec1-v2.pdf[SEC1] encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
+The `derivation_path` is a vector of variable length byte strings.
+The `key_id` is a struct specifying both a curve and a name.
+The availability of a particular `key_id` depends on implementation.
+
+For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see https://ia.cr/2021/1330[ia.cr/2021/1330, Appendix D]). To derive (non-hardened) https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032]-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2^31^.
+
+The return result is an extended public key consisting of an ECDSA `public_key`, encoded in https://www.secg.org/sec2-v2.pdf[SEC1] compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+
+This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id.
+Otherwise it will be rejected.
+
+[#ic-sign_with_ecdsa]
+=== IC method `sign_with_ecdsa`
+
+NOTE: The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+This method returns a new https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf[ECDSA] signature of the given `message_hash` that can be separately verified against a derived ECDSA public key.
+This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
+
+The signatures are encoded as the concatenation of the https://www.secg.org/sec2-v2.pdf[SEC1] encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
+
+This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long.
+Otherwise it will be rejected.
+
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 
@@ -1593,6 +1623,115 @@ Cycles added to this call via `ic0.call_cycles_add128` are returned to the calle
 Any user can top-up any canister this way.
 
 This method is only available in local development instances.
+
+
+[#ic-bitcoin-api]
+== The IC Bitcoin API
+
+NOTE: The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+The Bitcoin functionality is exposed via the management canister.
+Information about Bitcoin can be found in the https://developer.bitcoin.org/devguide/[Bitcoin developer guides].
+Invoking the functions of the Bitcoin API will cost cycles. The concrete costs for each function are yet to be determined.
+
+[#ic-bitcoin_get_utxos]
+=== IC method `bitcoin_get_utxos`
+
+Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the
+provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component.
+The UTXOs are returned sorted by block height in descending order.
+
+The following address formats are supported:
+
+* Pay to public key hash (P2PKH)
+* Pay to script hash (P2SH)
+* Pay to witness public key hash (P2WPKH)
+* Pay to witness script hash (P2WSH)
+* Pay to taproot (P2TR)
+
+If the address is malformed, the call is rejected.
+
+The optional `filter` parameter can be used to restrict the set of returned UTXOs, either providing a
+minimum number of confirmations or a page reference when pagination is used for addresses with many UTXOs.
+In the first case, only UTXOs with at least the provided number of confirmations
+are returned, i.e., transactions with fewer than this number of
+confirmations are not considered. In other words, if the number of confirmations is `c`, an output
+is returned if it occurred in a transaction with at least `c` confirmations
+and there is no transaction that spends the same output with at least `c` confirmations.
+
+There is an upper bound of 144 on the minimum number of confirmations.
+If a larger minimum number of confirmations is specified, the call is rejected.
+Note that this is not a severe restriction as the minimum number of confirmations is typically set
+to a value around 6 in practice.
+
+It is important to note that the validity of transactions is not verified in the Bitcoin component. The Bitcoin component relies on the
+proof of work that goes into the blocks and the verification of the blocks in the Bitcoin network.
+For a newly discovered block, a regular Bitcoin (full) node therefore provides a higher level of security
+than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
+to gain confidence in the correctness of the returned UTXOs.
+
+There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently large UTXOs,
+the partial set of the address' UTXOs are returned along with a page reference.
+
+In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to
+collect UTXOs starting from the corresponding "page".
+
+A `get_utxos_request` without the optional `filter` results in a request that
+considers the full blockchain, which is equivalent to setting
+`min_confirmations` to 0.
+
+The recommended workflow is to issue a request with the desired number of confirmations.
+If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector.
+In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
+
+[#ic-bitcoin_get_balance]
+=== IC method `bitcoin_get_balance`
+
+Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`] are supported.
+
+If the address is malformed, the call is rejected.
+
+The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs
+for the calculation of the balance to those with at least the provided number of confirmations
+in the same manner as for the link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`] call.
+
+Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over
+all UTXOs, i.e., the same balance is returned as when calling
+link:#ic-bitcoin_get_utxos[`bitcoin_get_utxos`]
+for the same address and the same number of confirmations and, if necessary,
+using pagination to get all UTXOs for the same tip hash.
+
+[#ic-bitcoin_send_transaction]
+=== IC method `bitcoin_send_transaction`
+
+Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
+
+- The transaction is well formed.
+- The transaction only consumes unspent outputs with respect to the current (longest)
+blockchain, i.e., there is no block on the (longest) chain that consumes any of these outputs.
+- There is a positive transaction fee.
+
+If at least one of these checks fails, the call is rejected.
+
+If the transaction passes these tests, the transaction is forwarded to the
+specified Bitcoin network.
+
+The Bitcoin component periodically forwards the transaction
+until the transaction appears in a block appended to the blockchain or the transaction
+times out after 24 hours. As soon as it appears in a block or expires,
+the Bitcoin component drops the transaction.
+It follows that the function does not provide any guarantees that a submitted
+transaction will ever appear in a block.
+
+[#ic-bitcoin_get_current_fee_percentiles]
+=== IC method `bitcoin_get_current_fee_percentiles`
+
+The transaction fees in the Bitcoin network change dynamically based on the number of
+pending transactions.
+It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
+
+This function returns the 100 fee percentiles, measured in millisatoshi/byte (10^3 millisatoshi = 1 satoshi), over the last 10,000 transactions, i.e.,
+over the transactions in the last approximately 4-10 blocks.
 
 [#certification]
 == Certification
