@@ -205,7 +205,7 @@ If an empty canister receives a response, that response is dropped, as if the ca
 ==== Canister cycles
 
 The IC relies on _cycles_, a utility token, to manage its resources. A canister pays for the resources it uses from its _cycle balance_.
-The _cycle_balance_ is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if _cycles_ are added to a canister that would bring its total balance beyond 2^128-1, then the balance will be capped at 2^128-1 and any additional cycles will be lost.
+The _cycle_balance_ is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if _cycles_ are added to a canister that would bring its total balance beyond 2^128^-1, then the balance will be capped at 2^128^-1 and any additional cycles will be lost.
 
 When the cycle balance of a canister falls to zero, the canister is _deallocated_. This has the same effect as
 
@@ -1281,15 +1281,15 @@ The stable memory is initially empty.
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
 +
-This system call traps if the size of the stable memory exceeds 2^32 bytes.
+This system call traps if the size of the stable memory exceeds 2^32^ bytes.
 
 * `ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 +
-This system call traps if the _previous_ size of the memory exceeds 2^32 bytes.
+This system call traps if the _previous_ size of the memory exceeds 2^32^ bytes.
 +
-If the _new_ size of the memory exceeds 2^32 bytes or growing is unsuccessful, then it returns `-1`.
+If the _new_ size of the memory exceeds 2^32^ bytes or growing is unsuccessful, then it returns `-1`.
 +
 Otherwise, it grows the memory and returns the _previous_ size of the memory in pages.
 
@@ -1297,7 +1297,7 @@ Otherwise, it grows the memory and returns the _previous_ size of the memory in 
 +
 copies the data referred to by `src`/`size` out of the canister and replaces the corresponding segment starting at `offset` in the stable memory.
 +
-This system call traps if the size of the stable memory exceeds 2^32 bytes.
+This system call traps if the size of the stable memory exceeds 2^32^ bytes.
 +
 It also traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
@@ -1305,7 +1305,7 @@ It also traps if `src+size` exceeds the size of the WebAssembly memory or `offse
 +
 copies the data referred to by `offset`/`size` out of the stable memory and replaces the corresponding bytes starting at `dest` in the canister memory.
 +
-This system call traps if the size of the stable memory exceeds 2^32 bytes.
+This system call traps if the size of the stable memory exceeds 2^32^ bytes.
 +
 It also traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory
 
@@ -3974,7 +3974,7 @@ ic0.msg_reject<es>(src : i32, size : i32) =
   es.cycles_available := 0
 
 ic0.msg_cycles_available<es>() : i64 =
-  if es.cycles_available >= 2^64 then Trap
+  if es.cycles_available >= 2^64^ then Trap
   return es.cycles_available
 
 ic0.msg_cycles_available128<es>(dst : i32) =
@@ -3982,7 +3982,7 @@ ic0.msg_cycles_available128<es>(dst : i32) =
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.msg_cycles_refunded<es>() : i64 =
-  if es.params.cycles_refunded >= 2^64 then Trap
+  if es.params.cycles_refunded >= 2^64^ then Trap
   return es.params.cycles_refunded
 
 ic0.msg_cycles_refunded128<es>(dst : i32) =
@@ -4007,7 +4007,7 @@ ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   return amount
 
 ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
-  let max_amount = max_amount_high * 2^64 + max_amount_low
+  let max_amount = max_amount_high * 2^64^ + max_amount_low
   let amount = min(max_amount, es.cycles_available)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
@@ -4021,7 +4021,7 @@ ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
-  if es.balance >= 2^64 then Trap
+  if es.balance >= 2^64^ then Trap
   return es.balance
 
 ic0.canister_cycles_balance128<es>(dst : i32) =
@@ -4089,7 +4089,7 @@ ic0.call_cycles_add<es>(amount : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
-  let amount = amount_high * 2^64 + amount_low
+  let amount = amount_high * 2^64^ + amount_low
   if es.pending_call = NoPendingCall then Trap
   if es.balance < amount then Trap
 
@@ -4117,12 +4117,12 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
-  if |es.wasm_state.store.mem| > 2^32 then Trap
+  if |es.wasm_state.store.mem| > 2^32^ then Trap
   page_count := |es.wasm_state.stable_mem| / 64k
   return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
-  if |es.wasm_state.store.mem| > 2^32 then Trap
+  if |es.wasm_state.store.mem| > 2^32^ then Trap
   if arbitrary() then return -1
   else
     old_size := |es.wasm_state.stable_mem| / 64k
@@ -4132,14 +4132,14 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
     return old_size
 
 ic0.stable_write<es>(offset : i32, src : i32, size : i32)
-  if |es.wasm_state.store.mem| > 2^32 then Trap
+  if |es.wasm_state.store.mem| > 2^32^ then Trap
   if src+size > |es.wasm_state.store.mem| then Trap
   if offset+size > |es.wasm_state.stable_mem| then Trap
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
-  if |es.wasm_state.store.mem| > 2^32 then Trap
+  if |es.wasm_state.store.mem| > 2^32^ then Trap
   if offset+size > |es.wasm_state.stable_mem| then Trap
   if dst+size > |es.wasm_state.store.mem| then Trap
 
