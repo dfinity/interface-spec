@@ -215,7 +215,7 @@
 [#v0_4_0]
 === 0.4.0 (2020-05-25)
 
-* (editorial) the term “principal” is now used for the _id_ of a canister or
+* (Editorial) the term “principal” is now used for the _id_ of a canister or
   user, not the canister or user itself
 * The signature of a request needs to be calculated using a domain separator
 * Describe the `controller` attribute, add a request to change it
