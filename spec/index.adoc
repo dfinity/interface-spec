@@ -1730,7 +1730,7 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 pending transactions.
 It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
-This function returns the 100 fee percentiles, measured in millisatoshi/byte (10^3 millisatoshi = 1 satoshi), over the last 10,000 transactions, i.e.,
+This function returns the 100 fee percentiles, measured in millisatoshi/byte (10^3 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e.,
 over the transactions in the last approximately 4-10 blocks.
 
 [#certification]
