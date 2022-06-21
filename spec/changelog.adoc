@@ -6,12 +6,17 @@
 
 * Spec: Idle consumption of resources in cycles per day can be obtain via `canister_status` method of the management canister
 * Spec: Canister access to performance metrics
-* Spec: Expose Wasm custom sections in the state tree
 * Spec: User delegations include a principal scope
 * Spec: Include the HTTP Gateway Protocol in this spec
-* Canister cycle balances are represnted by 128 bits, and no system-defined upper limit exists anymore
+
+[#0_18_4]
+=== 0.18.4 (2022-06-20)
+
+* Canister cycle balances are represented by 128 bits, and no system-defined upper limit exists anymore
 * Canister modules can be gzip-encoded
-* Canisters can make HTTP requests via the `http_request` method of the management canister
+* Expose Wasm custom sections in the state tree
+* EXPERIMENTAL: Canister API for accessing Bitcoin transactions
+* EXPERIMENTAL: Canister API for threshold ECDSA signatures
 
 [#0_18_3]
 === 0.18.3 (2022-01-10)
@@ -218,7 +223,7 @@
 [#v0_4_0]
 === 0.4.0 (2020-05-25)
 
-* (editorial) the term “principal” is now used for the _id_ of a canister or
+* (Editorial) the term “principal” is now used for the _id_ of a canister or
   user, not the canister or user itself
 * The signature of a request needs to be calculated using a domain separator
 * Describe the `controller` attribute, add a request to change it
