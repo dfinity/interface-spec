@@ -1647,7 +1647,7 @@ The responses for all identical requests must match too. However, a web service 
 
 For this reason, the calling canister can supply a transformation function, which the IC uses to let the canister sanitize the responses from such unique values. The transformation function is executed separately on the corresponding response received for a request. The final response will only be available to the calling canister.
 
-Currently, only the `GET` method is supported for HTTP requests.
+Currently, only the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests. Note that when using `POST`, the calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
@@ -1659,7 +1659,7 @@ The following parameters should be supplied for the call:
 
 - `url` - the requested URL
 - `max_response_bytes` - optional, specifies the maximal size of the response in bytes. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
-- `method` - currently, only GET is supported
+- `method` - currently, only GET, HEAD, and POST are supported
 - `headers` - list of HTTP request headers and their corresponding values
 - `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
 
