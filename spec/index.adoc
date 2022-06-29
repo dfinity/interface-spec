@@ -2447,8 +2447,7 @@ APIReadRequest
 
 A `Path` may refer to a request by way of a _request id_, as specified in <<request-id>>:
 ....
-Request = Blob
-hash_of_map: Request -> Request
+hash_of_map: Request -> Blob
 ....
 
 For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
