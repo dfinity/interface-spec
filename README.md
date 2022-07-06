@@ -30,6 +30,26 @@ The `master` branch contains finished designs, but is not directly scheduled
 for implementation. It lists version version number `∞`. The reference
 implementation on this branch typically does _not_ fully implement the spec. This branch should always be “ahead” of all the release branches.
 
+## Formal Model
+
+We are developing a formal model of Interface Spec in the interactive theorem prover [https://isabelle.in.tum.de/](Isabelle/HOL).
+The formal development is included in the directory `thys/`.
+
+To setup the environment, follow the standard [https://isabelle.in.tum.de/installation.html](instructions) for Isabelle/HOL.
+Additionally, you may want to setup `isabelle` as an alias for the path `bin/isabelle` in your local Isabelle directory.
+
+To browse the formal model, open Isabelle/jEdit:
+```
+isabelle jedit thys/IC.thy
+```
+from the root directory of this repository.
+
+To build the formal model and export Haskell code from the formal model, run
+```
+isabelle build -e -v -D thys
+```
+in the root directory of this repository. The exported Haskell code can then be found under `thys/code/`.
+
 ## Contributing
 
 This repository accepts external contributions, conditioned on acceptance of the [https://github.com/dfinity/cla/](Contributor Lincense Agreement).
