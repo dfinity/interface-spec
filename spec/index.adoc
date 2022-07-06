@@ -2830,7 +2830,7 @@ Conditions::
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
       (F = Mod.update_methods[Name](Arg, Env, Available)) or (F = query_as_update(Mod.query_methods[Name], Arg, Env))
-      Name ∉ dom(Mod.update_methods) or Name ∉ dom(Mod.update_methods)
+      Name ∉ dom(Mod.update_methods) or Name ∉ dom(Mod.query_methods)
     )
     or
     ( M.entry_point = Callback Callback Response RefundedCycles
