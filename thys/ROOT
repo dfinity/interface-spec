@@ -1,0 +1,8 @@
+chapter AFP
+
+session Internet_Computer (AFP) = "HOL-Library" +
+  options [timeout=600]
+  theories
+    IC
+export_files (in ".") [2]
+    "Internet_Computer.IC:code/**"

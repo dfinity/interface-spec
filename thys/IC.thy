@@ -752,6 +752,6 @@ export_code request_submission_pre request_submission_post
   message_execution_pre message_execution_post
   call_context_starvation_pre call_context_starvation_post
   call_context_removal_pre call_context_removal_post
-in Haskell
+in Haskell module_name IC file_prefix code
 
 end
