@@ -743,6 +743,15 @@ lemma call_context_removal_cycles_inv:
 
 end
 
-export_code message_execution_post in Haskell
+export_code request_submission_pre request_submission_post
+  request_rejection_pre request_rejection_post
+  initiate_canister_call_pre initiate_canister_call_post
+  call_reject_pre call_reject_post
+  call_context_create_pre call_context_create_post
+  call_context_heartbeat_pre call_context_heartbeat_post
+  message_execution_pre message_execution_post
+  call_context_starvation_pre call_context_starvation_post
+  call_context_removal_pre call_context_removal_post
+in Haskell
 
 end
