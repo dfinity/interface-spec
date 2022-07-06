@@ -2545,8 +2545,8 @@ The following is an incomplete list of invariants that should hold for the abstr
 * Referenced call contexts exists:
 +
 ....
-∀ CallMessage M ∈ S.messages.  M.origin.calling_context ∈ S.call_contexts
-∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ∈ S.call_contexts
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
 ∀ _ ↦ Ctxt ∈ S.call_contexts:
   if Ctx.needs_to_respond:
      Ctxt.origin.calling_context ∈ S.call_contexts
@@ -2953,8 +2953,8 @@ Conditions::
 ....
     S.call_contexts[Ctxt_id].needs_to_respond = true
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
-    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
-    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ctxt_ids ∈ dom(S.call_contexts).
         S.call_contexts[ctxt_ids].needs_to_respond
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
@@ -2986,8 +2986,8 @@ Conditions::
       S.call_contexts[Ctxt_id].origin = FromHeartbeat
       ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
     )
-    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
-    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
         S.call_contexts[ctxt_ids].needs_to_respond = true
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
