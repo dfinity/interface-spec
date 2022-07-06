@@ -32,10 +32,10 @@ implementation on this branch typically does _not_ fully implement the spec. Thi
 
 ## Formal Model
 
-We are developing a formal model of Interface Spec in the interactive theorem prover [https://isabelle.in.tum.de/](Isabelle/HOL).
+We are developing a formal model of Interface Spec in the interactive theorem prover [Isabelle/HOL](https://isabelle.in.tum.de/).
 The formal development is included in the directory `thys/`.
 
-To setup the environment, follow the standard [https://isabelle.in.tum.de/installation.html](instructions) for Isabelle/HOL.
+To setup the environment, follow the standard [instructions](https://isabelle.in.tum.de/installation.html) for Isabelle/HOL.
 Additionally, you may want to setup `isabelle` as an alias for the path `bin/isabelle` in your local Isabelle directory.
 
 To browse the formal model, open Isabelle/jEdit:
@@ -46,7 +46,7 @@ from the root directory of this repository.
 
 To build the formal model and export Haskell code from the formal model, run
 ```
-isabelle build -e -v -D thys
+isabelle build -e -v -D thys/
 ```
 in the root directory of this repository. The exported Haskell code can then be found under `thys/code/`.
 
