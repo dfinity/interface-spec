@@ -2896,8 +2896,8 @@ else
   S with
     messages = Older_messages · Younger_messages
     balances[M.receiver] =
-      (S.balances[M.receiver] + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-      - Cycles_used
+      S.balances[M.receiver] +
+      ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - Cycles_used)
 ....
 
 The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable.

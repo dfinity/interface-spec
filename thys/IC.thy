@@ -550,17 +550,13 @@ definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
               messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
               balances := list_map_set (balances S) recv New_balance, certified_data := certified_data\<rparr>)
         else S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-            balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - cycles_used)\<rparr>))
+            balances := list_map_set (balances S) recv (bal + ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - cycles_used))\<rparr>))
     | _ \<Rightarrow> undefined)"
 
 definition message_execution_lost_cycles :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "message_execution_lost_cycles n cycles_used S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
-    (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
-      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
-      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
-        let Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) in
-        min cycles_used (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)))
-    | _ \<Rightarrow> undefined))"
+    let Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) in
+    min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))"
 
 lemma message_execution_cycles_monotonic:
   assumes pre: "message_execution_pre n cycles_used S"
@@ -596,7 +592,7 @@ proof -
   note lm = list_map_sum_in[OF prod(2), where ?g=id, simplified] list_map_sum_in_ge[OF prod(2), where ?g=id, simplified]
     list_map_sum_in[OF prod(5), where ?g=call_ctxt_carried_cycles] list_map_sum_in_ge[OF prod(5), where ?g=call_ctxt_carried_cycles]
   define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-    balances := list_map_set (balances S) recv (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - cycles_used)\<rparr>"
+    balances := list_map_set (balances S) recv (bal + ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - cycles_used))\<rparr>"
   define cond where "cond = (\<not>isl R \<and> cycles_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
     cycles_accepted_res \<le> Available \<and>
     cycles_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
@@ -609,7 +605,7 @@ proof -
   proof (cases cond)
     case False
     have "message_execution_post n cycles_used S = S''"
-      "message_execution_lost_cycles n cycles_used S = min cycles_used (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))"
+      "message_execution_lost_cycles n cycles_used S = min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using False
       by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] res[symmetric]
@@ -644,8 +640,7 @@ proof -
     have no_response: "no_response = (response result = None)"
       by (auto simp: no_response_def R_Inr)
     have msg_exec: "message_execution_post n cycles_used S = S'"
-      and lost: "message_execution_lost_cycles n cycles_used S =
-      min cycles_used (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))"
+      and lost: "message_execution_lost_cycles n cycles_used S = min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using True
       by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] res[symmetric]
