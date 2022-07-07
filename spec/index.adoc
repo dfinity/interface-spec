@@ -2916,7 +2916,7 @@ This transition detects certain behavior that will appear as a trap (and which a
  * Sending out more cycles than available to the canister
  * Consuming more cycles than allowed (and reserved)
 
-If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
+If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded. If the message was a call, the associated cycles are held by its associated call context and will be refunded to the caller, see <<rule-starvation>>.
 
 If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function)>>, the state is updated and possible outbound calls and responses are enqueued.
 
