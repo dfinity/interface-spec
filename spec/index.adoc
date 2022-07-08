@@ -2903,9 +2903,11 @@ else
       - Cycles_used
 ....
 
-The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable.
 
-Depending whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
+Depending on whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
+
+The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
+
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -2914,7 +2916,7 @@ This transition detects certain behavior that will appear as a trap (and which a
  * Sending out more cycles than available to the canister
  * Consuming more cycles than allowed (and reserved)
 
-If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded.
+If message execution <<define-wasm-fn,_traps_ (in the sense of a Wasm function)>>, the message gets dropped. No response is generated (as some other message may still fulfill this calling context). Any state mutation is discarded. If the message was a call, the associated cycles are held by its associated call context and will be refunded to the caller, see <<rule-starvation>>.
 
 If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function)>>, the state is updated and possible outbound calls and responses are enqueued.
 
@@ -3258,7 +3260,7 @@ We encode this behavior via three (types of) transitions:
 
 1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
 2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
-3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that that the canister is stopped.
+3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
 Conditions::
 ....
