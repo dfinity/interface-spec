@@ -32,4 +32,4 @@ implementation on this branch typically does _not_ fully implement the spec. Thi
 
 ## Contributing
 
-This repository currently does not accept external contributions.
+This repository accepts external contributions, conditioned on acceptance of the [https://github.com/dfinity/cla/](Contributor Lincense Agreement).
