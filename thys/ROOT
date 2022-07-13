@@ -1,6 +1,6 @@
-chapter AFP
+chapter IC
 
-session Internet_Computer (AFP) = "HOL-Library" +
+session Internet_Computer (IC) = "HOL-Library" +
   options [timeout=600]
   theories
     IC
