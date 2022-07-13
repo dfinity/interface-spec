@@ -549,7 +549,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
-If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`). In other words, we define `aaaaa-aa` to belong to every canister range for the purposes of certificate checking. Note that `aaaaa-aa` is a valid canister id only for calls to `provisional_create_canister_with_cycles`, so it cannot appear in `read_state` requests on production networks.
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -598,11 +598,13 @@ Canister methods that do not change the canister state can be executed more effi
 
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
-* If the call is to the Management Canister (`aaaaa-aa`), and the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+* If the call is to the Management Canister (`aaaaa-aa`), then:
+   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
+   - Otherwise, there is no effective canister id. In particular, the `create_canister` method has no effective canister ID, and this method cannot be called by users, only via canisters.
 
 * If the call is to the `raw_rand` method of the Management Canister (`aaaaa-aa`), then there is no effective canister id. This implies that this method cannot be called by users, only via canisters.
 
-* If the call is to the `provisional_create_canister_with_cycles` method of the Management Canister (`aaaaa-aa`), any principal is a valid effective canister id for this call.
 +
 [NOTE]
 ====
