@@ -1651,7 +1651,7 @@ Currently, the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests
 
 It is important to note the following for the usage of the `POST` method:
 - The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
-- There is no guarantee on which replica makes the first `POST` request. Since a single replica may be malicious, it might be that the first `POST` request to reach the remote server is maliciously modified. Therefore, it is recommended to verify the content of the request at the remote server and/or use additional integrity checks.
+- There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
