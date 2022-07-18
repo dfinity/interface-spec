@@ -2528,6 +2528,13 @@ for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using 
 
 The following is an incomplete list of invariants that should hold for the abstract state `S`, and are not already covered by the type annotations in this section.
 
+* No method name is the name of an update and query method in a CanisterModule at the same time:
++
+....
+∀ _ ↦ CanState ∈ S.canisters:
+  dom(CanState.module.update_methods) ∩ dom(CanState.module.query_methods) = ∅
+....
+
 * Deleted call contexts were not awaiting a response:
 +
 ....
@@ -2830,7 +2837,6 @@ Conditions::
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
       (F = Mod.update_methods[Name](Arg, Env, Available)) or (F = query_as_update(Mod.query_methods[Name], Arg, Env))
-      Name ∉ dom(Mod.update_methods) or Name ∉ dom(Mod.query_methods)
     )
     or
     ( M.entry_point = Callback Callback Response RefundedCycles
@@ -3146,6 +3152,7 @@ Conditions::
       status = S.status[M.receiver];
     }
     Mod.init(A.canister_id, Arg, Env) = Return New_state
+    dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
 State after::
 ....
@@ -3190,6 +3197,7 @@ Conditions::
       caller = M.caller;
     }
     Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env) = Return New_state
+    dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
 State after::
 ....

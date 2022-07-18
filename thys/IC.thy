@@ -29,6 +29,12 @@ lift_definition list_map_del :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow
   "\<lambda>f x. AList.delete x f"
   by (rule distinct_delete)
 
+lift_definition list_map_empty :: "('a, 'b) list_map" is "[]"
+  by auto
+
+lemma list_map_empty_dom[simp]: "list_map_dom list_map_empty = {}"
+  by transfer auto
+
 lemma list_map_sum_in_ge_aux:
   fixes g :: "'a \<Rightarrow> nat"
   shows "distinct (map fst f) \<Longrightarrow> map_of f x = Some y \<Longrightarrow> g y \<le> sum_list (map g (map snd f))"
@@ -114,7 +120,7 @@ type_synonym available_cycles = nat
 type_synonym refunded_cycles = nat
 
 datatype inspect_method_result = Accept | Reject
-record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
+record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec =
   init :: "'canid \<times> ('b, 'p) arg \<times> 'b env \<Rightarrow> 'tr + 'w"
   pre_upgrade :: "'w \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'sm"
   post_upgrade :: "'canid \<times> 'sm \<times> ('b, 'p) arg \<times> 'b env \<Rightarrow> 'tr + 'w"
@@ -123,6 +129,25 @@ record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
   heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w"
   callbacks :: "('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func"
   inspect_message :: "('s \<times> 'w \<times> ('b, 'p) arg \<times> 'b env) \<Rightarrow> 'tr + inspect_method_result"
+typedef ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
+  "{m :: ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec. list_map_dom (update_methods m) \<inter> list_map_dom (query_methods m) = {}}"
+  by (auto intro: exI[of _ "\<lparr>init = undefined, pre_upgrade = undefined, post_upgrade = undefined,
+      update_methods = list_map_empty, query_methods = list_map_empty, heartbeat = undefined, callbacks = undefined,
+      inspect_message = undefined\<rparr>"])
+
+setup_lifting type_definition_canister_module
+
+lift_definition dispatch_method :: "'s \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
+  (((('b, 'p) arg \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) +
+   ((('b, 'p) arg \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func)) option" is
+  "\<lambda>f m. case list_map_get (update_methods m) f of Some f' \<Rightarrow> None | None \<Rightarrow> (case list_map_get (query_methods m) f of Some f' \<Rightarrow> None | None \<Rightarrow> None)" .
+
+lift_definition canister_module_callbacks :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
+  ('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" is
+  callbacks .
+
+lift_definition canister_module_heartbeat :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w" is
+  heartbeat .
 
 (* Call contexts *)
 
@@ -498,12 +523,12 @@ fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w) \<t
 fun exec_function :: "('s, 'p, 'b, 'c) entry_point \<Rightarrow> 'b env \<Rightarrow> nat \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "exec_function (entry_point.Public_method mn c d) e bal m = (
     let arg = \<lparr>arg.data = d, arg.caller = c\<rparr> in
-    case list_map_get (canister_module.update_methods m) mn of Some upd \<Rightarrow> upd (arg, e, bal) | None \<Rightarrow>
-    (case list_map_get (canister_module.query_methods m) mn of Some query \<Rightarrow> query_as_update (query, arg, e) | None \<Rightarrow>
-    undefined))"
+    case dispatch_method mn m of Some (Inl upd) \<Rightarrow> upd (arg, e, bal)
+    | Some (Inr query) \<Rightarrow> query_as_update (query, arg, e) | None \<Rightarrow>
+    undefined)"
 | "exec_function (entry_point.Callback cb resp ref_cycles) e bal m =
-    canister_module.callbacks m (cb, resp, ref_cycles, e, bal)"
-| "exec_function (entry_point.Heartbeat) e bal m = heartbeat_as_update ((heartbeat m), e)"
+    canister_module_callbacks m (cb, resp, ref_cycles, e, bal)"
+| "exec_function (entry_point.Heartbeat) e bal m = heartbeat_as_update ((canister_module_heartbeat m), e)"
 
 definition message_execution_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "message_execution_pre n cycles_used S =
