@@ -2888,10 +2888,10 @@ then
        call_contexts[M.call_context].needs_to_respond = false
        call_contexts[M.call_context].available_cycles = 0
 
-    balances[M.receiver] = New_balance
-
     if res.new_certified_data ≠ NoCertifiedData:
       certified_data[M.receiver] = res.new_certified_data
+
+    balances[M.receiver] = New_balance
 else
   S with
     messages = Older_messages · Younger_messages
