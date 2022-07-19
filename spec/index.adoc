@@ -2634,7 +2634,7 @@ Conditions::
       E.content.arg = candid({canister_id = CanisterId, …})
       E.content.sender ∈ S.controllers[CanisterId]
       E.content.method_name ∈
-        { "install_code", "set_controller", "start_canister", "stop_canister",
+        { "install_code", "update_settings", "start_canister", "stop_canister",
           "canister_status", "delete_canister" }
     ) ∨ (
       E.content.canister_id ≠ ic_principal
