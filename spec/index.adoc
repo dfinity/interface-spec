@@ -2307,7 +2307,7 @@ RefundedCycles = Nat
 
 CanisterModule = {
   init : (CanisterId, Arg, Env) -> Trap | Return WasmState
-  pre_upgrade : (WasmState, caller : Principal, Env) -> Trap | Return StableMemory
+  pre_upgrade : (WasmState, Principal, Env) -> Trap | Return StableMemory
   post_upgrade : (CanisterId, StableMemory, Arg, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, Env) -> QueryFunc)
@@ -2338,13 +2338,14 @@ The Internet Computer provides certain messaging guarantees: If a user or a cani
 To ensure that only one response is generated, and also to detect when no response can be generated any more, the IC maintains a _call context_. The `needs_to_respond` field is set to `false` once the call has received a response. Further attempts to respond will now fail.
 
 ....
-CallCtxt = {
-  canister : CanisterId;
-  origin : CallOrigin;
-  needs_to_respond : bool;
-  deleted : bool;
-  available_cycles : Nat;
-}
+Request = {
+    nonce : Blob;
+    ingress_expiry : Nat;
+    sender : UserId;
+    canister_id : CanisterId;
+    method_name : Text;
+    data : Blob;
+  }
 CallId = (abstract)
 CallOrigin
   = FromUser {
@@ -2355,6 +2356,13 @@ CallOrigin
       callback: Callback
     }
   | FromHeartbeat
+CallCtxt = {
+  canister : CanisterId;
+  origin : CallOrigin;
+  needs_to_respond : bool;
+  deleted : bool;
+  available_cycles : Nat;
+}
 ....
 
 ==== Calls and Messages
@@ -2398,36 +2406,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 ==== API requests
 
-We distinguish between the _asynchronous_ API requests passed to `/api/v2/…/call`, which may be present in the IC state, and the _synchronous_ API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
-
-....
-Envelope = {
-  content : Request | APIReadRequest;
-  sender_pubkey : PublicKey | NoPublicKey;
-  sender_sig : Signature | NoSignature;
-  sender_delegation: [SignedDelegation]
-}
-
-Request
-  = CanisterUpdateCall = {
-    nonce : Blob;
-    ingress_expiry : Nat;
-    sender : UserId;
-    canister_id : CanisterId;
-    method_name : Text;
-    data : Blob;
-  }
-....
-
-The evolution of a `Request` goes through these states, as explained in <<http-call-overview>>:
-....
-RequestStatus
-  = Received
-  | Processing
-  | Rejected (RejectCode, Text)
-  | Replied Blob
-  | Done
-....
+We distinguish between the _asynchronous_ API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the _synchronous_ API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
 These are the synchronous read messages:
 ....
@@ -2449,10 +2428,29 @@ APIReadRequest
   }
 ....
 
+....
+Envelope = {
+  content : Request | APIReadRequest;
+  sender_pubkey : PublicKey | NoPublicKey;
+  sender_sig : Signature | NoSignature;
+  sender_delegation: [SignedDelegation]
+}
+....
+
+The evolution of a `Request` goes through these states, as explained in <<http-call-overview>>:
+....
+RequestStatus
+  = Received
+  | Processing
+  | Rejected (RejectCode, Text)
+  | Replied Blob
+  | Done
+....
+
 A `Path` may refer to a request by way of a _request id_, as specified in <<request-id>>:
 ....
-Request = Blob
-hash_of_map: Request -> Request
+RequestId = Blob
+hash_of_map: Request -> RequestId
 ....
 
 For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
@@ -2481,6 +2479,18 @@ SignedDelegation = {
 Finally, we can describe the state of the IC as a record having the following fields:
 
 ....
+CanState
+ = EmptyCanister | {
+  wasm_state : WasmState;
+  module : CanisterModule;
+  raw_module : Blob;
+  public_custom_sections: Text ↦ Blob;
+  private_custom_sections: Text ↦ Blob;
+}
+CanStatus
+  = Running
+  | Stopping (List (CallOrigin, Nat))
+  | Stopped
 S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
@@ -2495,18 +2505,6 @@ S = {
   messages : List Message; // ordered!
   root_key : PublicKey
 }
-CanState
- = EmptyCanister | {
-  wasm_state : WasmState;
-  module : CanisterModule;
-  raw_module : Blob;
-  public_custom_sections: Text ↦ Blob;
-  private_custom_sections: Text ↦ Blob;
-}
-CanStatus
-  = Running
-  | Stopping (List (CallOrigin, Nat))
-  | Stopped
 ....
 
 ==== Initial state
@@ -2518,8 +2516,10 @@ The initial state of the IC is
   canisters = ();
   controllers = ();
   freezing_threshold = ();
+  canister_status = ();
   time = ();
   balances = ();
+  certified_data = ();
   system_time = T;
   call_contexts = ();
   messages = ();
@@ -2531,6 +2531,13 @@ for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using 
 === Invariants
 
 The following is an incomplete list of invariants that should hold for the abstract state `S`, and are not already covered by the type annotations in this section.
+
+* No method name is the name of an update and query method in a CanisterModule at the same time:
++
+....
+∀ _ ↦ CanState ∈ S.canisters:
+  dom(CanState.module.update_methods) ∩ dom(CanState.module.query_methods) = ∅
+....
 
 * Deleted call contexts were not awaiting a response:
 +
@@ -2549,8 +2556,8 @@ The following is an incomplete list of invariants that should hold for the abstr
 * Referenced call contexts exists:
 +
 ....
-∀ CallMessage M ∈ S.messages.  M.origin.calling_context ∈ S.call_contexts
-∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ∈ S.call_contexts
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
 ∀ _ ↦ Ctxt ∈ S.call_contexts:
   if Ctx.needs_to_respond:
      Ctxt.origin.calling_context ∈ S.call_contexts
@@ -2562,7 +2569,7 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 
  * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
- * Responses to reads (i.e. `/api/v2/…/read_state`). By definition, these do _not_ change the state of the IC, and merely describe the response based on the read request and the current state.
+ * Responses to reads (i.e. `/api/v2/…/read_state` and `/api/v2/…/query`). By definition, these do _not_ change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
@@ -2607,9 +2614,9 @@ delegated_senders(D)
 A `Request` has an effective canister id according to the rules in <<#http-effective-canister-id>>:
 
 ....
-is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
-is_effective_canister_id(CanisterUpdateCall {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
-is_effective_canister_id(CanisterUpdateCall {canister_id = p, …}, p), if p ≠ ic_principal
+is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
+is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ....
 
 ==== API Request submission
@@ -2677,17 +2684,17 @@ The IC does not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.requests[CanisterUpdateCall R] = Received
+    S.requests[R] = Received
     S.system_time <= R.ingress_expiry
     C = S.canisters[R.canister_id]
 ....
 State after::
 ....
 S with
-    requests[CanisterUpdateCall R] = Processing
+    requests[R] = Processing
     messages =
       CallMessage {
-        origin = FromUser { request = CanisterUpdateCall R };
+        origin = FromUser { request = R };
         caller = R.sender;
         callee = R.canister_id;
         method_name = R.method_name;
@@ -2708,14 +2715,14 @@ Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping or balances[CM.callee] < freezing_limit(S, CM.callee)
+    S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or balances[CM.callee] < freezing_limit(S, CM.callee)
 ....
 
 State after::
 ....
     S.messages = Older_messages · Younger_messages  ·
       ResponseMessage {
-          origin = S.call_contexts[CM.call_context].origin
+          origin = CM.origin;
           response = Reject (CANISTER_ERROR, "canister not running");
           refunded_cycles = CM.transferred_cycles;
       }
@@ -2742,7 +2749,7 @@ Conditions::
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
     S.canister_status[CM.callee] = Running
-    balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
+    S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom S.call_contexts
 ....
 +
@@ -2755,7 +2762,7 @@ S with
       FuncMessage {
         call_context = Ctxt_id;
         receiver = CM.callee;
-        entry_point = PublicMethod CM.method_name CM.caller CM.data
+        entry_point = PublicMethod CM.method_name CM.caller CM.data;
         queue = CM.queue;
       } ·
       Younger_messages
@@ -2833,9 +2840,7 @@ Conditions::
     Available = S.call_contexts[M.call_contexts].available_cycles
     ( M.entry_point = PublicMethod Name Caller Data
       Arg = { data = Data; caller = Caller }
-      (F = Mod.update_methods[Name](Arg, Env, Available)
-      or
-      (F = query_as_update(Mod.query_methods[Name], Arg, Env))
+      (F = Mod.update_methods[Name](Arg, Env, Available)) or (F = query_as_update(Mod.query_methods[Name], Arg, Env))
     )
     or
     ( M.entry_point = Callback Callback Response RefundedCycles
@@ -2854,12 +2859,11 @@ if
   R = Return res
   Cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
+  (Cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
+    (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
   New_balance =
-      S.balances[M.receiver]
-      + res.cycles_accepted
-      + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-      - Cycles_used
-      - ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]
+      (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
+      - (Cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
   New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
@@ -2902,9 +2906,8 @@ else
   S with
     messages = Older_messages · Younger_messages
     balances[M.receiver] =
-      S.balances[M.receiver]
-      + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-      - Cycles_used
+      S.balances[M.receiver] +
+      ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - Cycles_used)
 ....
 
 
@@ -2935,9 +2938,9 @@ query_as_update(f, arg, env) = λ wasm_state →
     Return res → Return {
       new_state = wasm_state;
       new_calls = [];
+      new_certified_data = NoCertifiedData;
       response = res;
       cycles_accepted = 0;
-      new_certified_data = NoCertifiedData;
     }
 
 heartbeat_as_update(f, env) = λ wasm_state →
@@ -2946,9 +2949,9 @@ heartbeat_as_update(f, env) = λ wasm_state →
     Return wasm_state → Return {
       new_state = wasm_state;
       new_calls = [];
+      new_certified_data = NoCertifiedData;
       response = NoResponse;
       cycles_accepted = 0;
-      new_certified_data = NoCertifiedData;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
@@ -2962,9 +2965,9 @@ Conditions::
 ....
     S.call_contexts[Ctxt_id].needs_to_respond = true
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
-    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
-    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
-    ∀ ctxt_ids.
+    ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
+    ∀ ctxt_ids ∈ dom(S.call_contexts).
         S.call_contexts[ctxt_ids].needs_to_respond
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
 ....
@@ -2995,8 +2998,8 @@ Conditions::
       S.call_contexts[Ctxt_id].origin = FromHeartbeat
       ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
     )
-    ∀ CallMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
-    ∀ ResponseMessage M ∈ S.messages. M.origin.calling_context ≠ Ctxt_id
+    ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
+    ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ctxt_ids.
         S.call_contexts[ctxt_ids].needs_to_respond = true
         ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
@@ -3155,6 +3158,7 @@ Conditions::
       status = S.status[M.receiver];
     }
     Mod.init(A.canister_id, Arg, Env) = Return New_state
+    dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
 State after::
 ....
@@ -3199,6 +3203,7 @@ Conditions::
       caller = M.caller;
     }
     Mod.post_upgrade(A.canister_id, Stable_memory, Arg, Env) = Return New_state
+    dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
 State after::
 ....
