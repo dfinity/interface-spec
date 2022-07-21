@@ -2646,9 +2646,16 @@ Conditions::
     ) ∨ (
       E.content.canister_id ≠ ic_principal
       S.canisters[E.content.canister_id] ≠ EmptyCanister
-      Arg = { data = E.content.arg; caller = E.content.sender; method = E.content.method_name; time = S.time[E.content.canister_id] }
+      Arg = { data = E.content.arg; caller = E.content.sender }
+      Env = {
+        time = S.time[E.content.canister_id];
+        balance = S.balances[E.content.canister_id]
+        freezing_limit = freezing_limit(S, E.content.canister_id);
+        certificate = NoCertificate;
+        status = S.status[E.content.canister_id];
+      }
       S.canisters[E.content.canister_id].module.inspect_message
-        (E.content.method_name, C.wasm_state, Arg, S.balance[E.content.canister_id]) = Return Accept
+        (E.content.method_name, C.wasm_state, Arg, Env) = Return Accept
    )
 ....
 State after::
@@ -3876,7 +3883,7 @@ Params = {
   reject_message : Text;
   sysenv : Env;
   cycles_refunded : Nat;
-  method_name : Text;
+  method_name : NoData | Text;
 }
 ExecutionState = {
   wasm_state : WasmState;
@@ -3913,6 +3920,7 @@ empty_params = {
   reject_code = 0;
   reject_message = "";
   cycles_refunded = 0;
+  method_name = NoData;
 }
 
 empty_execution_state = {
@@ -4142,7 +4150,7 @@ inspect_message = λ (method_name, wasm_state, arg, sysenv) →
       params = empty_params with {
         data = arg.data;
         caller = arg.caller;
-        method_name = arg.method_name;
+        method_name = method_name;
         sysenv
       }
       balance = sysenv.balance;
