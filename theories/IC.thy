@@ -111,8 +111,9 @@ record ('w, 'p, 'canid, 's, 'b, 'c) update_return =
   new_certified_data :: "'b option"
   response :: "('b, 's) response option"
   cycles_accepted :: nat
+  cycles_used :: nat
 type_synonym ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func = "'w \<Rightarrow> 'tr + ('w, 'p, 'canid, 's, 'b, 'c) update_return"
-type_synonym ('w, 'b, 's, 'tr) query_func = "'w \<Rightarrow> 'tr + ('b, 's) response"
+type_synonym ('w, 'b, 's, 'tr) query_func = "'w \<Rightarrow> 'tr + (('b, 's) response \<times> nat)"
 
 type_synonym available_cycles = nat
 type_synonym refunded_cycles = nat
@@ -124,7 +125,7 @@ record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec =
   post_upgrade :: "'canid \<times> 'sm \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'w"
   update_methods :: "('s, ('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) list_map"
   query_methods :: "('s, ('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) list_map"
-  heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w"
+  heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)"
   callbacks :: "('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func"
   inspect_message :: "('s \<times> 'w \<times> 'b arg \<times> 'p \<times> 'b env) \<Rightarrow> 'tr + inspect_method_result"
 typedef ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
@@ -144,7 +145,7 @@ lift_definition canister_module_callbacks :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c,
   ('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" is
   callbacks .
 
-lift_definition canister_module_heartbeat :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w" is
+lift_definition canister_module_heartbeat :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)" is
   heartbeat .
 
 (* Call contexts *)
@@ -511,12 +512,12 @@ lemma call_context_heartbeat_cycles_inv:
 
 fun query_as_update :: "(('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "query_as_update (f, a, e) = (\<lambda>w. case f (a, e) w of Inl t \<Rightarrow> Inl t |
-    Inr res \<Rightarrow> Inr \<lparr>new_state = w, new_calls = [], new_certified_data = None, response = Some res, cycles_accepted = 0\<rparr>)"
+    Inr (res, cyc_used) \<Rightarrow> Inr \<lparr>new_state = w, new_calls = [], new_certified_data = None, response = Some res, cycles_accepted = 0, cycles_used = cyc_used\<rparr>)"
 
-fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w) \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
+fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)) \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "heartbeat_as_update (f, e) w = (case f e w of Inl t \<Rightarrow> Inl t |
-    Inr w' \<Rightarrow> Inr \<lparr>update_return.new_state = w', update_return.new_calls = [], update_return.new_certified_data = None,
-      update_return.response = None, update_return.cycles_accepted = 0\<rparr>)"
+    Inr (w', cyc_used) \<Rightarrow> Inr \<lparr>update_return.new_state = w', update_return.new_calls = [], update_return.new_certified_data = None,
+      update_return.response = None, update_return.cycles_accepted = 0, cycles_used = cyc_used\<rparr>)"
 
 fun exec_function :: "('s, 'p, 'b, 'c) entry_point \<Rightarrow> 'b env \<Rightarrow> nat \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "exec_function (entry_point.Public_method mn c d) e bal m = (
@@ -527,8 +528,8 @@ fun exec_function :: "('s, 'p, 'b, 'c) entry_point \<Rightarrow> 'b env \<Righta
     canister_module_callbacks m (cb, resp, ref_cycles, e, bal)"
 | "exec_function (entry_point.Heartbeat) e bal m = heartbeat_as_update ((canister_module_heartbeat m), e)"
 
-definition message_execution_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "message_execution_pre n cycles_used S =
+definition message_execution_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "message_execution_pre n S =
     (n < length (messages S) \<and> (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
@@ -536,8 +537,8 @@ definition message_execution_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'u
       (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> True | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
-definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "message_execution_post n cycles_used S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
+definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "message_execution_post n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
       list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
       (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
@@ -547,13 +548,14 @@ definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
+        cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined);
         (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res));
         New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-          - (cycles_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res));
+          - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res));
         no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) in
-        if \<not>isl R \<and> cycles_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+        if \<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
           cycles_accepted_res \<le> Available \<and>
-          cycles_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+          cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
             bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
           New_balance > (if Is_response then 0 else ic_freezing_limit S recv) \<and>
           (no_response \<or> call_ctxt_needs_to_respond ctxt) then
@@ -571,18 +573,38 @@ definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
             in S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := new_state result\<rparr>)),
               messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
               balances := list_map_set (balances S) recv New_balance, certified_data := certified_data\<rparr>)
-        else S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-            balances := list_map_set (balances S) recv (bal + ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - cycles_used))\<rparr>))
+        else S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>))
     | _ \<Rightarrow> undefined)"
 
-definition message_execution_lost_cycles :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "message_execution_lost_cycles n cycles_used S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
-    let Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) in
-    min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))"
+definition message_execution_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "message_execution_lost_cycles n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
+    (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
+      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
+      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
+        let Mod = module can;
+        Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False);
+        Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>;
+        Available = call_ctxt_available_cycles ctxt;
+        F = exec_function ep Env Available Mod;
+        R = F (wasm_state can);
+        cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined);
+        (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res));
+        New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+          - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res));
+        no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) in
+        if \<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+          cycles_accepted_res \<le> Available \<and>
+          cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+            bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+          New_balance > (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+          (no_response \<or> call_ctxt_needs_to_respond ctxt) then
+          min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+        else
+          (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))))"
 
 lemma message_execution_cycles_monotonic:
-  assumes pre: "message_execution_pre n cycles_used S"
-  shows "total_cycles S = total_cycles (message_execution_post n cycles_used S) + message_execution_lost_cycles n cycles_used S"
+  assumes pre: "message_execution_pre n S"
+  shows "total_cycles S = total_cycles (message_execution_post n S) + message_execution_lost_cycles n S"
 proof -
   obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
     and prod: "list_map_get (canisters S) recv = Some (Some can)"
@@ -598,10 +620,11 @@ proof -
   define Available where "Available = call_ctxt_available_cycles ctxt"
   define F where "F = exec_function ep Env Available Mod"
   define R where "R = F (wasm_state can)"
+  define cyc_used where "cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined)"
   obtain cycles_accepted_res new_calls_res where res: "(cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res))"
     by (cases "(case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res))") auto
   define New_balance where "New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-    - (cycles_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res))"
+    - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res))"
   define no_response where "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
   define older where "older = take n (messages S)"
   define younger where "younger = drop (Suc n) (messages S)"
@@ -613,11 +636,10 @@ proof -
     by (auto simp: message_execution_pre_def msg older_def younger_def)
   note lm = list_map_sum_in[OF prod(2), where ?g=id, simplified] list_map_sum_in_ge[OF prod(2), where ?g=id, simplified]
     list_map_sum_in[OF prod(5), where ?g=call_ctxt_carried_cycles] list_map_sum_in_ge[OF prod(5), where ?g=call_ctxt_carried_cycles]
-  define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-    balances := list_map_set (balances S) recv (bal + ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - cycles_used))\<rparr>"
-  define cond where "cond = (\<not>isl R \<and> cycles_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+  define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>"
+  define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
     cycles_accepted_res \<le> Available \<and>
-    cycles_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+    cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
       bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
     New_balance > (if Is_response then 0 else ic_freezing_limit S recv) \<and>
     (no_response \<or> call_ctxt_needs_to_respond ctxt))"
@@ -626,11 +648,11 @@ proof -
   show ?thesis
   proof (cases cond)
     case False
-    have "message_execution_post n cycles_used S = S''"
-      "message_execution_lost_cycles n cycles_used S = min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
+    have "message_execution_post n S = S''"
+      "message_execution_lost_cycles n S = (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using False
       by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
-          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] res[symmetric]
+          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric] del: min_less_iff_conj split del: if_split)
     then show ?thesis
       using lm(2)
@@ -661,11 +683,11 @@ proof -
       by (auto simp: R_Inr)
     have no_response: "no_response = (response result = None)"
       by (auto simp: no_response_def R_Inr)
-    have msg_exec: "message_execution_post n cycles_used S = S'"
-      and lost: "message_execution_lost_cycles n cycles_used S = min cycles_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
+    have msg_exec: "message_execution_post n S = S'"
+      and lost: "message_execution_lost_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using True
       by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
-          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] res[symmetric]
+          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric]
           messages_def[symmetric] new_ctxt_def[symmetric] certified_data_def[symmetric] S'_def[symmetric]
           result_def[symmetric] response_messages_def[symmetric] new_call_to_message_def[symmetric]

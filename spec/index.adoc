@@ -2295,8 +2295,9 @@ UpdateFunc = WasmState -> Trap | Return {
   new_certified_data : NoCertifiedData | Blob
   response : NoResponse | Response;
   cycles_accepted : Nat;
+  cycles_used : Nat;
 }
-QueryFunc = WasmState -> Trap | Return Response
+QueryFunc = WasmState -> Trap | Return (Response, Nat)
 
 AvailableCycles = Nat
 RefundedCycles = Nat
@@ -2307,7 +2308,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, CallerId, Env) -> QueryFunc)
-  heartbeat : (Env) -> WasmState -> Trap | Return WasmState
+  heartbeat : (Env) -> WasmState -> Trap | Return (WasmState, Nat)
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return (Accept | Reject)
 }
@@ -2872,13 +2873,13 @@ State after::
 ....
 if
   R = Return res
-  Cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+  res.cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
-  (Cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
+  (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
     (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-      - (Cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
+      - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
   New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
@@ -2920,9 +2921,6 @@ then
 else
   S with
     messages = Older_messages · Younger_messages
-    balances[M.receiver] =
-      S.balances[M.receiver] +
-      ((if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) - Cycles_used)
 ....
 
 
@@ -2950,23 +2948,25 @@ The functions `query_as_update` and `heartbeat_as_update` turns a query function
 query_as_update(f, arg, env) = λ wasm_state →
   match f(arg, env)(wasm_state) with
     Trap → Trap
-    Return res → Return {
+    Return (res, cyc_used) → Return {
       new_state = wasm_state;
       new_calls = [];
       new_certified_data = NoCertifiedData;
       response = res;
       cycles_accepted = 0;
+      cycles_used = cyc_used;
     }
 
 heartbeat_as_update(f, env) = λ wasm_state →
   match f(env)(wasm_state) with
     Trap → Trap
-    Return wasm_state → Return {
+    Return (wasm_state, cyc_used) → Return {
       new_state = wasm_state;
       new_calls = [];
       new_certified_data = NoCertifiedData;
       response = NoResponse;
       cycles_accepted = 0;
+      cycles_used = cyc_used;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
