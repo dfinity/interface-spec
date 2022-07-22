@@ -29,14 +29,16 @@ ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
 ic0.accept_message : () -> ();                                              // F
 
 ic0.call_new :                                                              // U Ry Rt H
-  ( callee_src  : i32,
-    callee_size : i32,
-    name_src : i32,
-    name_size : i32,
-    reply_fun : i32,
-    reply_env : i32,
-    reject_fun : i32,
-    reject_env : i32
+  ( callee_src      : i32,
+    callee_size     : i32,
+    name_src        : i32,
+    name_size       : i32,
+    reply_fun_src   : i32,
+    reply_fun_size  : i32,
+    reply_env       : i64,
+    reject_fun_src  : i32,
+    reject_fun_size : i32,
+    reject_env      : i64,
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
