@@ -3720,7 +3720,7 @@ S with
 
 ==== Query call
 
-Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which are `Running`.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which have a status of `Running` and are also not frozen.
 
 During the execution of a query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be) and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
@@ -3732,7 +3732,7 @@ Conditions::
   is_effective_canister_id(E.content, ECID)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
-  S.canister_status[Q.canister_id] = Running
+  S.canister_status[Q.canister_id] = Running ∧ S.balances[Q.canister_id] >= freezing_limit(S, Q.canister_id)
   C = S.canisters[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
