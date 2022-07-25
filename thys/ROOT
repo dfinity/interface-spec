@@ -4,5 +4,7 @@ session Internet_Computer (IC) = "HOL-Library" +
   options [timeout=600]
   theories
     IC
+  document_files
+    "root.tex"
 export_files (in ".") [2]
     "Internet_Computer.IC:code/**"
