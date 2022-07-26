@@ -6,6 +6,7 @@
 
 * Spec: Canister access to performance metrics
 * Spec: User delegations include a principal scope
+* Spec: Query calls are rejected when the canister is frozen
 
 [#0_18_5]
 === 0.18.5 (2022-07-08)

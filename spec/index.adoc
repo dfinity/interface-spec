@@ -231,9 +231,7 @@ In all cases, calls to the <<ic-management-canister,management canister>> are pr
 
 The controllers of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
 
-NOTE:
-This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
-
+NOTE: This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
 
 [#signatures]
 === Signatures
@@ -549,7 +547,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
-If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`). In other words, we define `aaaaa-aa` to belong to every canister range for the purposes of certificate checking. Note that `aaaaa-aa` is a valid canister id only for calls to `provisional_create_canister_with_cycles`, so it cannot appear in `read_state` requests on production networks.
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -598,11 +596,13 @@ Canister methods that do not change the canister state can be executed more effi
 
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
-* If the call is to the Management Canister (`aaaaa-aa`), and the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+* If the call is to the Management Canister (`aaaaa-aa`), then:
+   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
+   - Otherwise, there is no effective canister id. In particular, the `create_canister` method has no effective canister ID, and this method cannot be called by users, only via canisters.
 
 * If the call is to the `raw_rand` method of the Management Canister (`aaaaa-aa`), then there is no effective canister id. This implies that this method cannot be called by users, only via canisters.
 
-* If the call is to the `provisional_create_canister_with_cycles` method of the Management Canister (`aaaaa-aa`), any principal is a valid effective canister id for this call.
 +
 [NOTE]
 ====
@@ -3718,7 +3718,7 @@ S with
 
 ==== Query call
 
-Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which are `Running`.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which have a status of `Running` and are also not frozen.
 
 During the execution of a query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be) and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
@@ -3730,7 +3730,7 @@ Conditions::
   is_effective_canister_id(E.content, ECID)
   S.system_time <= Q.ingress_expiry
   S.canisters[Q.canister_id] ≠ EmptyCanister
-  S.canister_status[Q.canister_id] = Running
+  S.canister_status[Q.canister_id] = Running ∧ S.balances[Q.canister_id] >= freezing_limit(S, Q.canister_id)
   C = S.canisters[Q.canister_id]
   F = C.module.query_methods[Q.method_name]
   Arg = {
