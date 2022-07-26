@@ -1623,6 +1623,8 @@ The return result is an extended public key consisting of an ECDSA `public_key`,
 This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id.
 Otherwise it will be rejected.
 
+Invoking this API will cost cycles. The concrete cost is yet to be determined.
+
 [#ic-sign_with_ecdsa]
 === IC method `sign_with_ecdsa`
 
@@ -1635,6 +1637,8 @@ The signatures are encoded as the concatenation of the https://www.secg.org/sec2
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long.
 Otherwise it will be rejected.
+
+Invoking this API will cost cycles. The concrete cost is yet to be determined.
 
 [#ic-http_request]
 === IC method `http_request`
