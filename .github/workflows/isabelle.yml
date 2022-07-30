@@ -1,0 +1,23 @@
+name: Build on Ubuntu
+on:
+  push:
+    paths:
+      - 'theories/**'
+
+jobs:
+  isabelle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v2
+      - name: Run Isabelle with Docker
+        uses: addnab/docker-run-action@v3
+        with:
+          image: martin2718/isabelle
+          options: -v ${{ github.workspace }}:/interface-spec
+          run: Isabelle/bin/isabelle build -e -v -D /interface-spec/theories/
+      - name: Haskell Code
+        uses: actions/upload-artifact@v2
+        with:
+          name: haskell-code
+          path: ${{ github.workspace }}/theories/code
