@@ -231,9 +231,7 @@ In all cases, calls to the <<ic-management-canister,management canister>> are pr
 
 The controllers of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
 
-NOTE:
-This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
-
+NOTE: This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
 
 [#signatures]
 === Signatures
