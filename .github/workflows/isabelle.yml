@@ -2,7 +2,7 @@ name: Build on Ubuntu
 on:
   push:
     paths:
-      - 'thys/**'
+      - 'theories/**'
 
 jobs:
   isabelle:
@@ -15,9 +15,9 @@ jobs:
         with:
           image: martin2718/isabelle
           options: -v ${{ github.workspace }}:/interface-spec
-          run: Isabelle/bin/isabelle build -e -v -D /interface-spec/thys/
+          run: Isabelle/bin/isabelle build -e -v -D /interface-spec/theories/
       - name: Haskell Code
         uses: actions/upload-artifact@v2
         with:
           name: haskell-code
-          path: ${{ github.workspace }}/thys/code
+          path: ${{ github.workspace }}/theories/code
