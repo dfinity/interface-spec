@@ -19,7 +19,7 @@ type definite_canister_settings = record {
 type http_header = record { name: text; value: text };
 
 type http_response = record {
-  status: nat;
+  status: nat64;
   headers: vec http_header;
   body: blob;
 };
@@ -29,8 +29,9 @@ type ecdsa_curve = variant { secp256k1; };
 type satoshi = nat64;
 
 type bitcoin_network = variant {
-  mainnet;
-  testnet;
+  Mainnet;
+  Testnet;
+  Regtest;
 };
 
 type bitcoin_address = text;
@@ -52,8 +53,8 @@ type get_utxos_request = record {
   address : bitcoin_address;
   network: bitcoin_network;
   filter: opt variant {
-    min_confirmations: nat32;
-    page: blob;
+    MinConfirmations: nat32;
+    Page: blob;
   };
 };
 
@@ -112,12 +113,10 @@ service ic : {
   http_request : (record {
     url : text;
     max_response_bytes: opt nat64;
-    method : variant { get; head; post };
+    http_method : variant { get; head; post };
     headers: vec http_header;
     body : opt blob;
-    transform : opt variant {
-      function: func (http_response) -> (http_response) query
-    };
+    transform_method_name : opt text;
   }) -> (http_response);
 
   // Threshold ECDSA signature
