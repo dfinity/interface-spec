@@ -112,7 +112,7 @@ service ic : {
   http_request : (record {
     url : text;
     max_response_bytes: opt nat64;
-    http_method : variant { get; head; post };
+    http_method : variant { GET; HEAD; POST };
     headers: vec http_header;
     body : opt blob;
     transform_method_name : opt text;
