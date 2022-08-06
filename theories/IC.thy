@@ -40,6 +40,11 @@ lift_definition list_map_empty :: "('a, 'b) list_map" is "[]"
 lemma list_map_empty_dom[simp]: "list_map_dom list_map_empty = {}"
   by transfer auto
 
+lift_definition list_map_init :: "('a \<times> 'b) list \<Rightarrow> ('a, 'b) list_map" is
+  "\<lambda>xys. AList.updates (map fst xys) (map snd xys) []"
+  using distinct_updates
+  by force
+
 lemma list_map_sum_in_ge_aux:
   fixes g :: "'a \<Rightarrow> nat"
   shows "distinct (map fst f) \<Longrightarrow> map_of f x = Some y \<Longrightarrow> g y \<le> sum_list (map g (map snd f))"
@@ -289,14 +294,18 @@ record ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic =
 
 (* Candid *)
 
-datatype ('s, 'b, 'p) candid = Candid_nat nat | Candid_text 's | Candid_blob (candid_unwrap_blob: 'b) | Candid_vec "('s, 'b, 'p) candid list" | Candid_record "('s, ('s, 'b, 'p) candid) list_map" | Candid_empty
+datatype ('s, 'b, 'p) candid = Candid_nat nat
+  | Candid_text 's
+  | Candid_blob (candid_unwrap_blob: 'b)
+  | Candid_opt "('s, 'b, 'p) candid"
+  | Candid_vec "('s, 'b, 'p) candid list"
+  | Candid_record "('s, ('s, 'b, 'p) candid) list_map"
+  | Candid_null
+  | Candid_empty
 
 fun candid_is_blob :: "('s, 'b, 'p) candid \<Rightarrow> bool" where
   "candid_is_blob (Candid_blob b) = True"
 | "candid_is_blob _ = False"
-
-definition candid_single_blob_record :: "'s \<Rightarrow> 'b \<Rightarrow> ('s, 'b, 'p) candid" where
-  "candid_single_blob_record s b = Candid_record (list_map_set list_map_empty s (Candid_blob b))"
 
 fun candid_lookup :: "('s, 'b, 'p) candid \<Rightarrow> 's \<Rightarrow> ('s, 'b, 'p) candid option" where
   "candid_lookup (Candid_record m) s = list_map_get m s"
@@ -311,7 +320,8 @@ context fixes
   and MAX_CYCLES_PER_MESSAGE :: nat
   and MAX_CYCLES_PER_RESPONSE :: nat
   and MAX_CANISTER_BALANCE :: nat
-  and ic_freezing_limit :: "('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> 'canid \<Rightarrow> nat"
+  and ic_freezing_limit :: "('p :: linorder, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> 'canid \<Rightarrow> nat"
+  and sha_256 :: "'b \<Rightarrow> 'b"
   and ic_principal :: 'canid
   and blob_of_candid :: "('s, 'b, 'p) candid \<Rightarrow> 'b"
   and parse_candid :: "'b \<Rightarrow> ('s, 'b, 'p) candid option"
@@ -324,6 +334,13 @@ context fixes
   and principal_of_canid :: "'canid \<Rightarrow> 'p"
   and canid_of_principal :: "'p \<Rightarrow> 'canid option"
 begin
+
+(* Candid helper functions *)
+
+fun candid_of_can_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarrow> ('s, 'b, 'p) candid" where
+  "candid_of_can_status Running = Candid_text (encode_string ''Running'')"
+| "candid_of_can_status (Stopping _) = Candid_text (encode_string ''Stopping'')"
+| "candid_of_can_status Stopped = Candid_text (encode_string ''Stopped'')"
 
 (* Cycles *)
 
@@ -839,7 +856,7 @@ definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> 
       certified_data := list_map_set (certified_data S) cid empty_blob,
       messages := take n (messages S) @ drop (Suc n) (messages S) @
         [Response_message orig (response.Reply (blob_of_candid
-        (candid_single_blob_record (encode_string ''canister_id'') (blob_of_principal (principal_of_canid cid))))) 0],
+        (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_principal (principal_of_canid cid)))])))) 0],
       canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
 
 lemma ic_canister_creation_cycles_inv:
@@ -866,7 +883,7 @@ qed
 
 (* System transition: IC Management Canister: Changing settings [DONE] *)
 
-definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_update_settings_pre n S = (n < length (messages S) \<and> (case messages S ! n of
     Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
       (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
@@ -879,7 +896,7 @@ definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
       (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
-definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_update_settings_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = (case parse_candid d of Some c \<Rightarrow>
       (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
@@ -890,7 +907,7 @@ definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 
       (case candid_lookup c' (encode_string ''controllers'') of Some (Candid_vec xs) \<Rightarrow>
         if (\<forall>c'' \<in> set xs. candid_is_blob c'' \<and> parse_principal (candid_unwrap_blob c'') \<noteq> None) then
         list_map_set (controllers S) cid (the ` parse_principal ` candid_unwrap_blob ` set xs) else controllers S | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) in
-  let freezing_thres = (case parse_candid d of Some c \<Rightarrow>
+    let freezing_thres = (case parse_candid d of Some c \<Rightarrow>
       (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
       (case candid_lookup c' (encode_string ''freezing_threshold'') of Some (Candid_nat freeze) \<Rightarrow>
         list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) in
@@ -914,6 +931,60 @@ proof -
   show ?thesis
     using assms
     by (auto simp: ic_update_settings_pre_def ic_update_settings_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Canister status [DONE] *)
+
+definition ic_canister_status_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_status_pre n S = (n < length (messages S) \<and> (case messages S ! n of
+    Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+      (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+      cee = ic_principal \<and>
+      mn = encode_string ''canister_status'' \<and>
+      (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
+      (case parse_principal b of Some p \<Rightarrow>
+      (case canid_of_principal p of Some cid \<Rightarrow> cid \<in> list_map_dom (canister_status S) \<and>
+        cid \<in> list_map_dom (canisters S) \<and>
+        cid \<in> list_map_dom (balances S) \<and>
+      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False))"
+
+definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_status_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
+      (case parse_principal b of Some p \<Rightarrow>
+      (case canid_of_principal p of Some cid \<Rightarrow> cid)))) in
+    let hash = (case the (list_map_get (canisters S) cid) of None \<Rightarrow> Candid_null
+      | Some m \<Rightarrow> Candid_opt (Candid_blob (sha_256 (raw_module m)))) in
+    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @
+      [Response_message orig (response.Reply (blob_of_candid
+      (Candid_record (list_map_init [(encode_string ''status'', candid_of_can_status (the (list_map_get (canister_status S) cid))),
+        (encode_string ''module_hash'', hash),
+        (encode_string ''controllers'', Candid_vec (map (Candid_blob \<circ> blob_of_principal) (sorted_list_of_set (the (list_map_get (controllers S) cid))))),
+        (encode_string ''memory_size'', Candid_nat memory),
+        (encode_string ''cycles'', Candid_nat (the (list_map_get (balances S) cid)))])))) trans_cycles]\<rparr>)"
+
+lemma ic_canister_status_cycles_inv:
+  assumes "ic_canister_status_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_status_post n memory S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    using assms
+    by (auto simp: ic_canister_status_pre_def split: message.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_status_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_status_pre_def ic_canister_status_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
 
 end

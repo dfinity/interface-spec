@@ -3159,10 +3159,10 @@ S with
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
-            else opt (SHA-265(S.canisters[A.canister_id].raw_module));
+            else opt (SHA-256(S.canisters[A.canister_id].raw_module));
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
-          cycles = S.balance[A.canister_id];
+          cycles = S.balances[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(S, A.canister_id);
         })
