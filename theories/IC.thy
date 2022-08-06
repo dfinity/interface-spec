@@ -289,7 +289,7 @@ record ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic =
 
 (* Candid *)
 
-datatype ('s, 'b, 'p) candid = Candid_text 's | Candid_blob (candid_unwrap_blob: 'b) | Candid_vec "('s, 'b, 'p) candid list" | Candid_record "('s, ('s, 'b, 'p) candid) list_map" | Candid_empty
+datatype ('s, 'b, 'p) candid = Candid_nat nat | Candid_text 's | Candid_blob (candid_unwrap_blob: 'b) | Candid_vec "('s, 'b, 'p) candid list" | Candid_record "('s, ('s, 'b, 'p) candid) list_map" | Candid_empty
 
 fun candid_is_blob :: "('s, 'b, 'p) candid \<Rightarrow> bool" where
   "candid_is_blob (Candid_blob b) = True"
@@ -322,6 +322,7 @@ context fixes
   and encode_string :: "string \<Rightarrow> 's"
   and principal_of_uid :: "'uid \<Rightarrow> 'p"
   and principal_of_canid :: "'canid \<Rightarrow> 'p"
+  and canid_of_principal :: "'p \<Rightarrow> 'canid option"
 begin
 
 (* Cycles *)
@@ -859,6 +860,60 @@ proof -
     using assms
     by (auto simp: ic_canister_creation_pre_def ic_canister_creation_post_def total_cycles_def Let_def msgs
         list_map_sum_out[where ?g=id] split: message.splits option.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Changing settings [DONE] *)
+
+definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_update_settings_pre n S = (n < length (messages S) \<and> (case messages S ! n of
+    Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+      (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+      cee = ic_principal \<and>
+      mn = encode_string ''update_settings'' \<and>
+      (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
+      (case parse_principal b of Some p \<Rightarrow>
+      (case canid_of_principal p of Some cid \<Rightarrow>
+      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False))"
+
+definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_update_settings_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
+      (case parse_principal b of Some p \<Rightarrow>
+      (case canid_of_principal p of Some cid \<Rightarrow> cid)))) in
+    let ctrls = (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
+      (case candid_lookup c' (encode_string ''controllers'') of Some (Candid_vec xs) \<Rightarrow>
+        if (\<forall>c'' \<in> set xs. candid_is_blob c'' \<and> parse_principal (candid_unwrap_blob c'') \<noteq> None) then
+        list_map_set (controllers S) cid (the ` parse_principal ` candid_unwrap_blob ` set xs) else controllers S | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) in
+  let freezing_thres = (case parse_candid d of Some c \<Rightarrow>
+      (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
+      (case candid_lookup c' (encode_string ''freezing_threshold'') of Some (Candid_nat freeze) \<Rightarrow>
+        list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) in
+    S\<lparr>controllers := ctrls, freezing_threshold := freezing_thres, messages := take n (messages S) @ drop (Suc n) (messages S) @
+        [Response_message orig (response.Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
+
+lemma ic_update_settings_cycles_inv:
+  assumes "ic_update_settings_pre n S"
+  shows "total_cycles S = total_cycles (ic_update_settings_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    using assms
+    by (auto simp: ic_update_settings_pre_def split: message.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_update_settings_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_update_settings_pre_def ic_update_settings_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
 
 end
