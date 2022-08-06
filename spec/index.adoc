@@ -3065,7 +3065,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'create_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
@@ -3083,7 +3083,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = CanisterId}))
         refunded_cycles = 0
       }
     canister_status[CanisterId] = Running
@@ -3113,7 +3113,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'update_settings'
-    M.arg = candid(A)
+    M.data = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3126,7 +3126,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3145,7 +3145,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'canister_status'
-    M.arg = candid(A)
+    M.data = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3180,7 +3180,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'install_code'
-    M.arg = candid(A)
+    M.data = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
       (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
     or A.mode = reinstall
@@ -3205,7 +3205,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3220,7 +3220,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'install_code'
-    M.arg = candid(A)
+    M.data = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
 
     A.mode = upgrade
@@ -3248,7 +3248,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3264,7 +3264,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'uninstall_code'
-    M.arg = candid(A)
+    M.data = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3276,7 +3276,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       } ·
       [ ResponseMessage {
@@ -3312,7 +3312,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     S.canister_status[A.canister_id] = Running
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3331,7 +3331,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     S.canister_status[A.canister_id] = Stopping Origins
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3357,7 +3357,7 @@ S with
     messages = Messages ·
         [ ResponseMessage {
             origin = O
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
@@ -3372,7 +3372,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     S.canister_status[A.canister_id] = Stopped
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3383,7 +3383,7 @@ S with
     S.messages = Messages ·
         ResponseMessage {
           origin = M.origin
-          response = Accepted (candid())
+          response = Reply (candid())
         }
 ....
 
@@ -3408,7 +3408,7 @@ S with
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = M.transferred_cycles
         }
 ....
@@ -3433,7 +3433,7 @@ S with
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = M.transferred_cycles
         } ·
         [ ResponseMessage {
@@ -3453,7 +3453,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'delete_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     S.canister_status[A.canister_id] = stopped
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3468,7 +3468,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3481,7 +3481,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'deposit_cycles'
-    M.arg = candid(A)
+    M.data = candid(A)
     Cycle_cost ≤ S.balances[A.canister_id] + M.transferred_cycles
 ....
 State after::
@@ -3492,7 +3492,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = 0
       }
 ....
@@ -3509,7 +3509,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'raw_rand'
-    M.arg = candid()
+    M.data = candid()
     |B| = 32
 ....
 State after::
@@ -3518,7 +3518,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid(B))
+        response = Reply (candid(B))
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3533,7 +3533,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'provisional_create_canister_with_cycles'
-    M.arg = candid(A)
+    M.data = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
@@ -3548,7 +3548,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = CanisterId}))
         transferred_cycles = M.transferred_cycles
       }
     canister_status[CanisterId] = Running
@@ -3562,7 +3562,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'provisional_top_up_canister'
-    M.arg = candid(A)
+    M.data = candid(A)
     A.canister_id ∈ dom S.canisters
 ....
 State after::
