@@ -2339,9 +2339,11 @@ The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through
 
 The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
-The parsing of a blob to a canister module is modelled via the (possibly implicitly failing) function
+The parsing of a blob to a canister module and its public and private custom sections is modelled via the (possibly implicitly failing) functions
 ....
 parse_wasm_mod : Blob -> CanisterModule
+parse_public_custom_sections : Blob -> Text ↦ Blob
+parse_private_custom_sections : Blob -> Text ↦ Blob
 ....
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
@@ -3182,15 +3184,14 @@ Conditions::
     M.method_name = 'install_code'
     M.data = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
-      (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
-    or A.mode = reinstall
+    (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
-      time = S.time[M.receiver];
-      balance = S.balances[M.receiver];
-      freezing_limit = freezing_limit(S, M.receiver);
+      time = S.time[A.canister_id];
+      balance = S.balances[A.canister_id];
+      freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
-      status = simple_status(S.canister_status[M.receiver]);
+      status = simple_status(S.canister_status[A.canister_id]);
     }
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
@@ -3199,14 +3200,19 @@ Conditions::
 State after::
 ....
 S with
-    canisters[A.canister_id] =
-      { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
+    canisters[A.canister_id] = {
+      wasm_state = New_state;
+      module = Mod;
+      raw_module = A.wasm_module;
+      public_custom_sections = parse_public_custom_sections(A.wasm_module);
+      private_custom_sections = parse_private_custom_sections(A.wasm_module);
+    }
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
-        origin = M.origin
-        response = Reply (candid())
-        refunded_cycles = M.transferred_cycles
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
       }
 ....
 

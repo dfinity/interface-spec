@@ -157,6 +157,8 @@ typedef ('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module =
 
 setup_lifting type_definition_canister_module
 
+lift_definition canister_module_init :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'canid \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> trap_return + 'w cycles_return" is "init" .
+
 lift_definition dispatch_method :: "'s \<Rightarrow> ('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
   ((('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c) update_func) +
    (('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's) query_func)) option" is
@@ -333,6 +335,9 @@ context fixes
   and principal_of_uid :: "'uid \<Rightarrow> 'p"
   and principal_of_canid :: "'canid \<Rightarrow> 'p"
   and canid_of_principal :: "'p \<Rightarrow> 'canid option"
+  and parse_wasm_mod :: "'b \<Rightarrow> ('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module option"
+  and parse_public_custom_sections :: "'b \<Rightarrow> ('s, 'b) list_map option"
+  and parse_private_custom_sections :: "'b \<Rightarrow> ('s, 'b) list_map option"
 begin
 
 (* Type conversion functions *)
@@ -354,8 +359,14 @@ definition candid_parse_controllers :: "'b \<Rightarrow> 'p set option" where
       Some (the ` parse_principal ` candid_unwrap_blob ` set xs)
     else None | _ \<Rightarrow> None)"
 
+definition candid_parse_text :: "'b \<Rightarrow> 's list \<Rightarrow> 's option" where
+  "candid_parse_text b s = (case candid_nested_lookup b s of Some (Candid_text t') \<Rightarrow> Some t' | _ \<Rightarrow> None)"
+
+definition candid_parse_blob :: "'b \<Rightarrow> 's list \<Rightarrow> 'b option" where
+  "candid_parse_blob b s = (case candid_nested_lookup b s of Some (Candid_blob b') \<Rightarrow> Some b' | _ \<Rightarrow> None)"
+
 definition candid_parse_cid :: "'b \<Rightarrow> 'canid option" where
-  "candid_parse_cid b = (case candid_nested_lookup b [encode_string ''canister_id''] of Some (Candid_blob p) \<Rightarrow> canid_of_blob p | _ \<Rightarrow> None)"
+  "candid_parse_cid b = (case candid_parse_blob b [encode_string ''canister_id''] of Some b' \<Rightarrow> canid_of_blob b' | _ \<Rightarrow> None)"
 
 fun candid_of_can_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarrow> ('s, 'b, 'p) candid" where
   "candid_of_can_status Running = Candid_text (encode_string ''Running'')"
@@ -989,6 +1000,79 @@ proof -
     by (auto simp: ic_canister_status_pre_def ic_canister_status_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
 
+
+
+(* System transition: IC Management Canister: Code installation [DONE] *)
+
+definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_code_installation_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''install_code'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (candid_parse_text d [encode_string ''mode''], candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
+      (Some mode, Some w, Some a) \<Rightarrow>
+    (case parse_wasm_mod w of Some m \<Rightarrow>
+    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow>
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
+      (Some t, Some bal, Some can_status) \<Rightarrow>
+      let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+      ((mode = encode_string ''install'' \<and> (case list_map_get (canisters S) cid of Some None \<Rightarrow> True | _ \<Rightarrow> False)) \<or> mode = encode_string ''reinstall'') \<and>
+      cer \<in> ctrls \<and>
+      (case canister_module_init m (cid, a, cer, env) of Inl _ \<Rightarrow> False
+      | Inr ret \<Rightarrow> cycles_return.cycles_used ret \<le> bal) \<and>
+      parse_public_custom_sections w \<noteq> None \<and>
+      parse_private_custom_sections w \<noteq> None
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_code_installation_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_code_installation_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (candid_parse_text d [encode_string ''mode''], candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
+      (Some mode, Some w, Some a) \<Rightarrow>
+    (case parse_wasm_mod w of Some m \<Rightarrow>
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
+      (Some t, Some bal, Some can_status) \<Rightarrow>
+      let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr>;
+      (new_state, cyc_used) = (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> (cycles_return.return ret, cycles_return.cycles_used ret)) in
+    S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
+        public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
+      balances := list_map_set (balances S) cid (bal - cyc_used),
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))"
+
+definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_code_installation_burned_cycles n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
+      (Some w, Some a) \<Rightarrow>
+    (case parse_wasm_mod w of Some m \<Rightarrow>
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
+      (Some t, Some bal, Some can_status) \<Rightarrow>
+      let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+      (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> cycles_return.cycles_used ret))))))"
+
+lemma ic_code_installation_cycles_inv:
+  assumes "ic_code_installation_pre n S"
+  shows "total_cycles S = total_cycles (ic_code_installation_post n memory S) + ic_code_installation_burned_cycles n memory S"
+proof -
+  obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    using assms
+    by (auto simp: ic_code_installation_pre_def split: message.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_code_installation_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms list_map_sum_in_ge[where ?f="balances S" and ?g=id and ?x="the (candid_parse_cid d)"]
+    by (auto simp: ic_code_installation_pre_def ic_code_installation_post_def ic_code_installation_burned_cycles_def total_cycles_def Let_def msgs list_map_sum_in[where ?f="balances S"] split: message.splits option.splits sum.splits prod.splits)
+qed
+
 end
 
 export_code request_submission_pre request_submission_post
@@ -1003,6 +1087,7 @@ export_code request_submission_pre request_submission_post
   ic_canister_creation_pre ic_canister_creation_post
   ic_update_settings_pre ic_update_settings_post
   ic_canister_status_pre ic_canister_status_post
+  ic_code_installation_pre ic_code_installation_post
 in Haskell module_name IC file_prefix code
 
 end
