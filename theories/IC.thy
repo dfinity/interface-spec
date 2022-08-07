@@ -1637,8 +1637,8 @@ qed
 
 (* System transition: Callback invocation (not deleted) [DONE] *)
 
-definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "callback_invocation_not_deleted_pre n b S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "callback_invocation_not_deleted_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
       (case list_map_get (balances S) cid of Some bal \<Rightarrow> \<not>call_ctxt_deleted ctxt
@@ -1646,8 +1646,8 @@ definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> 'b \<Righta
     | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "callback_invocation_not_deleted_post n b S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "callback_invocation_not_deleted_post n S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
       (case list_map_get (balances S) cid of Some bal \<Rightarrow>
@@ -1655,8 +1655,8 @@ definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> 'b \<Right
           messages := take n (messages S) @ Func_message ctxt_id cid (Callback c resp ref_cycles) Unordered # drop (Suc n) (messages S)\<rparr>)))"
 
 lemma callback_invocation_not_deleted_cycles_inv:
-  assumes "callback_invocation_not_deleted_pre n b S"
-  shows "total_cycles S = total_cycles (callback_invocation_not_deleted_post n b S)"
+  assumes "callback_invocation_not_deleted_pre n S"
+  shows "total_cycles S = total_cycles (callback_invocation_not_deleted_post n S)"
 proof -
   obtain ctxt_id c resp ref_cycles where msg: "messages S ! n = Response_message (From_canister ctxt_id c) resp ref_cycles"
     using assms
@@ -1678,8 +1678,8 @@ qed
 
 (* System transition: Callback invocation (deleted) [DONE] *)
 
-definition callback_invocation_deleted_pre :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "callback_invocation_deleted_pre n b S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+definition callback_invocation_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "callback_invocation_deleted_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
       (case list_map_get (balances S) cid of Some bal \<Rightarrow> call_ctxt_deleted ctxt
@@ -1687,8 +1687,8 @@ definition callback_invocation_deleted_pre :: "nat \<Rightarrow> 'b \<Rightarrow
     | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition callback_invocation_deleted_post :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "callback_invocation_deleted_post n b S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+definition callback_invocation_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "callback_invocation_deleted_post n S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
       (case list_map_get (balances S) cid of Some bal \<Rightarrow>
@@ -1696,8 +1696,8 @@ definition callback_invocation_deleted_post :: "nat \<Rightarrow> 'b \<Rightarro
           messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>)))"
 
 lemma callback_invocation_deleted_cycles_inv:
-  assumes "callback_invocation_deleted_pre n b S"
-  shows "total_cycles S = total_cycles (callback_invocation_deleted_post n b S)"
+  assumes "callback_invocation_deleted_pre n S"
+  shows "total_cycles S = total_cycles (callback_invocation_deleted_post n S)"
 proof -
   obtain ctxt_id c resp ref_cycles where msg: "messages S ! n = Response_message (From_canister ctxt_id c) resp ref_cycles"
     using assms
@@ -1713,6 +1713,47 @@ proof -
     using assms
     by (auto simp: callback_invocation_deleted_pre_def callback_invocation_deleted_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
+qed
+
+
+
+(* System transition: Respond to user request [DONE] *)
+
+definition respond_to_user_request_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "respond_to_user_request_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
+    (case list_map_get (requests S) req of Some Processing \<Rightarrow>
+      True
+    | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition respond_to_user_request_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "respond_to_user_request_post n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
+    let req_resp = (case resp of Reply b \<Rightarrow> Replied b | response.Reject c b \<Rightarrow> Rejected c b) in
+    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+      requests := list_map_set (requests S) req req_resp\<rparr>)"
+
+definition respond_to_user_request_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "respond_to_user_request_lost_cycles n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
+    ref_cycles)"
+
+lemma respond_to_user_request_cycles_monotonic:
+  assumes "respond_to_user_request_pre n S"
+  shows "total_cycles S = total_cycles (respond_to_user_request_post n S) + respond_to_user_request_lost_cycles n S"
+proof -
+  obtain req resp ref_cycles where msg: "messages S ! n = Response_message (From_user req) resp ref_cycles"
+    using assms
+    by (auto simp: respond_to_user_request_pre_def split: message.splits option.splits call_origin.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Response_message (From_user req) resp ref_cycles # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: respond_to_user_request_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: respond_to_user_request_pre_def respond_to_user_request_post_def respond_to_user_request_lost_cycles_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
+        list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits request_status.splits)
 qed
 
 end

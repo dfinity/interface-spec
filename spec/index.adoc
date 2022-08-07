@@ -3649,8 +3649,8 @@ State after::
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Replied R   if response = Reply R
-      | Rejected R  if response = Reject R
+      | Replied R        if response = Reply R
+      | Rejected (c, R)  if response = Reject (c, R)
 ....
 
 NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
