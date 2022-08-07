@@ -471,7 +471,7 @@ fun simple_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarr
 
 
 
-(* System transition: API Request submission [DONE] *)
+(* System transition: API Request submission [Precondition relaxed] *)
 
 definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "request_submission_pre E S = (case content E of Inl req \<Rightarrow> req \<notin> list_map_dom (requests S) | _ \<Rightarrow> False)"
@@ -911,8 +911,8 @@ lemma call_context_removal_cycles_monotonic:
 
 (* System transition: IC Management Canister: Canister creation [DONE] *)
 
-definition ic_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_canister_creation_pre n cid S = (n < length (messages S) \<and> (case messages S ! n of
+definition ic_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_creation_pre n cid t S = (n < length (messages S) \<and> (case messages S ! n of
     Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
       (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
       cee = ic_principal \<and>
@@ -939,7 +939,7 @@ definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> 
       canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
 
 lemma ic_canister_creation_cycles_inv:
-  assumes "ic_canister_creation_pre n cid S"
+  assumes "ic_canister_creation_pre n cid t S"
   shows "total_cycles S = total_cycles (ic_canister_creation_post n cid t S)"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
@@ -1004,8 +1004,8 @@ qed
 
 (* System transition: IC Management Canister: Canister status [DONE] *)
 
-definition ic_canister_status_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_canister_status_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_canister_status_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_status_pre n m S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
     cee = ic_principal \<and>
     mn = encode_string ''canister_status'' \<and>
@@ -1017,7 +1017,7 @@ definition ic_canister_status_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
   | _ \<Rightarrow> False))"
 
 definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_canister_status_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+  "ic_canister_status_post n m S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d);
     hash = (case the (list_map_get (canisters S) cid) of None \<Rightarrow> Candid_null
       | Some m \<Rightarrow> Candid_opt (Candid_blob (sha_256 (raw_module m)))) in
@@ -1025,12 +1025,12 @@ definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 
       (Candid_record (list_map_init [(encode_string ''status'', candid_of_can_status (the (list_map_get (canister_status S) cid))),
         (encode_string ''module_hash'', hash),
         (encode_string ''controllers'', Candid_vec (map (Candid_blob \<circ> blob_of_principal) (sorted_list_of_set (the (list_map_get (controllers S) cid))))),
-        (encode_string ''memory_size'', Candid_nat memory),
+        (encode_string ''memory_size'', Candid_nat m),
         (encode_string ''cycles'', Candid_nat (the (list_map_get (balances S) cid)))])))) trans_cycles]\<rparr>)"
 
 lemma ic_canister_status_cycles_inv:
-  assumes "ic_canister_status_pre n S"
-  shows "total_cycles S = total_cycles (ic_canister_status_post n memory S)"
+  assumes "ic_canister_status_pre n m S"
+  shows "total_cycles S = total_cycles (ic_canister_status_post n m S)"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1791,12 +1791,12 @@ lemma request_cleanup_expired_cycles_inv:
 
 (* System transition: Canister out of cycles [DONE] *)
 
-definition canister_out_of_cycles_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition canister_out_of_cycles_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_out_of_cycles_pre cid S = (case list_map_get (balances S) cid of Some bal \<Rightarrow>
     bal = 0
   | _ \<Rightarrow> False)"
 
-definition canister_out_of_cycles_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition canister_out_of_cycles_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "canister_out_of_cycles_post cid S = (
     let call_ctxt_to_msg = (\<lambda>ctxt.
       if call_ctxt_canister ctxt = cid \<and> call_ctxt_needs_to_respond ctxt then
@@ -1877,6 +1877,87 @@ lemma system_time_progress_cycles_inv:
   assumes "system_time_progress_pre t1 S"
   shows "total_cycles S = total_cycles (system_time_progress_post t1 S)"
   by (auto simp: system_time_progress_post_def total_cycles_def)
+
+
+
+(* State machine *)
+
+inductive ic_steps :: "'sig \<Rightarrow> 'sd \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_steps sig sd S S"
+| request_submission: "ic_steps sig sd S0 S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 (request_submission_post E S)"
+| request_rejection: "ic_steps sig sd S0 S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 (request_rejection_post E req code msg S)"
+| initiate_canister_call: "ic_steps sig sd S0 S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 (initiate_canister_call_post req S)"
+| call_reject: "ic_steps sig sd S0 S \<Longrightarrow> call_reject_pre n S \<Longrightarrow> ic_steps sig sd S0 (call_reject_post n S)"
+| call_context_create: "ic_steps sig sd S0 S \<Longrightarrow> call_context_create_pre n ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_create_post n ctxt_id S)"
+| call_context_heartbeat: "ic_steps sig sd S0 S \<Longrightarrow> call_context_heartbeat_pre cee ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_heartbeat_post cee ctxt_id S)"
+| message_execution: "ic_steps sig sd S0 S \<Longrightarrow> message_execution_pre n S \<Longrightarrow> ic_steps sig sd S0 (message_execution_post n S)"
+| call_context_starvation: "ic_steps sig sd S0 S \<Longrightarrow> call_context_starvation_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_starvation_post ctxt_id S)"
+| call_context_removal: "ic_steps sig sd S0 S \<Longrightarrow> call_context_removal_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_removal_post ctxt_id S)"
+| ic_canister_creation: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_creation_pre n cid t S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_creation_post n cid t S)"
+| ic_update_settings: "ic_steps sig sd S0 S \<Longrightarrow> ic_update_settings_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_update_settings_post n S)"
+| ic_canister_status: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_status_pre n m S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_status_post n m S)"
+| ic_code_installation: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_installation_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_installation_post n S)"
+| ic_code_upgrade: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_upgrade_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_upgrade_post n S)"
+| ic_code_uninstallation: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_uninstallation_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_uninstallation_post n S)"
+| ic_canister_stop_running: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_running_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_running_post n S)"
+| ic_canister_stop_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_stopping_post n S)"
+| ic_canister_stop_done_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_done_stopping_pre cid S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_done_stopping_post cid S)"
+| ic_canister_stop_stopped: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_stopped_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_stopped_post n S)"
+| ic_canister_start_not_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_start_not_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_start_not_stopping_post n S)"
+| ic_canister_start_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_start_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_start_stopping_post n S)"
+| ic_canister_deletion: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_deletion_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_deletion_post n S)"
+| ic_depositing_cycles: "ic_steps sig sd S0 S \<Longrightarrow> ic_depositing_cycles_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_depositing_cycles_post n S)"
+| ic_random_numbers: "ic_steps sig sd S0 S \<Longrightarrow> ic_random_numbers_pre n b S \<Longrightarrow> ic_steps sig sd S0 (ic_random_numbers_post n b S)"
+| callback_invocation_not_deleted: "ic_steps sig sd S0 S \<Longrightarrow> callback_invocation_not_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 (callback_invocation_not_deleted_post n S)"
+| callback_invocation_deleted: "ic_steps sig sd S0 S \<Longrightarrow> callback_invocation_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 (callback_invocation_deleted_post n S)"
+| respond_to_user_request: "ic_steps sig sd S0 S \<Longrightarrow> respond_to_user_request_pre n S \<Longrightarrow> ic_steps sig sd S0 (respond_to_user_request_post n S)"
+| request_cleanup: "ic_steps sig sd S0 S \<Longrightarrow> request_cleanup_pre req S \<Longrightarrow> ic_steps sig sd S0 (request_cleanup_post req S)"
+| request_cleanup_expired: "ic_steps sig sd S0 S \<Longrightarrow> request_cleanup_expired_pre req S \<Longrightarrow> ic_steps sig sd S0 (request_cleanup_expired_post req S)"
+| canister_out_of_cycles: "ic_steps sig sd S0 S \<Longrightarrow> canister_out_of_cycles_pre cid S \<Longrightarrow> ic_steps sig sd S0 (canister_out_of_cycles_post cid S)"
+| canister_time_progress: "ic_steps sig sd S0 S \<Longrightarrow> canister_time_progress_pre cid t1 S \<Longrightarrow> ic_steps sig sd S0 (canister_time_progress_post cid t1 S)"
+| cycle_consumption: "ic_steps sig sd S0 S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig sd S0 (cycle_consumption_post cid b1 S)"
+| system_time_progress: "ic_steps sig sd S0 S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig sd S0 (system_time_progress_post t1 S)"
+
+lemma total_cycles_monotonic:
+  assumes "ic_steps sig sd S0 S"
+  shows "total_cycles S0 \<ge> total_cycles S"
+  using assms
+  apply (induction sig sd S0 S rule: ic_steps.induct)
+                      apply auto[1]
+  using request_submission_cycles_inv apply fastforce
+  using request_rejection_cycles_inv apply fastforce
+  using initiate_canister_call_cycles_inv apply fastforce
+  using call_reject_cycles_inv apply fastforce
+  using call_context_create_cycles_inv apply fastforce
+  using call_context_heartbeat_cycles_inv apply fastforce
+  using message_execution_cycles_monotonic apply fastforce
+  using call_context_starvation_cycles_inv apply fastforce
+  using call_context_removal_cycles_monotonic apply fastforce
+  using ic_canister_creation_cycles_inv apply fastforce
+  using ic_update_settings_cycles_inv apply fastforce
+  using ic_canister_status_cycles_inv apply fastforce
+  using ic_code_installation_cycles_inv apply fastforce
+  using ic_code_upgrade_cycles_inv apply fastforce
+  using ic_code_uninstallation_cycles_inv apply fastforce
+  using ic_canister_stop_running_cycles_inv apply fastforce
+  using ic_canister_stop_stopping_cycles_inv apply fastforce
+  using ic_canister_stop_done_stopping_cycles_inv apply fastforce
+  using ic_canister_stop_stopped_cycles_inv apply fastforce
+  using ic_canister_start_not_stopping_cycles_inv apply fastforce
+  using ic_canister_start_stopping_cycles_inv apply fastforce
+  using ic_canister_deletion_cycles_monotonic apply fastforce
+  using ic_depositing_cycles_cycles_monotonic apply fastforce
+  using ic_random_numbers_cycles_inv apply fastforce
+  using callback_invocation_not_deleted_cycles_inv apply fastforce
+  using callback_invocation_deleted_cycles_inv apply fastforce
+  using respond_to_user_request_cycles_monotonic apply fastforce
+  using request_cleanup_cycles_inv apply fastforce
+  using request_cleanup_expired_cycles_inv apply fastforce
+  using canister_out_of_cycles_cycles_inv apply fastforce
+  using canister_time_progress_cycles_inv apply fastforce
+  using cycle_consumption_cycles_monotonic apply fastforce
+  using system_time_progress_cycles_inv apply fastforce
+  done
 
 end
 
