@@ -355,6 +355,7 @@ context fixes
   and MAX_CYCLES_PER_RESPONSE :: nat
   and MAX_CANISTER_BALANCE :: nat
   and ic_freezing_limit :: "('p :: linorder, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> 'canid \<Rightarrow> nat"
+  and blob_length :: "'b \<Rightarrow> nat"
   and sha_256 :: "'b \<Rightarrow> 'b"
   and ic_principal :: 'canid
   and blob_of_candid :: "('s, 'b, 'p) candid \<Rightarrow> 'b"
@@ -890,7 +891,7 @@ definition call_context_removal_post :: "'cid \<Rightarrow>
   ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "call_context_removal_post ctxt_id S = S\<lparr>call_contexts := list_map_del (call_contexts S) ctxt_id\<rparr>"
 
-definition call_context_removal_lost_cycles :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition call_context_removal_lost_cycles :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "call_context_removal_lost_cycles ctxt_id S = call_ctxt_available_cycles (the (list_map_get (call_contexts S) ctxt_id))"
 
 lemma call_context_removal_cycles_monotonic:
@@ -1246,7 +1247,7 @@ qed
 
 (* System transition: IC Management Canister: Canister deletion [DONE] *)
 
-definition ic_canister_deletion_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition ic_canister_deletion_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_canister_deletion_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
     cee = ic_principal \<and>
@@ -1257,7 +1258,7 @@ definition ic_canister_deletion_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_deletion_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     S\<lparr>canisters := list_map_del (canisters S) cid,
@@ -1269,7 +1270,7 @@ definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       certified_data := list_map_del (certified_data S) cid,
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
-definition ic_canister_deletion_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition ic_canister_deletion_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "ic_canister_deletion_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid))"
 
@@ -1298,7 +1299,7 @@ qed
 
 (* System transition: IC Management Canister: Depositing cycles [DONE] *)
 
-definition ic_depositing_cycles_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition ic_depositing_cycles_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_depositing_cycles_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
     cee = ic_principal \<and>
@@ -1309,14 +1310,14 @@ definition ic_depositing_cycles_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition ic_depositing_cycles_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition ic_depositing_cycles_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_depositing_cycles_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case list_map_get (balances S) cid of Some bal \<Rightarrow>
     S\<lparr>balances := list_map_set (balances S) cid (min (bal + trans_cycles) MAX_CANISTER_BALANCE),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) 0]\<rparr>))"
 
-definition ic_depositing_cycles_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition ic_depositing_cycles_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "ic_depositing_cycles_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid) + trans_cycles) - MAX_CANISTER_BALANCE"
 
@@ -1341,6 +1342,42 @@ proof -
         list_map_sum_in[where ?g=id and ?f="balances S"] min_def split: message.splits option.splits sum.splits)
 qed
 
+
+
+(* System transition: IC Management Canister: Random numbers [DONE] *)
+
+definition ic_random_numbers_pre :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_random_numbers_pre n b S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''raw_rand'' \<and>
+    d = blob_of_candid Candid_empty \<and>
+    blob_length b = 32
+  | _ \<Rightarrow> False))"
+
+definition ic_random_numbers_post :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_random_numbers_post n b S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid (Candid_blob b))) trans_cycles]\<rparr>)"
+
+lemma ic_random_numbers_cycles_inv:
+  assumes "ic_random_numbers_pre n b S"
+  shows "total_cycles S = total_cycles (ic_random_numbers_post n b S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    using assms
+    by (auto simp: ic_random_numbers_pre_def split: message.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_random_numbers_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_random_numbers_pre_def ic_random_numbers_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs)
+qed
+
 end
 
 export_code request_submission_pre request_submission_post
@@ -1359,6 +1396,8 @@ export_code request_submission_pre request_submission_post
   ic_code_upgrade_pre ic_code_upgrade_post
   ic_code_uninstallation_pre ic_code_uninstallation_post
   ic_canister_deletion_pre ic_canister_deletion_post
+  ic_depositing_cycles_pre ic_depositing_cycles_post
+  ic_random_numbers_pre ic_random_numbers_post
 in Haskell module_name IC file_prefix code
 
 end
