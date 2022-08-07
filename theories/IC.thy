@@ -1294,6 +1294,53 @@ proof -
         list_map_del_sum[where ?g=id and ?f="balances S"] split: message.splits option.splits sum.splits)
 qed
 
+
+
+(* System transition: IC Management Canister: Depositing cycles [DONE] *)
+
+definition ic_depositing_cycles_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_depositing_cycles_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''deposit_cycles'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+      True
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_depositing_cycles_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_depositing_cycles_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+    S\<lparr>balances := list_map_set (balances S) cid (min (bal + trans_cycles) MAX_CANISTER_BALANCE),
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) 0]\<rparr>))"
+
+definition ic_depositing_cycles_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_depositing_cycles_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid) + trans_cycles) - MAX_CANISTER_BALANCE"
+
+lemma ic_depositing_cycles_cycles_monotonic:
+  assumes "ic_depositing_cycles_pre n S"
+  shows "total_cycles S = total_cycles (ic_depositing_cycles_post n S) + ic_depositing_cycles_lost_cycles n S"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_depositing_cycles_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_depositing_cycles_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms list_map_sum_in_ge[where ?g=id and ?f="balances S" and ?x=cid]
+    by (auto simp: ic_depositing_cycles_pre_def ic_depositing_cycles_post_def ic_depositing_cycles_lost_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        list_map_sum_in[where ?g=id and ?f="balances S"] min_def split: message.splits option.splits sum.splits)
+qed
+
 end
 
 export_code request_submission_pre request_submission_post
