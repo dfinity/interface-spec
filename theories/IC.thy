@@ -17,7 +17,10 @@ hide_const (open) map set rel
 lift_definition list_map_dom :: "('a, 'b) list_map \<Rightarrow> 'a set" is
   "set \<circ> map fst" .
 
-lift_definition list_map_vals :: "('a, 'b) list_map \<Rightarrow> 'b set" is
+lift_definition list_map_vals :: "('a, 'b) list_map \<Rightarrow> 'b list" is
+  "map snd" .
+
+lift_definition list_map_range :: "('a, 'b) list_map \<Rightarrow> 'b set" is
   "set \<circ> map snd" .
 
 lift_definition list_map_sum_vals :: "('b \<Rightarrow> nat) \<Rightarrow> ('a, 'b) list_map \<Rightarrow> nat" is
@@ -44,6 +47,29 @@ lift_definition list_map_init :: "('a \<times> 'b) list \<Rightarrow> ('a, 'b) l
   "\<lambda>xys. AList.updates (map fst xys) (map snd xys) []"
   using distinct_updates
   by force
+
+lift_definition list_map_map :: "('b \<Rightarrow> 'c) \<Rightarrow> ('a, 'b) list_map \<Rightarrow> ('a, 'c) list_map" is
+  "\<lambda>f xs. map (\<lambda>(k, v). (k, f v)) xs"
+  by (auto simp: comp_def case_prod_beta)
+
+lemma list_map_sum_vals_split: "(\<And>ctxt. ctxt \<in> list_map_range xs \<Longrightarrow> f (g ctxt) \<le> f ctxt) \<Longrightarrow> list_map_sum_vals f xs =
+  list_map_sum_vals id
+    (list_map_map (\<lambda>ctxt. if P ctxt then f ctxt - f (g ctxt) else 0) xs) +
+  list_map_sum_vals f
+    (list_map_map (\<lambda>ctxt. if P ctxt then g ctxt else ctxt) xs)"
+  apply (transfer fixing: f g P)
+  subgoal for xs
+    by (induction xs) auto
+  done
+
+lemma list_map_sum_vals_filter:
+  assumes "\<And>b. b \<in> list_map_range xs \<Longrightarrow> P b = None \<Longrightarrow> f b = 0" "\<And>b y. b \<in> list_map_range xs \<Longrightarrow> P b = Some y \<Longrightarrow> f b = g y"
+  shows "list_map_sum_vals id (list_map_map f xs) = sum_list (map g (List.map_filter P (list_map_vals xs)))"
+  using assms
+  apply (transfer fixing: f g P)
+  subgoal for xs
+    by (induction xs) (auto simp: List.map_filter_def)
+  done
 
 lemma list_map_sum_in_ge_aux:
   fixes g :: "'a \<Rightarrow> nat"
@@ -199,14 +225,13 @@ typedef ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt = "{ctxt :: ('p, 'uid, 'c
 
 setup_lifting type_definition_call_ctxt
 
-lift_definition call_ctxt_origin :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) call_origin" is
-  "\<lambda>ctxt. origin ctxt" .
+lift_definition call_ctxt_canister :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> 'canid" is "canister" .
 
-lift_definition call_ctxt_needs_to_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> bool" is
-  "\<lambda>ctxt. needs_to_respond ctxt" .
+lift_definition call_ctxt_origin :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) call_origin" is "origin" .
 
-lift_definition call_ctxt_available_cycles :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> nat" is
-  "\<lambda>ctxt. available_cycles ctxt" .
+lift_definition call_ctxt_needs_to_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> bool" is needs_to_respond .
+
+lift_definition call_ctxt_available_cycles :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> nat" is available_cycles .
 
 lemma call_ctxt_inv: "\<not>call_ctxt_needs_to_respond x2 \<Longrightarrow> call_ctxt_available_cycles x2 = 0"
   by transfer auto
@@ -233,6 +258,10 @@ lemma call_ctxt_deduct_cycles_needs_to_respond[simp]: "call_ctxt_needs_to_respon
 
 lemma call_ctxt_deduct_cycles_available_cycles[simp]: "call_ctxt_available_cycles (call_ctxt_deduct_cycles n ctxt) = call_ctxt_available_cycles ctxt - n"
   by transfer auto
+
+lift_definition call_ctxt_delete :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
+  "\<lambda>ctxt. ctxt\<lparr>deleted := True, needs_to_respond := False, available_cycles := 0\<rparr>"
+  by auto
 
 (* Calls and Messages *)
 
@@ -319,6 +348,7 @@ fun candid_lookup :: "('s, 'b, 'p) candid \<Rightarrow> 's \<Rightarrow> ('s, 'b
 
 context fixes
   CANISTER_ERROR :: reject_code
+  and CANISTER_REJECT :: reject_code
   and SYS_FATAL :: reject_code
   and SYS_TRANSIENT :: reject_code
   and MAX_CYCLES_PER_MESSAGE :: nat
@@ -401,6 +431,9 @@ lemma call_ctxt_respond_carried_cycles[simp]: "call_ctxt_carried_cycles (call_ct
 
 lemma call_ctxt_carried_cycles: "call_ctxt_carried_cycles ctxt = (if call_ctxt_needs_to_respond ctxt
   then call_ctxt_available_cycles ctxt + carried_cycles (call_ctxt_origin ctxt) else 0)"
+  by transfer auto
+
+lemma call_ctxt_delete_carried_cycles[simp]: "call_ctxt_carried_cycles (call_ctxt_delete ctxt) = 0"
   by transfer auto
 
 definition total_cycles :: "('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -810,7 +843,7 @@ definition call_context_starvation_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid,
         Call_message orig _ _ _ _ _ _ \<Rightarrow> calling_context orig \<noteq> Some ctxt_id
       | Response_message orig _ _ \<Rightarrow> calling_context orig \<noteq> Some ctxt_id
       | _ \<Rightarrow> True) \<and>
-    (\<forall>other_call_context \<in> list_map_vals (call_contexts S).
+    (\<forall>other_call_context \<in> list_map_range (call_contexts S).
       call_ctxt_needs_to_respond other_call_context \<longrightarrow>
       calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id)
   | None \<Rightarrow> False)"
@@ -846,7 +879,7 @@ definition call_context_removal_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b
           Call_message ctxt _ _ _ _ _ _ \<Rightarrow> calling_context ctxt \<noteq> Some ctxt_id
         | Response_message ctxt _ _ \<Rightarrow> calling_context ctxt \<noteq> Some ctxt_id
         | _ \<Rightarrow> True) \<and>
-      (\<forall>other_call_context \<in> list_map_vals (call_contexts S).
+      (\<forall>other_call_context \<in> list_map_range (call_contexts S).
         call_ctxt_needs_to_respond other_call_context \<longrightarrow>
         calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id)
     | None \<Rightarrow> False))"
@@ -1027,8 +1060,8 @@ definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition ic_code_installation_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_code_installation_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_code_installation_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case candid_parse_cid d of Some cid \<Rightarrow>
     (case (candid_parse_text d [encode_string ''mode''], candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
@@ -1057,7 +1090,7 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> nat \<Righta
 
 lemma ic_code_installation_cycles_inv:
   assumes "ic_code_installation_pre n S"
-  shows "total_cycles S = total_cycles (ic_code_installation_post n memory S) + ic_code_installation_burned_cycles n memory S"
+  shows "total_cycles S = total_cycles (ic_code_installation_post n S) + ic_code_installation_burned_cycles n memory S"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1099,8 +1132,8 @@ definition ic_code_upgrade_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 
     | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition ic_code_upgrade_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_code_upgrade_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_code_upgrade_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_code_upgrade_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case candid_parse_cid d of Some cid \<Rightarrow>
     (case (candid_parse_text d [encode_string ''mode''], candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
@@ -1132,7 +1165,7 @@ definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> nat \<Rightarrow>
 
 lemma ic_code_upgrade_cycles_inv:
   assumes "ic_code_upgrade_pre n S"
-  shows "total_cycles S = total_cycles (ic_code_upgrade_post n memory S) + ic_code_upgrade_burned_cycles n memory S"
+  shows "total_cycles S = total_cycles (ic_code_upgrade_post n S) + ic_code_upgrade_burned_cycles n memory S"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1147,6 +1180,62 @@ proof -
   show ?thesis
     using assms list_map_sum_in_ge[where ?f="balances S" and ?g=id and ?x="the (candid_parse_cid d)"]
     by (auto simp: ic_code_upgrade_pre_def ic_code_upgrade_post_def ic_code_upgrade_burned_cycles_def total_cycles_def Let_def msgs list_map_sum_in[where ?f="balances S"] split: message.splits option.splits sum.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Code uninstallation [DONE] *)
+
+definition ic_code_uninstallation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_code_uninstallation_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''uninstall_code'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_code_uninstallation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_code_uninstallation_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    let call_ctxt_to_msg = (\<lambda>ctxt.
+      if call_ctxt_canister ctxt = cid \<and> call_ctxt_needs_to_respond ctxt then
+        Some (Response_message (call_ctxt_origin ctxt) (response.Reject CANISTER_REJECT (encode_string ''Canister has been uninstalled'')) (call_ctxt_available_cycles ctxt))
+      else None);
+    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) in
+    S\<lparr>canisters := list_map_set (canisters S) cid None, certified_data := list_map_set (certified_data S) cid empty_blob,
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles] @
+        List.map_filter call_ctxt_to_msg (list_map_vals (call_contexts S)),
+      call_contexts := list_map_map call_ctxt_to_ctxt (call_contexts S)\<rparr>))"
+
+lemma ic_code_uninstallation_cycles_inv:
+  assumes "ic_code_uninstallation_pre n S"
+  shows "total_cycles S = total_cycles (ic_code_uninstallation_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_code_uninstallation_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_code_uninstallation_pre_def msg younger_def older_def nth_append)
+  have F1: "list_map_sum_vals call_ctxt_carried_cycles (call_contexts S) =
+    list_map_sum_vals id
+      (list_map_map (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_carried_cycles ctxt else 0) (call_contexts S)) +
+    list_map_sum_vals call_ctxt_carried_cycles
+      (list_map_map (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) (call_contexts S))"
+    using list_map_sum_vals_split[where ?f="call_ctxt_carried_cycles" and ?g="call_ctxt_delete", unfolded call_ctxt_delete_carried_cycles diff_zero]
+    by auto
+  show ?thesis
+    using assms
+    by (auto simp: ic_code_uninstallation_pre_def ic_code_uninstallation_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs F1
+        split: message.splits option.splits sum.splits if_splits intro!: list_map_sum_vals_filter)
 qed
 
 end
@@ -1165,6 +1254,7 @@ export_code request_submission_pre request_submission_post
   ic_canister_status_pre ic_canister_status_post
   ic_code_installation_pre ic_code_installation_post
   ic_code_upgrade_pre ic_code_upgrade_post
+  ic_code_uninstallation_pre ic_code_uninstallation_post
 in Haskell module_name IC file_prefix code
 
 end
