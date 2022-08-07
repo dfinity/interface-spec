@@ -1250,6 +1250,253 @@ qed
 
 
 
+(* System transition: IC Management Canister: Stopping a canister (running) [DONE] *)
+
+definition ic_canister_stop_running_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_stop_running_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''stop_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some Running, Some ctrls) \<Rightarrow>
+      cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+definition ic_canister_stop_running_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_stop_running_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    S\<lparr>canister_status := list_map_set (canister_status S) cid (Stopping [(orig, trans_cycles)]),
+      messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>)"
+
+lemma ic_canister_stop_running_cycles_inv:
+  assumes "ic_canister_stop_running_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_stop_running_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_stop_running_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_stop_running_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_stop_running_pre_def ic_canister_stop_running_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Stopping a canister (stopping) [DONE] *)
+
+definition ic_canister_stop_stopping_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_stop_stopping_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''stop_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some (Stopping os), Some ctrls) \<Rightarrow>
+      cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_canister_stop_stopping_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_stop_stopping_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
+    S\<lparr>canister_status := list_map_set (canister_status S) cid (Stopping (os @ [(orig, trans_cycles)])),
+      messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>))"
+
+lemma ic_canister_stop_stopping_cycles_inv:
+  assumes "ic_canister_stop_stopping_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_stop_stopping_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_stop_stopping_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_stop_stopping_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_stop_stopping_pre_def ic_canister_stop_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Stopping a canister (done stopping) [DONE] *)
+
+definition ic_canister_stop_done_stopping_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_stop_done_stopping_pre cid S =
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some (Stopping os), Some ctrls) \<Rightarrow>
+      (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_canister ctxt \<noteq> cid) | _ \<Rightarrow> False)"
+
+definition ic_canister_stop_done_stopping_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_stop_done_stopping_post cid S = (
+    let orig_cycles_to_msg = (\<lambda>(or, cyc). Response_message or (Reply (blob_of_candid Candid_empty)) cyc) in
+    (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
+    S\<lparr>canister_status := list_map_set (canister_status S) cid Stopped,
+      messages := messages S @ map orig_cycles_to_msg os\<rparr>))"
+
+lemma ic_canister_stop_done_stopping_cycles_inv:
+  assumes "ic_canister_stop_done_stopping_pre cid S"
+  shows "total_cycles S = total_cycles (ic_canister_stop_done_stopping_post cid S)"
+proof -
+  have F1: "(message_cycles \<circ> (\<lambda>(or, y). Response_message or (Reply (blob_of_candid Candid_empty)) y)) = (\<lambda>(or, y). carried_cycles or + y)"
+    by auto
+  have F2: "(\<Sum>(or, y)\<leftarrow>xs. carried_cycles or + y) = sum_list (map (carried_cycles \<circ> fst) xs) + sum_list (map snd xs)" for xs
+    by (induction xs) auto
+  show ?thesis
+    using assms list_map_sum_in_ge[where ?g=status_cycles and ?f="canister_status S" and ?x=cid]
+    by (auto simp: ic_canister_stop_done_stopping_pre_def ic_canister_stop_done_stopping_post_def total_cycles_def call_ctxt_carried_cycles Let_def
+        F1 F2 list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Stopping a canister (stopped) [DONE] *)
+
+definition ic_canister_stop_stopped_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_stop_stopped_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''stop_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some Stopped, Some ctrls) \<Rightarrow>
+      cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_canister_stop_stopped_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_stop_stopped_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
+
+lemma ic_canister_stop_stopped_cycles_inv:
+  assumes "ic_canister_stop_stopped_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_stop_stopped_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_stop_stopped_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_stop_stopped_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_stop_stopped_pre_def ic_canister_stop_stopped_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Starting a canister (not stopping) [DONE] *)
+
+definition ic_canister_start_not_stopping_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_start_not_stopping_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''start_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some can_status, Some ctrls) \<Rightarrow>
+      (can_status = Running \<or> can_status = Stopped) \<and> cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_canister_start_not_stopping_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_start_not_stopping_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    S\<lparr>canister_status := list_map_set (canister_status S) cid Running,
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
+
+lemma ic_canister_start_not_stopping_cycles_inv:
+  assumes "ic_canister_start_not_stopping_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_start_not_stopping_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_start_not_stopping_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_start_not_stopping_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_start_not_stopping_pre_def ic_canister_start_not_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Starting a canister (stopping) [DONE] *)
+
+definition ic_canister_start_stopping_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_start_stopping_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''start_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some (Stopping _), Some ctrls) \<Rightarrow>
+      cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_canister_start_stopping_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_start_stopping_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d);
+    orig_cycles_to_msg = (\<lambda>(or, cyc). Response_message or (response.Reject CANISTER_REJECT (encode_string ''Canister has been restarted'')) cyc) in
+    (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
+    S\<lparr>canister_status := list_map_set (canister_status S) cid Running,
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles] @
+      map orig_cycles_to_msg os\<rparr>))"
+
+lemma ic_canister_start_stopping_cycles_inv:
+  assumes "ic_canister_start_stopping_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_start_stopping_post n S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_start_stopping_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_start_stopping_pre_def msg younger_def older_def nth_append)
+  have F1: "(message_cycles \<circ> (\<lambda>(or, y). Response_message or (response.Reject CANISTER_REJECT (encode_string ''Canister has been restarted'')) y)) = (\<lambda>(or, y). carried_cycles or + y)"
+    by auto
+  have F2: "(\<Sum>(or, y)\<leftarrow>xs. carried_cycles or + y) = sum_list (map (carried_cycles \<circ> fst) xs) + sum_list (map snd xs)" for xs
+    by (induction xs) auto
+  show ?thesis
+    using assms list_map_sum_in_ge[where ?g=status_cycles and ?f="canister_status S" and ?x=cid]
+    by (auto simp: ic_canister_start_stopping_pre_def ic_canister_start_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs F1 F2
+        list_map_sum_in[where ?g=status_cycles and ?f="canister_status S"]
+        split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+
+
 (* System transition: IC Management Canister: Canister deletion [DONE] *)
 
 definition ic_canister_deletion_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
@@ -1299,98 +1546,6 @@ proof -
     by (auto simp: ic_canister_deletion_pre_def ic_canister_deletion_post_def ic_canister_deletion_lost_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         list_map_del_sum[where ?g=id and ?f="balances S"] list_map_del_sum[where ?g=status_cycles and ?f="canister_status S"]
         split: message.splits option.splits sum.splits)
-qed
-
-
-
-(* System transition: IC Management Canister: Starting a canister (not stopping) [DONE] *)
-
-definition ic_canister_start_not_stopping_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_canister_start_not_stopping_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
-    cee = ic_principal \<and>
-    mn = encode_string ''start_canister'' \<and>
-    (case candid_parse_cid d of Some cid \<Rightarrow>
-    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some can_status, Some ctrls) \<Rightarrow>
-      (can_status = Running \<or> can_status = Stopped) \<and> cer \<in> ctrls
-    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
-  | _ \<Rightarrow> False))"
-
-definition ic_canister_start_not_stopping_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_canister_start_not_stopping_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let cid = the (candid_parse_cid d) in
-    S\<lparr>canister_status := list_map_set (canister_status S) cid Running,
-      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
-
-lemma ic_canister_start_not_stopping_cycles_inv:
-  assumes "ic_canister_start_not_stopping_pre n S"
-  shows "total_cycles S = total_cycles (ic_canister_start_not_stopping_post n S)"
-proof -
-  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
-    and cid_def: "candid_parse_cid d = Some cid"
-    using assms
-    by (auto simp: ic_canister_start_not_stopping_pre_def split: message.splits option.splits)
-  define older where "older = take n (messages S)"
-  define younger where "younger = drop (Suc n) (messages S)"
-  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
-    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
-    "drop (Suc n - length older) (w # ws) = ws" for w ws
-    using id_take_nth_drop[of n "messages S"] assms
-    by (auto simp: ic_canister_start_not_stopping_pre_def msg younger_def older_def nth_append)
-  show ?thesis
-    using assms
-    by (auto simp: ic_canister_start_not_stopping_pre_def ic_canister_start_not_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
-        list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits)
-qed
-
-
-
-(* System transition: IC Management Canister: Starting a canister (stopping) [DONE] *)
-
-definition ic_canister_start_stopping_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_canister_start_stopping_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
-    cee = ic_principal \<and>
-    mn = encode_string ''start_canister'' \<and>
-    (case candid_parse_cid d of Some cid \<Rightarrow>
-    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid) of (Some (Stopping _), Some ctrls) \<Rightarrow>
-      cer \<in> ctrls
-    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
-  | _ \<Rightarrow> False))"
-
-definition ic_canister_start_stopping_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_canister_start_stopping_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let cid = the (candid_parse_cid d);
-    orig_cycles_to_msg = (\<lambda>(or, cyc). Response_message or (response.Reject CANISTER_REJECT (encode_string ''Canister has been restarted'')) cyc) in
-    (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
-    S\<lparr>canister_status := list_map_set (canister_status S) cid Running,
-      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles] @
-      map orig_cycles_to_msg os\<rparr>))"
-
-lemma ic_canister_start_stopping_cycles_inv:
-  assumes "ic_canister_start_stopping_pre n S"
-  shows "total_cycles S = total_cycles (ic_canister_start_stopping_post n S)"
-proof -
-  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
-    and cid_def: "candid_parse_cid d = Some cid"
-    using assms
-    by (auto simp: ic_canister_start_stopping_pre_def split: message.splits option.splits)
-  define older where "older = take n (messages S)"
-  define younger where "younger = drop (Suc n) (messages S)"
-  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
-    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
-    "drop (Suc n - length older) (w # ws) = ws" for w ws
-    using id_take_nth_drop[of n "messages S"] assms
-    by (auto simp: ic_canister_start_stopping_pre_def msg younger_def older_def nth_append)
-  have F1: "(message_cycles \<circ> (\<lambda>(or, y). Response_message or (response.Reject CANISTER_REJECT (encode_string ''Canister has been restarted'')) y)) = (\<lambda>(or, y). carried_cycles or + y)"
-    by auto
-  have F2: "(\<Sum>(or, y)\<leftarrow>xs. carried_cycles or + y) = sum_list (map (carried_cycles \<circ> fst) xs) + sum_list (map snd xs)" for xs
-    by (induction xs) auto
-  show ?thesis
-    using assms list_map_sum_in_ge[where ?g=status_cycles and ?f="canister_status S" and ?x=cid]
-    by (auto simp: ic_canister_start_stopping_pre_def ic_canister_start_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs F1 F2
-        list_map_sum_in[where ?g=status_cycles and ?f="canister_status S"]
-        split: message.splits option.splits sum.splits can_status.splits)
 qed
 
 

@@ -3358,8 +3358,8 @@ The status of a stopping canister which has no open call contexts is set to `Sto
 
 Conditions::
 ....
-    S.canister_status[A.canister_id] = Stopping Origins
-    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ A.canister_id
+    S.canister_status[Canister_id] = Stopping Origins
+    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ Canister_id
 ....
 State after::
 ....
@@ -3390,12 +3390,12 @@ Conditions::
 State after::
 ....
 S with
-    messages = Older_messages · Younger_messages
-    S.messages = Messages ·
-        ResponseMessage {
-          origin = M.origin
-          response = Reply (candid())
-        }
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
+      }
 ....
 
 ==== IC Management Canister: Starting a canister
