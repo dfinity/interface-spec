@@ -1791,6 +1791,60 @@ lemma request_cleanup_expired_cycles_inv:
   shows "total_cycles S = total_cycles (request_cleanup_expired_post n S)"
   by (auto simp: request_cleanup_expired_post_def total_cycles_def)
 
+
+
+(* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
+
+definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "canister_time_progress_pre cid t1 S = (case list_map_get (time S) cid of Some t0 \<Rightarrow>
+      t0 < t1
+    | _ \<Rightarrow> False)"
+
+definition canister_time_progress_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "canister_time_progress_post cid t1 S = (S\<lparr>time := list_map_set (time S) cid t1\<rparr>)"
+
+lemma canister_time_progress_cycles_inv:
+  assumes "canister_time_progress_pre cid t1 S"
+  shows "total_cycles S = total_cycles (canister_time_progress_post cid t1 S)"
+  by (auto simp: canister_time_progress_post_def total_cycles_def)
+
+
+
+(* System transition: Time progressing and cycle consumption (cycle consumption) [DONE] *)
+
+definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "cycle_consumption_pre cid b1 S = (case list_map_get (balances S) cid of Some b0 \<Rightarrow>
+      0 \<le> b1 \<and> b1 < b0
+    | _ \<Rightarrow> False)"
+
+definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
+
+definition cycle_consumption_lost_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "cycle_consumption_lost_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
+
+lemma cycle_consumption_cycles_monotonic:
+  assumes "cycle_consumption_pre cid b1 S"
+  shows "total_cycles S = total_cycles (cycle_consumption_post cid b1 S) + cycle_consumption_lost_cycles cid b1 S"
+  using assms list_map_sum_in_ge[where ?g=id and ?f="balances S" and ?x=cid]
+  by (auto simp: cycle_consumption_pre_def cycle_consumption_post_def cycle_consumption_lost_cycles_def total_cycles_def
+      list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
+
+
+
+(* System transition: Time progressing and cycle consumption (system time) [DONE] *)
+
+definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "system_time_progress_pre t1 S = (system_time S < t1)"
+
+definition system_time_progress_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "system_time_progress_post t1 S = (S\<lparr>system_time := t1\<rparr>)"
+
+lemma system_time_progress_cycles_inv:
+  assumes "system_time_progress_pre t1 S"
+  shows "total_cycles S = total_cycles (system_time_progress_post t1 S)"
+  by (auto simp: system_time_progress_post_def total_cycles_def)
+
 end
 
 export_code request_submission_pre request_submission_post
