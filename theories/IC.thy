@@ -335,7 +335,27 @@ context fixes
   and canid_of_principal :: "'p \<Rightarrow> 'canid option"
 begin
 
+(* Type conversion functions *)
+
+definition canid_of_blob :: "'b \<Rightarrow> 'canid option" where
+  "canid_of_blob b = (case parse_principal b of Some p \<Rightarrow> canid_of_principal p | _ \<Rightarrow> None)"
+
+definition blob_of_canid :: "'canid \<Rightarrow> 'b" where
+  "blob_of_canid = blob_of_principal \<circ> principal_of_canid"
+
 (* Candid helper functions *)
+
+definition candid_nested_lookup :: "'b \<Rightarrow> 's list \<Rightarrow> ('s, 'b, 'p) candid option" where
+  "candid_nested_lookup b = foldl (\<lambda>c s. case c of Some c' \<Rightarrow> candid_lookup c' s | _ \<Rightarrow> None) (parse_candid b)"
+
+definition candid_parse_controllers :: "'b \<Rightarrow> 'p set option" where
+  "candid_parse_controllers b = (case candid_nested_lookup b [encode_string ''settings'', encode_string ''controllers''] of Some (Candid_vec xs) \<Rightarrow>
+    if (\<forall>c'' \<in> set xs. candid_is_blob c'' \<and> parse_principal (candid_unwrap_blob c'') \<noteq> None) then
+      Some (the ` parse_principal ` candid_unwrap_blob ` set xs)
+    else None | _ \<Rightarrow> None)"
+
+definition candid_parse_cid :: "'b \<Rightarrow> 'canid option" where
+  "candid_parse_cid b = (case candid_nested_lookup b [encode_string ''canister_id''] of Some (Candid_blob p) \<Rightarrow> canid_of_blob p | _ \<Rightarrow> None)"
 
 fun candid_of_can_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarrow> ('s, 'b, 'p) candid" where
   "candid_of_can_status Running = Candid_text (encode_string ''Running'')"
@@ -840,23 +860,24 @@ definition ic_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> (
       cee = ic_principal \<and>
       mn = encode_string ''create_canister'' \<and>
       is_system_assigned (principal_of_canid cid) \<and>
-      cid \<notin> list_map_dom (canisters S) \<and> cid \<notin> list_map_dom (balances S)
+      cid \<notin> list_map_dom (canisters S) \<and>
+      cid \<notin> list_map_dom (time S) \<and>
+      cid \<notin> list_map_dom (controllers S) \<and>
+      cid \<notin> list_map_dom (balances S) \<and>
+      cid \<notin> list_map_dom (certified_data S) \<and>
+      cid \<notin> list_map_dom (canister_status S)
     | _ \<Rightarrow> False))"
 
 definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_creation_post n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let ctrls = (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
-      (case candid_lookup c' (encode_string ''controllers'') of Some (Candid_vec xs) \<Rightarrow>
-        if (\<forall>c'' \<in> set xs. candid_is_blob c'' \<and> parse_principal (candid_unwrap_blob c'') \<noteq> None) then
-        the ` parse_principal ` candid_unwrap_blob ` set xs else {cer} | _ \<Rightarrow> {cer}) | _ \<Rightarrow> {cer}) | _ \<Rightarrow> {cer}) in
-    S\<lparr>canisters := list_map_set (canisters S) cid None, time := list_map_set (time S) cid t,
+    let ctrls = (case candid_parse_controllers d of Some ctrls \<Rightarrow> ctrls | _ \<Rightarrow> {cer}) in
+    S\<lparr>canisters := list_map_set (canisters S) cid None,
+      time := list_map_set (time S) cid t,
       controllers := list_map_set (controllers S) cid ctrls,
       balances := list_map_set (balances S) cid trans_cycles,
       certified_data := list_map_set (certified_data S) cid empty_blob,
-      messages := take n (messages S) @ drop (Suc n) (messages S) @
-        [Response_message orig (response.Reply (blob_of_candid
-        (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_principal (principal_of_canid cid)))])))) 0],
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid
+        (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_canid cid))])))) 0],
       canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
 
 lemma ic_canister_creation_cycles_inv:
@@ -889,30 +910,18 @@ definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
       (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
       cee = ic_principal \<and>
       mn = encode_string ''update_settings'' \<and>
-      (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
-      (case parse_principal b of Some p \<Rightarrow>
-      (case canid_of_principal p of Some cid \<Rightarrow>
-      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+      (case candid_parse_cid d of Some cid \<Rightarrow>
+      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
 definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_update_settings_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let cid = (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
-      (case parse_principal b of Some p \<Rightarrow>
-      (case canid_of_principal p of Some cid \<Rightarrow> cid)))) in
-    let ctrls = (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
-      (case candid_lookup c' (encode_string ''controllers'') of Some (Candid_vec xs) \<Rightarrow>
-        if (\<forall>c'' \<in> set xs. candid_is_blob c'' \<and> parse_principal (candid_unwrap_blob c'') \<noteq> None) then
-        list_map_set (controllers S) cid (the ` parse_principal ` candid_unwrap_blob ` set xs) else controllers S | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) | _ \<Rightarrow> controllers S) in
-    let freezing_thres = (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string '''settings'') of Some c' \<Rightarrow>
-      (case candid_lookup c' (encode_string ''freezing_threshold'') of Some (Candid_nat freeze) \<Rightarrow>
-        list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) | _ \<Rightarrow> freezing_threshold S) in
+    let cid = the (candid_parse_cid d);
+    ctrls = (case candid_parse_controllers d of Some ctrls \<Rightarrow> list_map_set (controllers S) cid ctrls | _ \<Rightarrow> controllers S);
+    freezing_thres = (case candid_nested_lookup d [encode_string '''settings'', encode_string ''freezing_threshold''] of Some (Candid_nat freeze) \<Rightarrow>
+      list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S) in
     S\<lparr>controllers := ctrls, freezing_threshold := freezing_thres, messages := take n (messages S) @ drop (Suc n) (messages S) @
-        [Response_message orig (response.Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
+        [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
 lemma ic_update_settings_cycles_inv:
   assumes "ic_update_settings_pre n S"
@@ -938,30 +947,23 @@ qed
 (* System transition: IC Management Canister: Canister status [DONE] *)
 
 definition ic_canister_status_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_canister_status_pre n S = (n < length (messages S) \<and> (case messages S ! n of
-    Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-      (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
-      cee = ic_principal \<and>
-      mn = encode_string ''canister_status'' \<and>
-      (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
-      (case parse_principal b of Some p \<Rightarrow>
-      (case canid_of_principal p of Some cid \<Rightarrow> cid \<in> list_map_dom (canister_status S) \<and>
-        cid \<in> list_map_dom (canisters S) \<and>
-        cid \<in> list_map_dom (balances S) \<and>
-      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False) | _ \<Rightarrow> False)
-    | _ \<Rightarrow> False))"
+  "ic_canister_status_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''canister_status'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+      cid \<in> list_map_dom (canister_status S) \<and>
+      cid \<in> list_map_dom (canisters S) \<and>
+      cid \<in> list_map_dom (balances S) \<and>
+    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
 
 definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_status_post n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let cid = (case parse_candid d of Some c \<Rightarrow>
-      (case candid_lookup c (encode_string ''canister_id'') of Some (Candid_blob b) \<Rightarrow>
-      (case parse_principal b of Some p \<Rightarrow>
-      (case canid_of_principal p of Some cid \<Rightarrow> cid)))) in
-    let hash = (case the (list_map_get (canisters S) cid) of None \<Rightarrow> Candid_null
+    let cid = the (candid_parse_cid d);
+    hash = (case the (list_map_get (canisters S) cid) of None \<Rightarrow> Candid_null
       | Some m \<Rightarrow> Candid_opt (Candid_blob (sha_256 (raw_module m)))) in
-    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @
-      [Response_message orig (response.Reply (blob_of_candid
+    S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid
       (Candid_record (list_map_init [(encode_string ''status'', candid_of_can_status (the (list_map_get (canister_status S) cid))),
         (encode_string ''module_hash'', hash),
         (encode_string ''controllers'', Candid_vec (map (Candid_blob \<circ> blob_of_principal) (sorted_list_of_set (the (list_map_get (controllers S) cid))))),
@@ -998,6 +1000,9 @@ export_code request_submission_pre request_submission_post
   message_execution_pre message_execution_post
   call_context_starvation_pre call_context_starvation_post
   call_context_removal_pre call_context_removal_post
+  ic_canister_creation_pre ic_canister_creation_post
+  ic_update_settings_pre ic_update_settings_post
+  ic_canister_status_pre ic_canister_status_post
 in Haskell module_name IC file_prefix code
 
 end
