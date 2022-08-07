@@ -1569,16 +1569,12 @@ definition ic_depositing_cycles_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
   "ic_depositing_cycles_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case list_map_get (balances S) cid of Some bal \<Rightarrow>
-    S\<lparr>balances := list_map_set (balances S) cid (min (bal + trans_cycles) MAX_CANISTER_BALANCE),
+    S\<lparr>balances := list_map_set (balances S) cid (bal + trans_cycles),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) 0]\<rparr>))"
-
-definition ic_depositing_cycles_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "ic_depositing_cycles_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
-    let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid) + trans_cycles) - MAX_CANISTER_BALANCE"
 
 lemma ic_depositing_cycles_cycles_monotonic:
   assumes "ic_depositing_cycles_pre n S"
-  shows "total_cycles S = total_cycles (ic_depositing_cycles_post n S) + ic_depositing_cycles_lost_cycles n S"
+  shows "total_cycles S = total_cycles (ic_depositing_cycles_post n S)"
 proof -
   obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     and cid_def: "candid_parse_cid d = Some cid"
@@ -1593,7 +1589,7 @@ proof -
     by (auto simp: ic_depositing_cycles_pre_def msg younger_def older_def nth_append)
   show ?thesis
     using assms list_map_sum_in_ge[where ?g=id and ?f="balances S" and ?x=cid]
-    by (auto simp: ic_depositing_cycles_pre_def ic_depositing_cycles_post_def ic_depositing_cycles_lost_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+    by (auto simp: ic_depositing_cycles_pre_def ic_depositing_cycles_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         list_map_sum_in[where ?g=id and ?f="balances S"] min_def split: message.splits option.splits sum.splits)
 qed
 
@@ -1637,7 +1633,7 @@ qed
 
 (* System transition: Callback invocation (not deleted) [DONE] *)
 
-definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "callback_invocation_not_deleted_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
@@ -1646,7 +1642,7 @@ definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 
     | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "callback_invocation_not_deleted_post n S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
@@ -1678,7 +1674,7 @@ qed
 
 (* System transition: Callback invocation (deleted) [DONE] *)
 
-definition callback_invocation_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition callback_invocation_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "callback_invocation_deleted_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
@@ -1687,7 +1683,7 @@ definition callback_invocation_deleted_pre :: "nat \<Rightarrow> ('p, 'uid, 'can
     | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition callback_invocation_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition callback_invocation_deleted_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "callback_invocation_deleted_post n S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
     (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
       let cid = call_ctxt_canister ctxt in
@@ -1719,20 +1715,20 @@ qed
 
 (* System transition: Respond to user request [DONE] *)
 
-definition respond_to_user_request_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition respond_to_user_request_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "respond_to_user_request_pre n S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
     (case list_map_get (requests S) req of Some Processing \<Rightarrow>
       True
     | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
-definition respond_to_user_request_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition respond_to_user_request_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "respond_to_user_request_post n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
     let req_resp = (case resp of Reply b \<Rightarrow> Replied b | response.Reject c b \<Rightarrow> Rejected c b) in
     S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
       requests := list_map_set (requests S) req req_resp\<rparr>)"
 
-definition respond_to_user_request_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition respond_to_user_request_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "respond_to_user_request_lost_cycles n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
     ref_cycles)"
 
@@ -1760,12 +1756,12 @@ qed
 
 (* System transition: Request clean up [DONE] *)
 
-definition request_cleanup_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition request_cleanup_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "request_cleanup_pre req S = (case list_map_get (requests S) req of Some req_status \<Rightarrow>
     (case req_status of Replied _ \<Rightarrow> True | Rejected _ _ \<Rightarrow> True | _ \<Rightarrow> False)
     | _ \<Rightarrow> False)"
 
-definition request_cleanup_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition request_cleanup_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "request_cleanup_post req S = (S\<lparr>requests := list_map_set (requests S) req Done\<rparr>)"
 
 lemma request_cleanup_cycles_inv:
@@ -1777,13 +1773,13 @@ lemma request_cleanup_cycles_inv:
 
 (* System transition: Request clean up (expired) [DONE] *)
 
-definition request_cleanup_expired_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition request_cleanup_expired_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "request_cleanup_expired_pre req S = (case list_map_get (requests S) req of Some req_status \<Rightarrow>
     (case req_status of Replied _ \<Rightarrow> True | Rejected _ _ \<Rightarrow> True | Done \<Rightarrow> True | _ \<Rightarrow> False) \<and>
     request.ingress_expiry req < system_time S
     | _ \<Rightarrow> False)"
 
-definition request_cleanup_expired_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition request_cleanup_expired_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "request_cleanup_expired_post req S = (S\<lparr>requests := list_map_del (requests S) req\<rparr>)"
 
 lemma request_cleanup_expired_cycles_inv:
@@ -1795,12 +1791,12 @@ lemma request_cleanup_expired_cycles_inv:
 
 (* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
 
-definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_time_progress_pre cid t1 S = (case list_map_get (time S) cid of Some t0 \<Rightarrow>
       t0 < t1
     | _ \<Rightarrow> False)"
 
-definition canister_time_progress_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition canister_time_progress_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "canister_time_progress_post cid t1 S = (S\<lparr>time := list_map_set (time S) cid t1\<rparr>)"
 
 lemma canister_time_progress_cycles_inv:
@@ -1812,15 +1808,15 @@ lemma canister_time_progress_cycles_inv:
 
 (* System transition: Time progressing and cycle consumption (cycle consumption) [DONE] *)
 
-definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "cycle_consumption_pre cid b1 S = (case list_map_get (balances S) cid of Some b0 \<Rightarrow>
       0 \<le> b1 \<and> b1 < b0
     | _ \<Rightarrow> False)"
 
-definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
 
-definition cycle_consumption_lost_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition cycle_consumption_lost_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "cycle_consumption_lost_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
 
 lemma cycle_consumption_cycles_monotonic:
@@ -1834,10 +1830,10 @@ lemma cycle_consumption_cycles_monotonic:
 
 (* System transition: Time progressing and cycle consumption (system time) [DONE] *)
 
-definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "system_time_progress_pre t1 S = (system_time S < t1)"
 
-definition system_time_progress_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition system_time_progress_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "system_time_progress_post t1 S = (S\<lparr>system_time := t1\<rparr>)"
 
 lemma system_time_progress_cycles_inv:
