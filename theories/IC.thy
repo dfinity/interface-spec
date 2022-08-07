@@ -1756,6 +1756,41 @@ proof -
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits request_status.splits)
 qed
 
+
+
+(* System transition: Request clean up [DONE] *)
+
+definition request_cleanup_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "request_cleanup_pre req S = (case list_map_get (requests S) req of Some req_status \<Rightarrow>
+    (case req_status of Replied _ \<Rightarrow> True | Rejected _ _ \<Rightarrow> True | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False)"
+
+definition request_cleanup_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "request_cleanup_post req S = (S\<lparr>requests := list_map_set (requests S) req Done\<rparr>)"
+
+lemma request_cleanup_cycles_inv:
+  assumes "request_cleanup_pre n S"
+  shows "total_cycles S = total_cycles (request_cleanup_post n S)"
+  by (auto simp: request_cleanup_post_def total_cycles_def)
+
+
+
+(* System transition: Request clean up (expired) [DONE] *)
+
+definition request_cleanup_expired_pre :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "request_cleanup_expired_pre req S = (case list_map_get (requests S) req of Some req_status \<Rightarrow>
+    (case req_status of Replied _ \<Rightarrow> True | Rejected _ _ \<Rightarrow> True | Done \<Rightarrow> True | _ \<Rightarrow> False) \<and>
+    request.ingress_expiry req < system_time S
+    | _ \<Rightarrow> False)"
+
+definition request_cleanup_expired_post :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "request_cleanup_expired_post req S = (S\<lparr>requests := list_map_del (requests S) req\<rparr>)"
+
+lemma request_cleanup_expired_cycles_inv:
+  assumes "request_cleanup_expired_pre n S"
+  shows "total_cycles S = total_cycles (request_cleanup_expired_post n S)"
+  by (auto simp: request_cleanup_expired_post_def total_cycles_def)
+
 end
 
 export_code request_submission_pre request_submission_post
@@ -1784,6 +1819,8 @@ export_code request_submission_pre request_submission_post
   ic_random_numbers_pre ic_random_numbers_post
   callback_invocation_not_deleted_pre callback_invocation_not_deleted_post
   callback_invocation_deleted_pre callback_invocation_deleted_post
+  request_cleanup_pre request_cleanup_post
+  request_cleanup_expired_pre request_cleanup_expired_post
 in Haskell module_name IC file_prefix code
 
 end
