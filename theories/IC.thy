@@ -233,7 +233,7 @@ lift_definition call_ctxt_needs_to_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'c
 
 lift_definition call_ctxt_available_cycles :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> nat" is available_cycles .
 
-lemma call_ctxt_inv: "\<not>call_ctxt_needs_to_respond x2 \<Longrightarrow> call_ctxt_available_cycles x2 = 0"
+lemma call_ctxt_not_needs_to_respond_available_cycles: "\<not>call_ctxt_needs_to_respond x2 \<Longrightarrow> call_ctxt_available_cycles x2 = 0"
   by transfer auto
 
 lift_definition call_ctxt_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
@@ -472,7 +472,8 @@ definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd
   "request_submission_post E S = S\<lparr>requests := list_map_set (requests S) (projl (content E)) Received\<rparr>"
 
 lemma request_submission_cycles_inv:
-  "request_submission_pre E S \<Longrightarrow> total_cycles S = total_cycles (request_submission_post E S)"
+  assumes "request_submission_pre E S"
+  shows "total_cycles S = total_cycles (request_submission_post E S)"
   by (auto simp: request_submission_pre_def request_submission_post_def total_cycles_def)
 
 
@@ -486,7 +487,8 @@ definition request_rejection_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd)
   "request_rejection_post E req code msg S = S\<lparr>requests := list_map_set (requests S) req (Rejected code msg)\<rparr>"
 
 lemma request_rejection_cycles_inv:
-  "request_rejection_pre E req code msg S \<Longrightarrow> total_cycles S = total_cycles (request_rejection_post E req code msg S)"
+  assumes "request_rejection_pre E req code msg S"
+  shows "total_cycles S = total_cycles (request_rejection_post E req code msg S)"
   by (auto simp: request_rejection_pre_def request_rejection_post_def total_cycles_def)
 
 
@@ -508,8 +510,8 @@ definition initiate_canister_call_post :: "('b, 'p, 'uid, 'canid, 's) request \<
       (request.arg req) 0 Unordered # messages S\<rparr>"
 
 lemma initiate_canister_call_cycles_inv:
-  "initiate_canister_call_pre R S \<Longrightarrow>
-  total_cycles S = total_cycles (initiate_canister_call_post R S)"
+  assumes "initiate_canister_call_pre R S"
+  shows "total_cycles S = total_cycles (initiate_canister_call_post R S)"
   by (auto simp: initiate_canister_call_pre_def initiate_canister_call_post_def total_cycles_def)
 
 
@@ -622,9 +624,9 @@ definition call_context_heartbeat_post :: "'canid \<Rightarrow> 'cid \<Rightarro
     balances := list_map_set (balances S) cee (bal - MAX_CYCLES_PER_MESSAGE)\<rparr>)"
 
 lemma call_context_heartbeat_cycles_inv:
-  "call_context_heartbeat_pre cee ctxt_id S \<Longrightarrow>
-    total_cycles S = total_cycles (call_context_heartbeat_post cee ctxt_id S)"
-  using list_map_sum_in_ge[of "balances S" cee, where ?g=id, simplified]
+  assumes "call_context_heartbeat_pre cee ctxt_id S"
+  shows "total_cycles S = total_cycles (call_context_heartbeat_post cee ctxt_id S)"
+  using assms list_map_sum_in_ge[of "balances S" cee, where ?g=id, simplified]
   by (auto simp: call_context_heartbeat_pre_def call_context_heartbeat_post_def total_cycles_def
       list_map_sum_in[where ?g=id, simplified] list_map_sum_out split: option.splits)
 
@@ -825,7 +827,7 @@ proof -
     have messages_msgs: "messages = older @ younger @ map new_call_to_message new_calls_res @ response_messages"
       by (auto simp: messages_def older_def younger_def)
     show ?thesis
-      using lm(2,4) True call_ctxt_inv[of ctxt]
+      using lm(2,4) True call_ctxt_not_needs_to_respond_available_cycles[of ctxt]
       by (auto simp: cond_def msg_exec S'_def total_cycles_def lm(1,3) msgs messages_msgs A1 A2 A3 A4 New_balance_def
           reserve cycles_accepted_res_def no_response_def R_Inr lost Available_def split: option.splits)
   qed
@@ -857,9 +859,9 @@ definition call_context_starvation_post :: "'cid \<Rightarrow>
         messages := messages S @ [msg]\<rparr>)"
 
 lemma call_context_starvation_cycles_inv:
-  "call_context_starvation_pre ctxt_id S \<Longrightarrow>
-  total_cycles S = total_cycles (call_context_starvation_post ctxt_id S)"
-  using list_map_sum_in_ge[where ?f="call_contexts S" and ?x=ctxt_id and ?g=call_ctxt_carried_cycles]
+  assumes "call_context_starvation_pre ctxt_id S"
+  shows "total_cycles S = total_cycles (call_context_starvation_post ctxt_id S)"
+  using assms list_map_sum_in_ge[where ?f="call_contexts S" and ?x=ctxt_id and ?g=call_ctxt_carried_cycles]
   by (auto simp: call_context_starvation_pre_def call_context_starvation_post_def total_cycles_def
       call_ctxt_carried_cycles list_map_sum_in[where ?g=call_ctxt_carried_cycles] split: option.splits)
 
@@ -888,12 +890,14 @@ definition call_context_removal_post :: "'cid \<Rightarrow>
   ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "call_context_removal_post ctxt_id S = S\<lparr>call_contexts := list_map_del (call_contexts S) ctxt_id\<rparr>"
 
-lemma call_context_removal_cycles_inv:
-  "call_context_removal_pre ctxt_id S \<Longrightarrow>
-  total_cycles S = total_cycles (call_context_removal_post ctxt_id S) +
-    (case list_map_get (call_contexts S) ctxt_id of Some call_context \<Rightarrow> call_ctxt_available_cycles call_context)"
-  using call_ctxt_inv
-  by (auto simp: call_context_removal_pre_def call_context_removal_post_def total_cycles_def call_ctxt_carried_cycles list_map_del_sum split: option.splits)
+definition call_context_removal_lost_cycles :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "call_context_removal_lost_cycles ctxt_id S = call_ctxt_available_cycles (the (list_map_get (call_contexts S) ctxt_id))"
+
+lemma call_context_removal_cycles_monotonic:
+  assumes "call_context_removal_pre ctxt_id S"
+  shows "total_cycles S = total_cycles (call_context_removal_post ctxt_id S) + call_context_removal_lost_cycles ctxt_id S"
+  using assms call_ctxt_not_needs_to_respond_available_cycles
+  by (auto simp: call_context_removal_pre_def call_context_removal_post_def call_context_removal_lost_cycles_def total_cycles_def call_ctxt_carried_cycles list_map_del_sum split: option.splits)
 
 
 
@@ -1238,6 +1242,58 @@ proof -
         split: message.splits option.splits sum.splits if_splits intro!: list_map_sum_vals_filter)
 qed
 
+
+
+(* System transition: IC Management Canister: Canister deletion [DONE] *)
+
+definition ic_canister_deletion_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_canister_deletion_pre n S = (n < length (messages S) \<and> (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+    cee = ic_principal \<and>
+    mn = encode_string ''delete_canister'' \<and>
+    (case candid_parse_cid d of Some cid \<Rightarrow>
+    (case (list_map_get (canister_status S) cid, list_map_get (controllers S) cid, list_map_get (balances S) cid) of (Some can_status, Some ctrls, Some bal) \<Rightarrow>
+      can_status = Stopped \<and> cer \<in> ctrls
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_canister_deletion_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in
+    S\<lparr>canisters := list_map_del (canisters S) cid,
+      controllers := list_map_del (controllers S) cid,
+      freezing_threshold := list_map_del (freezing_threshold S) cid,
+      canister_status := list_map_del (canister_status S) cid,
+      time := list_map_del (time S) cid,
+      balances := list_map_del (balances S) cid,
+      certified_data := list_map_del (certified_data S) cid,
+      messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
+
+definition ic_canister_deletion_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_canister_deletion_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid))"
+
+lemma ic_canister_deletion_cycles_monotonic:
+  assumes "ic_canister_deletion_pre n S"
+  shows "total_cycles S = total_cycles (ic_canister_deletion_post n S) + ic_canister_deletion_lost_cycles n S"
+proof -
+  obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    and cid_def: "candid_parse_cid d = Some cid"
+    using assms
+    by (auto simp: ic_canister_deletion_pre_def split: message.splits option.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_canister_deletion_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: ic_canister_deletion_pre_def ic_canister_deletion_post_def ic_canister_deletion_lost_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+        list_map_del_sum[where ?g=id and ?f="balances S"] split: message.splits option.splits sum.splits)
+qed
+
 end
 
 export_code request_submission_pre request_submission_post
@@ -1255,6 +1311,7 @@ export_code request_submission_pre request_submission_post
   ic_code_installation_pre ic_code_installation_post
   ic_code_upgrade_pre ic_code_upgrade_post
   ic_code_uninstallation_pre ic_code_uninstallation_post
+  ic_canister_deletion_pre ic_canister_deletion_post
 in Haskell module_name IC file_prefix code
 
 end

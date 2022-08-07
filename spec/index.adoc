@@ -3473,9 +3473,11 @@ State after::
 S with
     canisters[CanisterId] = (deleted)
     controllers[CanisterId] = (deleted)
+    freezing_threshold[CanisterId] = (deleted)
     canister_status[CanisterId] = (deleted)
     time[CanisterId] = (deleted)
     balances[CanisterId] = (deleted)
+    certified_data[CanisterId] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
