@@ -3607,8 +3607,8 @@ S with
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id
-        receiver = C
-        entry_point = Callback Callback FM.response RM.refunded_cycles
+        receiver = S.call_contexts[Ctxt_id].canister
+        entry_point = Callback Callback RM.response RM.refunded_cycles
         queue = Unordered
       } ·
       Younger_messages

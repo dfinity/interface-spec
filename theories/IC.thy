@@ -231,6 +231,8 @@ lift_definition call_ctxt_origin :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_c
 
 lift_definition call_ctxt_needs_to_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> bool" is needs_to_respond .
 
+lift_definition call_ctxt_deleted :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> bool" is deleted .
+
 lift_definition call_ctxt_available_cycles :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> nat" is available_cycles .
 
 lemma call_ctxt_not_needs_to_respond_available_cycles: "\<not>call_ctxt_needs_to_respond x2 \<Longrightarrow> call_ctxt_available_cycles x2 = 0"
@@ -1631,6 +1633,88 @@ proof -
     by (auto simp: ic_random_numbers_pre_def ic_random_numbers_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs)
 qed
 
+
+
+(* System transition: Callback invocation (not deleted) [DONE] *)
+
+definition callback_invocation_not_deleted_pre :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "callback_invocation_not_deleted_pre n b S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+    (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
+      let cid = call_ctxt_canister ctxt in
+      (case list_map_get (balances S) cid of Some bal \<Rightarrow> \<not>call_ctxt_deleted ctxt
+      | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition callback_invocation_not_deleted_post :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "callback_invocation_not_deleted_post n b S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+    (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
+      let cid = call_ctxt_canister ctxt in
+      (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+        S\<lparr>balances := list_map_set (balances S) cid (bal + ref_cycles),
+          messages := take n (messages S) @ Func_message ctxt_id cid (Callback c resp ref_cycles) Unordered # drop (Suc n) (messages S)\<rparr>)))"
+
+lemma callback_invocation_not_deleted_cycles_inv:
+  assumes "callback_invocation_not_deleted_pre n b S"
+  shows "total_cycles S = total_cycles (callback_invocation_not_deleted_post n b S)"
+proof -
+  obtain ctxt_id c resp ref_cycles where msg: "messages S ! n = Response_message (From_canister ctxt_id c) resp ref_cycles"
+    using assms
+    by (auto simp: callback_invocation_not_deleted_pre_def split: message.splits option.splits call_origin.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Response_message (From_canister ctxt_id c) resp ref_cycles # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: callback_invocation_not_deleted_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: callback_invocation_not_deleted_pre_def callback_invocation_not_deleted_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
+        list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
+qed
+
+
+
+(* System transition: Callback invocation (deleted) [DONE] *)
+
+definition callback_invocation_deleted_pre :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "callback_invocation_deleted_pre n b S = (n < length (messages S) \<and> (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+    (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
+      let cid = call_ctxt_canister ctxt in
+      (case list_map_get (balances S) cid of Some bal \<Rightarrow> call_ctxt_deleted ctxt
+      | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False)
+  | _ \<Rightarrow> False))"
+
+definition callback_invocation_deleted_post :: "nat \<Rightarrow> 'b \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "callback_invocation_deleted_post n b S = (case messages S ! n of Response_message (From_canister ctxt_id c) resp ref_cycles \<Rightarrow>
+    (case list_map_get (call_contexts S) ctxt_id of Some ctxt \<Rightarrow>
+      let cid = call_ctxt_canister ctxt in
+      (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+        S\<lparr>balances := list_map_set (balances S) cid (bal + ref_cycles + MAX_CYCLES_PER_RESPONSE),
+          messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>)))"
+
+lemma callback_invocation_deleted_cycles_inv:
+  assumes "callback_invocation_deleted_pre n b S"
+  shows "total_cycles S = total_cycles (callback_invocation_deleted_post n b S)"
+proof -
+  obtain ctxt_id c resp ref_cycles where msg: "messages S ! n = Response_message (From_canister ctxt_id c) resp ref_cycles"
+    using assms
+    by (auto simp: callback_invocation_deleted_pre_def split: message.splits option.splits call_origin.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Response_message (From_canister ctxt_id c) resp ref_cycles # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: callback_invocation_deleted_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (auto simp: callback_invocation_deleted_pre_def callback_invocation_deleted_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
+        list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
+qed
+
 end
 
 export_code request_submission_pre request_submission_post
@@ -1648,11 +1732,17 @@ export_code request_submission_pre request_submission_post
   ic_code_installation_pre ic_code_installation_post
   ic_code_upgrade_pre ic_code_upgrade_post
   ic_code_uninstallation_pre ic_code_uninstallation_post
-  ic_canister_deletion_pre ic_canister_deletion_post
+  ic_canister_stop_running_pre ic_canister_stop_running_post
+  ic_canister_stop_stopping_pre ic_canister_stop_stopping_post
+  ic_canister_stop_done_stopping_pre ic_canister_stop_done_stopping_post
+  ic_canister_stop_stopped_pre ic_canister_stop_stopped_post
   ic_canister_start_not_stopping_pre ic_canister_start_not_stopping_post
   ic_canister_start_stopping_pre ic_canister_start_stopping_post
+  ic_canister_deletion_pre ic_canister_deletion_post
   ic_depositing_cycles_pre ic_depositing_cycles_post
   ic_random_numbers_pre ic_random_numbers_post
+  callback_invocation_not_deleted_pre callback_invocation_not_deleted_post
+  callback_invocation_deleted_pre callback_invocation_deleted_post
 in Haskell module_name IC file_prefix code
 
 end
