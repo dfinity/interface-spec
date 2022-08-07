@@ -1789,6 +1789,43 @@ lemma request_cleanup_expired_cycles_inv:
 
 
 
+(* System transition: Canister out of cycles [DONE] *)
+
+definition canister_out_of_cycles_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "canister_out_of_cycles_pre cid S = (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+    bal = 0
+  | _ \<Rightarrow> False)"
+
+definition canister_out_of_cycles_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "canister_out_of_cycles_post cid S = (
+    let call_ctxt_to_msg = (\<lambda>ctxt.
+      if call_ctxt_canister ctxt = cid \<and> call_ctxt_needs_to_respond ctxt then
+        Some (Response_message (call_ctxt_origin ctxt) (response.Reject CANISTER_REJECT (encode_string ''Canister has been uninstalled'')) (call_ctxt_available_cycles ctxt))
+      else None);
+    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) in
+    S\<lparr>canisters := list_map_set (canisters S) cid None, certified_data := list_map_set (certified_data S) cid empty_blob,
+      messages := messages S @ List.map_filter call_ctxt_to_msg (list_map_vals (call_contexts S)),
+      call_contexts := list_map_map call_ctxt_to_ctxt (call_contexts S)\<rparr>)"
+
+lemma canister_out_of_cycles_cycles_inv:
+  assumes "canister_out_of_cycles_pre cid S"
+  shows "total_cycles S = total_cycles (canister_out_of_cycles_post cid S)"
+proof -
+  have F1: "list_map_sum_vals call_ctxt_carried_cycles (call_contexts S) =
+    list_map_sum_vals id
+      (list_map_map (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_carried_cycles ctxt else 0) (call_contexts S)) +
+    list_map_sum_vals call_ctxt_carried_cycles
+      (list_map_map (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) (call_contexts S))"
+    using list_map_sum_vals_split[where ?f="call_ctxt_carried_cycles" and ?g="call_ctxt_delete", unfolded call_ctxt_delete_carried_cycles diff_zero]
+    by auto
+  show ?thesis
+    using assms
+    by (auto simp: canister_out_of_cycles_pre_def canister_out_of_cycles_post_def total_cycles_def call_ctxt_carried_cycles Let_def F1
+        split: message.splits option.splits sum.splits if_splits intro!: list_map_sum_vals_filter)
+qed
+
+
+
 (* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
 
 definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
@@ -1869,8 +1906,13 @@ export_code request_submission_pre request_submission_post
   ic_random_numbers_pre ic_random_numbers_post
   callback_invocation_not_deleted_pre callback_invocation_not_deleted_post
   callback_invocation_deleted_pre callback_invocation_deleted_post
+  respond_to_user_request_pre respond_to_user_request_post
   request_cleanup_pre request_cleanup_post
   request_cleanup_expired_pre request_cleanup_expired_post
+  canister_out_of_cycles_pre canister_out_of_cycles_post
+  canister_time_progress_pre canister_time_progress_post
+  cycle_consumption_pre cycle_consumption_post
+  system_time_progress_pre system_time_progress_post
 in Haskell module_name IC file_prefix code
 
 end

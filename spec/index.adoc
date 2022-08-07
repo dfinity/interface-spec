@@ -3697,7 +3697,7 @@ S with
     canisters[CanisterId] = EmptyCanister
     certified_data[A.canister_id] = ""
 
-    messages = Older_messages · Younger_messages ·
+    messages = messages ·
       [ ResponseMessage {
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
