@@ -29,6 +29,9 @@ lift_definition list_map_sum_vals :: "('b \<Rightarrow> nat) \<Rightarrow> ('a, 
 lift_definition list_map_get :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow> 'b option" is
   "map_of" .
 
+lemma list_map_get_dom[dest]: "x \<in> list_map_dom f \<Longrightarrow> list_map_get f x = None \<Longrightarrow> False"
+  by transfer auto
+
 lift_definition list_map_set :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> ('a, 'b) list_map" is
   "\<lambda>f x y. AList.update x y f"
   by (rule distinct_update)
@@ -1686,6 +1689,51 @@ proof -
     using assms
     by (auto simp: ic_provisional_canister_creation_pre_def ic_provisional_canister_creation_post_def ic_provisional_canister_creation_minted_cycles_def total_cycles_def Let_def msgs
         list_map_sum_out[where ?g=id] list_map_sum_out[where ?g=status_cycles] split: message.splits option.splits)
+qed
+
+
+
+(* System transition: IC Management Canister: Top up canister [DONE] *)
+
+definition ic_top_up_canister_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_top_up_canister_pre n cid t S = (n < length (messages S) \<and> (case messages S ! n of
+    Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    (case candid_parse_nat d [encode_string ''amount''] of Some cyc \<Rightarrow>
+      (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
+      cee = ic_principal \<and>
+      mn = encode_string ''provisional_top_up_canister'' \<and>
+      cid \<in> list_map_dom (balances S)
+    | _ \<Rightarrow> False) | _ \<Rightarrow> False))"
+
+definition ic_top_up_canister_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_top_up_canister_post n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    let bal = the (list_map_get (balances S) cid);
+    cyc = the (candid_parse_nat d [encode_string ''amount'']) in
+    S\<lparr>balances := list_map_set (balances S) cid (bal + cyc)\<rparr>)"
+
+definition ic_top_up_canister_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_top_up_canister_minted_cycles n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+    the (candid_parse_nat d [encode_string ''amount'']))"    
+
+lemma ic_top_up_canister_cycles_antimonotonic:
+  assumes "ic_top_up_canister_pre n cid t S"
+  shows "total_cycles S + ic_top_up_canister_minted_cycles n cid t S  = total_cycles (ic_top_up_canister_post n cid t S)"
+proof -
+  obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
+    using assms
+    by (auto simp: ic_top_up_canister_pre_def split: message.splits)
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Call_message orig cer cee mn d trans_cycles q # younger" "(older @ w # younger) ! n = w"
+    "take n older = older" "take (n - length older) ws = []" "drop (Suc n) older = []"
+    "drop (Suc n - length older) (w # ws) = ws" for w ws
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: ic_top_up_canister_pre_def msg younger_def older_def nth_append)
+  show ?thesis
+    using assms
+    by (cases "list_map_get (balances S) cid")
+       (auto simp: ic_top_up_canister_pre_def ic_top_up_canister_post_def ic_top_up_canister_minted_cycles_def total_cycles_def Let_def msgs
+        list_map_sum_in[where ?g=id] split: message.splits option.splits)
 qed
 
 
