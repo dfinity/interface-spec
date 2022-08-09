@@ -717,8 +717,8 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
             - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>))
     | _ \<Rightarrow> undefined)"
 
-definition message_execution_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "message_execution_lost_cycles n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
+definition message_execution_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "message_execution_burned_cycles n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
       list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
       (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
@@ -734,7 +734,7 @@ definition message_execution_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid
 
 lemma message_execution_cycles_monotonic:
   assumes pre: "message_execution_pre n S"
-  shows "total_cycles S = total_cycles (message_execution_post n S) + message_execution_lost_cycles n S"
+  shows "total_cycles S = total_cycles (message_execution_post n S) + message_execution_burned_cycles n S"
 proof -
   obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
     and prod: "list_map_get (canisters S) recv = Some (Some can)"
@@ -780,9 +780,9 @@ proof -
   proof (cases cond)
     case False
     have "message_execution_post n S = S''"
-      "message_execution_lost_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
+      "message_execution_burned_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using False
-      by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
+      by (simp_all add: message_execution_post_def message_execution_burned_cycles_def Let_def msg prod
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric] del: min_less_iff_conj split del: if_split)
     then show ?thesis
@@ -793,7 +793,7 @@ proof -
     define result where "result = projr R"
     have R_Inr: "R = Inr result"
       using True
-      by (auto simp: cond_def result_def)
+      by (auto simp: cond_def result_def split: option.splits)
     define response_messages where "response_messages = (case update_return.response result of None \<Rightarrow> []
       | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
     define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
@@ -815,9 +815,9 @@ proof -
     have no_response: "no_response = (update_return.response result = None)"
       by (auto simp: no_response_def R_Inr)
     have msg_exec: "message_execution_post n S = S'"
-      and lost: "message_execution_lost_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
+      and lost: "message_execution_burned_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
       using True
-      by (simp_all add: message_execution_post_def message_execution_lost_cycles_def Let_def msg prod
+      by (simp_all add: message_execution_post_def message_execution_burned_cycles_def Let_def msg prod
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric]
           messages_def[symmetric] new_ctxt_def[symmetric] certified_data_def[symmetric] S'_def[symmetric]
@@ -904,14 +904,14 @@ definition call_context_removal_post :: "'cid \<Rightarrow>
   ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "call_context_removal_post ctxt_id S = S\<lparr>call_contexts := list_map_del (call_contexts S) ctxt_id\<rparr>"
 
-definition call_context_removal_lost_cycles :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "call_context_removal_lost_cycles ctxt_id S = call_ctxt_available_cycles (the (list_map_get (call_contexts S) ctxt_id))"
+definition call_context_removal_burned_cycles :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "call_context_removal_burned_cycles ctxt_id S = call_ctxt_available_cycles (the (list_map_get (call_contexts S) ctxt_id))"
 
 lemma call_context_removal_cycles_monotonic:
   assumes "call_context_removal_pre ctxt_id S"
-  shows "total_cycles S = total_cycles (call_context_removal_post ctxt_id S) + call_context_removal_lost_cycles ctxt_id S"
+  shows "total_cycles S = total_cycles (call_context_removal_post ctxt_id S) + call_context_removal_burned_cycles ctxt_id S"
   using assms call_ctxt_not_needs_to_respond_available_cycles
-  by (auto simp: call_context_removal_pre_def call_context_removal_post_def call_context_removal_lost_cycles_def total_cycles_def call_ctxt_carried_cycles list_map_del_sum split: option.splits)
+  by (auto simp: call_context_removal_pre_def call_context_removal_post_def call_context_removal_burned_cycles_def total_cycles_def call_ctxt_carried_cycles list_map_del_sum split: option.splits)
 
 
 
@@ -1094,8 +1094,8 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       balances := list_map_set (balances S) cid (bal - cyc_used),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))"
 
-definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "ic_code_installation_burned_cycles n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_code_installation_burned_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case candid_parse_cid d of Some cid \<Rightarrow>
     (case (candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
@@ -1108,7 +1108,7 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> nat \<Righta
 
 lemma ic_code_installation_cycles_inv:
   assumes "ic_code_installation_pre n S"
-  shows "total_cycles S = total_cycles (ic_code_installation_post n S) + ic_code_installation_burned_cycles n memory S"
+  shows "total_cycles S = total_cycles (ic_code_installation_post n S) + ic_code_installation_burned_cycles n S"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1167,8 +1167,8 @@ definition ic_code_upgrade_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w,
       balances := list_map_set (balances S) cid (bal - (cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))))"
 
-definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "ic_code_upgrade_burned_cycles n memory S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_code_upgrade_burned_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
     (case candid_parse_cid d of Some cid \<Rightarrow>
     (case (candid_parse_text d [encode_string ''mode''], candid_parse_blob d [encode_string ''wasm_module''], candid_parse_blob d [encode_string ''arg'']) of
@@ -1183,7 +1183,7 @@ definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> nat \<Rightarrow>
 
 lemma ic_code_upgrade_cycles_inv:
   assumes "ic_code_upgrade_pre n S"
-  shows "total_cycles S = total_cycles (ic_code_upgrade_post n S) + ic_code_upgrade_burned_cycles n memory S"
+  shows "total_cycles S = total_cycles (ic_code_upgrade_post n S) + ic_code_upgrade_burned_cycles n S"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1270,6 +1270,7 @@ definition ic_canister_stop_running_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid,
       cer \<in> ctrls
     | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
+
 definition ic_canister_stop_running_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_stop_running_post n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in
@@ -1530,13 +1531,13 @@ definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       certified_data := list_map_del (certified_data S) cid,
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
-definition ic_canister_deletion_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "ic_canister_deletion_lost_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_canister_deletion_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_canister_deletion_burned_cycles n S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid d) in the (list_map_get (balances S) cid))"
 
 lemma ic_canister_deletion_cycles_monotonic:
   assumes "ic_canister_deletion_pre n S"
-  shows "total_cycles S = total_cycles (ic_canister_deletion_post n S) + ic_canister_deletion_lost_cycles n S"
+  shows "total_cycles S = total_cycles (ic_canister_deletion_post n S) + ic_canister_deletion_burned_cycles n S"
 proof -
   obtain orig cer cee mn d trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     and cid_def: "candid_parse_cid d = Some cid"
@@ -1551,7 +1552,7 @@ proof -
     by (auto simp: ic_canister_deletion_pre_def msg younger_def older_def nth_append)
   show ?thesis
     using assms
-    by (auto simp: ic_canister_deletion_pre_def ic_canister_deletion_post_def ic_canister_deletion_lost_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
+    by (auto simp: ic_canister_deletion_pre_def ic_canister_deletion_post_def ic_canister_deletion_burned_cycles_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         list_map_del_sum[where ?g=id and ?f="balances S"] list_map_del_sum[where ?g=status_cycles and ?f="canister_status S"]
         split: message.splits option.splits sum.splits)
 qed
@@ -1639,7 +1640,7 @@ qed
 
 (* System transition: IC Management Canister: Canister creation with cycles [DONE] *)
 
-definition ic_provisional_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+definition ic_provisional_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_provisional_canister_creation_pre n cid t S = (n < length (messages S) \<and> (case messages S ! n of
     Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     (case candid_parse_nat d [encode_string ''amount''] of Some cyc \<Rightarrow>
@@ -1655,7 +1656,7 @@ definition ic_provisional_canister_creation_pre :: "nat \<Rightarrow> 'canid \<R
       cid \<notin> list_map_dom (canister_status S)
     | _ \<Rightarrow> False) | _ \<Rightarrow> False))"
 
-definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_provisional_canister_creation_post n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let cyc = the (candid_parse_nat d [encode_string ''amount'']) in
     S\<lparr>canisters := list_map_set (canisters S) cid None,
@@ -1667,7 +1668,7 @@ definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<
         (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_canid cid))])))) trans_cycles],
       canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
 
-definition ic_provisional_canister_creation_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+definition ic_provisional_canister_creation_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "ic_provisional_canister_creation_minted_cycles n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     the (candid_parse_nat d [encode_string ''amount'']))"    
 
@@ -1695,8 +1696,8 @@ qed
 
 (* System transition: IC Management Canister: Top up canister [DONE] *)
 
-definition ic_top_up_canister_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_top_up_canister_pre n cid t S = (n < length (messages S) \<and> (case messages S ! n of
+definition ic_top_up_canister_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_top_up_canister_pre n cid S = (n < length (messages S) \<and> (case messages S ! n of
     Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     (case candid_parse_nat d [encode_string ''amount''] of Some cyc \<Rightarrow>
       (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
@@ -1705,19 +1706,19 @@ definition ic_top_up_canister_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> nat
       cid \<in> list_map_dom (balances S)
     | _ \<Rightarrow> False) | _ \<Rightarrow> False))"
 
-definition ic_top_up_canister_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "ic_top_up_canister_post n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_top_up_canister_post :: "nat \<Rightarrow> 'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "ic_top_up_canister_post n cid S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     let bal = the (list_map_get (balances S) cid);
     cyc = the (candid_parse_nat d [encode_string ''amount'']) in
     S\<lparr>balances := list_map_set (balances S) cid (bal + cyc)\<rparr>)"
 
-definition ic_top_up_canister_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "ic_top_up_canister_minted_cycles n cid t S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
+definition ic_top_up_canister_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "ic_top_up_canister_minted_cycles n cid S = (case messages S ! n of Call_message orig cer cee mn d trans_cycles q \<Rightarrow>
     the (candid_parse_nat d [encode_string ''amount'']))"    
 
 lemma ic_top_up_canister_cycles_antimonotonic:
-  assumes "ic_top_up_canister_pre n cid t S"
-  shows "total_cycles S + ic_top_up_canister_minted_cycles n cid t S  = total_cycles (ic_top_up_canister_post n cid t S)"
+  assumes "ic_top_up_canister_pre n cid S"
+  shows "total_cycles S + ic_top_up_canister_minted_cycles n cid S  = total_cycles (ic_top_up_canister_post n cid S)"
 proof -
   obtain orig cer cee mn d trans_cycles q where msg: "messages S ! n = Call_message orig cer cee mn d trans_cycles q"
     using assms
@@ -1835,13 +1836,13 @@ definition respond_to_user_request_post :: "nat \<Rightarrow> ('p, 'uid, 'canid,
     S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
       requests := list_map_set (requests S) req req_resp\<rparr>)"
 
-definition respond_to_user_request_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "respond_to_user_request_lost_cycles n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
+definition respond_to_user_request_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "respond_to_user_request_burned_cycles n S = (case messages S ! n of Response_message (From_user req) resp ref_cycles \<Rightarrow>
     ref_cycles)"
 
 lemma respond_to_user_request_cycles_monotonic:
   assumes "respond_to_user_request_pre n S"
-  shows "total_cycles S = total_cycles (respond_to_user_request_post n S) + respond_to_user_request_lost_cycles n S"
+  shows "total_cycles S = total_cycles (respond_to_user_request_post n S) + respond_to_user_request_burned_cycles n S"
 proof -
   obtain req resp ref_cycles where msg: "messages S ! n = Response_message (From_user req) resp ref_cycles"
     using assms
@@ -1855,7 +1856,7 @@ proof -
     by (auto simp: respond_to_user_request_pre_def msg younger_def older_def nth_append)
   show ?thesis
     using assms
-    by (auto simp: respond_to_user_request_pre_def respond_to_user_request_post_def respond_to_user_request_lost_cycles_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
+    by (auto simp: respond_to_user_request_pre_def respond_to_user_request_post_def respond_to_user_request_burned_cycles_def total_cycles_def call_ctxt_carried_cycles Let_def msgs
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits request_status.splits)
 qed
 
@@ -1960,14 +1961,14 @@ definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p,
 definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
 
-definition cycle_consumption_lost_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "cycle_consumption_lost_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
+definition cycle_consumption_burned_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "cycle_consumption_burned_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
 
 lemma cycle_consumption_cycles_monotonic:
   assumes "cycle_consumption_pre cid b1 S"
-  shows "total_cycles S = total_cycles (cycle_consumption_post cid b1 S) + cycle_consumption_lost_cycles cid b1 S"
+  shows "total_cycles S = total_cycles (cycle_consumption_post cid b1 S) + cycle_consumption_burned_cycles cid b1 S"
   using assms list_map_sum_in_ge[where ?g=id and ?f="balances S" and ?x=cid]
-  by (auto simp: cycle_consumption_pre_def cycle_consumption_post_def cycle_consumption_lost_cycles_def total_cycles_def
+  by (auto simp: cycle_consumption_pre_def cycle_consumption_post_def cycle_consumption_burned_cycles_def total_cycles_def
       list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
 
 
@@ -1989,47 +1990,50 @@ lemma system_time_progress_cycles_inv:
 
 (* State machine *)
 
-inductive ic_steps :: "'sig \<Rightarrow> 'sd \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_steps sig sd S S"
-| request_submission: "ic_steps sig sd S0 S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 (request_submission_post E S)"
-| request_rejection: "ic_steps sig sd S0 S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 (request_rejection_post E req code msg S)"
-| initiate_canister_call: "ic_steps sig sd S0 S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 (initiate_canister_call_post req S)"
-| call_reject: "ic_steps sig sd S0 S \<Longrightarrow> call_reject_pre n S \<Longrightarrow> ic_steps sig sd S0 (call_reject_post n S)"
-| call_context_create: "ic_steps sig sd S0 S \<Longrightarrow> call_context_create_pre n ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_create_post n ctxt_id S)"
-| call_context_heartbeat: "ic_steps sig sd S0 S \<Longrightarrow> call_context_heartbeat_pre cee ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_heartbeat_post cee ctxt_id S)"
-| message_execution: "ic_steps sig sd S0 S \<Longrightarrow> message_execution_pre n S \<Longrightarrow> ic_steps sig sd S0 (message_execution_post n S)"
-| call_context_starvation: "ic_steps sig sd S0 S \<Longrightarrow> call_context_starvation_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_starvation_post ctxt_id S)"
-| call_context_removal: "ic_steps sig sd S0 S \<Longrightarrow> call_context_removal_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 (call_context_removal_post ctxt_id S)"
-| ic_canister_creation: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_creation_pre n cid t S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_creation_post n cid t S)"
-| ic_update_settings: "ic_steps sig sd S0 S \<Longrightarrow> ic_update_settings_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_update_settings_post n S)"
-| ic_canister_status: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_status_pre n m S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_status_post n m S)"
-| ic_code_installation: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_installation_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_installation_post n S)"
-| ic_code_upgrade: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_upgrade_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_upgrade_post n S)"
-| ic_code_uninstallation: "ic_steps sig sd S0 S \<Longrightarrow> ic_code_uninstallation_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_code_uninstallation_post n S)"
-| ic_canister_stop_running: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_running_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_running_post n S)"
-| ic_canister_stop_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_stopping_post n S)"
-| ic_canister_stop_done_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_done_stopping_pre cid S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_done_stopping_post cid S)"
-| ic_canister_stop_stopped: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_stop_stopped_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_stop_stopped_post n S)"
-| ic_canister_start_not_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_start_not_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_start_not_stopping_post n S)"
-| ic_canister_start_stopping: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_start_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_start_stopping_post n S)"
-| ic_canister_deletion: "ic_steps sig sd S0 S \<Longrightarrow> ic_canister_deletion_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_canister_deletion_post n S)"
-| ic_depositing_cycles: "ic_steps sig sd S0 S \<Longrightarrow> ic_depositing_cycles_pre n S \<Longrightarrow> ic_steps sig sd S0 (ic_depositing_cycles_post n S)"
-| ic_random_numbers: "ic_steps sig sd S0 S \<Longrightarrow> ic_random_numbers_pre n b S \<Longrightarrow> ic_steps sig sd S0 (ic_random_numbers_post n b S)"
-| callback_invocation_not_deleted: "ic_steps sig sd S0 S \<Longrightarrow> callback_invocation_not_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 (callback_invocation_not_deleted_post n S)"
-| callback_invocation_deleted: "ic_steps sig sd S0 S \<Longrightarrow> callback_invocation_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 (callback_invocation_deleted_post n S)"
-| respond_to_user_request: "ic_steps sig sd S0 S \<Longrightarrow> respond_to_user_request_pre n S \<Longrightarrow> ic_steps sig sd S0 (respond_to_user_request_post n S)"
-| request_cleanup: "ic_steps sig sd S0 S \<Longrightarrow> request_cleanup_pre req S \<Longrightarrow> ic_steps sig sd S0 (request_cleanup_post req S)"
-| request_cleanup_expired: "ic_steps sig sd S0 S \<Longrightarrow> request_cleanup_expired_pre req S \<Longrightarrow> ic_steps sig sd S0 (request_cleanup_expired_post req S)"
-| canister_out_of_cycles: "ic_steps sig sd S0 S \<Longrightarrow> canister_out_of_cycles_pre cid S \<Longrightarrow> ic_steps sig sd S0 (canister_out_of_cycles_post cid S)"
-| canister_time_progress: "ic_steps sig sd S0 S \<Longrightarrow> canister_time_progress_pre cid t1 S \<Longrightarrow> ic_steps sig sd S0 (canister_time_progress_post cid t1 S)"
-| cycle_consumption: "ic_steps sig sd S0 S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig sd S0 (cycle_consumption_post cid b1 S)"
-| system_time_progress: "ic_steps sig sd S0 S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig sd S0 (system_time_progress_post t1 S)"
+inductive ic_steps :: "'sig itself \<Rightarrow> 'sd itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow>
+  nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_steps sig sd S 0 0 S"
+| request_submission: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_submission_post E S)"
+| request_rejection: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_rejection_post E req code msg S)"
+| initiate_canister_call: "ic_steps sig sd S0 minted burned S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (initiate_canister_call_post req S)"
+| call_reject: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_reject_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (call_reject_post n S)"
+| call_context_create: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_context_create_pre n ctxt_id S \<Longrightarrow> ic_steps sig sd S0 minted burned (call_context_create_post n ctxt_id S)"
+| call_context_heartbeat: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_context_heartbeat_pre cee ctxt_id S \<Longrightarrow> ic_steps sig sd S0 minted burned (call_context_heartbeat_post cee ctxt_id S)"
+| message_execution: "ic_steps sig sd S0 minted burned S \<Longrightarrow> message_execution_pre n S \<Longrightarrow> ic_steps sig sd S0 minted (burned + message_execution_burned_cycles n S) (message_execution_post n S)"
+| call_context_starvation: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_context_starvation_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 minted burned (call_context_starvation_post ctxt_id S)"
+| call_context_removal: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_context_removal_pre ctxt_id S \<Longrightarrow> ic_steps sig sd S0 minted (burned + call_context_removal_burned_cycles ctxt_id S) (call_context_removal_post ctxt_id S)"
+| ic_canister_creation: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_creation_pre n cid t S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_creation_post n cid t S)"
+| ic_update_settings: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_update_settings_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_update_settings_post n S)"
+| ic_canister_status: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_status_pre n m S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_status_post n m S)"
+| ic_code_installation: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_code_installation_pre n S \<Longrightarrow> ic_steps sig sd S0 minted (burned + ic_code_installation_burned_cycles n S) (ic_code_installation_post n S)"
+| ic_code_upgrade: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_code_upgrade_pre n S \<Longrightarrow> ic_steps sig sd S0 minted (burned + ic_code_upgrade_burned_cycles n S) (ic_code_upgrade_post n S)"
+| ic_code_uninstallation: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_code_uninstallation_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_code_uninstallation_post n S)"
+| ic_canister_stop_running: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_stop_running_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_stop_running_post n S)"
+| ic_canister_stop_stopping: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_stop_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_stop_stopping_post n S)"
+| ic_canister_stop_done_stopping: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_stop_done_stopping_pre cid S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_stop_done_stopping_post cid S)"
+| ic_canister_stop_stopped: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_stop_stopped_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_stop_stopped_post n S)"
+| ic_canister_start_not_stopping: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_start_not_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_start_not_stopping_post n S)"
+| ic_canister_start_stopping: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_start_stopping_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_canister_start_stopping_post n S)"
+| ic_canister_deletion: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_canister_deletion_pre n S \<Longrightarrow> ic_steps sig sd S0 minted (burned + ic_canister_deletion_burned_cycles n S) (ic_canister_deletion_post n S)"
+| ic_depositing_cycles: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_depositing_cycles_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_depositing_cycles_post n S)"
+| ic_random_numbers: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_random_numbers_pre n b S \<Longrightarrow> ic_steps sig sd S0 minted burned (ic_random_numbers_post n b S)"
+| ic_provisional_canister_creation: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_provisional_canister_creation_pre n cid t S \<Longrightarrow> ic_steps sig sd S0 (minted + ic_provisional_canister_creation_minted_cycles n cid t S) burned (ic_provisional_canister_creation_post n cid t S)"
+| ic_top_up_canister: "ic_steps sig sd S0 minted burned S \<Longrightarrow> ic_top_up_canister_pre n cid S \<Longrightarrow> ic_steps sig sd S0 (minted + ic_top_up_canister_minted_cycles n cid S) burned (ic_top_up_canister_post n cid S)"
+| callback_invocation_not_deleted: "ic_steps sig sd S0 minted burned S \<Longrightarrow> callback_invocation_not_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (callback_invocation_not_deleted_post n S)"
+| callback_invocation_deleted: "ic_steps sig sd S0 minted burned S \<Longrightarrow> callback_invocation_deleted_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (callback_invocation_deleted_post n S)"
+| respond_to_user_request: "ic_steps sig sd S0 minted burned S \<Longrightarrow> respond_to_user_request_pre n S \<Longrightarrow> ic_steps sig sd S0 minted (burned + respond_to_user_request_burned_cycles n S) (respond_to_user_request_post n S)"
+| request_cleanup: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_cleanup_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_cleanup_post req S)"
+| request_cleanup_expired: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_cleanup_expired_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_cleanup_expired_post req S)"
+| canister_out_of_cycles: "ic_steps sig sd S0 minted burned S \<Longrightarrow> canister_out_of_cycles_pre cid S \<Longrightarrow> ic_steps sig sd S0 minted burned (canister_out_of_cycles_post cid S)"
+| canister_time_progress: "ic_steps sig sd S0 minted burned S \<Longrightarrow> canister_time_progress_pre cid t1 S \<Longrightarrow> ic_steps sig sd S0 minted burned (canister_time_progress_post cid t1 S)"
+| cycle_consumption: "ic_steps sig sd S0 minted burned S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig sd S0 minted (burned + cycle_consumption_burned_cycles cid b1 S) (cycle_consumption_post cid b1 S)"
+| system_time_progress: "ic_steps sig sd S0 minted burned S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig sd S0 minted burned (system_time_progress_post t1 S)"
 
 lemma total_cycles_monotonic:
-  assumes "ic_steps sig sd S0 S"
-  shows "total_cycles S0 \<ge> total_cycles S"
+  assumes "ic_steps TYPE('sig) TYPE('sd) S0 minted burned S"
+  shows "total_cycles S0 + minted = total_cycles S + burned"
   using assms
-  apply (induction sig sd S0 S rule: ic_steps.induct)
+  apply (induction "TYPE('sig)" "TYPE('sd)" S0 minted burned S rule: ic_steps.induct)
                       apply auto[1]
   using request_submission_cycles_inv apply fastforce
   using request_rejection_cycles_inv apply fastforce
@@ -2055,6 +2059,8 @@ lemma total_cycles_monotonic:
   using ic_canister_deletion_cycles_monotonic apply fastforce
   using ic_depositing_cycles_cycles_monotonic apply fastforce
   using ic_random_numbers_cycles_inv apply fastforce
+  using ic_provisional_canister_creation_cycles_antimonotonic apply fastforce
+  using ic_top_up_canister_cycles_antimonotonic apply fastforce
   using callback_invocation_not_deleted_cycles_inv apply fastforce
   using callback_invocation_deleted_cycles_inv apply fastforce
   using respond_to_user_request_cycles_monotonic apply fastforce
