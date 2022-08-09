@@ -6,6 +6,7 @@
 * Canister access to performance metrics
 * Query calls are rejected when the canister is frozen
 * Support for implementation-specific error codes for requests
+* Formal model in Isabelle
 
 [#0_18_5]
 === 0.18.5 (2022-07-08)
