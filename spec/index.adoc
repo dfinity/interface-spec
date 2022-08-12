@@ -147,8 +147,6 @@ When the IC creates a _fresh_ id, it never creates a self-authenticating id, an 
 [#textual-ids]
 ==== Textual representation of principals
 
-NOTE: This textual representation does not actually show up in the interface (which always deals with blobs), so it is merely a recommended convention.
-
 We specify a _canonical textual format_ that is recommended whenever principals need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
 
 The textual representation of a blob `b` is `Grouped(Base32(CRC32(b) · b))` where
