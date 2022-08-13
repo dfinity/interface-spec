@@ -3574,7 +3574,7 @@ S with
       Younger_messages
 ....
 
-If the responded call context does not exist anymore, because the canister has been uninstalled since, the refundend cycles are still added to the canister balance, but
+If the responded call context does not exist anymore, because the canister has been uninstalled since, the refunded cycles are still added to the canister balance, but
 no function invocation is enqueued:
 
 Conditions::
