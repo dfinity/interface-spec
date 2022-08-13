@@ -3888,6 +3888,7 @@ ExecutionState = {
   response : NoResponse | Response;
   cycles_accepted : Nat;
   cycles_available : Nat;
+  cycles_used : Nat;
   balance : Funds;
   reply_params : { arg : Blob };
   pending_call : MethodCall | NoPendingCall;
@@ -3926,6 +3927,7 @@ empty_execution_state = {
   response = NoResponse;
   cycles_accepted = 0;
   cycles_available = 0;
+  cycles_used = 0;
   balance = 0;
   reply_params = { arg = "" };
   pending_call = NoPendingCall;
@@ -4030,7 +4032,8 @@ update_methods[method] = λ (arg, caller, sysenv, available) → λ wasm_state �
     new_calls = es.calls;
     response = es.response;
     cycles_accepted = es.cycles_accepted;
-    new_certified_data = es.new_certified_data
+    cycles_used = es.cycles_used;
+    new_certified_data = es.new_certified_data;
   }
 ....
 
@@ -4048,7 +4051,10 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
   if es.calls ≠ () then Trap
   if es.ingress_filter ≠ Reject then Trap
   if es.response = NoResponse then Trap
-  Return es.response;
+  Return {
+    response = es.response;
+    cycles_used = es.cycles_used;
+  }
 ....
 +
 This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
@@ -4068,7 +4074,10 @@ heartbeat = λ (sysenv) → λ wasm_state →
   if es.cycles_accepted ≠ 0 then Trap
   if es.ingress_filter ≠ Reject then Trap
   if es.response ≠ NoResponse then Trap
-  Return es.wasm_state;
+  Return {
+    new_state = es.wasm_state;
+    cycles_used = es.cycles_used;
+  }
 ....
 otherwise it is
 ....
@@ -4107,6 +4116,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
       new_calls = es.calls;
       response = es.response;
       cycles_accepted = es.cycles_accepted;
+      cycles_used = es.cycles_used;
       new_certified_data = es.certified_data;
     }
   with Trap
@@ -4116,7 +4126,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     if typeof(func) ≠ func (i32) -> () then Trap
 
     let es = ref { empty_execution_state with
-      wasm_state;
+      wasm_state = wasm_state;
     }
     func<es>(callbacks.on_cleanup.env)
     Return {
@@ -4124,6 +4134,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
       new_calls = [];
       response = NoResponse;
       cycles_accepted = 0;
+      cycles_used = 0;
     }
 ....
 +
