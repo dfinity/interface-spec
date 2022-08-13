@@ -597,9 +597,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
 * If the call is to the Management Canister (`aaaaa-aa`), then:
    - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
-   - Otherwise, there is no effective canister id. In particular, the `create_canister` method has no effective canister ID, and this method cannot be called by users, only via canisters.
-
-* If the call is to the `raw_rand` method of the Management Canister (`aaaaa-aa`), then there is no effective canister id. This implies that this method cannot be called by users, only via canisters.
+   - Otherwise, there is no effective canister id. In particular, the `create_canister` and `raw_rand` methods have no effective canister ID, and these methods cannot be called by users, only via canisters.
 
 +
 [NOTE]
@@ -2667,7 +2665,8 @@ Conditions::
       E.content.sender ∈ S.controllers[CanisterId]
       E.content.method_name ∈
         { "install_code", "update_settings", "start_canister", "stop_canister",
-          "canister_status", "delete_canister" }
+          "canister_status", "delete_canister",
+          "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
     ) ∨ (
       E.content.canister_id ≠ ic_principal
       S.canisters[E.content.canister_id] ≠ EmptyCanister
@@ -2679,7 +2678,7 @@ Conditions::
         status = simple_status(S.canister_status[E.content.canister_id]);
       }
       S.canisters[E.content.canister_id].module.inspect_message
-        (E.content.method_name, C.wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
+        (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
       Cycles_used ≤ S.balances[E.content.canister_id]
    )
 ....
@@ -2687,7 +2686,8 @@ State after::
 ....
 S with
     requests[E.content] = Received
-    balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
+    if E.content.canister_id ≠ ic_principal then
+      balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 ....
 
 NOTE: This is not instantaneous (the IC takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once the request has entered the IC state like this, it will be acted upon.

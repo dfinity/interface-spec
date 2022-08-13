@@ -189,6 +189,7 @@ setup_lifting type_definition_canister_module
 lift_definition canister_module_init :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'canid \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> trap_return + 'w cycles_return" is "init" .
 lift_definition canister_module_pre_upgrade :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'w \<times> 'p \<times> 'b env \<Rightarrow> trap_return + 'sm cycles_return" is pre_upgrade .
 lift_definition canister_module_post_upgrade :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'canid \<times> 'sm \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> trap_return + 'w cycles_return" is post_upgrade .
+lift_definition canister_module_inspect_message :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> ('s \<times> 'w \<times> 'b arg \<times> 'p \<times> 'b env) \<Rightarrow> trap_return + inspect_method_result cycles_return" is inspect_message .
 
 lift_definition dispatch_method :: "'s \<Rightarrow> ('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
   ((('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c) update_func) +
@@ -376,6 +377,7 @@ context fixes
   and parse_wasm_mod :: "'b \<Rightarrow> ('p, 'canid, 'b, 'w, 'sm, 'c, 's) canister_module option"
   and parse_public_custom_sections :: "'b \<Rightarrow> ('s, 'b) list_map option"
   and parse_private_custom_sections :: "'b \<Rightarrow> ('s, 'b) list_map option"
+  and verify_envelope :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope \<Rightarrow> 'p \<Rightarrow> nat \<Rightarrow> 'p set" (* TODO *)
 begin
 
 (* Type conversion functions *)
@@ -475,20 +477,109 @@ fun simple_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarr
 | "simple_status (can_status.Stopping _) = status.Stopping"
 | "simple_status can_status.Stopped = status.Stopped"
 
+(* Effective canister IDs *)
+
+definition is_effective_canister_id :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> 'p \<Rightarrow> bool" where
+  "is_effective_canister_id r p = (if request.canister_id r = ic_principal then
+      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> principal_of_canid cid = p
+      | _ \<Rightarrow> request.method_name r = encode_string ''provisional_create_canister_with_cycles'')
+    else principal_of_canid (request.canister_id r) = p)"
+
+lemma is_effective_canister_id_code[code_unfold]:
+  "(\<exists>p. is_effective_canister_id r p) = (if request.canister_id r = ic_principal then
+      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> True
+      | _ \<Rightarrow> request.method_name r = encode_string ''provisional_create_canister_with_cycles'')
+    else True)"
+  by (auto simp: is_effective_canister_id_def split: option.splits)
 
 
-(* System transition: API Request submission [Precondition relaxed] *)
+
+(* System transition: API Request submission [DONE] *)
 
 definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "request_submission_pre E S = (case content E of Inl req \<Rightarrow> req \<notin> list_map_dom (requests S) | _ \<Rightarrow> False)"
+  "request_submission_pre E S = (case content E of Inl req \<Rightarrow>
+    principal_of_canid (request.canister_id req) \<in> verify_envelope E (principal_of_uid (request.sender req)) (system_time S) \<and>
+    req \<notin> list_map_dom (requests S) \<and>
+    system_time S \<le> request.ingress_expiry req \<and>
+    (\<exists>ECID. is_effective_canister_id req ECID) \<and>
+    (
+      (
+        request.canister_id req = ic_principal \<and>
+        (case candid_parse_cid (request.arg req) of Some cid \<Rightarrow>
+          (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow>
+            principal_of_uid (request.sender req) \<in> ctrls \<and>
+            request.method_name req \<in> {encode_string ''install_code'', encode_string ''update_settings'',
+              encode_string ''start_canister'', encode_string ''stop_canister'',
+              encode_string ''canister_status'', encode_string ''delete_canister'',
+              encode_string ''provisional_create_canister_with_cycles'', encode_string ''provisional_top_up_canister''}
+          | _ \<Rightarrow> False)
+        | _ \<Rightarrow> False)
+      )
+    \<or>
+      (
+        request.canister_id req \<noteq> ic_principal \<and>
+        (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
+          (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
+          let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+          (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
+            cycles_return.return ret = Accept \<and> cycles_return.cycles_used ret \<le> bal
+          | _ \<Rightarrow> False)
+        | _ \<Rightarrow> False)
+      )
+    )
+  | _ \<Rightarrow> False)"
 
 definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "request_submission_post E S = S\<lparr>requests := list_map_set (requests S) (projl (content E)) Received\<rparr>"
+  "request_submission_post E S = (
+    let req = projl (content E);
+    cid = request.canister_id req;
+    balances = (if request.canister_id req \<noteq> ic_principal then
+      (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
+        (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
+        let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+        (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
+          list_map_set (balances S) cid (bal - cycles_return.cycles_used ret)))
+      else balances S) in
+    S\<lparr>requests := list_map_set (requests S) req Received, balances := balances\<rparr>)"
+
+definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "request_submission_burned_cycles E S = (
+    let req = projl (content E);
+    cid = request.canister_id req in
+    (if request.canister_id req \<noteq> ic_principal then
+      (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
+        (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
+        let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+        (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
+          cycles_return.cycles_used ret))
+      else 0))"
 
 lemma request_submission_cycles_inv:
   assumes "request_submission_pre E S"
-  shows "total_cycles S = total_cycles (request_submission_post E S)"
-  by (auto simp: request_submission_pre_def request_submission_post_def total_cycles_def)
+  shows "total_cycles S = total_cycles (request_submission_post E S) + request_submission_burned_cycles E S"
+proof -
+  obtain req where req_def: "content E = Inl req"
+    using assms
+    by (auto simp: request_submission_pre_def split: sum.splits)
+  {
+    assume "request.canister_id req \<noteq> ic_principal"
+    then have "(case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
+      (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
+      let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+      (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
+        cycles_return.return ret = Accept \<and> cycles_return.cycles_used ret \<le> bal
+      | _ \<Rightarrow> False)
+    | _ \<Rightarrow> False)"
+      using assms
+      by (auto simp: request_submission_pre_def req_def split: option.splits sum.splits prod.splits)
+    then have ?thesis
+      using list_map_sum_in_ge[where ?f="balances S" and ?g=id and ?x="request.canister_id req"]
+      by (auto simp: request_submission_pre_def request_submission_post_def request_submission_burned_cycles_def total_cycles_def req_def list_map_sum_in[where ?f="balances S"]
+          split: option.splits sum.splits)
+  }
+  then show ?thesis
+    by (auto simp: request_submission_pre_def request_submission_post_def request_submission_burned_cycles_def total_cycles_def req_def)
+qed
 
 
 
@@ -1993,7 +2084,7 @@ lemma system_time_progress_cycles_inv:
 inductive ic_steps :: "'sig itself \<Rightarrow> 'sd itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow>
   nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_steps sig sd S 0 0 S"
-| request_submission: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_submission_post E S)"
+| request_submission: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 minted (burned + request_submission_burned_cycles E S) (request_submission_post E S)"
 | request_rejection: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_rejection_post E req code msg S)"
 | initiate_canister_call: "ic_steps sig sd S0 minted burned S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (initiate_canister_call_post req S)"
 | call_reject: "ic_steps sig sd S0 minted burned S \<Longrightarrow> call_reject_pre n S \<Longrightarrow> ic_steps sig sd S0 minted burned (call_reject_post n S)"
