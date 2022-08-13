@@ -2297,7 +2297,14 @@ UpdateFunc = WasmState -> Trap | Return {
   cycles_accepted : Nat;
   cycles_used : Nat;
 }
-QueryFunc = WasmState -> Trap | Return (Response, Nat)
+QueryFunc = WasmState -> Trap | Return {
+  response : Response;
+  cycles_used : Nat;
+}
+HeartbeatFunc = WasmState -> Trap | Return {
+  new_state : WasmState;
+  cycles_used : Nat;
+}
 
 AvailableCycles = Nat
 RefundedCycles = Nat
@@ -2308,7 +2315,7 @@ CanisterModule = {
   post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap | Return WasmState
   update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, CallerId, Env) -> QueryFunc)
-  heartbeat : (Env) -> WasmState -> Trap | Return (WasmState, Nat)
+  heartbeat : (Env) -> HeartbeatFunc
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return (Accept | Reject)
 }
@@ -2948,25 +2955,25 @@ The functions `query_as_update` and `heartbeat_as_update` turns a query function
 query_as_update(f, arg, env) = λ wasm_state →
   match f(arg, env)(wasm_state) with
     Trap → Trap
-    Return (res, cyc_used) → Return {
+    Return res → Return {
       new_state = wasm_state;
       new_calls = [];
       new_certified_data = NoCertifiedData;
-      response = res;
+      response = res.response;
       cycles_accepted = 0;
-      cycles_used = cyc_used;
+      cycles_used = res.cycles_used;
     }
 
 heartbeat_as_update(f, env) = λ wasm_state →
   match f(env)(wasm_state) with
     Trap → Trap
-    Return (wasm_state, cyc_used) → Return {
-      new_state = wasm_state;
+    Return res → Return {
+      new_state = res.new_state;
       new_calls = [];
       new_certified_data = NoCertifiedData;
       response = NoResponse;
       cycles_accepted = 0;
-      cycles_used = cyc_used;
+      cycles_used = res.cycles_used;
     }
 ....
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.

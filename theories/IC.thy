@@ -112,8 +112,14 @@ record ('w, 'p, 'canid, 's, 'b, 'c) update_return =
   response :: "('b, 's) response option"
   cycles_accepted :: nat
   cycles_used :: nat
+record ('b, 's) query_return =
+  response :: "('b, 's) response"
+  cycles_used :: nat
+record 'w heartbeat_return =
+  new_state :: 'w
+  cycles_used :: nat
 type_synonym ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func = "'w \<Rightarrow> 'tr + ('w, 'p, 'canid, 's, 'b, 'c) update_return"
-type_synonym ('w, 'b, 's, 'tr) query_func = "'w \<Rightarrow> 'tr + (('b, 's) response \<times> nat)"
+type_synonym ('w, 'b, 's, 'tr) query_func = "'w \<Rightarrow> 'tr + ('b, 's) query_return"
 
 type_synonym available_cycles = nat
 type_synonym refunded_cycles = nat
@@ -125,7 +131,7 @@ record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec =
   post_upgrade :: "'canid \<times> 'sm \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'w"
   update_methods :: "('s, ('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) list_map"
   query_methods :: "('s, ('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) list_map"
-  heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)"
+  heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w heartbeat_return"
   callbacks :: "('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func"
   inspect_message :: "('s \<times> 'w \<times> 'b arg \<times> 'p \<times> 'b env) \<Rightarrow> 'tr + inspect_method_result"
 typedef ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
@@ -145,7 +151,7 @@ lift_definition canister_module_callbacks :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c,
   ('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" is
   callbacks .
 
-lift_definition canister_module_heartbeat :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)" is
+lift_definition canister_module_heartbeat :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> 'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w heartbeat_return" is
   heartbeat .
 
 (* Call contexts *)
@@ -512,12 +518,13 @@ lemma call_context_heartbeat_cycles_inv:
 
 fun query_as_update :: "(('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "query_as_update (f, a, e) = (\<lambda>w. case f (a, e) w of Inl t \<Rightarrow> Inl t |
-    Inr (res, cyc_used) \<Rightarrow> Inr \<lparr>new_state = w, new_calls = [], new_certified_data = None, response = Some res, cycles_accepted = 0, cycles_used = cyc_used\<rparr>)"
+    Inr res \<Rightarrow> Inr \<lparr>update_return.new_state = w, update_return.new_calls = [], update_return.new_certified_data = None,
+      update_return.response = Some (query_return.response res), update_return.cycles_accepted = 0, update_return.cycles_used = query_return.cycles_used res\<rparr>)"
 
-fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + ('w \<times> nat)) \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
+fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w heartbeat_return) \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "heartbeat_as_update (f, e) w = (case f e w of Inl t \<Rightarrow> Inl t |
-    Inr (w', cyc_used) \<Rightarrow> Inr \<lparr>update_return.new_state = w', update_return.new_calls = [], update_return.new_certified_data = None,
-      update_return.response = None, update_return.cycles_accepted = 0, cycles_used = cyc_used\<rparr>)"
+    Inr res \<Rightarrow> Inr \<lparr>update_return.new_state = heartbeat_return.new_state res, update_return.new_calls = [], update_return.new_certified_data = None,
+      update_return.response = None, update_return.cycles_accepted = 0, update_return.cycles_used = heartbeat_return.cycles_used res\<rparr>)"
 
 fun exec_function :: "('s, 'p, 'b, 'c) entry_point \<Rightarrow> 'b env \<Rightarrow> nat \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "exec_function (entry_point.Public_method mn c d) e bal m = (
@@ -548,8 +555,8 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
-        cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined);
-        (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res));
+        cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | _ \<Rightarrow> undefined);
+        (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, update_return.new_calls res));
         New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
           - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res));
         no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) in
@@ -562,15 +569,15 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
           (let result = projr R;
             new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
               (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)));
-            response_messages = (case response result of None \<Rightarrow> []
+            response_messages = (case update_return.response result of None \<Rightarrow> []
               | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)]);
             messages = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages;
-            new_ctxt = (case response result of
+            new_ctxt = (case update_return.response result of
               None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
             | Some _ \<Rightarrow> call_ctxt_respond ctxt);
             certified_data = (case new_certified_data result of None \<Rightarrow> certified_data S
               | Some cd \<Rightarrow> list_map_set (certified_data S) recv cd)
-            in S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := new_state result\<rparr>)),
+            in S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
               messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
               balances := list_map_set (balances S) recv New_balance, certified_data := certified_data\<rparr>)
         else S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S)\<rparr>))
@@ -587,8 +594,8 @@ definition message_execution_lost_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
-        cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined);
-        (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res));
+        cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | _ \<Rightarrow> undefined);
+        (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, new_calls res));
         New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
           - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res));
         no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) in
@@ -620,9 +627,9 @@ proof -
   define Available where "Available = call_ctxt_available_cycles ctxt"
   define F where "F = exec_function ep Env Available Mod"
   define R where "R = F (wasm_state can)"
-  define cyc_used where "cyc_used = (case R of Inr res \<Rightarrow> cycles_used res | _ \<Rightarrow> undefined)"
-  obtain cycles_accepted_res new_calls_res where res: "(cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res))"
-    by (cases "(case R of Inr res \<Rightarrow> (cycles_accepted res, new_calls res))") auto
+  define cyc_used where "cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | _ \<Rightarrow> undefined)"
+  obtain cycles_accepted_res new_calls_res where res: "(cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, new_calls res))"
+    by (cases "(case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, new_calls res))") auto
   define New_balance where "New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
     - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res))"
   define no_response where "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
@@ -663,25 +670,25 @@ proof -
     have R_Inr: "R = Inr result"
       using True
       by (auto simp: cond_def result_def)
-    define response_messages where "response_messages = (case response result of None \<Rightarrow> []
+    define response_messages where "response_messages = (case update_return.response result of None \<Rightarrow> []
       | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
     define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
       "new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
         (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)))"
     define messages where "messages = take n (ic.messages S) @ drop (Suc n) (ic.messages S) @ map new_call_to_message new_calls_res @ response_messages"
-    define new_ctxt where "new_ctxt = (case response result of
+    define new_ctxt where "new_ctxt = (case update_return.response result of
         None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
       | Some _ \<Rightarrow> call_ctxt_respond ctxt)"
     define certified_data where "certified_data = (case new_certified_data result of None \<Rightarrow> ic.certified_data S
       | Some cd \<Rightarrow> list_map_set (ic.certified_data S) recv cd)"
-    define S' where "S' = S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := new_state result\<rparr>)),
+    define S' where "S' = S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
       messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
       balances := list_map_set (balances S) recv New_balance, certified_data := certified_data\<rparr>"
-    have cycles_accepted_res_def: "cycles_accepted_res = cycles_accepted result"
+    have cycles_accepted_res_def: "cycles_accepted_res = update_return.cycles_accepted result"
       and new_calls_res_def: "new_calls_res = new_calls result"
       using res
       by (auto simp: R_Inr)
-    have no_response: "no_response = (response result = None)"
+    have no_response: "no_response = (update_return.response result = None)"
       by (auto simp: no_response_def R_Inr)
     have msg_exec: "message_execution_post n S = S'"
       and lost: "message_execution_lost_cycles n S = min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)"
@@ -696,11 +703,11 @@ proof -
       by (auto simp: new_call_to_message_def)
     then have A1: "sum_list (map (message_cycles \<circ> new_call_to_message) new_calls_res) = (\<Sum>x\<leftarrow>new_calls_res. MAX_CYCLES_PER_RESPONSE + transferred_cycles x)"
       by auto
-    have A2: "sum_list (map local.message_cycles response_messages) = (case response result of None \<Rightarrow> 0
-      | _ \<Rightarrow> carried_cycles (call_ctxt_origin ctxt) + (call_ctxt_available_cycles ctxt - cycles_accepted result))"
+    have A2: "sum_list (map local.message_cycles response_messages) = (case update_return.response result of None \<Rightarrow> 0
+      | _ \<Rightarrow> carried_cycles (call_ctxt_origin ctxt) + (call_ctxt_available_cycles ctxt - update_return.cycles_accepted result))"
       by (auto simp: response_messages_def Available_def cycles_accepted_res_def split: option.splits)
-    have A3: "call_ctxt_carried_cycles new_ctxt = (case response result of Some _ \<Rightarrow> 0
-      | _ \<Rightarrow> if call_ctxt_needs_to_respond ctxt then carried_cycles (call_ctxt_origin ctxt) + (call_ctxt_available_cycles ctxt - cycles_accepted result) else 0)"
+    have A3: "call_ctxt_carried_cycles new_ctxt = (case update_return.response result of Some _ \<Rightarrow> 0
+      | _ \<Rightarrow> if call_ctxt_needs_to_respond ctxt then carried_cycles (call_ctxt_origin ctxt) + (call_ctxt_available_cycles ctxt - update_return.cycles_accepted result) else 0)"
       by (auto simp: new_ctxt_def Available_def cycles_accepted_res_def call_ctxt_carried_cycles split: option.splits)
     have A4: "call_ctxt_carried_cycles ctxt = (if call_ctxt_needs_to_respond ctxt then carried_cycles (call_ctxt_origin ctxt) + call_ctxt_available_cycles ctxt else 0)"
       using call_ctxt_carried_cycles
