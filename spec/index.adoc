@@ -1652,7 +1652,7 @@ It is important to note the following for the usage of the `POST` method:
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
 Each request can specify the maximal expected size for the response from the remote HTTP server. The upper limit on the size of a response defaults to `2MiB` if no maximal size value is specified.
-An error will be returned when the response is larger than the maximal size. 
+An error will be returned when the response is larger than the maximal size.
 The `2MiB` size limit also applies to the value returned by the `transform` function.
 
 The following parameters should be supplied for the call:
@@ -2657,7 +2657,7 @@ Submitted request:: `E : Envelope`
 Conditions::
 ....
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
-    E.content ∉ requests
+    E.content ∉ dom(S.requests)
     S.system_time <= E.content.ingress_expiry
     is_effective_canister_id(E.content, ECID)
     ( E.content.canister_id = ic_principal
@@ -3067,7 +3067,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'create_canister'
-    M.data = candid(A)
+    M.arg = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
@@ -3115,7 +3115,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'update_settings'
-    M.data = candid(A)
+    M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3123,7 +3123,7 @@ State after::
 S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
-    if A.settings.freezing_threshold exists:
+    if A.settings.freezing_threshold is not null:
       freezing_threshold[A.canister_id] = A.settings.freezing_threshold
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3147,7 +3147,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'canister_status'
-    M.data = candid(A)
+    M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3182,8 +3182,10 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'install_code'
-    M.data = candid(A)
+    M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
+    Public_custom_sections = parse_public_custom_sections(A.wasm_module);
+    Private_custom_sections = parse_private_custom_sections(A.wasm_module);
     (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
@@ -3196,6 +3198,7 @@ Conditions::
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+
 ....
 State after::
 ....
@@ -3204,8 +3207,8 @@ S with
       wasm_state = New_state;
       module = Mod;
       raw_module = A.wasm_module;
-      public_custom_sections = parse_public_custom_sections(A.wasm_module);
-      private_custom_sections = parse_private_custom_sections(A.wasm_module);
+      public_custom_sections = Public_custom_sections;
+      private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     messages = Older_messages · Younger_messages ·
@@ -3226,9 +3229,10 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'install_code'
-    M.data = candid(A)
+    M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
-
+    Public_custom_sections = parse_public_custom_sections(A.wasm_module)
+    Private_custom_sections = parse_private_custom_sections(A.wasm_module)
     A.mode = upgrade
     S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller ∈ S.controllers[A.canister_id]
@@ -3252,8 +3256,8 @@ S with
       wasm_state = New_state;
       module = Mod;
       raw_module = A.wasm_module;
-      public_custom_sections = parse_public_custom_sections(A.wasm_module);
-      private_custom_sections = parse_private_custom_sections(A.wasm_module);
+      public_custom_sections = Public_custom_sections;
+      private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     messages = Older_messages · Younger_messages ·
@@ -3275,7 +3279,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'uninstall_code'
-    M.data = candid(A)
+    M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3323,7 +3327,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.data = candid(A)
+    M.arg = candid(A)
     S.canister_status[A.canister_id] = Running
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3342,7 +3346,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.data = candid(A)
+    M.arg = candid(A)
     S.canister_status[A.canister_id] = Stopping Origins
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3383,7 +3387,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'stop_canister'
-    M.data = candid(A)
+    M.arg = candid(A)
     S.canister_status[A.canister_id] = Stopped
     M.caller ∈ S.controllers[A.canister_id]
 ....
@@ -3464,8 +3468,8 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'delete_canister'
-    M.data = candid(A)
-    S.canister_status[A.canister_id] = stopped
+    M.arg = candid(A)
+    S.canister_status[A.canister_id] = Stopped
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
@@ -3494,7 +3498,8 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'deposit_cycles'
-    M.data = candid(A)
+    M.arg = candid(A)
+    A.canister_id ∈ dom(S.balances)
 ....
 State after::
 ....
@@ -3521,7 +3526,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'raw_rand'
-    M.data = candid()
+    M.arg = candid()
     |B| = 32
 ....
 State after::
@@ -3545,7 +3550,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'provisional_create_canister_with_cycles'
-    M.data = candid(A)
+    M.arg = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom S.canisters
 ....
@@ -3574,7 +3579,7 @@ Conditions::
     (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
     M.callee = ic_principal
     M.method_name = 'provisional_top_up_canister'
-    M.data = candid(A)
+    M.arg = candid(A)
     A.canister_id ∈ dom S.canisters
 ....
 State after::
@@ -3597,6 +3602,7 @@ Conditions::
         callback = Callback
       }
     not S.call_contexts[Ctxt_id].deleted
+    S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
 ....
 State after::
 ....
@@ -3625,6 +3631,7 @@ Conditions::
         callback = Callback
       }
     S.call_contexts[Ctxt_id].deleted
+    S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
 ....
 State after::
 ....
