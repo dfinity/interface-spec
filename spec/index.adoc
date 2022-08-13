@@ -3365,7 +3365,7 @@ State after::
 ....
 S with
     canister_status[CanisterId] = Stopped
-    messages = Messages ·
+    messages = S.Messages ·
         [ ResponseMessage {
             origin = O
             response = Reply (candid())
