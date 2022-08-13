@@ -123,6 +123,7 @@ lemma list_map_del_sum: "list_map_get f x = Some y \<Longrightarrow> list_map_su
 (* Abstract canisters *)
 
 type_synonym 'b arg = 'b
+type_synonym 's method_name = 's
 
 type_synonym timestamp = nat
 datatype status = Running | Stopping | Stopped
@@ -139,7 +140,7 @@ datatype ('b, 's) response =
 | Reject reject_code 's
 record ('p, 'canid, 's, 'b, 'c) method_call =
   callee :: 'canid
-  method_name :: 's
+  method_name :: "'s method_name"
   arg :: 'b
   transferred_cycles :: nat
   callback :: 'c
@@ -276,7 +277,7 @@ lift_definition call_ctxt_delete :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_c
 datatype 'canid queue_origin = System | Canister 'canid
 datatype 'canid queue = Unordered | Queue "'canid queue_origin" 'canid
 datatype ('s, 'p, 'b, 'c) entry_point =
-  Public_method "'s" "'p" "'b"
+  Public_method "'s method_name" "'p" "'b"
 | Callback "'c" "('b, 's) response" "refunded_cycles"
 | Heartbeat
 
