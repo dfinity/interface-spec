@@ -4134,7 +4134,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
       new_calls = [];
       response = NoResponse;
       cycles_accepted = 0;
-      cycles_used = 0;
+      cycles_used = es.cycles_used;
     }
 ....
 +
