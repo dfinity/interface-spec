@@ -149,7 +149,7 @@ We specify a _canonical textual format_ that is recommended whenever principals 
 
 The textual representation of a blob `b` is `Grouped(Base32(CRC32(b) · b))` where
 
- * `CRC32` is a four byte check sequence, calculated as defined by ISO 3309, ITU-T V.42 and https://www.w3.org/TR/2003/REC-PNG-20031110/#5CRC-algorithm[elsewhere]
+ * `CRC32` is a four byte check sequence, calculated as defined by ISO 3309, ITU-T V.42, and https://www.w3.org/TR/2003/REC-PNG-20031110/#5CRC-algorithm[elsewhere], and stored as big-endian, i.e., the most significant byte comes first and then the less significant bytes come in descending order of significance (MSB B2 B1 LSB).
  * `Base32` is the Base32 encoding as defined in https://tools.ietf.org/html/rfc4648#section-6[RFC 4648], with no padding character added.
  * The middle dot denotes concatenation.
  * `Grouped` takes an ASCII string and inserts the separator `-` (dash) every 5 characters. The last group may contain less than 5 characters. A separator never appears at the beginning or end.
