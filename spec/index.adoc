@@ -4151,7 +4151,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     }
     func<es'>(callbacks.on_cleanup.env)
     Return {
-      new_state = es.wasm_state;
+      new_state = es'.wasm_state;
       new_calls = [];
       response = NoResponse;
       cycles_accepted = 0;
