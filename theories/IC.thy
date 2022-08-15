@@ -83,9 +83,7 @@ lemma list_map_del_sum: "list_map_get f x = Some y \<Longrightarrow> list_map_su
 
 (* Abstract canisters *)
 
-record ('b, 'p) arg =
-  data :: 'b
-  caller :: 'p
+type_synonym 'b arg = 'b
 
 type_synonym timestamp = nat
 datatype status = Running | Stopping | Stopped
@@ -121,14 +119,14 @@ type_synonym refunded_cycles = nat
 
 datatype inspect_method_result = Accept | Reject
 record ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec =
-  init :: "'canid \<times> ('b, 'p) arg \<times> 'b env \<Rightarrow> 'tr + 'w"
+  init :: "'canid \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'w"
   pre_upgrade :: "'w \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'sm"
-  post_upgrade :: "'canid \<times> 'sm \<times> ('b, 'p) arg \<times> 'b env \<Rightarrow> 'tr + 'w"
-  update_methods :: "('s, (('b, 'p) arg \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) list_map"
-  query_methods :: "('s, (('b, 'p) arg \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) list_map"
+  post_upgrade :: "'canid \<times> 'sm \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> 'tr + 'w"
+  update_methods :: "('s, ('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) list_map"
+  query_methods :: "('s, ('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) list_map"
   heartbeat :: "'b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w"
   callbacks :: "('c \<times> ('b, 's) response \<times> refunded_cycles \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func"
-  inspect_message :: "('s \<times> 'w \<times> ('b, 'p) arg \<times> 'b env) \<Rightarrow> 'tr + inspect_method_result"
+  inspect_message :: "('s \<times> 'w \<times> 'b arg \<times> 'p \<times> 'b env) \<Rightarrow> 'tr + inspect_method_result"
 typedef ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
   "{m :: ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module_rec. list_map_dom (update_methods m) \<inter> list_map_dom (query_methods m) = {}}"
   by (auto intro: exI[of _ "\<lparr>init = undefined, pre_upgrade = undefined, post_upgrade = undefined,
@@ -138,8 +136,8 @@ typedef ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module =
 setup_lifting type_definition_canister_module
 
 lift_definition dispatch_method :: "'s \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
-  (((('b, 'p) arg \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) +
-   ((('b, 'p) arg \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func)) option" is
+  ((('b arg \<times> 'p \<times> 'b env \<times> available_cycles) \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func) +
+   (('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func)) option" is
   "\<lambda>f m. case list_map_get (update_methods m) f of Some f' \<Rightarrow> None | None \<Rightarrow> (case list_map_get (query_methods m) f of Some f' \<Rightarrow> None | None \<Rightarrow> None)" .
 
 lift_definition canister_module_callbacks :: "('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow>
@@ -157,7 +155,7 @@ record ('b, 'p, 'uid, 'canid, 's) request =
   sender :: 'uid
   canister_id :: 'canid
   method_name :: 's
-  data :: 'b
+  arg :: 'b
 datatype ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) call_origin =
   From_user "('b, 'p, 'uid, 'canid, 's) request"
 | From_canister "'cid" "'c"
@@ -238,7 +236,7 @@ record ('b, 'uid, 'canid, 's) CanisterQuery =
   sender :: 'uid
   canister_id :: 'canid
   method_name :: 's
-  data :: 'b
+  arg :: 'b
 type_synonym ('b, 'uid, 'canid, 's) APIReadRequest = "('b, 'uid) StateRead + ('b, 'uid, 'canid, 's) CanisterQuery"
 record ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope =
   content :: "('b, 'p, 'uid, 'canid, 's) request + ('b, 'uid, 'canid, 's) APIReadRequest"
@@ -335,10 +333,10 @@ fun message_queue :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message \<Rightarrow>
 
 (* Type conversion functions *)
 
-fun to_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarrow> status" where
-  "to_status can_status.Running = status.Running"
-| "to_status (can_status.Stopping _) = status.Stopping"
-| "to_status can_status.Stopped = status.Stopped"
+fun simple_status :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status \<Rightarrow> status" where
+  "simple_status can_status.Running = status.Running"
+| "simple_status (can_status.Stopping _) = status.Stopping"
+| "simple_status can_status.Stopped = status.Stopped"
 
 
 
@@ -384,7 +382,7 @@ definition initiate_canister_call_post :: "('b, 'p, 'uid, 'canid, 's) request \<
   "initiate_canister_call_post req S =
     S\<lparr>requests := list_map_set (requests S) req Processing, messages :=
       Call_message (From_user req) (principal_of_uid (request.sender req)) (request.canister_id req) (request.method_name req)
-      (request.data req) 0 Unordered # messages S\<rparr>"
+      (request.arg req) 0 Unordered # messages S\<rparr>"
 
 lemma initiate_canister_call_cycles_inv:
   "initiate_canister_call_pre R S \<Longrightarrow>
@@ -511,7 +509,7 @@ lemma call_context_heartbeat_cycles_inv:
 
 (* System transition: Message execution [DONE] *)
 
-fun query_as_update :: "((('b, 'p) arg \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) \<times> ('b, 'p) arg \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
+fun query_as_update :: "(('b arg \<times> 'p \<times> 'b env) \<Rightarrow> ('w, 'b, 's, 'tr) query_func) \<times> 'b arg \<times> 'p \<times> 'b env \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "query_as_update (f, a, e) = (\<lambda>w. case f (a, e) w of Inl t \<Rightarrow> Inl t |
     Inr res \<Rightarrow> Inr \<lparr>new_state = w, new_calls = [], new_certified_data = None, response = Some res, cycles_accepted = 0\<rparr>)"
 
@@ -522,9 +520,8 @@ fun heartbeat_as_update :: "('b env \<Rightarrow> 'w \<Rightarrow> 'tr + 'w) \<t
 
 fun exec_function :: "('s, 'p, 'b, 'c) entry_point \<Rightarrow> 'b env \<Rightarrow> nat \<Rightarrow> ('p, 'canid, 'b, 'tr, 'w, 'sm, 'c, 's) canister_module \<Rightarrow> ('w, 'p, 'canid, 's, 'b, 'c, 'tr) update_func" where
   "exec_function (entry_point.Public_method mn c d) e bal m = (
-    let arg = \<lparr>arg.data = d, arg.caller = c\<rparr> in
-    case dispatch_method mn m of Some (Inl upd) \<Rightarrow> upd (arg, e, bal)
-    | Some (Inr query) \<Rightarrow> query_as_update (query, arg, e) | None \<Rightarrow>
+    case dispatch_method mn m of Some (Inl upd) \<Rightarrow> upd (d, c, e, bal)
+    | Some (Inr query) \<Rightarrow> query_as_update (query, d, c, e) | None \<Rightarrow>
     undefined)"
 | "exec_function (entry_point.Callback cb resp ref_cycles) e bal m =
     canister_module_callbacks m (cb, resp, ref_cycles, e, bal)"
@@ -546,7 +543,7 @@ definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
       (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
         let Mod = module can;
         Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False);
-        Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = to_status can_status\<rparr>;
+        Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>;
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
@@ -562,7 +559,7 @@ definition message_execution_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
           (no_response \<or> call_ctxt_needs_to_respond ctxt) then
           (let result = projr R;
             new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
-              (callee call) (method_call.method_name call) (arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)));
+              (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)));
             response_messages = (case response result of None \<Rightarrow> []
               | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)]);
             messages = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages;
@@ -597,7 +594,7 @@ proof -
     by (auto simp: message_execution_pre_def split: message.splits option.splits)
   define Mod where "Mod = can_state_rec.module can"
   define Is_response where "Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False)"
-  define Env :: "'b env" where "Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = to_status can_status\<rparr>"
+  define Env :: "'b env" where "Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>"
   define Available where "Available = call_ctxt_available_cycles ctxt"
   define F where "F = exec_function ep Env Available Mod"
   define R where "R = F (wasm_state can)"
@@ -648,7 +645,7 @@ proof -
       | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
     define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
       "new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
-        (callee call) (method_call.method_name call) (arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)))"
+        (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)))"
     define messages where "messages = take n (ic.messages S) @ drop (Suc n) (ic.messages S) @ map new_call_to_message new_calls_res @ response_messages"
     define new_ctxt where "new_ctxt = (case response result of
         None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
