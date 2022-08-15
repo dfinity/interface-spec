@@ -4149,7 +4149,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     let es' = ref { empty_execution_state with
       wasm_state = wasm_state;
     }
-    func<es'>(callbacks.on_cleanup.env)
+    try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
     Return {
       new_state = es'.wasm_state;
       new_calls = [];
