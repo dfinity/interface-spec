@@ -36,12 +36,21 @@ lift_definition list_map_set :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow
   "\<lambda>f x y. AList.update x y f"
   by (rule distinct_update)
 
+lemma list_map_get_set: "list_map_get (list_map_set f x y) z = (if x = z then Some y else list_map_get f z)"
+  by transfer (auto simp add: update_Some_unfold update_conv)
+
 lift_definition list_map_del :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow> ('a, 'b) list_map" is
   "\<lambda>f x. AList.delete x f"
   by (rule distinct_delete)
 
+lemma list_map_get_del: "list_map_get (list_map_del f x) z = (if x = z then None else list_map_get f z)"
+  by transfer (auto simp add: delete_conv')
+
 lift_definition list_map_empty :: "('a, 'b) list_map" is "[]"
   by auto
+
+lemma list_map_get_empty[simp]: "list_map_get list_map_empty x = None"
+  by transfer auto
 
 lemma list_map_empty_dom[simp]: "list_map_dom list_map_empty = {}"
   by transfer auto
@@ -1032,6 +1041,7 @@ definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> 
   "ic_canister_creation_post n cid t S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
     let ctrls = (case candid_parse_controllers a of Some ctrls \<Rightarrow> ctrls | _ \<Rightarrow> {cer}) in
     S\<lparr>canisters := list_map_set (canisters S) cid None,
+      freezing_threshold := list_map_set (freezing_threshold S) cid 2592000,
       time := list_map_set (time S) cid t,
       controllers := list_map_set (controllers S) cid ctrls,
       balances := list_map_set (balances S) cid trans_cycles,
@@ -1765,6 +1775,7 @@ definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<
   "ic_provisional_canister_creation_post n cid t S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
     let cyc = the (candid_parse_nat a [encode_string ''amount'']) in
     S\<lparr>canisters := list_map_set (canisters S) cid None,
+      freezing_threshold := list_map_set (freezing_threshold S) cid 2592000,
       time := list_map_set (time S) cid t,
       controllers := list_map_set (controllers S) cid {cer},
       balances := list_map_set (balances S) cid cyc,
@@ -2094,9 +2105,23 @@ lemma system_time_progress_cycles_inv:
 
 (* State machine *)
 
+definition initial_ic :: "nat \<Rightarrow> 'pk \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "initial_ic t pk = \<lparr>requests = list_map_empty,
+    canisters = list_map_empty,
+    controllers = list_map_empty,
+    freezing_threshold = list_map_empty,
+    canister_status = list_map_empty,
+    time = list_map_empty,
+    balances = list_map_empty,
+    certified_data = list_map_empty,
+    system_time = t,
+    call_contexts = list_map_empty,
+    messages = [],
+    root_key = pk\<rparr>"
+
 inductive ic_steps :: "'sig itself \<Rightarrow> 'sd itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow>
   nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_steps sig sd S 0 0 S"
+  "ic_steps sig sd (initial_ic t pk) 0 0 (initial_ic t pk)"
 | request_submission: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 minted (burned + request_submission_burned_cycles E S) (request_submission_post E S)"
 | request_rejection: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_rejection_post E req code msg S)"
 | initiate_canister_call: "ic_steps sig sd S0 minted burned S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (initiate_canister_call_post req S)"
