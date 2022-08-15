@@ -3978,7 +3978,7 @@ init = λ (self_id, arg, caller, sysenv) →
       balance = sysenv.balance
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.performed_calls ≠ [] then Trap {cycles_used = es.cycles_used;}
+  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {new_state = es.wasm_state; cycles_used = es.cycles_used;}
@@ -4004,7 +4004,7 @@ pre_upgrade = λ (old_state, caller, sysenv) →
       balance = sysenv.balance
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.performed_calls ≠ [] then Trap {cycles_used = es.cycles_used;}
+  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {stable_memory = es.wasm_state.stable_mem; cycles_used = es.cycles_used;}
@@ -4030,7 +4030,7 @@ post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
       balance = sysenv.balance
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.performed_calls ≠ [] then Trap {cycles_used = es.cycles_used;}
+  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {new_state = es.wasm_state; cycles_used = es.cycles_used;}
@@ -4069,7 +4069,7 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-  if es.calls ≠ () then Trap {cycles_used = es.cycles_used;}
+  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   if es.response = NoResponse then Trap {cycles_used = es.cycles_used;}
   Return {
@@ -4150,6 +4150,10 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
       wasm_state = wasm_state;
     }
     try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    if es'.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    if es'.calls ≠ [] then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    if es'.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    if es'.response ≠ NoResponse then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
     Return {
       new_state = es'.wasm_state;
       new_calls = [];
@@ -4186,7 +4190,7 @@ inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
       cycles_available = 0; // ingress requests have no funds
     }
    try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-   if es.calls ≠ () then Trap {cycles_used = es.cycles_used;}
+   if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
    if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
    Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
 ....
