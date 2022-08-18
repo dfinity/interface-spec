@@ -2901,7 +2901,7 @@ if
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
-  New_balance > if Is_response then 0 else freezing_limit(S, CM.callee);
+  New_balance ≥ if Is_response then 0 else freezing_limit(S, CM.callee);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with

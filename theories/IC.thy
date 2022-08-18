@@ -569,7 +569,7 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
           cycles_accepted_res \<le> Available \<and>
           cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
             bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
-          New_balance > (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+          New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<and>
           (no_response \<or> call_ctxt_needs_to_respond ctxt) then
           (let result = projr R;
             new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
@@ -645,7 +645,7 @@ proof -
     cycles_accepted_res \<le> Available \<and>
     cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
       bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
-    New_balance > (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+    New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<and>
     (no_response \<or> call_ctxt_needs_to_respond ctxt))"
   have reserved: "(if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) = cycles_reserved ep"
     by (auto simp: Is_response_def split: entry_point.splits)
