@@ -3704,7 +3704,7 @@ State after::
 ....
 S with
     canisters[CanisterId] = EmptyCanister
-    certified_data[A.canister_id] = ""
+    certified_data[Canister_id] = ""
 
     messages = messages ·
       [ ResponseMessage {
