@@ -521,7 +521,7 @@ definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd)
         (case candid_parse_cid (request.arg req) of Some cid \<Rightarrow>
           (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow>
             principal_of_uid (request.sender req) \<in> ctrls \<and>
-            request.method_name req \<in> {encode_string ''install_code'', encode_string ''update_settings'',
+            request.method_name req \<in> {encode_string ''install_code'', encode_string ''uninstall_code'', encode_string ''update_settings'',
               encode_string ''start_canister'', encode_string ''stop_canister'',
               encode_string ''canister_status'', encode_string ''delete_canister'',
               encode_string ''provisional_create_canister_with_cycles'', encode_string ''provisional_top_up_canister''}
