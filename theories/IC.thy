@@ -2,6 +2,11 @@ theory IC
   imports "HOL-Library.AList"
 begin
 
+(* General helper lemmas *)
+
+lemma in_set_updD: "x \<in> set (xs[n := z]) \<Longrightarrow> x \<in> set xs \<or> x = z"
+  by (meson insert_iff set_update_subset_insert subsetD)
+
 (* Partial maps *)
 
 typedef ('a, 'b) list_map = "{f :: ('a \<times> 'b) list. distinct (map fst f)}"
@@ -23,6 +28,9 @@ lift_definition list_map_vals :: "('a, 'b) list_map \<Rightarrow> 'b list" is
 lift_definition list_map_range :: "('a, 'b) list_map \<Rightarrow> 'b set" is
   "set \<circ> map snd" .
 
+lemma in_set_map_filter_vals: "z \<in> set (List.map_filter g (list_map_vals f)) \<Longrightarrow> \<exists>w \<in> list_map_range f. g w = Some z"
+  by transfer (force simp: List.map_filter_def)
+
 lift_definition list_map_sum_vals :: "('b \<Rightarrow> nat) \<Rightarrow> ('a, 'b) list_map \<Rightarrow> nat" is
   "\<lambda>g. sum_list \<circ> (map (g \<circ> snd))" .
 
@@ -32,6 +40,9 @@ lift_definition list_map_get :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow
 lemma list_map_get_dom[dest]: "x \<in> list_map_dom f \<Longrightarrow> list_map_get f x = None \<Longrightarrow> False"
   by transfer auto
 
+lemma list_map_get_range: "list_map_get f x = Some y \<Longrightarrow> y \<in> list_map_range f"
+  by transfer force
+
 lift_definition list_map_set :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> ('a, 'b) list_map" is
   "\<lambda>f x y. AList.update x y f"
   by (rule distinct_update)
@@ -39,12 +50,30 @@ lift_definition list_map_set :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow
 lemma list_map_get_set: "list_map_get (list_map_set f x y) z = (if x = z then Some y else list_map_get f z)"
   by transfer (auto simp add: update_Some_unfold update_conv)
 
+lemma list_map_dom_set[simp]: "list_map_dom (list_map_set f x y) = list_map_dom f \<union> {x}"
+  by transfer (auto simp add: dom_update)
+
+lemma list_map_range_setD: "z \<in> list_map_range (list_map_set f x y) \<Longrightarrow> z \<in> list_map_range f \<or> z = y"
+  apply transfer
+  apply auto
+  apply (metis distinct_update image_iff map_of_eq_Some_iff snd_eqD update_Some_unfold)
+  done
+
 lift_definition list_map_del :: "('a, 'b) list_map \<Rightarrow> 'a \<Rightarrow> ('a, 'b) list_map" is
   "\<lambda>f x. AList.delete x f"
   by (rule distinct_delete)
 
 lemma list_map_get_del: "list_map_get (list_map_del f x) z = (if x = z then None else list_map_get f z)"
   by transfer (auto simp add: delete_conv')
+
+lemma list_map_dom_del[simp]: "list_map_dom (list_map_del f x) = list_map_dom f - {x}"
+  by transfer (simp add: delete_keys)
+
+lemma list_map_range_del: "z \<in> list_map_range (list_map_del f x) \<Longrightarrow> z \<in> list_map_range f"
+  apply transfer
+  apply auto
+  apply (metis Some_eq_map_of_iff delete_notin_dom distinct_delete fst_eqD imageI map_of_delete snd_eqD)
+  done
 
 lift_definition list_map_empty :: "('a, 'b) list_map" is "[]"
   by auto
@@ -55,6 +84,9 @@ lemma list_map_get_empty[simp]: "list_map_get list_map_empty x = None"
 lemma list_map_empty_dom[simp]: "list_map_dom list_map_empty = {}"
   by transfer auto
 
+lemma list_map_empty_range[simp]: "list_map_range list_map_empty = {}"
+  by transfer auto
+
 lift_definition list_map_init :: "('a \<times> 'b) list \<Rightarrow> ('a, 'b) list_map" is
   "\<lambda>xys. AList.updates (map fst xys) (map snd xys) []"
   using distinct_updates
@@ -63,6 +95,12 @@ lift_definition list_map_init :: "('a \<times> 'b) list \<Rightarrow> ('a, 'b) l
 lift_definition list_map_map :: "('b \<Rightarrow> 'c) \<Rightarrow> ('a, 'b) list_map \<Rightarrow> ('a, 'c) list_map" is
   "\<lambda>f xs. map (\<lambda>(k, v). (k, f v)) xs"
   by (auto simp: comp_def case_prod_beta)
+
+lemma list_map_dom_map_map[simp]: "list_map_dom (list_map_map g f) = list_map_dom f"
+  by transfer force
+
+lemma list_map_range_map_map[simp]: "list_map_range (list_map_map g f) = g ` list_map_range f"
+  by transfer force
 
 lemma list_map_sum_vals_split: "(\<And>ctxt. ctxt \<in> list_map_range xs \<Longrightarrow> f (g ctxt) \<le> f ctxt) \<Longrightarrow> list_map_sum_vals f xs =
   list_map_sum_vals id
@@ -258,10 +296,13 @@ lift_definition call_ctxt_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_
   "\<lambda>ctxt. ctxt\<lparr>available_cycles := 0, needs_to_respond := False\<rparr>"
   by auto
 
-lemma call_ctxt_respond_available_cycles[simp]: "call_ctxt_available_cycles (call_ctxt_respond ctxt) = 0"
+lemma call_ctxt_respond_origin[simp]: "call_ctxt_origin (call_ctxt_respond ctxt) = call_ctxt_origin ctxt"
   by transfer auto
 
 lemma call_ctxt_respond_needs_to_respond[dest]: "call_ctxt_needs_to_respond (call_ctxt_respond ctxt) \<Longrightarrow> False"
+  by transfer auto
+
+lemma call_ctxt_respond_available_cycles[simp]: "call_ctxt_available_cycles (call_ctxt_respond ctxt) = 0"
   by transfer auto
 
 lift_definition call_ctxt_deduct_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
@@ -280,6 +321,9 @@ lemma call_ctxt_deduct_cycles_available_cycles[simp]: "call_ctxt_available_cycle
 lift_definition call_ctxt_delete :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
   "\<lambda>ctxt. ctxt\<lparr>deleted := True, needs_to_respond := False, available_cycles := 0\<rparr>"
   by auto
+
+lemma call_ctxt_delete_needs_to_respond[simp]: "call_ctxt_needs_to_respond (call_ctxt_delete ctxt) = False"
+  by transfer auto
 
 (* Calls and Messages *)
 
@@ -342,6 +386,68 @@ record ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic =
   call_contexts :: "('cid, ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt) list_map"
   messages :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message list"
   root_key :: 'pk
+
+definition initial_ic :: "nat \<Rightarrow> 'pk \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "initial_ic t pk = \<lparr>requests = list_map_empty,
+    canisters = list_map_empty,
+    controllers = list_map_empty,
+    freezing_threshold = list_map_empty,
+    canister_status = list_map_empty,
+    time = list_map_empty,
+    balances = list_map_empty,
+    certified_data = list_map_empty,
+    system_time = t,
+    call_contexts = list_map_empty,
+    messages = [],
+    root_key = pk\<rparr>"
+
+definition ic_can_status_inv :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status set \<Rightarrow> 'cid set \<Rightarrow> bool" where
+  "ic_can_status_inv st c = (\<forall>can_status \<in> st.
+    case can_status of Stopping os \<Rightarrow> \<forall>(orig, cycles) \<in> set os. (case orig of
+      From_canister ctxt_id _ \<Rightarrow> ctxt_id \<in> c
+      | _ \<Rightarrow> True)
+    | _ \<Rightarrow> True)"
+
+lemma ic_can_status_inv_mono1: "ic_can_status_inv x y \<Longrightarrow>
+  z \<subseteq> x \<union> {can_status.Running, can_status.Stopped} \<Longrightarrow>
+  ic_can_status_inv z y"
+  by (fastforce simp: ic_can_status_inv_def split: can_status.splits call_origin.splits)
+
+lemma ic_can_status_inv_mono2: "ic_can_status_inv x y \<Longrightarrow>
+  y \<subseteq> z \<Longrightarrow>
+  ic_can_status_inv x z"
+  by (force simp: ic_can_status_inv_def split: can_status.splits call_origin.splits)
+
+lemma ic_can_status_inv_stopping: "ic_can_status_inv x y \<Longrightarrow>
+  (\<And>ctxt_id c. os = From_canister ctxt_id c \<Longrightarrow> ctxt_id \<in> y) \<Longrightarrow>
+  z \<subseteq> x \<union> {can_status.Stopping [(os, cyc)]} \<Longrightarrow>
+  ic_can_status_inv z y"
+  by (fastforce simp: ic_can_status_inv_def split: can_status.splits call_origin.splits)
+
+lemma ic_can_status_inv_stopping_app: "ic_can_status_inv x y \<Longrightarrow>
+  can_status.Stopping w \<in> x \<Longrightarrow>
+  (\<And>ctxt_id c. os = From_canister ctxt_id c \<Longrightarrow> ctxt_id \<in> y) \<Longrightarrow>
+  z \<subseteq> x \<union> {can_status.Stopping (w @ [(os, cyc)])} \<Longrightarrow>
+  ic_can_status_inv z y"
+  by (force simp: ic_can_status_inv_def split: can_status.splits call_origin.splits dest!: subsetD[where ?A=z])
+
+lemma ic_can_status_inv_del: "ic_can_status_inv x z \<Longrightarrow>
+  (\<And>os ctxt_id' c cyc. Stopping os \<in> x \<Longrightarrow> (From_canister ctxt_id' c, cyc) \<in> set os \<Longrightarrow> ctxt_id \<noteq> ctxt_id') \<Longrightarrow>
+  ic_can_status_inv x (z - {ctxt_id})"
+  by (fastforce simp: ic_can_status_inv_def split: can_status.splits call_origin.splits)
+
+definition ic_inv :: "('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "ic_inv S = ((\<forall>msg \<in> set (messages S). case msg of
+    Call_message (From_canister ctxt_id _) _ _ _ _ _ _ \<Rightarrow> ctxt_id \<in> list_map_dom (call_contexts S)
+  | Response_message (From_canister ctxt_id _) _ _ \<Rightarrow> ctxt_id \<in> list_map_dom (call_contexts S)
+  | _ \<Rightarrow> True) \<and>
+  (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_needs_to_respond ctxt \<longrightarrow>
+    (case call_ctxt_origin ctxt of From_canister ctxt_id _ \<Rightarrow> ctxt_id \<in> list_map_dom (call_contexts S)
+    | _ \<Rightarrow> True)) \<and>
+  ic_can_status_inv (list_map_range (canister_status S)) (list_map_dom (call_contexts S)))"
+
+lemma ic_initial_inv: "ic_inv (initial_ic t pk)"
+  by (auto simp: ic_inv_def ic_can_status_inv_def initial_ic_def split: call_origin.splits)
 
 (* Candid *)
 
@@ -594,6 +700,13 @@ proof -
     by (auto simp: request_submission_pre_def request_submission_post_def request_submission_burned_cycles_def total_cycles_def req_def)
 qed
 
+lemma request_submission_ic_inv:
+  assumes "request_submission_pre E S" "ic_inv S"
+  shows "ic_inv (request_submission_post E S)"
+  using assms
+  by (auto simp: ic_inv_def request_submission_pre_def request_submission_post_def Let_def
+      split: sum.splits message.splits call_origin.splits)
+
 
 
 (* System transition: Request rejection [DONE] *)
@@ -608,6 +721,13 @@ lemma request_rejection_cycles_inv:
   assumes "request_rejection_pre E req code msg S"
   shows "total_cycles S = total_cycles (request_rejection_post E req code msg S)"
   by (auto simp: request_rejection_pre_def request_rejection_post_def total_cycles_def)
+
+lemma request_rejection_ic_inv:
+  assumes "request_rejection_pre E req code msg S" "ic_inv S"
+  shows "ic_inv (request_rejection_post E req code msg S)"
+  using assms
+  by (auto simp: ic_inv_def request_rejection_pre_def request_rejection_post_def Let_def
+      split: sum.splits message.splits call_origin.splits)
 
 
 
@@ -631,6 +751,13 @@ lemma initiate_canister_call_cycles_inv:
   assumes "initiate_canister_call_pre R S"
   shows "total_cycles S = total_cycles (initiate_canister_call_post R S)"
   by (auto simp: initiate_canister_call_pre_def initiate_canister_call_post_def total_cycles_def)
+
+lemma initiate_canister_call_ic_inv:
+  assumes "initiate_canister_call_pre R S" "ic_inv S"
+  shows "ic_inv (initiate_canister_call_post R S)"
+  using assms
+  by (auto simp: ic_inv_def initiate_canister_call_pre_def initiate_canister_call_post_def Let_def
+      split: sum.splits message.splits call_origin.splits)
 
 
 
@@ -668,6 +795,14 @@ proof -
     by (auto simp: call_reject_pre_def call_reject_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
 
+lemma call_reject_ic_inv:
+  assumes "call_reject_pre n S" "ic_inv S"
+  shows "ic_inv (call_reject_post n S)"
+  using assms
+  by (auto simp: ic_inv_def call_reject_pre_def call_reject_post_def Let_def
+      split: sum.splits message.splits call_origin.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"])
+
 
 
 (* System transition: Call context creation: Public entry points [DONE] *)
@@ -686,6 +821,9 @@ lift_definition create_call_ctxt :: "'canid \<Rightarrow> ('b, 'p, 'uid, 'canid,
   ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
   "\<lambda>cee orig trans_cycles. \<lparr>canister = cee, origin = orig, needs_to_respond = True, deleted = False, available_cycles = trans_cycles\<rparr>"
   by auto
+
+lemma create_call_ctxt_origin[simp]: "call_ctxt_origin (create_call_ctxt cee orig trans_cycles) = orig"
+  by transfer auto
 
 lemma create_call_ctxt_carried_cycles[simp]: "call_ctxt_carried_cycles (create_call_ctxt cee orig trans_cycles) = carried_cycles orig + trans_cycles"
   by transfer auto
@@ -716,6 +854,15 @@ proof -
         list_map_sum_in[where ?g=id, simplified] list_map_sum_out msgs msgs_upd split: option.splits)
 qed
 
+lemma call_context_create_ic_inv:
+  assumes "call_context_create_pre n ctxt_id S" "ic_inv S"
+  shows "ic_inv (call_context_create_post n ctxt_id S)"
+  using assms
+  by (auto simp: ic_inv_def call_context_create_pre_def call_context_create_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD
+      intro: ic_can_status_inv_mono2)
+
 
 
 (* System transition: Call context creation: Heartbeat [DONE] *)
@@ -730,6 +877,9 @@ definition call_context_heartbeat_pre :: "'canid \<Rightarrow> 'cid \<Rightarrow
 lift_definition create_call_ctxt_heartbeat :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
   "\<lambda>cee. \<lparr>canister = cee, origin = From_heartbeat, needs_to_respond = False, deleted = False, available_cycles = 0\<rparr>"
   by auto
+
+lemma create_call_ctxt_heartbeat_needs_to_respond[simp]: "call_ctxt_needs_to_respond (create_call_ctxt_heartbeat cee) = False"
+  by transfer auto
 
 lemma create_call_ctxt_heartbeat_carried_cycles[simp]: "call_ctxt_carried_cycles (create_call_ctxt_heartbeat cee) = 0"
   by transfer auto
@@ -747,6 +897,15 @@ lemma call_context_heartbeat_cycles_inv:
   using assms list_map_sum_in_ge[of "balances S" cee, where ?g=id, simplified]
   by (auto simp: call_context_heartbeat_pre_def call_context_heartbeat_post_def total_cycles_def
       list_map_sum_in[where ?g=id, simplified] list_map_sum_out split: option.splits)
+
+lemma call_context_heartbeat_ic_inv:
+  assumes "call_context_heartbeat_pre cee ctxt_id S" "ic_inv S"
+  shows "ic_inv (call_context_heartbeat_post cee ctxt_id S)"
+  using assms
+  by (auto simp: ic_inv_def call_context_heartbeat_pre_def call_context_heartbeat_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD
+      intro: ic_can_status_inv_mono2)
 
 
 
@@ -951,6 +1110,126 @@ proof -
   qed
 qed
 
+lemma message_execution_ic_inv:
+  assumes "message_execution_pre n S" "ic_inv S"
+  shows "ic_inv (message_execution_post n S)"
+proof -
+  obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
+    and prod: "list_map_get (canisters S) recv = Some (Some can)"
+    "list_map_get (balances S) recv = Some bal"
+    "list_map_get (canister_status S) recv = Some can_status"
+    "list_map_get (time S) recv = Some t"
+    "list_map_get (call_contexts S) ctxt_id = Some ctxt"
+    using assms
+    by (auto simp: message_execution_pre_def split: message.splits option.splits)
+  define Mod where "Mod = can_state_rec.module can"
+  define Is_response where "Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False)"
+  define Env :: "'b env" where "Env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>"
+  define Available where "Available = call_ctxt_available_cycles ctxt"
+  define F where "F = exec_function ep Env Available Mod"
+  define R where "R = F (wasm_state can)"
+  define cyc_used where "cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | Inl trap \<Rightarrow> trap_return.cycles_used trap)"
+  obtain cycles_accepted_res new_calls_res where res: "(cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, new_calls res))"
+    by (cases "(case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, new_calls res))") auto
+  define New_balance where "New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+    - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res))"
+  define no_response where "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
+  define older where "older = take n (messages S)"
+  define younger where "younger = drop (Suc n) (messages S)"
+  have msgs: "messages S = older @ Func_message ctxt_id recv ep q # younger"
+    "take n older = older" "drop (Suc n) older = []"
+    "take (n - length older) ws = []" "drop (Suc n - length older) (w # ws) = ws"
+    for w and ws :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message list"
+    using id_take_nth_drop[of n "messages S"] assms
+    by (auto simp: message_execution_pre_def msg older_def younger_def)
+  define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+    balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>"
+  define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+    cycles_accepted_res \<le> Available \<and>
+    cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+      bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+    New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+    (no_response \<or> call_ctxt_needs_to_respond ctxt))"
+  show ?thesis
+  proof (cases cond)
+    case False
+    have "message_execution_post n S = S''"
+      using False
+      by (simp_all add: message_execution_post_def Let_def msg prod
+          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
+          New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric])
+    then show ?thesis
+      using assms(2)
+      apply (auto simp: ic_inv_def S''_def msgs split: message.splits call_origin.splits)
+         apply force
+        apply fast
+       apply force
+      apply fast
+      done
+  next
+    case True
+    define result where "result = projr R"
+    have R_Inr: "R = Inr result"
+      using True
+      by (auto simp: cond_def result_def split: option.splits)
+    define response_messages where "response_messages = (case update_return.response result of None \<Rightarrow> []
+      | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
+    define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
+      "new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv)
+        (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call) (Queue (Canister recv) (callee call)))"
+    define messages where "messages = take n (ic.messages S) @ drop (Suc n) (ic.messages S) @ map new_call_to_message new_calls_res @ response_messages"
+    define new_ctxt where "new_ctxt = (case update_return.response result of
+        None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
+      | Some _ \<Rightarrow> call_ctxt_respond ctxt)"
+    define certified_data where "certified_data = (case new_certified_data result of None \<Rightarrow> ic.certified_data S
+      | Some cd \<Rightarrow> list_map_set (ic.certified_data S) recv cd)"
+    define S' where "S' = S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
+      messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
+      balances := list_map_set (balances S) recv New_balance, certified_data := certified_data\<rparr>"
+    have cycles_accepted_res_def: "cycles_accepted_res = update_return.cycles_accepted result"
+      and new_calls_res_def: "new_calls_res = new_calls result"
+      using res
+      by (auto simp: R_Inr)
+    have no_response: "no_response = (update_return.response result = None)"
+      by (auto simp: no_response_def R_Inr)
+    have msg_exec: "message_execution_post n S = S'"
+      using True
+      by (simp_all add: message_execution_post_def Let_def msg prod
+          Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
+          New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric]
+          messages_def[symmetric] new_ctxt_def[symmetric] certified_data_def[symmetric] S'_def[symmetric]
+          result_def[symmetric] response_messages_def[symmetric] new_call_to_message_def[symmetric])
+    have messages_msgs: "messages = older @ younger @ map new_call_to_message new_calls_res @ response_messages"
+      by (auto simp: messages_def older_def younger_def)
+    have ctxt_in_range: "ctxt \<in> list_map_range (call_contexts S)"
+      using prod(5)
+      by (simp add: list_map_get_range)
+    have response_msgsD: "msg \<in> set response_messages \<Longrightarrow> update_return.response result \<noteq> None \<and>
+      (\<exists>resp. msg = Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res))" for msg
+      by (auto simp: response_messages_def) metis
+    have call_ctxt_origin_new_ctxt: "call_ctxt_origin new_ctxt = call_ctxt_origin ctxt"
+      by (auto simp: new_ctxt_def split: option.splits)
+    have call_ctxt_needs_to_respond_new_ctxtD: "call_ctxt_needs_to_respond new_ctxt \<Longrightarrow> call_ctxt_needs_to_respond ctxt"
+      by (auto simp: new_ctxt_def split: option.splits)
+    show ?thesis
+      using assms(2) ctxt_in_range True call_ctxt_not_needs_to_respond_available_cycles[of ctxt]
+      apply (auto simp: cond_def msg_exec S'_def ic_inv_def msgs messages_msgs new_call_to_message_def
+          no_response_def R_Inr call_ctxt_origin_new_ctxt
+          split: option.splits message.splits call_origin.splits
+          dest!: list_map_range_setD response_msgsD call_ctxt_needs_to_respond_new_ctxtD
+          intro: ic_can_status_inv_mono2)
+             apply blast
+            apply fast
+           apply blast
+          apply fast
+         apply blast
+        apply fast
+       apply blast
+      apply fast
+      done
+  qed
+qed
+
 
 
 (* System transition: Call context starvation [DONE] *)
@@ -984,6 +1263,15 @@ lemma call_context_starvation_cycles_inv:
   by (auto simp: call_context_starvation_pre_def call_context_starvation_post_def total_cycles_def
       call_ctxt_carried_cycles list_map_sum_in[where ?g=call_ctxt_carried_cycles] split: option.splits)
 
+lemma call_context_starvation_ic_inv:
+  assumes "call_context_starvation_pre ctxt_id S" "ic_inv S"
+  shows "ic_inv (call_context_starvation_post ctxt_id S)"
+  using assms
+  by (auto simp: ic_inv_def call_context_starvation_pre_def call_context_starvation_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range
+      intro: ic_can_status_inv_mono2)
+
 
 
 (* System transition: Call context removal [DONE] *)
@@ -1002,7 +1290,10 @@ definition call_context_removal_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b
         | _ \<Rightarrow> True) \<and>
       (\<forall>other_call_context \<in> list_map_range (call_contexts S).
         call_ctxt_needs_to_respond other_call_context \<longrightarrow>
-        calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id)
+        calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id) \<and>
+      (\<forall>can_status \<in> list_map_range (canister_status S). case can_status of Stopping os \<Rightarrow>
+        (\<forall>(orig, cyc) \<in> set os. case orig of From_canister ctxt_id' _ \<Rightarrow> ctxt_id \<noteq> ctxt_id' | _ \<Rightarrow> True)
+      | _ \<Rightarrow> True)
     | None \<Rightarrow> False))"
 
 definition call_context_removal_post :: "'cid \<Rightarrow>
@@ -1017,6 +1308,15 @@ lemma call_context_removal_cycles_monotonic:
   shows "total_cycles S = total_cycles (call_context_removal_post ctxt_id S) + call_context_removal_burned_cycles ctxt_id S"
   using assms call_ctxt_not_needs_to_respond_available_cycles
   by (auto simp: call_context_removal_pre_def call_context_removal_post_def call_context_removal_burned_cycles_def total_cycles_def call_ctxt_carried_cycles list_map_del_sum split: option.splits)
+
+lemma call_context_removal_ic_inv:
+  assumes "call_context_removal_pre ctxt_id S" "ic_inv S"
+  shows "ic_inv (call_context_removal_post ctxt_id S)"
+  using assms
+  by (force simp: ic_inv_def call_context_removal_pre_def call_context_removal_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      intro!: ic_can_status_inv_del[where ?z="list_map_dom (call_contexts S)"])
 
 
 
@@ -1070,6 +1370,15 @@ proof -
         list_map_sum_out[where ?g=id] list_map_sum_out[where ?g=status_cycles] split: message.splits option.splits)
 qed
 
+lemma ic_canister_creation_ic_inv:
+  assumes "ic_canister_creation_pre n cid t S" "ic_inv S"
+  shows "ic_inv (ic_canister_creation_post n cid t S)"
+  using assms
+  by (auto simp: ic_inv_def ic_canister_creation_pre_def ic_canister_creation_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      intro: ic_can_status_inv_mono1)
+
 
 
 (* System transition: IC Management Canister: Changing settings [DONE] *)
@@ -1111,6 +1420,14 @@ proof -
     using assms
     by (auto simp: ic_update_settings_pre_def ic_update_settings_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
+
+lemma ic_update_settings_ic_inv:
+  assumes "ic_update_settings_pre n S" "ic_inv S"
+  shows "ic_inv (ic_update_settings_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_update_settings_pre_def ic_update_settings_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del)
 
 
 
@@ -1161,6 +1478,14 @@ proof -
     using assms
     by (auto simp: ic_canister_status_pre_def ic_canister_status_post_def total_cycles_def Let_def msgs split: message.splits option.splits)
 qed
+
+lemma ic_canister_status_ic_inv:
+  assumes "ic_canister_status_pre n m S" "ic_inv S"
+  shows "ic_inv (ic_canister_status_post n m S)"
+  using assms
+  by (auto simp: ic_inv_def ic_canister_status_pre_def ic_canister_status_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del)
 
 
 
@@ -1235,6 +1560,30 @@ proof -
     by (auto simp: ic_code_installation_pre_def ic_code_installation_post_def ic_code_installation_burned_cycles_def total_cycles_def Let_def msgs list_map_sum_in[where ?f="balances S"] split: message.splits option.splits sum.splits prod.splits)
 qed
 
+lemma ic_code_installation_ic_inv:
+  assumes "ic_code_installation_pre n S" "ic_inv S"
+  shows "ic_inv (ic_code_installation_post n S)"
+proof -
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+    and parse: "candid_parse_cid a = Some cid"
+    "candid_parse_text a [encode_string ''mode''] = Some mode"
+    "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
+    "candid_parse_blob a [encode_string ''arg''] = Some ar"
+    "parse_wasm_mod w = Some m"
+    and list_map_get:
+    "list_map_get (controllers S) cid = Some ctrls"
+    "list_map_get (time S) cid = Some t"
+    "list_map_get (balances S) cid = Some bal"
+    "list_map_get (canister_status S) cid = Some can_status"
+    using assms
+    by (auto simp: ic_code_installation_pre_def split: message.splits option.splits)
+  show ?thesis
+    using assms
+    by (auto simp: ic_inv_def ic_code_installation_pre_def ic_code_installation_post_def msg parse list_map_get Let_def
+        split: sum.splits call_origin.splits message.splits
+        dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del)
+qed
+
 
 
 (* System transition: IC Management Canister: Code upgrade [DONE] *)
@@ -1268,13 +1617,13 @@ definition ic_code_upgrade_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w,
     let cid = the (candid_parse_cid a) in
     (case candid_parse_cid a of Some cid \<Rightarrow>
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
-      (Some mode, Some w, Some a) \<Rightarrow>
+      (Some mode, Some w, Some ar) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
       (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
       let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
       (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
-      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, a, cer, env) of Inr post_ret \<Rightarrow>
+      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = cycles_return.return post_ret, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
       balances := list_map_set (balances S) cid (bal - (cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)),
@@ -1285,13 +1634,13 @@ definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid
     let cid = the (candid_parse_cid a) in
     (case candid_parse_cid a of Some cid \<Rightarrow>
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
-      (Some mode, Some w, Some a) \<Rightarrow>
+      (Some mode, Some w, Some ar) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
       (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
       let env = \<lparr>env_time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
       (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
-      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, a, cer, env) of Inr post_ret \<Rightarrow>
+      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
       cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)))))))"
 
 lemma ic_code_upgrade_cycles_inv:
@@ -1311,6 +1660,31 @@ proof -
   show ?thesis
     using assms list_map_sum_in_ge[where ?f="balances S" and ?g=id and ?x="the (candid_parse_cid a)"]
     by (auto simp: ic_code_upgrade_pre_def ic_code_upgrade_post_def ic_code_upgrade_burned_cycles_def total_cycles_def Let_def msgs list_map_sum_in[where ?f="balances S"] split: message.splits option.splits sum.splits)
+qed
+
+lemma ic_code_upgrade_ic_inv:
+  assumes "ic_code_upgrade_pre n S" "ic_inv S"
+  shows "ic_inv (ic_code_upgrade_post n S)"
+proof -
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m can ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+    and parse: "candid_parse_cid a = Some cid"
+    "candid_parse_text a [encode_string ''mode''] = Some mode"
+    "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
+    "candid_parse_blob a [encode_string ''arg''] = Some ar"
+    "parse_wasm_mod w = Some m"
+    and list_map_get:
+    "list_map_get (canisters S) cid = Some (Some can)"
+    "list_map_get (controllers S) cid = Some ctrls"
+    "list_map_get (time S) cid = Some t"
+    "list_map_get (balances S) cid = Some bal"
+    "list_map_get (canister_status S) cid = Some can_status"
+    using assms
+    by (auto simp: ic_code_upgrade_pre_def split: message.splits option.splits)
+  show ?thesis
+    using assms
+    by (auto simp: ic_inv_def ic_code_upgrade_pre_def ic_code_upgrade_post_def msg parse list_map_get Let_def
+        split: sum.splits call_origin.splits message.splits
+        dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del)
 qed
 
 
@@ -1369,6 +1743,15 @@ proof -
         split: message.splits option.splits sum.splits if_splits intro!: list_map_sum_vals_filter)
 qed
 
+lemma ic_code_uninstallation_ic_inv:
+  assumes "ic_code_uninstallation_pre n S" "ic_inv S"
+  shows "ic_inv (ic_code_uninstallation_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_code_uninstallation_pre_def ic_code_uninstallation_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* System transition: IC Management Canister: Stopping a canister (running) [DONE] *)
@@ -1409,6 +1792,22 @@ proof -
     using assms
     by (auto simp: ic_canister_stop_running_pre_def ic_canister_stop_running_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
+qed
+
+lemma ic_canister_stop_running_ic_inv:
+  assumes "ic_canister_stop_running_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_stop_running_post n S)"
+proof -
+  obtain orig cer cee mn a trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+    and cid_def: "candid_parse_cid a = Some cid"
+    using assms
+    by (auto simp: ic_canister_stop_running_pre_def split: message.splits option.splits)
+  show ?thesis
+    using assms
+    by (force simp: ic_inv_def ic_canister_stop_running_pre_def ic_canister_stop_running_post_def msg Let_def
+        split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+        dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+        in_set_map_filter_vals intro!: ic_can_status_inv_stopping[where ?x="list_map_range (canister_status S)" and ?os=orig])
 qed
 
 
@@ -1454,6 +1853,22 @@ proof -
         list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
 qed
 
+lemma ic_canister_stop_stopping_ic_inv:
+  assumes "ic_canister_stop_stopping_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_stop_stopping_post n S)"
+proof -
+  obtain orig cer cee mn a trans_cycles q cid where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+    and cid_def: "candid_parse_cid a = Some cid"
+    using assms
+    by (auto simp: ic_canister_stop_stopping_pre_def split: message.splits option.splits)
+  show ?thesis
+    using assms
+    by (force simp: ic_inv_def ic_canister_stop_stopping_pre_def ic_canister_stop_stopping_post_def msg Let_def
+        split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+        dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+        in_set_map_filter_vals intro!: ic_can_status_inv_stopping_app[where ?x="list_map_range (canister_status S)" and ?os=orig])
+qed
+
 
 
 (* System transition: IC Management Canister: Stopping a canister (done stopping) [DONE] *)
@@ -1484,6 +1899,15 @@ proof -
     by (auto simp: ic_canister_stop_done_stopping_pre_def ic_canister_stop_done_stopping_post_def total_cycles_def call_ctxt_carried_cycles Let_def
         F1 F2 list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits can_status.splits)
 qed
+
+lemma ic_canister_stop_done_stopping_ic_inv:
+  assumes "ic_canister_stop_done_stopping_pre cid S" "ic_inv S"
+  shows "ic_inv (ic_canister_stop_done_stopping_post cid S)"
+  using assms
+  by (force simp: ic_inv_def ic_can_status_inv_def ic_canister_stop_done_stopping_pre_def ic_canister_stop_done_stopping_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
 
 
 
@@ -1525,6 +1949,15 @@ proof -
     by (auto simp: ic_canister_stop_stopped_pre_def ic_canister_stop_stopped_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         split: message.splits option.splits sum.splits can_status.splits)
 qed
+
+lemma ic_canister_stop_stopped_ic_inv:
+  assumes "ic_canister_stop_stopped_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_stop_stopped_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_canister_stop_stopped_pre_def ic_canister_stop_stopped_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
 
 
 
@@ -1568,6 +2001,15 @@ proof -
     by (auto simp: ic_canister_start_not_stopping_pre_def ic_canister_start_not_stopping_post_def total_cycles_def call_ctxt_carried_cycles cid_def Let_def msgs
         list_map_sum_in[where ?g=status_cycles] split: message.splits option.splits sum.splits)
 qed
+
+lemma ic_canister_start_not_stopping_ic_inv:
+  assumes "ic_canister_start_not_stopping_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_start_not_stopping_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_canister_start_not_stopping_pre_def ic_canister_start_not_stopping_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals intro: ic_can_status_inv_mono1)
 
 
 
@@ -1618,6 +2060,17 @@ proof -
         list_map_sum_in[where ?g=status_cycles and ?f="canister_status S"]
         split: message.splits option.splits sum.splits can_status.splits)
 qed
+
+lemma ic_canister_start_stopping_ic_inv:
+  assumes "ic_canister_start_stopping_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_start_stopping_post n S)"
+  using assms
+  apply (auto simp: ic_inv_def ic_canister_start_stopping_pre_def ic_canister_start_stopping_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
+      intro: ic_can_status_inv_mono1)
+   apply (fastforce simp: ic_can_status_inv_def)+
+  done
 
 
 
@@ -1672,6 +2125,15 @@ proof -
         split: message.splits option.splits sum.splits can_status.splits)
 qed
 
+lemma ic_canister_deletion_ic_inv:
+  assumes "ic_canister_deletion_pre n S" "ic_inv S"
+  shows "ic_inv (ic_canister_deletion_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_canister_deletion_pre_def ic_canister_deletion_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
+      intro: ic_can_status_inv_mono1)
+
 
 
 (* System transition: IC Management Canister: Depositing cycles [DONE] *)
@@ -1715,6 +2177,15 @@ proof -
         list_map_sum_in[where ?g=id and ?f="balances S"] min_def split: message.splits option.splits sum.splits)
 qed
 
+lemma ic_depositing_cycles_ic_inv:
+  assumes "ic_depositing_cycles_pre n S" "ic_inv S"
+  shows "ic_inv (ic_depositing_cycles_post n S)"
+  using assms
+  by (auto simp: ic_inv_def ic_depositing_cycles_pre_def ic_depositing_cycles_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* System transition: IC Management Canister: Random numbers [DONE] *)
@@ -1750,6 +2221,15 @@ proof -
     using assms
     by (auto simp: ic_random_numbers_pre_def ic_random_numbers_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs)
 qed
+
+lemma ic_random_numbers_ic_inv:
+  assumes "ic_random_numbers_pre n b S" "ic_inv S"
+  shows "ic_inv (ic_random_numbers_post n b S)"
+  using assms
+  by (auto simp: ic_inv_def ic_random_numbers_pre_def ic_random_numbers_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
 
 
 
@@ -1808,6 +2288,15 @@ proof -
         list_map_sum_out[where ?g=id] list_map_sum_out[where ?g=status_cycles] split: message.splits option.splits)
 qed
 
+lemma ic_provisional_canister_creation_ic_inv:
+  assumes "ic_provisional_canister_creation_pre n cid t S" "ic_inv S"
+  shows "ic_inv (ic_provisional_canister_creation_post n cid t S)"
+  using assms
+  by (auto simp: ic_inv_def ic_provisional_canister_creation_pre_def ic_provisional_canister_creation_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
+      intro: ic_can_status_inv_mono1)
+
 
 
 (* System transition: IC Management Canister: Top up canister [DONE] *)
@@ -1853,6 +2342,15 @@ proof -
         list_map_sum_in[where ?g=id] split: message.splits option.splits)
 qed
 
+lemma ic_top_up_canister_ic_inv:
+  assumes "ic_top_up_canister_pre n cid S" "ic_inv S"
+  shows "ic_inv (ic_top_up_canister_post n cid S)"
+  using assms
+  by (auto simp: ic_inv_def ic_top_up_canister_pre_def ic_top_up_canister_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* System transition: Callback invocation (not deleted) [DONE] *)
@@ -1892,6 +2390,14 @@ proof -
     by (auto simp: callback_invocation_not_deleted_pre_def callback_invocation_not_deleted_post_def total_cycles_def call_ctxt_carried_cycles Let_def msgs msgs_upd
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
 qed
+
+lemma callback_invocation_not_deleted_ic_inv:
+  assumes "callback_invocation_not_deleted_pre n S" "ic_inv S"
+  shows "ic_inv (callback_invocation_not_deleted_post n S)"
+  using assms
+  by (auto simp: ic_inv_def callback_invocation_not_deleted_pre_def callback_invocation_not_deleted_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD)
 
 
 
@@ -1934,6 +2440,14 @@ proof -
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
 qed
 
+lemma callback_invocation_deleted_ic_inv:
+  assumes "callback_invocation_deleted_pre n S" "ic_inv S"
+  shows "ic_inv (callback_invocation_deleted_post n S)"
+  using assms
+  by (auto simp: ic_inv_def callback_invocation_deleted_pre_def callback_invocation_deleted_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD)
+
 
 
 (* System transition: Respond to user request [DONE] *)
@@ -1975,6 +2489,14 @@ proof -
         list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits request_status.splits)
 qed
 
+lemma respond_to_user_request_ic_inv:
+  assumes "respond_to_user_request_pre n S" "ic_inv S"
+  shows "ic_inv (respond_to_user_request_post n S)"
+  using assms
+  by (auto simp: ic_inv_def respond_to_user_request_pre_def respond_to_user_request_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD)
+
 
 
 (* System transition: Request clean up [DONE] *)
@@ -1991,6 +2513,14 @@ lemma request_cleanup_cycles_inv:
   assumes "request_cleanup_pre n S"
   shows "total_cycles S = total_cycles (request_cleanup_post n S)"
   by (auto simp: request_cleanup_post_def total_cycles_def)
+
+lemma request_cleanup_ic_inv:
+  assumes "request_cleanup_pre req S" "ic_inv S"
+  shows "ic_inv (request_cleanup_post req S)"
+  using assms
+  by (auto simp: ic_inv_def request_cleanup_pre_def request_cleanup_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD)
 
 
 
@@ -2009,6 +2539,14 @@ lemma request_cleanup_expired_cycles_inv:
   assumes "request_cleanup_expired_pre n S"
   shows "total_cycles S = total_cycles (request_cleanup_expired_post n S)"
   by (auto simp: request_cleanup_expired_post_def total_cycles_def)
+
+lemma request_cleanup_expired_ic_inv:
+  assumes "request_cleanup_expired_pre req S" "ic_inv S"
+  shows "ic_inv (request_cleanup_expired_post req S)"
+  using assms
+  by (auto simp: ic_inv_def request_cleanup_expired_pre_def request_cleanup_expired_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD)
 
 
 
@@ -2047,6 +2585,15 @@ proof -
         split: message.splits option.splits sum.splits if_splits intro!: list_map_sum_vals_filter)
 qed
 
+lemma canister_out_of_cycles_ic_inv:
+  assumes "canister_out_of_cycles_pre cid S" "ic_inv S"
+  shows "ic_inv (canister_out_of_cycles_post cid S)"
+  using assms
+  by (auto simp: ic_inv_def canister_out_of_cycles_pre_def canister_out_of_cycles_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
@@ -2063,6 +2610,15 @@ lemma canister_time_progress_cycles_inv:
   assumes "canister_time_progress_pre cid t1 S"
   shows "total_cycles S = total_cycles (canister_time_progress_post cid t1 S)"
   by (auto simp: canister_time_progress_post_def total_cycles_def)
+
+lemma canister_time_progress_ic_inv:
+  assumes "canister_time_progress_pre cid t1 S" "ic_inv S"
+  shows "ic_inv (canister_time_progress_post cid t1 S)"
+  using assms
+  by (auto simp: ic_inv_def canister_time_progress_pre_def canister_time_progress_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
 
 
 
@@ -2086,6 +2642,15 @@ lemma cycle_consumption_cycles_monotonic:
   by (auto simp: cycle_consumption_pre_def cycle_consumption_post_def cycle_consumption_burned_cycles_def total_cycles_def
       list_map_sum_in[where ?g=id and ?f="balances S"] split: option.splits)
 
+lemma cycle_consumption_ic_inv:
+  assumes "cycle_consumption_pre cid b1 S" "ic_inv S"
+  shows "ic_inv (cycle_consumption_post cid b1 S)"
+  using assms
+  by (auto simp: ic_inv_def cycle_consumption_pre_def cycle_consumption_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* System transition: Time progressing and cycle consumption (system time) [DONE] *)
@@ -2101,27 +2666,22 @@ lemma system_time_progress_cycles_inv:
   shows "total_cycles S = total_cycles (system_time_progress_post t1 S)"
   by (auto simp: system_time_progress_post_def total_cycles_def)
 
+lemma system_time_progress_ic_inv:
+  assumes "system_time_progress_pre t1 S" "ic_inv S"
+  shows "ic_inv (system_time_progress_post t1 S)"
+  using assms
+  by (auto simp: ic_inv_def system_time_progress_pre_def system_time_progress_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
 
 
 (* State machine *)
 
-definition initial_ic :: "nat \<Rightarrow> 'pk \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "initial_ic t pk = \<lparr>requests = list_map_empty,
-    canisters = list_map_empty,
-    controllers = list_map_empty,
-    freezing_threshold = list_map_empty,
-    canister_status = list_map_empty,
-    time = list_map_empty,
-    balances = list_map_empty,
-    certified_data = list_map_empty,
-    system_time = t,
-    call_contexts = list_map_empty,
-    messages = [],
-    root_key = pk\<rparr>"
-
 inductive ic_steps :: "'sig itself \<Rightarrow> 'sd itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow>
   nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "ic_steps sig sd (initial_ic t pk) 0 0 (initial_ic t pk)"
+  ic_steps_refl: "ic_steps sig sd S 0 0 S"
 | request_submission: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) S \<Longrightarrow> ic_steps sig sd S0 minted (burned + request_submission_burned_cycles E S) (request_submission_post E S)"
 | request_rejection: "ic_steps sig sd S0 minted burned S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig, 'sd) envelope) req code msg S \<Longrightarrow> ic_steps sig sd S0 minted burned (request_rejection_post E req code msg S)"
 | initiate_canister_call: "ic_steps sig sd S0 minted burned S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig sd S0 minted burned (initiate_canister_call_post req S)"
@@ -2158,7 +2718,7 @@ inductive ic_steps :: "'sig itself \<Rightarrow> 'sd itself \<Rightarrow> ('p, '
 | cycle_consumption: "ic_steps sig sd S0 minted burned S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig sd S0 minted (burned + cycle_consumption_burned_cycles cid b1 S) (cycle_consumption_post cid b1 S)"
 | system_time_progress: "ic_steps sig sd S0 minted burned S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig sd S0 minted burned (system_time_progress_post t1 S)"
 
-lemma total_cycles_monotonic:
+lemma total_cycles:
   assumes "ic_steps TYPE('sig) TYPE('sd) S0 minted burned S"
   shows "total_cycles S0 + minted = total_cycles S + burned"
   using assms
@@ -2199,6 +2759,49 @@ lemma total_cycles_monotonic:
   using canister_time_progress_cycles_inv apply fastforce
   using cycle_consumption_cycles_monotonic apply fastforce
   using system_time_progress_cycles_inv apply fastforce
+  done
+
+lemma ic_inv:
+  assumes "ic_steps TYPE('sig) TYPE('sd) S0 minted burned S"
+  shows "ic_inv S0 \<Longrightarrow> ic_inv S"
+  using assms
+  apply (induction "TYPE('sig)" "TYPE('sd)" S0 minted burned S rule: ic_steps.induct)
+                      apply auto[1]
+  using request_submission_ic_inv apply fastforce
+  using request_rejection_ic_inv apply fastforce
+  using initiate_canister_call_ic_inv apply fastforce
+  using call_reject_ic_inv apply fastforce
+  using call_context_create_ic_inv apply fastforce
+  using call_context_heartbeat_ic_inv apply fastforce
+  using message_execution_ic_inv apply fastforce
+  using call_context_starvation_ic_inv apply fastforce
+  using call_context_removal_ic_inv apply fastforce
+  using ic_canister_creation_ic_inv apply fastforce
+  using ic_update_settings_ic_inv apply fastforce
+  using ic_canister_status_ic_inv apply fastforce
+  using ic_code_installation_ic_inv apply fastforce
+  using ic_code_upgrade_ic_inv apply fastforce
+  using ic_code_uninstallation_ic_inv apply fastforce
+  using ic_canister_stop_running_ic_inv apply fastforce
+  using ic_canister_stop_stopping_ic_inv apply fastforce
+  using ic_canister_stop_done_stopping_ic_inv apply fastforce
+  using ic_canister_stop_stopped_ic_inv apply fastforce
+  using ic_canister_start_not_stopping_ic_inv apply fastforce
+  using ic_canister_start_stopping_ic_inv apply fastforce
+  using ic_canister_deletion_ic_inv apply fastforce
+  using ic_depositing_cycles_ic_inv apply fastforce
+  using ic_random_numbers_ic_inv apply fastforce
+  using ic_provisional_canister_creation_ic_inv apply fastforce
+  using ic_top_up_canister_ic_inv apply fastforce
+  using callback_invocation_not_deleted_ic_inv apply fastforce
+  using callback_invocation_deleted_ic_inv apply fastforce
+  using respond_to_user_request_ic_inv apply fastforce
+  using request_cleanup_ic_inv apply fastforce
+  using request_cleanup_expired_ic_inv apply fastforce
+  using canister_out_of_cycles_ic_inv apply fastforce
+  using canister_time_progress_ic_inv apply fastforce
+  using cycle_consumption_ic_inv apply fastforce
+  using system_time_progress_ic_inv apply fastforce
   done
 
 end

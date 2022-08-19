@@ -2576,14 +2576,13 @@ The following is an incomplete list of invariants that should hold for the abstr
   if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
-* Referenced call contexts exists:
+* Referenced call contexts exist:
 +
 ....
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
-∀ _ ↦ Ctxt ∈ S.call_contexts:
-  if Ctx.needs_to_respond:
-     Ctxt.origin.calling_context ∈ S.call_contexts
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
+∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ∈ dom(S.call_contexts)
+∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
 ....
 
 === State transitions
@@ -2790,7 +2789,7 @@ Conditions::
     S.canisters[CM.callee] ≠ EmptyCanister
     S.canister_status[CM.callee] = Running
     S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
-    Ctxt_id ∉ dom S.call_contexts
+    Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
 State after::
@@ -2826,7 +2825,7 @@ Conditions::
     S.canisters[C] ≠ EmptyCanister
     S.canister_status[C] = Running
     balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
-    Ctxt_id ∉ dom S.call_contexts
+    Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
 State after::
@@ -3041,9 +3040,8 @@ Conditions::
     )
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-    ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].needs_to_respond = true
-        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
+    ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
+    ∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -3069,7 +3067,7 @@ Conditions::
     M.method_name = 'create_canister'
     M.arg = candid(A)
     is_system_assigned CanisterId
-    CanisterId ∉ dom S.canisters
+    CanisterId ∉ dom(S.canisters)
 ....
 State after::
 ....
@@ -3553,7 +3551,7 @@ Conditions::
     M.method_name = 'provisional_create_canister_with_cycles'
     M.arg = candid(A)
     is_system_assigned CanisterId
-    CanisterId ∉ dom S.canisters
+    CanisterId ∉ dom(S.canisters)
 ....
 State after::
 ....
@@ -3582,7 +3580,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'provisional_top_up_canister'
     M.arg = candid(A)
-    A.canister_id ∈ dom S.canisters
+    A.canister_id ∈ dom(S.canisters)
 ....
 State after::
 ....
@@ -3838,9 +3836,9 @@ may_read_path(S, _, ["request_status", Rid] · _) =
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "metadata", name]) =
-  if name ∈ S.canisters[cid].public_custom_sections
+  if name ∈ dom(S.canisters[cid].public_custom_sections)
   then cid == ECID
-  else if name ∈ S.canisters[cid].private_custom_sections
+  else if name ∈ dom(S.canisters[cid].private_custom_sections)
   then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
   else False
 may_read_path(S, _, _) = False
