@@ -2444,6 +2444,27 @@ APIReadRequest
   }
 ....
 
+Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
+....
+PublicKey = Blob
+Signature = Blob
+SignedDelegation = {
+  delegation : {
+    pubkey : PublicKey;
+    targets : [CanisterId] | Unrestricted;
+    senders : [Principal] | Unrestricted;
+    expiration : Timestamp
+  };
+  signature : Signature
+}
+....
+
+For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
+This function picks the corresponding signature scheme according to the DER-encoded metadata in the public key.
+....
+verify_signature : PublicKey -> Signature -> Blob -> Bool
+....
+
 ....
 Envelope = {
   content : Request | APIReadRequest;
@@ -2467,27 +2488,6 @@ A `Path` may refer to a request by way of a _request id_, as specified in <<requ
 ....
 RequestId = Blob
 hash_of_map: Request -> RequestId
-....
-
-For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
-This function picks the corresponding signature scheme according to the DER-encoded metadata in the public key.
-....
-PublicKey = Blob
-Signature = Blob
-verify_signature : PublicKey -> Signature -> Blob -> Bool
-....
-
-Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
-....
-SignedDelegation = {
-  delegation : {
-    pubkey : PublicKey;
-    targets : [CanisterId] | Unrestricted;
-    senders : [Principal] | Unrestricted;
-    expiration : Timestamp
-  };
-  signature : Signature
-}
 ....
 
 ==== The system state
@@ -2545,7 +2545,7 @@ The initial state of the IC is
   certified_data = ();
   system_time = T;
   call_contexts = ();
-  messages = ();
+  messages = [];
   root_key = PublicKey;
 }
 ....
@@ -2652,6 +2652,15 @@ Requests that have expired are dropped here.
 
 Ingress message inspection is applied, and messages that are not accepted by the canister are dropped.
 
+The (unspecified) function `idle_cycles_burned_rate(S, cid)` determines the idle resource consumption rate in cycles per day of the canister with id `cid`,
+given its current memory footprint, compute and storage cost, and memory and compute allocation.
+The function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`,
+given its current memory footprint, compute and storage cost, memory and compute allocation, and current `freezing_threshold` setting.
+The value `freezing_limit(S, cid)` is derived from `idle_cycles_burned_rate(S, cid)` and `freezing_threshold` as follows:
+....
+    freezing_limit(S, cid) = idle_cycles_burned_rate(S, cid) * S.freezing_threshold[cid] / (24 * 60 * 60)
+....
+
 Submitted request:: `E : Envelope`
 Conditions::
 ....
@@ -2740,15 +2749,6 @@ S with
 ==== Calls to stopped/stopping/frozen canisters are rejected
 
 A call to a canister which is stopping, stopped, or frozen is automatically rejected.
-
-The (unspecified) function `idle_cycles_burned_rate(S, cid)` determines the idle resource consumption rate in cycles per day of the canister with id `cid`,
-given its current memory footprint, compute and storage cost, and memory and compute allocation.
-The function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`,
-given its current memory footprint, compute and storage cost, memory and compute allocation, and current `freezing_threshold` setting.
-The value `freezing_limit(S, cid)` is derived from `idle_cycles_burned_rate(S, cid)` and `freezing_threshold` as follows:
-....
-    freezing_limit(S, cid) = idle_cycles_burned_rate(S, cid) * S.freezing_threshold[cid] / (24 * 60 * 60)
-....
 
 Conditions::
 ....
@@ -2902,7 +2902,7 @@ if
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
-  New_balance ≥ if Is_response then 0 else freezing_limit(S, CM.callee);
+  New_balance ≥ if Is_response then 0 else freezing_limit(S, M.receiver);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3007,9 +3007,7 @@ Conditions::
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-    ∀ ctxt_ids ∈ dom(S.call_contexts).
-        S.call_contexts[ctxt_ids].needs_to_respond
-        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
+    ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -3233,9 +3231,8 @@ Conditions::
     Public_custom_sections = parse_public_custom_sections(A.wasm_module)
     Private_custom_sections = parse_private_custom_sections(A.wasm_module)
     A.mode = upgrade
-    S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller ∈ S.controllers[A.canister_id]
-    S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
+    S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
       balance = S.balances[A.canister_id];
@@ -3474,13 +3471,13 @@ Conditions::
 State after::
 ....
 S with
-    canisters[CanisterId] = (deleted)
-    controllers[CanisterId] = (deleted)
-    freezing_threshold[CanisterId] = (deleted)
-    canister_status[CanisterId] = (deleted)
-    time[CanisterId] = (deleted)
-    balances[CanisterId] = (deleted)
-    certified_data[CanisterId] = (deleted)
+    canisters[A.canister_id] = (deleted)
+    controllers[A.canister_id] = (deleted)
+    freezing_threshold[A.canister_id] = (deleted)
+    canister_status[A.canister_id] = (deleted)
+    time[A.canister_id] = (deleted)
+    balances[A.canister_id] = (deleted)
+    certified_data[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3503,7 +3500,7 @@ Conditions::
 State after::
 ....
 S with
-    balances[CanisterId] =
+    balances[A.canister_id] =
       S.balances[A.canister_id] + M.transferred_cycles
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3585,7 +3582,7 @@ Conditions::
 State after::
 ....
 S with
-    balances[CanisterId] = balances[CanisterId] + A.amount
+    balances[A.canister_id] = S.balances[A.canister_id] + A.amount
 ....
 
 ==== Callback invocation
@@ -3608,7 +3605,7 @@ State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles
+      S.balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles
     messages =
       Older_messages ·
       FuncMessage {
@@ -3637,7 +3634,7 @@ State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
+      S.balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
     messages = Older_messages · Younger_messages
 ....
 
@@ -3647,17 +3644,17 @@ When an ingress method call has been responded to, we can record the response in
 
 Conditions::
 ....
-    S.requests[M] = Processing
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     RM.origin = FromUser { request = M }
+    S.requests[M] = Processing
 ....
 State after::
 ....
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Replied R        if response = Reply R
-      | Rejected (c, R)  if response = Reject (c, R)
+      | Replied R        if M.response = Reply R
+      | Rejected (c, R)  if M.response = Reject (c, R)
 ....
 
 NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
@@ -3704,19 +3701,19 @@ S with
     canisters[CanisterId] = EmptyCanister
     certified_data[Canister_id] = ""
 
-    messages = messages ·
+    messages = S.messages ·
       [ ResponseMessage {
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
-      , Ctxt.canister = A.canister_id
+      , Ctxt.canister = CanisterId
       , Ctxt.needs_to_respond = true
       ]
 
     for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-      if Ctxt.canister = A.canister_id:
+      if Ctxt.canister = CanisterId:
         call_contexts[Ctxt_id].deleted := true
         call_contexts[Ctxt_id].needs_to_respond := false
         call_contexts[Ctxt_id].available_cycles := 0
