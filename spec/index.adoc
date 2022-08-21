@@ -2812,7 +2812,7 @@ S with
       deleted = false;
       available_cycles = CM.transferred_cycles;
     }
-    balances[CM.callee] = balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
+    balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 ....
 
 * Call context creation: Heartbeat
@@ -2847,7 +2847,7 @@ S with
       deleted = false;
       available_cycles = 0;
     }
-    balances[C] = balances[C] - MAX_CYCLES_PER_MESSAGE
+    balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
 ....
 
 The IC can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
