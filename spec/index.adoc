@@ -597,9 +597,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
 * If the call is to the Management Canister (`aaaaa-aa`), then:
    - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
-   - Otherwise, there is no effective canister id. In particular, the `create_canister` method has no effective canister ID, and this method cannot be called by users, only via canisters.
-
-* If the call is to the `raw_rand` method of the Management Canister (`aaaaa-aa`), then there is no effective canister id. This implies that this method cannot be called by users, only via canisters.
+   - Otherwise, there is no effective canister id. In particular, the `create_canister` and `raw_rand` methods have no effective canister ID, and these methods cannot be called by users, only via canisters.
 
 +
 [NOTE]
@@ -1654,7 +1652,7 @@ It is important to note the following for the usage of the `POST` method:
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
 Each request can specify the maximal expected size for the response from the remote HTTP server. The upper limit on the size of a response defaults to `2MiB` if no maximal size value is specified.
-An error will be returned when the response is larger than the maximal size. 
+An error will be returned when the response is larger than the maximal size.
 The `2MiB` size limit also applies to the value returned by the `transform` function.
 
 The following parameters should be supplied for the call:
@@ -2339,9 +2337,11 @@ The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through
 
 The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
-The parsing of a blob to a canister module is modelled via the (possibly implicitly failing) function
+The parsing of a blob to a canister module and its public and private custom sections is modelled via the (possibly implicitly failing) functions
 ....
 parse_wasm_mod : Blob -> CanisterModule
+parse_public_custom_sections : Blob -> Text ↦ Blob
+parse_private_custom_sections : Blob -> Text ↦ Blob
 ....
 
 The concrete mapping of this abstract `CanisterModule` to actual WebAssembly concepts and the System API is described separately in section <<concrete-canisters>>.
@@ -2444,6 +2444,27 @@ APIReadRequest
   }
 ....
 
+Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
+....
+PublicKey = Blob
+Signature = Blob
+SignedDelegation = {
+  delegation : {
+    pubkey : PublicKey;
+    targets : [CanisterId] | Unrestricted;
+    senders : [Principal] | Unrestricted;
+    expiration : Timestamp
+  };
+  signature : Signature
+}
+....
+
+For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
+This function picks the corresponding signature scheme according to the DER-encoded metadata in the public key.
+....
+verify_signature : PublicKey -> Signature -> Blob -> Bool
+....
+
 ....
 Envelope = {
   content : Request | APIReadRequest;
@@ -2467,27 +2488,6 @@ A `Path` may refer to a request by way of a _request id_, as specified in <<requ
 ....
 RequestId = Blob
 hash_of_map: Request -> RequestId
-....
-
-For the signatures in a `Request`, we assume that the following function implements signature verification as described in <<authentication>>.
-This function picks the corresponding signature scheme according to the DER-encoded metadata in the public key.
-....
-PublicKey = Blob
-Signature = Blob
-verify_signature : PublicKey -> Signature -> Blob -> Bool
-....
-
-Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
-....
-SignedDelegation = {
-  delegation : {
-    pubkey : PublicKey;
-    targets : [CanisterId] | Unrestricted;
-    senders : [Principal] | Unrestricted;
-    expiration : Timestamp
-  };
-  signature : Signature
-}
 ....
 
 ==== The system state
@@ -2545,7 +2545,7 @@ The initial state of the IC is
   certified_data = ();
   system_time = T;
   call_contexts = ();
-  messages = ();
+  messages = [];
   root_key = PublicKey;
 }
 ....
@@ -2576,14 +2576,13 @@ The following is an incomplete list of invariants that should hold for the abstr
   if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
-* Referenced call contexts exists:
+* Referenced call contexts exist:
 +
 ....
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ S.call_contexts
-∀ _ ↦ Ctxt ∈ S.call_contexts:
-  if Ctx.needs_to_respond:
-     Ctxt.origin.calling_context ∈ S.call_contexts
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
+∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ∈ dom(S.call_contexts)
+∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
 ....
 
 === State transitions
@@ -2653,19 +2652,29 @@ Requests that have expired are dropped here.
 
 Ingress message inspection is applied, and messages that are not accepted by the canister are dropped.
 
+The (unspecified) function `idle_cycles_burned_rate(S, cid)` determines the idle resource consumption rate in cycles per day of the canister with id `cid`,
+given its current memory footprint, compute and storage cost, and memory and compute allocation.
+The function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`,
+given its current memory footprint, compute and storage cost, memory and compute allocation, and current `freezing_threshold` setting.
+The value `freezing_limit(S, cid)` is derived from `idle_cycles_burned_rate(S, cid)` and `freezing_threshold` as follows:
+....
+    freezing_limit(S, cid) = idle_cycles_burned_rate(S, cid) * S.freezing_threshold[cid] / (24 * 60 * 60)
+....
+
 Submitted request:: `E : Envelope`
 Conditions::
 ....
     E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
-    E.content ∉ requests
+    E.content ∉ dom(S.requests)
     S.system_time <= E.content.ingress_expiry
     is_effective_canister_id(E.content, ECID)
     ( E.content.canister_id = ic_principal
       E.content.arg = candid({canister_id = CanisterId, …})
       E.content.sender ∈ S.controllers[CanisterId]
       E.content.method_name ∈
-        { "install_code", "update_settings", "start_canister", "stop_canister",
-          "canister_status", "delete_canister" }
+        { "install_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
+          "canister_status", "delete_canister",
+          "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
     ) ∨ (
       E.content.canister_id ≠ ic_principal
       S.canisters[E.content.canister_id] ≠ EmptyCanister
@@ -2677,7 +2686,7 @@ Conditions::
         status = simple_status(S.canister_status[E.content.canister_id]);
       }
       S.canisters[E.content.canister_id].module.inspect_message
-        (E.content.method_name, C.wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
+        (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
       Cycles_used ≤ S.balances[E.content.canister_id]
    )
 ....
@@ -2685,7 +2694,8 @@ State after::
 ....
 S with
     requests[E.content] = Received
-    balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
+    if E.content.canister_id ≠ ic_principal then
+      balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 ....
 
 NOTE: This is not instantaneous (the IC takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once the request has entered the IC state like this, it will be acted upon.
@@ -2740,15 +2750,6 @@ S with
 
 A call to a canister which is stopping, stopped, or frozen is automatically rejected.
 
-The (unspecified) function `idle_cycles_burned_rate(S, cid)` determines the idle resource consumption rate in cycles per day of the canister with id `cid`,
-given its current memory footprint, compute and storage cost, and memory and compute allocation.
-The function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`,
-given its current memory footprint, compute and storage cost, memory and compute allocation, and current `freezing_threshold` setting.
-The value `freezing_limit(S, cid)` is derived from `idle_cycles_burned_rate(S, cid)` and `freezing_threshold` as follows:
-....
-    freezing_limit(S, cid) = idle_cycles_burned_rate(S, cid) * S.freezing_threshold[cid] / (24 * 60 * 60)
-....
-
 Conditions::
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
@@ -2788,7 +2789,7 @@ Conditions::
     S.canisters[CM.callee] ≠ EmptyCanister
     S.canister_status[CM.callee] = Running
     S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
-    Ctxt_id ∉ dom S.call_contexts
+    Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
 State after::
@@ -2811,7 +2812,7 @@ S with
       deleted = false;
       available_cycles = CM.transferred_cycles;
     }
-    balances[CM.callee] = balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
+    balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 ....
 
 * Call context creation: Heartbeat
@@ -2824,7 +2825,7 @@ Conditions::
     S.canisters[C] ≠ EmptyCanister
     S.canister_status[C] = Running
     balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
-    Ctxt_id ∉ dom S.call_contexts
+    Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
 State after::
@@ -2846,7 +2847,7 @@ S with
       deleted = false;
       available_cycles = 0;
     }
-    balances[C] = balances[C] - MAX_CYCLES_PER_MESSAGE
+    balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
 ....
 
 The IC can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field.  The actual message execution, if successful, may enqueue further messages and -- if the function returns a response -- record this response.  The new call and response messages are enqueued at the end.
@@ -2901,7 +2902,7 @@ if
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
-  New_balance ≥ if Is_response then 0 else freezing_limit(S, CM.callee);
+  New_balance ≥ if Is_response then 0 else freezing_limit(S, M.receiver);
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3006,9 +3007,7 @@ Conditions::
     S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-    ∀ ctxt_ids ∈ dom(S.call_contexts).
-        S.call_contexts[ctxt_ids].needs_to_respond
-        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
+    ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -3039,9 +3038,8 @@ Conditions::
     )
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-    ∀ ctxt_ids.
-        S.call_contexts[ctxt_ids].needs_to_respond = true
-        ==> S.call_contexts[ctxt_ids].origin.calling_context ≠ Ctxt_id
+    ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
+    ∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 ....
 State after::
 ....
@@ -3067,7 +3065,7 @@ Conditions::
     M.method_name = 'create_canister'
     M.arg = candid(A)
     is_system_assigned CanisterId
-    CanisterId ∉ dom S.canisters
+    CanisterId ∉ dom(S.canisters)
 ....
 State after::
 ....
@@ -3078,12 +3076,13 @@ S with
       controllers[CanisterId] = A.settings.controllers
     else:
       controllers[CanisterId] = [M.caller]
+    freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = CanisterId}))
         refunded_cycles = 0
       }
     canister_status[CanisterId] = Running
@@ -3121,12 +3120,12 @@ State after::
 S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
-    if A.settings.freezing_threshold exists:
+    if A.settings.freezing_threshold is not null:
       freezing_threshold[A.canister_id] = A.settings.freezing_threshold
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3159,10 +3158,10 @@ S with
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
-            else opt (SHA-265(S.canisters[A.canister_id].raw_module));
+            else opt (SHA-256(S.canisters[A.canister_id].raw_module));
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
-          cycles = S.balance[A.canister_id];
+          cycles = S.balances[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(S, A.canister_id);
         })
@@ -3182,31 +3181,38 @@ Conditions::
     M.method_name = 'install_code'
     M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
-      (A.mode = install && S.canisters[A.canister_id] = EmptyCanister)
-    or A.mode = reinstall
+    Public_custom_sections = parse_public_custom_sections(A.wasm_module);
+    Private_custom_sections = parse_private_custom_sections(A.wasm_module);
+    (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
-      time = S.time[M.receiver];
-      balance = S.balances[M.receiver];
-      freezing_limit = freezing_limit(S, M.receiver);
+      time = S.time[A.canister_id];
+      balance = S.balances[A.canister_id];
+      freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
-      status = simple_status(S.canister_status[M.receiver]);
+      status = simple_status(S.canister_status[A.canister_id]);
     }
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+
 ....
 State after::
 ....
 S with
-    canisters[A.canister_id] =
-      { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
+    canisters[A.canister_id] = {
+      wasm_state = New_state;
+      module = Mod;
+      raw_module = A.wasm_module;
+      public_custom_sections = Public_custom_sections;
+      private_custom_sections = Private_custom_sections;
+    }
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
-        origin = M.origin
-        response = Accepted (candid())
-        refunded_cycles = M.transferred_cycles
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
       }
 ....
 
@@ -3222,17 +3228,17 @@ Conditions::
     M.method_name = 'install_code'
     M.arg = candid(A)
     Mod = parse_wasm_mod(A.wasm_module)
-
+    Public_custom_sections = parse_public_custom_sections(A.wasm_module)
+    Private_custom_sections = parse_private_custom_sections(A.wasm_module)
     A.mode = upgrade
-    S.canisters[A.canister_id] ≠ EmptyCanister
     M.caller ∈ S.controllers[A.canister_id]
-    S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module }
+    S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
-      time = S.time[M.receiver];
-      balance = S.balances[M.receiver];
-      freezing_limit = freezing_limit(S, M.receiver);
+      time = S.time[A.canister_id];
+      balance = S.balances[A.canister_id];
+      freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
-      status = simple_status(S.canister_status[M.receiver]);
+      status = simple_status(S.canister_status[A.canister_id]);
     }
     Old_module.pre_upgrade(Old_State, M.caller, Env) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
     Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used';}
@@ -3242,14 +3248,19 @@ Conditions::
 State after::
 ....
 S with
-    canisters[A.canister_id] =
-      { wasm_state = New_state; module = Mod; raw_module = A.wasm_module }
+    canisters[A.canister_id] = {
+      wasm_state = New_state;
+      module = Mod;
+      raw_module = A.wasm_module;
+      public_custom_sections = Public_custom_sections;
+      private_custom_sections = Private_custom_sections;
+    }
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
-        origin = M.origin
-        response = Accepted (candid())
-        refunded_cycles = M.transferred_cycles
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
       }
 ....
 
@@ -3276,7 +3287,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       } ·
       [ ResponseMessage {
@@ -3347,17 +3358,17 @@ The status of a stopping canister which has no open call contexts is set to `Sto
 
 Conditions::
 ....
-    S.canister_status[A.canister_id] = Stopping Origins
-    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ A.canister_id
+    S.canister_status[Canister_id] = Stopping Origins
+    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ Canister_id
 ....
 State after::
 ....
 S with
     canister_status[CanisterId] = Stopped
-    messages = Messages ·
+    messages = S.Messages ·
         [ ResponseMessage {
             origin = O
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
@@ -3379,12 +3390,12 @@ Conditions::
 State after::
 ....
 S with
-    messages = Older_messages · Younger_messages
-    S.messages = Messages ·
-        ResponseMessage {
-          origin = M.origin
-          response = Accepted (candid())
-        }
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
+      }
 ....
 
 ==== IC Management Canister: Starting a canister
@@ -3408,7 +3419,7 @@ S with
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = M.transferred_cycles
         }
 ....
@@ -3433,7 +3444,7 @@ S with
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
-            response = Accepted (candid())
+            response = Reply (candid())
             refunded_cycles = M.transferred_cycles
         } ·
         [ ResponseMessage {
@@ -3454,21 +3465,23 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'delete_canister'
     M.arg = candid(A)
-    S.canister_status[A.canister_id] = stopped
+    S.canister_status[A.canister_id] = Stopped
     M.caller ∈ S.controllers[A.canister_id]
 ....
 State after::
 ....
 S with
-    canisters[CanisterId] = (deleted)
-    controllers[CanisterId] = (deleted)
-    canister_status[CanisterId] = (deleted)
-    time[CanisterId] = (deleted)
-    balances[CanisterId] = (deleted)
+    canisters[A.canister_id] = (deleted)
+    controllers[A.canister_id] = (deleted)
+    freezing_threshold[A.canister_id] = (deleted)
+    canister_status[A.canister_id] = (deleted)
+    time[A.canister_id] = (deleted)
+    balances[A.canister_id] = (deleted)
+    certified_data[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3482,17 +3495,17 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'deposit_cycles'
     M.arg = candid(A)
-    Cycle_cost ≤ S.balances[A.canister_id] + M.transferred_cycles
+    A.canister_id ∈ dom(S.balances)
 ....
 State after::
 ....
 S with
-    balances[CanisterId] =
+    balances[A.canister_id] =
       S.balances[A.canister_id] + M.transferred_cycles
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid())
+        response = Reply (candid())
         refunded_cycles = 0
       }
 ....
@@ -3518,7 +3531,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid(B))
+        response = Reply (candid(B))
         refunded_cycles = M.transferred_cycles
       }
 ....
@@ -3535,7 +3548,7 @@ Conditions::
     M.method_name = 'provisional_create_canister_with_cycles'
     M.arg = candid(A)
     is_system_assigned CanisterId
-    CanisterId ∉ dom S.canisters
+    CanisterId ∉ dom(S.canisters)
 ....
 State after::
 ....
@@ -3543,12 +3556,13 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     controllers[CanisterId] = [M.caller]
+    freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = A.amount
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Accepted (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = CanisterId}))
         transferred_cycles = M.transferred_cycles
       }
     canister_status[CanisterId] = Running
@@ -3563,12 +3577,12 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'provisional_top_up_canister'
     M.arg = candid(A)
-    A.canister_id ∈ dom S.canisters
+    A.canister_id ∈ dom(S.canisters)
 ....
 State after::
 ....
 S with
-    balances[CanisterId] = balances[CanisterId] + A.amount
+    balances[A.canister_id] = S.balances[A.canister_id] + A.amount
 ....
 
 ==== Callback invocation
@@ -3585,18 +3599,19 @@ Conditions::
         callback = Callback
       }
     not S.call_contexts[Ctxt_id].deleted
+    S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
 ....
 State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles
+      S.balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles
     messages =
       Older_messages ·
       FuncMessage {
         call_context = Ctxt_id
-        receiver = C
-        entry_point = Callback Callback FM.response RM.refunded_cycles
+        receiver = S.call_contexts[Ctxt_id].canister
+        entry_point = Callback Callback RM.response RM.refunded_cycles
         queue = Unordered
       } ·
       Younger_messages
@@ -3613,12 +3628,13 @@ Conditions::
         callback = Callback
       }
     S.call_contexts[Ctxt_id].deleted
+    S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
 ....
 State after::
 ....
 S with
     balances[S.call_contexts[Ctxt_id].canister] =
-      balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
+      S.balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
     messages = Older_messages · Younger_messages
 ....
 
@@ -3628,17 +3644,17 @@ When an ingress method call has been responded to, we can record the response in
 
 Conditions::
 ....
-    S.requests[M] = Processing
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     RM.origin = FromUser { request = M }
+    S.requests[M] = Processing
 ....
 State after::
 ....
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Replied R   if response = Reply R
-      | Rejected R  if response = Reject R
+      | Replied R        if M.response = Reply R
+      | Rejected (c, R)  if M.response = Reject (c, R)
 ....
 
 NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
@@ -3683,21 +3699,21 @@ State after::
 ....
 S with
     canisters[CanisterId] = EmptyCanister
-    certified_data[A.canister_id] = ""
+    certified_data[Canister_id] = ""
 
-    messages = Older_messages · Younger_messages ·
+    messages = S.messages ·
       [ ResponseMessage {
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
-      , Ctxt.canister = A.canister_id
+      , Ctxt.canister = CanisterId
       , Ctxt.needs_to_respond = true
       ]
 
     for Ctxt_id ↦ Ctxt ∈ S.call_contexts:
-      if Ctxt.canister = A.canister_id:
+      if Ctxt.canister = CanisterId:
         call_contexts[Ctxt_id].deleted := true
         call_contexts[Ctxt_id].needs_to_respond := false
         call_contexts[Ctxt_id].available_cycles := 0
@@ -3817,9 +3833,9 @@ may_read_path(S, _, ["request_status", Rid] · _) =
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "metadata", name]) =
-  if name ∈ S.canisters[cid].public_custom_sections
+  if name ∈ dom(S.canisters[cid].public_custom_sections)
   then cid == ECID
-  else if name ∈ S.canisters[cid].private_custom_sections
+  else if name ∈ dom(S.canisters[cid].private_custom_sections)
   then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
   else False
 may_read_path(S, _, _) = False
