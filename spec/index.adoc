@@ -608,9 +608,7 @@ NOTE: The expectation is that user-side agent code shields users and developers 
 ====
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles`. This means that using an effective canister id from a subnet's canister range leads to the request being routed to a node on the corresponding subnet and produce an error response there, while using an effective canister id that is in no subnet's canister ranges would cause an error response from the node receiving the request.
 
-In multi-subnet development instances of the Internet Computer Protocol (e.g. testnets), users with privileged access to `provisional_create_canister_with_cycles` (or possibly similar, internal methods) and knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
-
-In a local canister execution environment, the effective canister id is ignored, and thus an arbitrary canister ID can be used.
+In development instances of the Internet Computer Protocol (e.g. local canister execution environment or testnets), users with knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
 ====
 
 [#authentication]
