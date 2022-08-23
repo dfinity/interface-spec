@@ -545,7 +545,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
-If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`). In other words, we define `aaaaa-aa` to belong to every canister range for the purposes of certificate checking. Note that `aaaaa-aa` is a valid canister id only for calls to `provisional_create_canister_with_cycles`, so it cannot appear in `read_state` requests on production networks.
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -594,25 +594,24 @@ Canister methods that do not change the canister state can be executed more effi
 
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
-* If the call is to the Management Canister (`aaaaa-aa`), then:
+* If the request is an update call to the Management Canister (`aaaaa-aa`), then:
    - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
-   - Otherwise, there is no effective canister id. In particular, the `create_canister` and `raw_rand` methods have no effective canister ID, and these methods cannot be called by users, only via canisters.
+   - Otherwise, there is no effective canister id.
+
+* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id is the `canister_id` in the request.
+
+NOTE: The expectation is that user-side agent code shields users and developers from the notion of an effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
 
 +
 [NOTE]
 ====
-The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles`. This means that using an effective canister id that could be an existing canister would lead to the request being routed to a node on the corresponding subnet and produce an error response there, while using an effective canister id that cannot be an existing canister id would cause an error response from the node receiving the request -- either is fine.
+The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles`. This means that using an effective canister id from a subnet's canister range leads to the request being routed to a node on the corresponding subnet and produce an error response there, while using an effective canister id that is in no subnet's canister ranges would cause an error response from the node receiving the request.
 
 In multi-subnet development instances of the Internet Computer Protocol (e.g. testnets), users with privileged access to `provisional_create_canister_with_cycles` (or possibly similar, internal methods) and knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
 
-In a local canister execution environment, the effective canister id is ignored, and thus `aaaaa-aa` can be used.
+In a local canister execution environment, the effective canister id is ignored, and thus an arbitrary canister ID can be used.
 ====
-
-* Else, the effective canister id must be the `canister_id` in the request.
-
-NOTE: The expectation is that user-side agent code shields users and developers from this concept, in analogy to how the System API interface shields canister developers from worrying about routing.
-
 
 [#authentication]
 === Authentication
@@ -3099,6 +3098,7 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
  * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
+ * `is_system_assigned ic_principal = false`.
 
 ==== IC Management Canister: Changing settings
 
