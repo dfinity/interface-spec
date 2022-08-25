@@ -597,7 +597,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
 * If the request is an update call to the Management Canister (`aaaaa-aa`), then:
    - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
-   - Otherwise, there is no effective canister id.
+   - Otherwise, the call is rejected by the system independently of the effective canister id.
 
 * If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id must be the `canister_id` in the request.
 
