@@ -595,11 +595,11 @@ Canister methods that do not change the canister state can be executed more effi
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
 * If the request is an update call to the Management Canister (`aaaaa-aa`), then:
-   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
+   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
    - Otherwise, there is no effective canister id.
 
-* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id is the `canister_id` in the request.
+* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id must be the `canister_id` in the request.
 
 NOTE: The expectation is that user-side agent code shields users and developers from the notion of an effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
 
