@@ -599,7 +599,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
    - Otherwise, the call is rejected by the system independently of the effective canister id.
 
-* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id must be the `canister_id` in the request.
+* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
 +
 [NOTE]
