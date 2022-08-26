@@ -610,7 +610,7 @@ The Internet Computer blockchain mainnet rejects all requests whose effective ca
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
+In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs, unless the request is an update call to the Management Canister (`aaaaa-aa`), the method name is `provisional_create_canister_with_cycles`, and the effective canister id is that of the Management Canister (`aaaaa-aa`).
 ====
 
 [#authentication]
