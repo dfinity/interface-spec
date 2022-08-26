@@ -596,7 +596,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
 
 * If the request is an update call to the Management Canister (`aaaaa-aa`), then:
    - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
-   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
+   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
    - Otherwise, the call is rejected by the system independently of the effective canister id.
 
 * If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
@@ -610,7 +610,7 @@ The Internet Computer blockchain mainnet rejects all requests whose effective ca
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-In development instances of the Internet Computer Protocol (e.g. testnets), users with knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
+In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id must be a canister id from the subnet's canister ranges of the subnet of the node to which the request was submitted.
 ====
 
 [#authentication]
