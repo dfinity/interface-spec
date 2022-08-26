@@ -601,16 +601,16 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
 
 * If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, the effective canister id must be the `canister_id` in the request.
 
-NOTE: The expectation is that user-side agent code shields users and developers from the notion of an effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
-
 +
 [NOTE]
 ====
-Although there are no restrictions on the effective canister id of read state requests, the Internet Computer blockchain mainnet rejects read state requests whose effective canister id is in no subnet's canister ranges.
+The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
+
+The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-In development instances of the Internet Computer Protocol (e.g. local canister execution environment or testnets), users with knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
+In development instances of the Internet Computer Protocol (e.g. testnets), users with knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
 ====
 
 [#authentication]
