@@ -223,7 +223,7 @@ The canister status can be used to control whether the canister is processing ca
 
 * In status `running`, calls to the canister are processed as normal.
 * In status `stopping`, calls to the canister are rejected by the IC, but responses to the canister are processed as normal.
-* In status `stopped`, calls to the canister are rejected by the IC, and there are no outstanding responses.
+* In status `stopped`, calls to the canister are rejected by the IC, and there are no outstanding responses to call contexts that are not marked as deleted.
 
 In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
 
@@ -1532,7 +1532,7 @@ Note that this is different from `uninstall_code` followed by `install_code`, as
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
-NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked. It is expected that the canister admin (or their tooling) does that separately.
+NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks that are not marked as deleted, or be uninstalled first, to prevent outstanding callbacks from being invoked (by marking the corresponding call contexts as deleted). It is expected that the canister admin (or their tooling) does that separately.
 
 The `wasm_module` field specifies the canister module to be installed.
 The system supports multiple encodings of the `wasm_module` field:
@@ -1574,7 +1574,7 @@ The controllers of a canister may stop a canister (e.g., to prepare for a canist
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped).
 The IC will reject all calls to a stopping canister, indicating that the canister is stopping.
 Responses to a stopping canister are processed as usual.
-When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
+When all outstanding responses to call contexts that are not marked as deleted have been processed (so there are no open call contexts that are not marked as deleted), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
 [#ic-start_canister]
 === IC method `start_canister`
@@ -3312,12 +3312,12 @@ S with
 
 ==== IC Management Canister: Stopping a canister
 
-The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
+The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts that are not marked as deleted, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
 
 We encode this behavior via three (types of) transitions:
 
 1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
-2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
+2. Next, when the canister has no open call contexts that are not marked as deleted (so, in particular, all outstanding responses to the canister have been processed or will be discared because the call context has been marked as deleted), the status of the canister is set to `Stopped`.
 3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
 Conditions::
@@ -3357,12 +3357,12 @@ S with
 ....
 
 
-The status of a stopping canister which has no open call contexts is set to `Stopped`, and all pending `stop_canister` calls are replied to.
+The status of a stopping canister which has no open call contexts that are not marked as deleted is set to `Stopped`, and all pending `stop_canister` calls are replied to.
 
 Conditions::
 ....
     S.canister_status[Canister_id] = Stopping Origins
-    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ Canister_id
+    ∀ Ctxt_id. S.call_contexts[Ctxt_id].deleted or S.call_contexts[Ctxt_id].canister ≠ Canister_id
 ....
 State after::
 ....
