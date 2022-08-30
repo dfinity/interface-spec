@@ -548,7 +548,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless
 - the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`),
 - all requested paths have `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
-- whenever the certificate contains the path `/request_status/<request_id>/reply` whose value is Candid-encoded and the first argument is a record with a `canister_id` field of type `principal`, then the `canister_id` must be included in each delegation’s canister id range.
+- whenever the certificate contains the path `/request_status/<request_id>/reply`, then its value is a Candid-encoded record with a `canister_id` field of type `principal` and the `canister_id` must be included in each delegation’s canister id range.
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -598,7 +598,7 @@ Canister methods that do not change the canister state can be executed more effi
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
 * If the request is an update call to the Management Canister (`aaaaa-aa`), then:
-   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
+   - If the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
    - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
    - Otherwise, the call is rejected by the system independently of the effective canister id.
 
