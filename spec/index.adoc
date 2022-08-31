@@ -543,7 +543,10 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
-If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`). In other words, we define `aaaaa-aa` to belong to every canister range for the purposes of certificate checking. Note that `aaaaa-aa` is a valid canister id only for calls to `provisional_create_canister_with_cycles`, so it cannot appear in `read_state` requests on production networks.
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless
+- the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`),
+- all requested paths have `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
+- whenever the certificate contains the path `/request_status/<request_id>/reply`, then its value is a Candid-encoded record with a `canister_id` field of type `principal` and the `canister_id` must be included in each delegation’s canister id range.
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
 
@@ -551,10 +554,10 @@ All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can be requested by anyone.
  * `/subnet`. Can be requested by anyone.
- * `/request_status/<request_id>`. Can only be read if `/request_id/<request_id>` is not present in the state tree, or if this `read_state` request was signed by same sender as the original request referenced by `<request_id>`, and the effective canister id of the original request matches the `<effective_canister_id>` (see <<http-effective-canister-id>>) in this HTTP request’s path.
- * `/canisters/<canister_id>/module_hash`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`.
- * `/canisters/<canister_id>/controllers`. Can be requested by anyone, if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
- * `/canisters/<canister_id>/metadata/<name>`. Can be read by anyone if `<canister_id>` matches `<effective_canister_id>`, and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be read if this `read_state` request was signed by one of the controllers of the canister.
+ * `/request_status/<request_id>`. Can only be requested by the same sender as the original request referenced by `<request_id>` and if the effective canister id of the original request matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/module_hash`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/controllers`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
+ * `/canisters/<canister_id>/metadata/<name>`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>` and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be requested by the controllers of the canister.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
 
@@ -592,25 +595,24 @@ Canister methods that do not change the canister state can be executed more effi
 
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
-* If the call is to the Management Canister (`aaaaa-aa`), then:
-   - If the `arg` is Candid-encoded where the first argument is a record with a `canister_id` field of type `principal`, then the effective canister id is that principal.
-   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal is a valid effective canister id for this call.
-   - Otherwise, there is no effective canister id. In particular, the `create_canister` and `raw_rand` methods have no effective canister ID, and these methods cannot be called by users, only via canisters.
+* If the request is an update call to the Management Canister (`aaaaa-aa`), then:
+   - If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
+   - Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
+   - Otherwise, the call is rejected by the system independently of the effective canister id.
+
+* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
 +
 [NOTE]
 ====
-The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles`. This means that using an effective canister id that could be an existing canister would lead to the request being routed to a node on the corresponding subnet and produce an error response there, while using an effective canister id that cannot be an existing canister id would cause an error response from the node receiving the request -- either is fine.
+The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
 
-In multi-subnet development instances of the Internet Computer Protocol (e.g. testnets), users with privileged access to `provisional_create_canister_with_cycles` (or possibly similar, internal methods) and knowledge of the mapping from canisters to subnets can use their choice of the effective canister id in the URL to steer the request to a specific subnet.
+The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
-In a local canister execution environment, the effective canister id is ignored, and thus `aaaaa-aa` can be used.
+The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
+
+In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs, unless the request is an update call to the Management Canister (`aaaaa-aa`), the method name is `provisional_create_canister_with_cycles`, and the effective canister id is that of the Management Canister (`aaaaa-aa`).
 ====
-
-* Else, the effective canister id must be the `canister_id` in the request.
-
-NOTE: The expectation is that user-side agent code shields users and developers from this concept, in analogy to how the System API interface shields canister developers from worrying about routing.
-
 
 [#authentication]
 === Authentication
@@ -2623,8 +2625,8 @@ delegation_targets(DS)
 A `Request` has an effective canister id according to the rules in <<#http-effective-canister-id>>:
 
 ....
-is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ....
 
@@ -3086,6 +3088,7 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
  * `is_system_assigned (mk_self_authenticating_id pk) = false` for possible public keys `pk` and
  * `is_system_assigned (mk_derived_id p dn) = false` for any `p` that could be a user id or canister id.
  * `is_system_assigned p = false` for `|p| > 29`.
+ * `is_system_assigned ic_principal = false`.
 
 ==== IC Management Canister: Changing settings
 
