@@ -598,8 +598,8 @@ Canister methods that do not change the canister state can be executed more effi
 The `<effective_canister_id>` in the URL paths of requests is the _effective_ destination of the request.
 
 * If the request is an update call to the Management Canister (`aaaaa-aa`), then:
-   - If the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
-   - Otherwise, if the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
+   - If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
+   - Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
    - Otherwise, the call is rejected by the system independently of the effective canister id.
 
 * If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
@@ -2638,8 +2638,8 @@ delegated_senders(D)
 A `Request` has an effective canister id according to the rules in <<#http-effective-canister-id>>:
 
 ....
-is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ....
 

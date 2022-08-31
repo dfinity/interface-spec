@@ -605,8 +605,8 @@ fun message_queue :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message \<Rightarrow>
 
 definition is_effective_canister_id :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> 'p \<Rightarrow> bool" where
   "is_effective_canister_id r p = (if request.canister_id r = ic_principal then
-      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> principal_of_canid cid = p
-      | _ \<Rightarrow> request.method_name r = encode_string ''provisional_create_canister_with_cycles'')
+    request.method_name r = encode_string ''provisional_create_canister_with_cycles'' \<or>
+      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> principal_of_canid cid = p | _ \<Rightarrow> False)
     else principal_of_canid (request.canister_id r) = p)"
 
 
