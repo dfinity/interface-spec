@@ -605,16 +605,9 @@ fun message_queue :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message \<Rightarrow>
 
 definition is_effective_canister_id :: "('b, 'p, 'uid, 'canid, 's) request \<Rightarrow> 'p \<Rightarrow> bool" where
   "is_effective_canister_id r p = (if request.canister_id r = ic_principal then
-      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> principal_of_canid cid = p
-      | _ \<Rightarrow> request.method_name r = encode_string ''provisional_create_canister_with_cycles'')
+    request.method_name r = encode_string ''provisional_create_canister_with_cycles'' \<or>
+      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> principal_of_canid cid = p | _ \<Rightarrow> False)
     else principal_of_canid (request.canister_id r) = p)"
-
-lemma is_effective_canister_id_code[code_unfold]:
-  "(\<exists>p. is_effective_canister_id r p) = (if request.canister_id r = ic_principal then
-      (case candid_parse_cid (request.arg r) of Some cid \<Rightarrow> True
-      | _ \<Rightarrow> request.method_name r = encode_string ''provisional_create_canister_with_cycles'')
-    else True)"
-  by (auto simp: is_effective_canister_id_def split: option.splits)
 
 
 
@@ -623,12 +616,12 @@ lemma is_effective_canister_id_code[code_unfold]:
 definition ic_freezing_limit :: "('p :: linorder, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> 'canid \<Rightarrow> nat" where
   "ic_freezing_limit S cid = ic_idle_cycles_burned_rate S cid * (the (list_map_get (freezing_threshold S) cid)) div (24 * 60 * 60)"
 
-definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "request_submission_pre E S = (case content E of Inl req \<Rightarrow>
+definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> 'p \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "request_submission_pre E ECID S = (case content E of Inl req \<Rightarrow>
     principal_of_canid (request.canister_id req) \<in> verify_envelope E (principal_of_uid (request.sender req)) (system_time S) \<and>
     req \<notin> list_map_dom (requests S) \<and>
     system_time S \<le> request.ingress_expiry req \<and>
-    (\<exists>ECID. is_effective_canister_id req ECID) \<and>
+    is_effective_canister_id req ECID \<and>
     (
       (
         request.canister_id req = ic_principal \<and>
@@ -656,8 +649,8 @@ definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) enve
     )
   | _ \<Rightarrow> False)"
 
-definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "request_submission_post E S = (
+definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> 'p \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "request_submission_post E ECID S = (
     let req = projl (content E);
     cid = request.canister_id req;
     balances = (if cid \<noteq> ic_principal then
@@ -669,8 +662,8 @@ definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) env
       else balances S) in
     S\<lparr>requests := list_map_set (requests S) req Received, balances := balances\<rparr>)"
 
-definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
-  "request_submission_burned_cycles E S = (
+definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> 'p \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
+  "request_submission_burned_cycles E ECID S = (
     let req = projl (content E);
     cid = request.canister_id req in
     (if request.canister_id req \<noteq> ic_principal then
@@ -682,8 +675,8 @@ definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 
       else 0))"
 
 lemma request_submission_cycles_inv:
-  assumes "request_submission_pre E S"
-  shows "total_cycles S = total_cycles (request_submission_post E S) + request_submission_burned_cycles E S"
+  assumes "request_submission_pre E ECID S"
+  shows "total_cycles S = total_cycles (request_submission_post E ECID S) + request_submission_burned_cycles E ECID S"
 proof -
   obtain req where req_def: "content E = Inl req"
     using assms
@@ -709,8 +702,8 @@ proof -
 qed
 
 lemma request_submission_ic_inv:
-  assumes "request_submission_pre E S" "ic_inv S"
-  shows "ic_inv (request_submission_post E S)"
+  assumes "request_submission_pre E ECID S" "ic_inv S"
+  shows "ic_inv (request_submission_post E ECID S)"
   using assms
   by (auto simp: ic_inv_def request_submission_pre_def request_submission_post_def Let_def
       split: sum.splits message.splits call_origin.splits)
@@ -2687,7 +2680,7 @@ lemma system_time_progress_ic_inv:
 inductive ic_steps :: "'sig itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow>
   nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   ic_steps_refl: "ic_steps sig S 0 0 S"
-| request_submission: "ic_steps sig S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope) S \<Longrightarrow> ic_steps sig S0 minted (burned + request_submission_burned_cycles E S) (request_submission_post E S)"
+| request_submission: "ic_steps sig S0 minted burned S \<Longrightarrow> request_submission_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope) ECID S \<Longrightarrow> ic_steps sig S0 minted (burned + request_submission_burned_cycles E ECID S) (request_submission_post E ECID S)"
 | request_rejection: "ic_steps sig S0 minted burned S \<Longrightarrow> request_rejection_pre (E :: ('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope) req code msg S \<Longrightarrow> ic_steps sig S0 minted burned (request_rejection_post E req code msg S)"
 | initiate_canister_call: "ic_steps sig S0 minted burned S \<Longrightarrow> initiate_canister_call_pre req S \<Longrightarrow> ic_steps sig S0 minted burned (initiate_canister_call_post req S)"
 | call_reject: "ic_steps sig S0 minted burned S \<Longrightarrow> call_reject_pre n S \<Longrightarrow> ic_steps sig S0 minted burned (call_reject_post n S)"
