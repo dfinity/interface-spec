@@ -6,6 +6,8 @@
 * Canister access to performance metrics
 * Query calls are rejected when the canister is frozen
 * Support for implementation-specific error codes for requests
+* Deleted call contexts do not prevent canister from reaching Stopped state
+* Update effective canister id checks in certificate delegations
 * Formal model in Isabelle
 
 [#0_18_5]
