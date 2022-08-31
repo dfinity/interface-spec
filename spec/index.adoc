@@ -2105,9 +2105,9 @@ The HTTP request is encoded into the `HttpRequest` Candid structure.
 
 === Upgrade to update calls
 
-If the canister sets `update = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses that response instead.
+If the canister sets `upgrade = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses that response instead.
 
-The value of the `update` field returned from `http_request_update` is ignored.
+The value of the `upgrade` field returned from `http_request_update` is ignored.
 
 === Response decoding
 
