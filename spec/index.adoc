@@ -548,7 +548,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>), unless
 
 - the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`),
-- all requested paths have `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
+- all requested paths have `/time` or `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
 - whenever the certificate contains the path `/request_status/<request_id>/reply`, then its value is a Candid-encoded record with a `canister_id` field of type `principal` and the `canister_id` must be included in each delegation’s canister id range.
 
 The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
