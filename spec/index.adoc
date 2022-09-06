@@ -684,7 +684,7 @@ The following encodings of field values as blobs are used
 [#request-id]
 === Request ids
 
-When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is the <<hash-of-map, representation-independent hash>> of the `content` map of the original request.
+When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is the <<hash-of-map, representation-independent hash>> of the `content` map of the original request. A request id must have length of 32 bytes.
 
 NOTE: The request id is independent of the representation of the request (currently only CBOR), and does not change if the specification adds further optional fields to a request type.
 
@@ -2489,7 +2489,7 @@ RequestStatus
 
 A `Path` may refer to a request by way of a _request id_, as specified in <<request-id>>:
 ....
-RequestId = Blob
+RequestId = { b ∈ Blob | |b| = 32 }
 hash_of_map: Request -> RequestId
 ....
 
