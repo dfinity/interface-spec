@@ -141,7 +141,7 @@ NOTE: Derived IDs are currently not explicitly used in this document, but they m
 +
 This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
-5. _Invalid ids_
+5. _Reserved ids_
 +
 These have the form of `blob · 0xff`, with no restriction on the blob length.
 +
