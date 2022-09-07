@@ -141,8 +141,13 @@ NOTE: Derived IDs are currently not explicitly used in this document, but they m
 +
 This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
-When the IC creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
+5. _Invalid ids_
++
+These have the form of `blob · 0xff`, with no restriction on the blob length.
++
+These ids can be useful for applications that want to re-use the <<textual-ids>> but want to indicate explicitly that the blob does not address any canisters or a user.
 
+When the IC creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
 
 [#textual-ids]
 ==== Textual representation of principals
