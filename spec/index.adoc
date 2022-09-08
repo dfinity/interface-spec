@@ -143,11 +143,11 @@ This has the form `0x04`, and is used for the anonymous caller. It can be used i
 
 5. _Reserved ids_
 +
-These have the form of `blob · 0xff`, with no restriction on the blob length.
+These have the form of `blob · 0xff`, `0 ≤ |blob| < 29`.
 +
 These ids can be useful for applications that want to re-use the <<textual-ids>> but want to indicate explicitly that the blob does not address any canisters or a user.
 
-When the IC creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
+When the IC creates a _fresh_ id, it never creates a self-authenticating id, reserved id, an anonymous id or an id derived from what could be a canister or user.
 
 [#textual-ids]
 ==== Textual representation of principals
