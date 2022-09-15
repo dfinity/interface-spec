@@ -3154,7 +3154,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'canister_status'
     M.arg = candid(A)
-    M.caller ∈ S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ....
 State after::
 ....
