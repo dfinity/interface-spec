@@ -1517,7 +1517,7 @@ Default value: 2592000 (approximately 30 days).
 [#ic-update_settings]
 === IC method `update_settings`
 
-Only _controllers_ of the canister can update settings. See <<ic-create_canister>> for a description of settings.
+Only _controllers_ of the canister, or the canister itself can update settings. See <<ic-create_canister>> for a description of settings.
 
 Not including a setting in the `settings` record means not changing that field. The defaults described above are only relevant during canister creation.
 
@@ -3122,7 +3122,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'update_settings'
     M.arg = candid(A)
-    M.caller ∈ S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ....
 State after::
 ....
