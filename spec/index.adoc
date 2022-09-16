@@ -951,7 +951,7 @@ ic0.msg_arg_data_size : () -> i32;                                          // I
 ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry F
 ic0.msg_caller_size : () -> i32;                                            // I G U Q F
 ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q F
-ic0.callback_generation : i64;                                              // Ry Rt
+ic0.callback_generation () -> : i64;                                         // Ry Rt
 ic0.msg_reject_code : () -> i32;                                            // Ry Rt
 ic0.msg_reject_msg_size : () -> i32;                                        // Rt
 ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
