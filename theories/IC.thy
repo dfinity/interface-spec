@@ -1393,7 +1393,7 @@ definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
       cee = ic_principal \<and>
       mn = encode_string ''update_settings'' \<and>
       (case candid_parse_cid a of Some cid \<Rightarrow>
-      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls
+      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls \<union> {principal_of_canid cid}
       | _ \<Rightarrow> False) | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
