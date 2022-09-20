@@ -1643,6 +1643,8 @@ Otherwise it will be rejected.
 [#ic-http_request]
 === IC method `http_request`
 
+NOTE: The IC http_request API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
 The canister should aim to issue _idempotent_ requests, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests. Otherwise, the risk of failure increases.
