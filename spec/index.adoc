@@ -550,7 +550,7 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
-If this `certificate` includes subnet delegations (possibly nested), then the `effective_principal_id` must be included in each delegation’s canister id range (see <<certification-delegation>>) or equal to the delegation’s subnet, unless
+If this `certificate` includes subnet delegations (possibly nested), then the `effective_principal_id` must be included in each delegation’s canister id range (see <<certification-delegation>>) or equal to the delegation’s subnet id, unless
 
 - the `effective_principal_id` is that of the Management Canister (`aaaaa-aa`),
 - all requested paths have `/time` or `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
