@@ -115,8 +115,9 @@ service ic : {
     method : variant { get; head; post };
     headers: vec http_header;
     body : opt blob;
+    transform_context: blob;
     transform : opt variant {
-      function: func (http_response) -> (http_response) query
+      function: func (http_response, blob) -> (http_response) query
     };
   }) -> (http_response);
 
