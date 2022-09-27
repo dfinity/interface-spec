@@ -1,6 +1,6 @@
 = The Internet Computer Interface Specification
 DFINITY Foundation
-0.18.6
+0.18.7
 // the following are ways to make this document work both in antora and stand alone
 :example: example$
 :partial: partial$
@@ -139,8 +139,13 @@ NOTE: Derived IDs are currently not explicitly used in this document, but they m
 +
 This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
-When the IC creates a _fresh_ id, it never creates a self-authenticating id, an anonymous id or an id derived from what could be a canister or user.
+5. _Reserved ids_
++
+These have the form of `blob · 0x7f`, `0 ≤ |blob| < 29`.
++
+These ids can be useful for applications that want to re-use the <<textual-ids>> but want to indicate explicitly that the blob does not address any canisters or a user.
 
+When the IC creates a _fresh_ id, it never creates a self-authenticating id, reserved id, an anonymous id or an id derived from what could be a canister or user.
 
 [#textual-ids]
 ==== Textual representation of principals
@@ -681,7 +686,7 @@ The following encodings of field values as blobs are used
 [#request-id]
 === Request ids
 
-When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is the <<hash-of-map, representation-independent hash>> of the `content` map of the original request.
+When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is the <<hash-of-map, representation-independent hash>> of the `content` map of the original request. A request id must have length of 32 bytes.
 
 NOTE: The request id is independent of the representation of the request (currently only CBOR), and does not change if the specification adds further optional fields to a request type.
 
@@ -1635,6 +1640,8 @@ Otherwise it will be rejected.
 [#ic-http_request]
 === IC method `http_request`
 
+NOTE: The IC http_request API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
 The canister should aim to issue _idempotent_ requests, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests. Otherwise, the risk of failure increases.
@@ -1643,18 +1650,22 @@ The responses for all identical requests must match too. However, a web service 
 
 For this reason, the calling canister can supply a transformation function, which the IC uses to let the canister sanitize the responses from such unique values. The transformation function is executed separately on the corresponding response received for a request. The final response will only be available to the calling canister.
 
-Currently, only the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests. Note that when using `POST`, the calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
+Currently, the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests.
+
+It is important to note the following for the usage of the `POST` method:
+- The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
+- There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
 Each request can specify the maximal expected size for the response from the remote HTTP server. The upper limit on the size of a response defaults to `2MiB` if no maximal size value is specified.
-An error will be returned when the response is larger than the maximal size. 
+An error will be returned when the response is larger than the maximal size.
 The `2MiB` size limit also applies to the value returned by the `transform` function.
 
 The following parameters should be supplied for the call:
 
-- `url` - the requested URL
-- `max_response_bytes` - optional, specifies the maximal size of the response in bytes. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
+- `url` - the requested URL. The URL may specify a custom port number. However, only ports 80, 443, and 20000-65535 can be used.
+- `max_response_bytes` - optional, specifies the maximal size of the response in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
 - `method` - currently, only GET, HEAD, and POST are supported
 - `headers` - list of HTTP request headers and their corresponding values
 - `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
@@ -1794,7 +1805,7 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 pending transactions.
 It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
-This function returns the 100 fee percentiles, measured in millisatoshi/byte (10^3 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e.,
+This function returns the 100 fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e.,
 over the transactions in the last approximately 4-10 blocks.
 
 [#certification]
@@ -1904,6 +1915,7 @@ find_label(l, _ · Labeled l1 t · _)                | l == l1     = Found t
 find_label(l, _ · Labeled l1 _ · Labeled l2 _ · _) | l1 < l < l2 = Absent
 find_label(l,                    Labeled l2 _ · _) |      l < l2 = Absent
 find_label(l, _ · Labeled l1 _ )                   | l1 < l      = Absent
+find_label(l, [Leaf _])                                          = Absent
 find_label(l, [])                                                = Absent
 find_label(l, _)                                                 = Unknown
 ....
@@ -1916,7 +1928,7 @@ well_formed(tree) =
 well_formed_forest(trees) =
   strictly_increasing([l | Label l _ ∈ trees]) ∧
   ∀ Label _ t ∈ trees. well_formed(t) ∧
-  ∀ t ∈ trees ≠ Leaf _
+  ∀ t ∈ trees. t ≠ Leaf _
 ....
 
 [#certification-delegation]
@@ -2482,7 +2494,7 @@ RequestStatus
 
 A `Path` may refer to a request by way of a _request id_, as specified in <<request-id>>:
 ....
-RequestId = Blob
+RequestId = { b ∈ Blob | |b| = 32 }
 hash_of_map: Request -> RequestId
 ....
 
