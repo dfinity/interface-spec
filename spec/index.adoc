@@ -1672,8 +1672,7 @@ The following parameters should be supplied for the call:
 - `method` - currently, only GET, HEAD, and POST are supported
 - `headers` - list of HTTP request headers and their corresponding values
 - `body` - optional, the content of the request's body
-- `transform_context` - a byte-encoded context that is provided to the `transform` function, along with the response
-- `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
+- `transform` - an optional record that includes a function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
