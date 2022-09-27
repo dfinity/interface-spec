@@ -1,10 +1,6 @@
 [#changelog]
 == Changelog
 
-[#unreleased]
-=== ∞ (unreleased)
-* Spec: User delegations include a principal scope
-
 [#0_18_7]
 === 0.18.7 (2022-09-27)
 * HTTP request API
