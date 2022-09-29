@@ -3,10 +3,12 @@
 
 [#unreleased]
 === ∞ (unreleased)
-
 * Spec: User delegations include a principal scope
-* Spec: Reserved principals
-* Spec: HTTP request API
+
+[#0_18_7]
+=== 0.18.7 (2022-09-27)
+* HTTP request API
+* Reserved principals
 
 [#0_18_6]
 === 0.18.6 (2022-08-09)
