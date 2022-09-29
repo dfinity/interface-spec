@@ -143,7 +143,7 @@ This has the form `0x04`, and is used for the anonymous caller. It can be used i
 
 5. _Reserved ids_
 +
-These have the form of `blob · 0xff`, `0 ≤ |blob| < 29`.
+These have the form of `blob · 0x7f`, `0 ≤ |blob| < 29`.
 +
 These ids can be useful for applications that want to re-use the <<textual-ids>> but want to indicate explicitly that the blob does not address any canisters or a user.
 
@@ -1642,6 +1642,8 @@ Otherwise it will be rejected.
 
 [#ic-http_request]
 === IC method `http_request`
+
+NOTE: The IC http_request API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
