@@ -567,7 +567,7 @@ All requested paths must have one of the following paths as prefix:
    - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request.
  * `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
- * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>` and
+ * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
    - canister with canister id `<canister_id>` does not exist or
    - canister with canister id `<canister_id>` is empty or
    - `<name>` is a public custom section or
