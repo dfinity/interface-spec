@@ -560,14 +560,22 @@ The returned certificate reveals all values whose path is a suffix of the list o
 
 All requested paths must have one of the following paths as prefix:
 
- * `/time`. Can be requested by anyone.
- * `/subnet`. Can be requested by anyone.
- * `/request_status/<request_id>`. Can only be requested by the same sender as the original request referenced by `<request_id>` and if the effective canister id of the original request matches `<effective_canister_id>`.
- * `/canisters/<canister_id>/module_hash`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
- * `/canisters/<canister_id>/controllers`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
- * `/canisters/<canister_id>/metadata/<name>`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>` and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be requested by the controllers of the canister.
+ * `/time`. Can always be requested.
+ * `/subnet`. Can always be requested.
+ * `/request_status/<request_id>`. Can be requested if the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>` and
+   - no path with such a prefix exists in the state tree or
+   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request.
+ * `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
+ * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>` and
+   - canister with canister id `<canister_id>` does not exist or
+   - canister with canister id `<canister_id>` is empty or
+   - `<name>` is a public custom section or
+   - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
-Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
+If a path cannot be requested, then it is absent in the returned certificate or the HTTP response to the read state request has a 4xx status code.
+
+Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
 
 See <<state-tree>> for details on the state tree.
 
