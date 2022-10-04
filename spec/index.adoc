@@ -232,9 +232,9 @@ The canister status can be used to control whether the canister is processing ca
 
 In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
 
-The controllers of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>>. The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
+The controllers of the canister can initiate transitions between these states using <<ic-stop_canister,`stop_canister`>> and <<ic-start_canister,`start_canister`>>, and query the state using <<ic-canister_status,`canister_status`>> (NB: this call returns additional information, such as the cycle balance of the canister). The canister itself can also query its state using <<system-api-canister-status,`ic0.canister_status`>>.
 
-NOTE: This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
+NOTE: This status is orthogonal to whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
 
 [#signatures]
 === Signatures
@@ -1570,7 +1570,7 @@ Indicates various information about the canister. It contains:
 * The memory size taken by the canister.
 * The cycle balance of the canister.
 
-Only the controllers of the canister can request its status.
+Only the controllers of the canister or the canister itself can request its status.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
@@ -3160,7 +3160,7 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'canister_status'
     M.arg = candid(A)
-    M.caller ∈ S.controllers[A.canister_id]
+    M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ....
 State after::
 ....
