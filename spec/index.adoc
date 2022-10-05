@@ -579,7 +579,7 @@ Read state requests containing many requested paths might be rejected with a 4xx
 
 [NOTE]
 ====
-The Internet Computer blockchain mainnet rejects all read state requests requesting more than 100 paths with prefix `/request_status/<request_id>`.
+The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
 ====
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
