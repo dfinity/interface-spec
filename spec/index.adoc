@@ -562,9 +562,9 @@ All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can always be requested.
  * `/subnet`. Can always be requested.
- * `/request_status/<request_id>`. Can be requested if the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>` and
+ * `/request_status/<request_id>`. Can be requested if
    - no path with such a prefix exists in the state tree or
-   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request.
+   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
  * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
