@@ -556,20 +556,22 @@ If this `certificate` includes subnet delegations (possibly nested), then the `e
 - all requested paths have `/time` or `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
 - whenever the certificate contains the path `/request_status/<request_id>/reply`, then its value is a Candid-encoded record with a `canister_id` field of type `principal` and the `canister_id` must be included in each delegation’s canister id range.
 
-The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
+The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
 
 All requested paths must have one of the following paths as prefix:
 
  * `/time`. Can always be requested.
  * `/subnet`. Can always be requested.
- * `/request_status/<request_id>`. Can be requested if
-   - no path with such a prefix exists in the state tree or
-   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>`.
+ * `/request_status/<request_id>`. Can be requested if no path with such a prefix exists in the state tree or
+   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
+   - `<effective_canister_id>` is a valid effective canister id for the original request referenced by `<request_id>` and
+   - the effective canister id of the original request referenced by `<request_id>` and the effective canister id `<effective_canister_id>` of the read state request belong to canister ranges of the same subnet.
  * `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
  * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
    - canister with canister id `<canister_id>` does not exist or
    - canister with canister id `<canister_id>` is empty or
+   - canister with canister id `<canister_id>` does not have `<name>` as its custom section or
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
