@@ -2283,6 +2283,7 @@ Arg = Blob;
 CallerId = Principal;
 
 Timestamp = Nat;
+CanHistoryIndex = Nat;
 Env = {
   time : Timestamp
   balance : Nat;
@@ -2299,6 +2300,7 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
+  canister_history_index : CanHistoryIndex;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -2383,9 +2385,12 @@ CallOrigin
     }
   | FromCanister {
       calling_context : CallId;
-      callback: Callback
+      callback: Callback;
+      canister_history_index: CanHistoryIndex;
     }
-  | FromHeartbeat
+  | FromHeartbeat {
+      canister_history_index: CanHistoryIndex;
+    }
 CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
@@ -2521,6 +2526,37 @@ CanStatus
   = Running
   | Stopping (List (CallOrigin, Nat))
   | Stopped
+CanChangeOrigin
+  = FromUser {
+      user_id : UserId;
+    }
+  | FromCanister {
+      canister_id : CanisterId;
+      canister_history_index : CanHistoryIndex;
+    }
+CodeDeploymentMode
+  = Install
+  | Reinstall
+  | Upgrade
+CanChangeType
+  = CanisterCreation
+  | CodeDeployment {
+      mode : CodeDeploymentMode;
+      module_hash : Blob;
+    }
+  | CodeUninstall
+  | ControllersChange {
+      new_controllers : [PrincipalId];
+    }
+CanChange = {
+  timestamp : Timestamp;
+  origin : CanChangeOrigin;
+  type : CanChangeType;
+}
+CanHistory = {
+  total_num_changes : Nat;
+  changes : [CanChange];
+}
 S = {
   requests : Request ↦ RequestStatus;
   canisters : CanisterId ↦ CanState;
@@ -2530,6 +2566,7 @@ S = {
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
   certified_data: CanisterId ↦ Blob;
+  canister_history: CanisterId ↦ CanHistory;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -2542,6 +2579,21 @@ To convert `CanStatus` into `status : Running | Stopping | Stopped` from `Env`, 
 simple_status(Running) = Running
 simple_status(Stopping _) = Stopping
 simple_status(Stopped) = Stopped
+....
+
+To convert `CallOrigin` into `CanChangeOrigin`, we define the following conversion function:
+....
+canister_change_origin(principal, FromUser { … }) = FromUser {
+    user_id = principal
+  }
+canister_change_origin(principal, FromCanister { canister_history_index = N, … }) = FromCanister {
+    canister_id = principal
+    canister_history_index = N
+  }
+canister_change_origin(principal, FromHeartbeat { canister_history_index = N, … }) = FromCanister {
+    canister_id = principal
+    canister_history_index = N
+  }
 ....
 
 ==== Initial state
@@ -2856,7 +2908,9 @@ S with
       · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
-      origin = FromHeartbeat;
+      origin = FromHeartbeat {
+          canister_history_index = S.canister_history[C].total_num_changes;
+        };
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
@@ -2927,7 +2981,8 @@ then
       [ CallMessage {
           origin = FromCanister {
             call_context = M.call_context;
-            callback = call.callback
+            callback = call.callback;
+            canister_history_index = S.canister_history[M.receiver].total_num_changes;
           };
           caller = M.receiver;
           callee = call.callee;
@@ -3093,6 +3148,14 @@ S with
     freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
+    canister_history[CanisterId] = {
+      total_num_changes = 1
+      changes = {
+        timestamp = CurrentTime
+        origin = canister_change_origin(M.caller, M.origin)
+        type = CanisterCreation
+      }
+    }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3129,12 +3192,26 @@ Conditions::
     M.method_name = 'update_settings'
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
+    S.canister_history = {
+      total_num_changes = N;
+      changes = H;
+    }
 ....
 State after::
 ....
 S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
+      canister_history[A.canister_id] = {
+        total_num_changes = N + 1;
+        changes = H · {
+            timestamp = S.time[A.canister_id];
+            origin = canister_change_origin(M.caller, M.origin);
+            type = ControllersChange {
+              new_controllers = A.settings.controllers;
+            };
+          };
+      }
     if A.settings.freezing_threshold is not null:
       freezing_threshold[A.canister_id] = A.settings.freezing_threshold
     messages = Older_messages · Younger_messages ·
@@ -3210,7 +3287,10 @@ Conditions::
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-
+    S.canister_history = {
+      total_num_changes = N;
+      changes = H;
+    }
 ....
 State after::
 ....
@@ -3223,6 +3303,17 @@ S with
       private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
+    canister_history[A.canister_id] = {
+      total_num_changes = N + 1;
+      changes = H · {
+          timestamp = S.time[A.canister_id];
+          origin = canister_change_origin(M.caller, M.origin);
+          type = CodeDeployment {
+            mode = A.mode;
+            module_hash = SHA-256(A.wasm_module);
+          };
+        };
+    }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3259,6 +3350,10 @@ Conditions::
     Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used';}
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+    S.canister_history = {
+      total_num_changes = N;
+      changes = H;
+    }
 ....
 State after::
 ....
@@ -3271,6 +3366,17 @@ S with
       private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
+    canister_history[A.canister_id] = {
+      total_num_changes = N + 1;
+      changes = H · {
+          timestamp = S.time[A.canister_id];
+          origin = canister_change_origin(M.caller, M.origin);
+          type = CodeDeployment {
+            mode = Upgrade;
+            module_hash = SHA-256(A.wasm_module);
+          };
+        };
+    }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3292,12 +3398,24 @@ Conditions::
     M.method_name = 'uninstall_code'
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
+    S.canister_history = {
+      total_num_changes = N;
+      changes = H;
+    }
 ....
 State after::
 ....
 S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
+    canister_history[A.canister_id] = {
+      total_num_changes = N + 1;
+      changes = H · {
+          timestamp = S.time[A.canister_id];
+          origin = canister_change_origin(M.caller, M.origin);
+          type = CodeUninstall;
+        };
+    }
 
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3574,6 +3692,14 @@ S with
     freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = A.amount
     certified_data[CanisterId] = ""
+    canister_history[CanisterId] = {
+      total_num_changes = 1
+      changes = {
+        timestamp = CurrentTime
+        origin = canister_change_origin(M.caller, M.origin)
+        type = CanisterCreation
+      }
+    }
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3612,6 +3738,7 @@ Conditions::
     RM.origin = FromCanister {
         call_context = Ctxt_id
         callback = Callback
+        …
       }
     not S.call_contexts[Ctxt_id].deleted
     S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
@@ -3641,6 +3768,7 @@ Conditions::
     RM.origin = FromCanister {
         call_context = Ctxt_id
         callback = Callback
+        …
       }
     S.call_contexts[Ctxt_id].deleted
     S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
@@ -3774,6 +3902,26 @@ State after::
 ....
 S with
     system_time = T1
+....
+
+==== Trimming canister history
+
+The list of canister changes can be trimmed, but the total number of recorded canister changes cannot be altered.
+
+Conditions::
+....
+  S.canister_history[CanisterId] = {
+      total_num_changes = N;
+      changes = Older_changes · Newer_changes;
+    }
+....
+State after::
+....
+S with
+  canister_history[CanisterId] = {
+      total_num_changes = N;
+      changes = Newer_changes;
+    }
 ....
 
 ==== Query call
