@@ -437,6 +437,10 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 +
 The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`).
 
+* `/canister/<canister_id>/history` (blob):
++
+The history of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by the binary encoding of the canister history (CDDL `#6.55799(...)`).
+
 * `/canister/<canister_id>/metadata/<name>` (blob):
 +
 If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
@@ -565,6 +569,7 @@ All requested paths must have one of the following paths as prefix:
  * `/request_status/<request_id>`. Can only be requested by the same sender as the original request referenced by `<request_id>` and if the effective canister id of the original request matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/module_hash`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
+ * `/canisters/<canister_id>/history`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/metadata/<name>`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>` and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be requested by the controllers of the canister.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
