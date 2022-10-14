@@ -854,7 +854,8 @@ NOTE: Applications can work around these problems. For the first problem, the qu
 [#canister-module-format]
 == Canister module format
 
-A canister module is simply a https://webassembly.github.io/spec/core/index.html[WebAssembly module] in binary format (typically `.wasm`).
+A canister module is a https://webassembly.github.io/spec/core/index.html[WebAssembly module] that is either in binary format (typically `.wasm`) or gzipped (typically `.wasm.gz`).
+If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to https://datatracker.ietf.org/doc/html/rfc1952.html[RFC-1952] and then parses the output as a WebAssembly binary.
 
 [#system-api]
 == Canister interface (System API)
@@ -1541,10 +1542,10 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks that are not marked as deleted, or be uninstalled first, to prevent outstanding callbacks from being invoked (by marking the corresponding call contexts as deleted). It is expected that the canister admin (or their tooling) does that separately.
 
 The `wasm_module` field specifies the canister module to be installed.
-The system supports multiple encodings of the `wasm_module` field:
+The system supports multiple encodings of the `wasm_module` field, as described in <<canister-module-format>>:
 
   * If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`,  the system parses `wasm_module` as a raw WebAssembly binary.
-  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system decompresses the contents of `wasm_module` as a gzip stream according to https://datatracker.ietf.org/doc/html/rfc1952.html[RFC-1952] and then parses the output as a WebAssembly binary.
+  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzipped WebAssembly binary.
 
 [#ic-uninstall_code]
 === IC method `uninstall_code`
