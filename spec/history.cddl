@@ -1,0 +1,51 @@
+can-history = tagged<{
+  total_num_changes : unsigned
+  changes : [* can-change]
+}>
+
+can-change = {
+  timestamp : timestamp
+  origin : can-change-origin
+  type : can-change-type
+}
+
+can-change-origin =
+  from-user /
+  from-canister
+
+from-user = {
+  user_id : principal
+}
+
+from-canister = {
+  canister_id : principal
+  canister_history_index : unsigned
+}
+
+can-change-type =
+  canister-creation /
+  code-deployment /
+  code-uninstall /
+  controllers-change
+
+code-deployment = {
+  mode : code-deployment-mode
+  module_hash : bytes
+}
+
+code-deployment-mode =
+  install /
+  reinstall /
+  upgrade
+
+controllers-change = {
+  new_controllers : [* principal]
+}
+
+tagged<t> = #6.55799(t) ; the CBOR tag
+
+; some common data types
+
+principal = bytes .size (0..29)
+
+timestamp = unsigned

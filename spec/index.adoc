@@ -439,7 +439,7 @@ The current controllers of the canister. The value consists of a CBOR data item 
 
 * `/canister/<canister_id>/history` (blob):
 +
-The history of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by the binary encoding of the canister history (CDDL `#6.55799(...)`).
+The history of the canister. The value consists of a CBOR value encoding the canister history (see <<history-cddl,CDDL description of canister history>>).
 
 * `/canister/<canister_id>/metadata/<name>` (blob):
 +
@@ -827,6 +827,11 @@ The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)]
 ----
 include::{example}requests.cddl[]
 ----
+
+[#history-cddl]
+=== CDDL description of canister history
+
+The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. The binary encoding of canister history is a CBOR value according to the following CDDL. You can also link:{attachmentsdir}/history.cddl[download the file].
 
 === Ordering guarantees
 
