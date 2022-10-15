@@ -219,7 +219,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, and _controllers_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, and _history_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
