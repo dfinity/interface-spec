@@ -28,6 +28,9 @@ can-change-type =
   code-uninstall /
   controllers-change
 
+canister-creation = ()
+code-uninstall = ()
+
 code-deployment = {
   mode : code-deployment-mode
   module_hash : bytes
@@ -37,6 +40,10 @@ code-deployment-mode =
   install /
   reinstall /
   upgrade
+
+install = ()
+reinstall = ()
+upgrade = ()
 
 controllers-change = {
   new_controllers : [* principal]
