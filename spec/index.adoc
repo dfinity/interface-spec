@@ -425,7 +425,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
+Users have the ability to learn about the hash of the canister's module, its current controllers, history, and metadata in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -439,7 +439,16 @@ The current controllers of the canister. The value consists of a CBOR data item 
 
 * `/canister/<canister_id>/history` (blob):
 +
-The history of the canister. The value consists of a CBOR value encoding the canister history (see <<history-cddl,CDDL description of canister history>>).
+The history of the canister. The value consists of a CBOR value encoding the canister history according to the following CDDL (the https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR). You can also link:{attachmentsdir}/history.cddl[download the file].
+
+[source,bash]
+----
+include::{example}history.cddl[]
+----
+
+The canister history consists of a list of canister changes and their total number. The system can drop the oldest canister changes from the list to keep its length bounded, but the total number of changes records all canister changes even if they have already been dropped from the list, i.e., the total number of changes never decreases.
+
+Every canister change is described by the system timestamp at which it was performed, its origin (a user or a canister), and its type (canister creation, code change, or controllers change). The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their type (code install, code reinstall, code upgrade, code uninstall) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
 * `/canister/<canister_id>/metadata/<name>` (blob):
 +
@@ -827,11 +836,6 @@ The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)]
 ----
 include::{example}requests.cddl[]
 ----
-
-[#history-cddl]
-=== CDDL description of canister history
-
-The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. The binary encoding of canister history is a CBOR value according to the following CDDL. You can also link:{attachmentsdir}/history.cddl[download the file].
 
 === Ordering guarantees
 
