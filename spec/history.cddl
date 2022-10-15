@@ -24,12 +24,12 @@ from-canister = {
 
 can-change-type =
   canister-creation /
-  code-deployment /
   code-uninstall /
+  code-deployment /
   controllers-change
 
-canister-creation = ()
-code-uninstall = ()
+canister-creation = 0
+code-uninstall = 1
 
 code-deployment = {
   mode : code-deployment-mode
@@ -41,9 +41,9 @@ code-deployment-mode =
   reinstall /
   upgrade
 
-install = ()
-reinstall = ()
-upgrade = ()
+install = 0
+reinstall = 1
+upgrade = 2
 
 controllers-change = {
   new_controllers : [* principal]
