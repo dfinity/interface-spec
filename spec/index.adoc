@@ -1545,7 +1545,7 @@ The `wasm_module` field specifies the canister module to be installed.
 The system supports multiple encodings of the `wasm_module` field, as described in <<canister-module-format>>:
 
   * If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`,  the system parses `wasm_module` as a raw WebAssembly binary.
-  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzipped WebAssembly binary.
+  * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
 [#ic-uninstall_code]
 === IC method `uninstall_code`
