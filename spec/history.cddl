@@ -9,43 +9,22 @@ can-change = {
   type : can-change-type
 }
 
-can-change-origin =
-  from-user /
-  from-canister
-
-from-user = {
+can-change-origin = {
+  type : "user"
   user_id : principal
-}
-
-from-canister = {
+  //
+  type : "canister"
   canister_id : principal
   canister_history_index : unsigned
 }
 
-can-change-type =
-  canister-creation /
-  code-uninstall /
-  code-deployment /
-  controllers-change
-
-canister-creation = 0
-code-uninstall = 1
-
-code-deployment = {
-  mode : code-deployment-mode
+can-change-type = {
+  type : "canister-creation" / "code-uninstall"
+  //
+  type : "code-install" / "code-reinstall" / "code-upgrade"
   module_hash : bytes
-}
-
-code-deployment-mode =
-  install /
-  reinstall /
-  upgrade
-
-install = 0
-reinstall = 1
-upgrade = 2
-
-controllers-change = {
+  //
+  type : "controllers-change"
   new_controllers : [* principal]
 }
 
