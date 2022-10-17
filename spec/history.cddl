@@ -1,30 +1,30 @@
-can-history = tagged<{
+canister-history = tagged<{
   total_num_changes : unsigned
-  changes : [* can-change]
+  change_entries : [* canister-change-entry]
 }>
 
-can-change = {
+canister-change-entry = {
   timestamp : timestamp
-  origin : can-change-origin
-  type : can-change-type
+  origin : canister-change-origin
+  change : canister-change
 }
 
-can-change-origin = {
-  type : "user"
+canister-change-origin = {
+  from : "user"
   user_id : principal
   //
-  type : "canister"
+  from : "canister"
   canister_id : principal
   canister_history_index : unsigned
 }
 
-can-change-type = {
-  type : "canister-creation" / "code-uninstall"
+canister-change = {
+  kind : "canister-creation" / "code-uninstall"
   //
-  type : "code-install" / "code-reinstall" / "code-upgrade"
+  kind : "code-install" / "code-reinstall" / "code-upgrade"
   module_hash : bytes
   //
-  type : "controllers-change"
+  kind : "controllers-change"
   new_controllers : [* principal]
 }
 

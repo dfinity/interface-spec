@@ -2297,7 +2297,7 @@ Arg = Blob;
 CallerId = Principal;
 
 Timestamp = Nat;
-CanHistoryIndex = Nat;
+CanisterHistoryIndex = Nat;
 Env = {
   time : Timestamp
   balance : Nat;
@@ -2314,7 +2314,7 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
-  canister_history_index : CanHistoryIndex;
+  canister_history_index : CanisterHistoryIndex;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -2400,10 +2400,10 @@ CallOrigin
   | FromCanister {
       calling_context : CallId;
       callback: Callback;
-      canister_history_index: CanHistoryIndex;
+      canister_history_index: CanisterHistoryIndex;
     }
   | FromHeartbeat {
-      canister_history_index: CanHistoryIndex;
+      canister_history_index: CanisterHistoryIndex;
     }
 CallCtxt = {
   canister : CanisterId;
@@ -2540,36 +2540,36 @@ CanStatus
   = Running
   | Stopping (List (CallOrigin, Nat))
   | Stopped
-CanChangeOrigin
+CanisterChangeOrigin
   = FromUser {
       user_id : UserId;
     }
   | FromCanister {
       canister_id : CanisterId;
-      canister_history_index : CanHistoryIndex;
+      canister_history_index : CanisterHistoryIndex;
     }
 CodeDeploymentMode
   = Install
   | Reinstall
   | Upgrade
-CanChangeType
+CanisterChange
   = CanisterCreation
+  | CodeUninstall
   | CodeDeployment {
       mode : CodeDeploymentMode;
       module_hash : Blob;
     }
-  | CodeUninstall
   | ControllersChange {
       new_controllers : [PrincipalId];
     }
-CanChange = {
+CanisterChangeEntry = {
   timestamp : Timestamp;
-  origin : CanChangeOrigin;
-  type : CanChangeType;
+  origin : CanisterChangeOrigin;
+  change : CanisterChange;
 }
-CanHistory = {
+CanisterHistory = {
   total_num_changes : Nat;
-  changes : [CanChange];
+  change_entries : [CanisterChangeEntry];
 }
 S = {
   requests : Request ↦ RequestStatus;
@@ -2580,7 +2580,7 @@ S = {
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
   certified_data: CanisterId ↦ Blob;
-  canister_history: CanisterId ↦ CanHistory;
+  canister_history: CanisterId ↦ CanisterHistory;
   system_time : Timestamp
   call_contexts : CallId ↦ CallCtxt;
   messages : List Message; // ordered!
@@ -2595,7 +2595,7 @@ simple_status(Stopping _) = Stopping
 simple_status(Stopped) = Stopped
 ....
 
-To convert `CallOrigin` into `CanChangeOrigin`, we define the following conversion function:
+To convert `CallOrigin` into `CanisterChangeOrigin`, we define the following conversion function:
 ....
 canister_change_origin(principal, FromUser { … }) = FromUser {
     user_id = principal
@@ -3164,10 +3164,10 @@ S with
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = 1
-      changes = {
+      change_entries = {
         timestamp = CurrentTime
         origin = canister_change_origin(M.caller, M.origin)
-        type = CanisterCreation
+        kind = CanisterCreation
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3208,7 +3208,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history = {
       total_num_changes = N;
-      changes = H;
+      change_entries = H;
     }
 ....
 State after::
@@ -3218,10 +3218,10 @@ S with
       controllers[A.canister_id] = A.settings.controllers
       canister_history[A.canister_id] = {
         total_num_changes = N + 1;
-        changes = H · {
+        change_entries = H · {
             timestamp = S.time[A.canister_id];
             origin = canister_change_origin(M.caller, M.origin);
-            type = ControllersChange {
+            kind = ControllersChange {
               new_controllers = A.settings.controllers;
             };
           };
@@ -3303,7 +3303,7 @@ Conditions::
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history = {
       total_num_changes = N;
-      changes = H;
+      change_entries = H;
     }
 ....
 State after::
@@ -3319,10 +3319,10 @@ S with
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          type = CodeDeployment {
+          kind = CodeDeployment {
             mode = A.mode;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3366,7 +3366,7 @@ Conditions::
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history = {
       total_num_changes = N;
-      changes = H;
+      change_entries = H;
     }
 ....
 State after::
@@ -3382,10 +3382,10 @@ S with
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          type = CodeDeployment {
+          kind = CodeDeployment {
             mode = Upgrade;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3414,7 +3414,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history = {
       total_num_changes = N;
-      changes = H;
+      change_entries = H;
     }
 ....
 State after::
@@ -3424,10 +3424,10 @@ S with
     certified_data[A.canister_id] = ""
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          type = CodeUninstall;
+          kind = CodeUninstall;
         };
     }
 
@@ -3708,10 +3708,10 @@ S with
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = 1
-      changes = {
+      change_entries = {
         timestamp = CurrentTime
         origin = canister_change_origin(M.caller, M.origin)
-        type = CanisterCreation
+        kind = CanisterCreation
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3926,7 +3926,7 @@ Conditions::
 ....
   S.canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = Older_changes · Newer_changes;
+      change_entries = Older_changes · Newer_changes;
     }
 ....
 State after::
@@ -3934,7 +3934,7 @@ State after::
 S with
   canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = Newer_changes;
+      change_entries = Newer_changes;
     }
 ....
 
