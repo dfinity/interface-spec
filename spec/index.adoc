@@ -454,7 +454,7 @@ include::{example}history.cddl[]
 
 The canister history consists of a list of canister change entries and their total number. The system can drop the oldest canister change entries from the list to keep its length bounded, but the total number of changes records all canister changes even if the corresponding entries have already been dropped from the list, i.e., the total number of changes never decreases.
 
-Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user or a canister), and its kind (canister creation, code change, or controllers change). The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code install, code reinstall, code upgrade, code uninstall) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
+Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user, a canister, or system), and its kind (canister creation, code change, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code uninstall, code install, code reinstall, code upgrade) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
 [#http-interface]
 == HTTPS Interface
@@ -2548,6 +2548,7 @@ CanisterChangeOrigin
       canister_id : CanisterId;
       canister_history_index : CanisterHistoryIndex;
     }
+  | FromSystem
 CodeDeploymentMode
   = Install
   | Reinstall
@@ -3206,7 +3207,7 @@ Conditions::
     M.method_name = 'update_settings'
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
-    S.canister_history = {
+    S.canister_history[A.canister_id] = {
       total_num_changes = N;
       change_entries = H;
     }
@@ -3301,7 +3302,7 @@ Conditions::
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-    S.canister_history = {
+    S.canister_history[A.canister_id] = {
       total_num_changes = N;
       change_entries = H;
     }
@@ -3364,7 +3365,7 @@ Conditions::
     Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used';}
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-    S.canister_history = {
+    S.canister_history[A.canister_id] = {
       total_num_changes = N;
       change_entries = H;
     }
@@ -3412,7 +3413,7 @@ Conditions::
     M.method_name = 'uninstall_code'
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
-    S.canister_history = {
+    S.canister_history[A.canister_id] = {
       total_num_changes = N;
       change_entries = H;
     }
@@ -3851,12 +3852,24 @@ Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstal
 Conditions::
 ....
     S.balances[CanisterId] = 0
+    S.canister_history[CanisterId] = {
+      total_num_changes = N;
+      change_entries = H;
+    }
 ....
 State after::
 ....
 S with
     canisters[CanisterId] = EmptyCanister
     certified_data[Canister_id] = ""
+    canister_history[Canister_id] = {
+      total_num_changes = N + 1;
+      change_entries = H · {
+          timestamp = S.time[Canister_id];
+          origin = FromSystem;
+          kind = CodeUninstall;
+        };
+    }
 
     messages = S.messages ·
       [ ResponseMessage {

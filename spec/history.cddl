@@ -16,6 +16,8 @@ canister-change-origin = {
   from : "canister"
   canister_id : principal
   canister_history_index : unsigned
+  //
+  from : "system"
 }
 
 canister-change = {
