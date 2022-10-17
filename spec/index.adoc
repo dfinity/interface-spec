@@ -854,7 +854,7 @@ NOTE: Applications can work around these problems. For the first problem, the qu
 [#canister-module-format]
 == Canister module format
 
-A canister module is a https://webassembly.github.io/spec/core/index.html[WebAssembly module] that is either in binary format (typically `.wasm`) or gzipped (typically `.wasm.gz`).
+A canister module is a https://webassembly.github.io/spec/core/index.html[WebAssembly module] that is either in binary format (typically `.wasm`) or gzip-compressed (typically `.wasm.gz`).
 If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to https://datatracker.ietf.org/doc/html/rfc1952.html[RFC-1952] and then parses the output as a WebAssembly binary.
 
 [#system-api]
