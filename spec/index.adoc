@@ -4029,6 +4029,7 @@ may_read_path(S, _, ["canister", cid, "metadata", name]) =
   else if name ∈ dom(S.canisters[cid].private_custom_sections)
   then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
   else False
+may_read_path(S, _, ["canister", cid, "history"]) = cid == ECID
 may_read_path(S, _, _) = False
 ....
 
@@ -4045,7 +4046,8 @@ state_tree(S) = {
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
         { "controllers" : CBOR(S.controllers[canister_id]) } ∪
-        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
+        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } } ∪
+        { "history" : CBOR(S.canister_history[canister_id]) }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
