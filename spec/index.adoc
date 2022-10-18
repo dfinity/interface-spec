@@ -452,7 +452,7 @@ The history of the canister. The value consists of a CBOR value encoding the can
 include::{example}history.cddl[]
 ----
 
-The canister history consists of a list of canister change entries and their total number. The system can drop the oldest canister change entries from the list to keep its length bounded, but the total number of changes records all canister changes even if the corresponding entries have already been dropped from the list, i.e., the total number of changes never decreases.
+The canister history consists of a list of canister change entries and their total number. The system can drop the oldest canister change entries from the list to keep its length bounded (at least 1000 change entries are guaranteed to remain in the list), but the total number of changes records all canister changes even if the corresponding entries have already been dropped from the list, i.e., the total number of changes never decreases.
 
 Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user, a canister, or system), and its kind (canister creation, code change, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code uninstall, code install, code reinstall, code upgrade) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
@@ -3933,7 +3933,7 @@ S with
 
 ==== Trimming canister history
 
-The list of canister change entries can be trimmed, but the total number of recorded canister changes cannot be altered.
+The list of canister change entries can be trimmed, but the total number of recorded canister changes cannot be altered. At least 1000 change entries are guaranteed to remain in the list of change entries.
 
 Conditions::
 ....
@@ -3941,6 +3941,7 @@ Conditions::
       total_num_changes = N;
       change_entries = Older_change_entries · Newer_change_entries;
     }
+  |Newer_change_entries| ≥ 1000
 ....
 State after::
 ....
