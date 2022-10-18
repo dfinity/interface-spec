@@ -2538,7 +2538,7 @@ CanStatus
   | Stopping (List (CallOrigin, Nat))
   | Stopped
 S = {
-  requests : Request ↦ RequestStatus;
+  requests : Request ↦ (RequestStatus, Principal);
   canisters : CanisterId ↦ CanState;
   controllers : CanisterId ↦ Set Principal;
   freezing_threshold : CanisterId ↦ Nat;
@@ -2723,7 +2723,7 @@ Conditions::
 State after::
 ....
 S with
-    requests[E.content] = Received
+    requests[E.content] = (Received, ECID)
     if E.content.canister_id ≠ ic_principal then
       balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 ....
@@ -2736,13 +2736,13 @@ The IC may reject a received message for internal reasons (high load, low resour
 
 Conditions::
 ....
-    S.requests[R] = Received
+    S.requests[R] = (Received, ECID)
     Code = SYS_FATAL or Code = SYS_TRANSIENT
 ....
 State after::
 ....
 S with
-    requests[R] = Rejected (Code, Msg)
+    requests[R] = (Rejected (Code, Msg), ECID)
 ....
 
 ==== Initiating canister calls
@@ -2755,14 +2755,14 @@ The IC does not make any guarantees about the order of incoming messages.
 
 Conditions::
 ....
-    S.requests[R] = Received
+    S.requests[R] = (Received, ECID)
     S.system_time <= R.ingress_expiry
     C = S.canisters[R.canister_id]
 ....
 State after::
 ....
 S with
-    requests[R] = Processing
+    requests[R] = (Processing, ECID)
     messages =
       CallMessage {
         origin = FromUser { request = R };
@@ -3677,15 +3677,15 @@ Conditions::
 ....
     S.messages = Older_messages · ResponseMessage RM · Younger_messages
     RM.origin = FromUser { request = M }
-    S.requests[M] = Processing
+    S.requests[M] = (Processing, ECID)
 ....
 State after::
 ....
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Replied R        if M.response = Reply R
-      | Rejected (c, R)  if M.response = Reject (c, R)
+      | (Replied R, ECID)        if M.response = Reply R
+      | (Rejected (c, R), ECID)  if M.response = Reject (c, R)
 ....
 
 NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
@@ -3696,12 +3696,12 @@ The IC will keep the data for a completed or rejected request around for a certa
 
 Conditions::
 ....
-    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _)
+    (S.requests[M] = (Replied _, ECID)) or (S.requests[M] = (Rejected _, ECID))
 ....
 State after::
 ....
 S with
-    requests[M] = Done
+    requests[M] = (Done, ECID)
 ....
 
 
@@ -3709,7 +3709,7 @@ At the same or some later point, the request will be removed from the state of t
 
 Conditions::
 ....
-    (S.requests[M] = Replied _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
+    (S.requests[M] = (Replied _, _)) or (S.requests[M] = (Rejected _, _)) or (S.requests[M] = (Done, _))
     M.ingress_expiry < S.system_time
 ....
 State after::
@@ -3848,7 +3848,7 @@ Conditions::
   TS = verify_envelope(E, RS.sender, S.system_time)
   S.system_time <= RS.ingress_expiry
   ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
-  ∀ ["request_status", Rid] · _ ∈ RS.paths.  ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid ∧ R.canister_id ∈ TS
+  ∀ ["request_status", Rid] · _ ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 ....
 Read response::
 A record with
@@ -3856,50 +3856,51 @@ A record with
 
 The predicate `may_read_path` is defined as follows, implementing the access control outlined in <<http-read-state>>:
 ....
-may_read_path(S, _, ["time"]) = True
+may_read_path(S, _, ["time"] · _) = True
+may_read_path(S, _, ["subnet"] · _) = True
 may_read_path(S, _, ["request_status", Rid] · _) =
-  if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
-  then RS.sender == R.sender ∧ is_effective_canister_id(R, ECID)
-  else True
-may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
-may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
-may_read_path(S, _, ["canister", cid, "metadata", name]) =
-  if name ∈ dom(S.canisters[cid].public_custom_sections)
-  then cid == ECID
-  else if name ∈ dom(S.canisters[cid].private_custom_sections)
-  then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
-  else False
+  ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
+may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
+may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
+may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+  (cid ∉ dom(S.canisters[cid]) ∨
+   S.canisters[cid] = EmptyCanister ∨
+   name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
+   name ∈ dom(S.canisters[cid].public_custom_sections) ∨
+   (name ∈ dom(S.canisters[cid].private_custom_sections) ∧ RS.sender ∈ S.controllers[cid])
+  )
 may_read_path(S, _, _) = False
 ....
+where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
 The response is a certificate `cert`, as specified in <<certification>>, which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in <<state-tree>> that is a suffix of a path in `RS.paths` or of `["time"]`, we have
 ....
 lookup(path, cert) = lookup_in_tree(path, state_tree(S))
 ....
-where `state_tree` constructs the a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per <<state-tree>>
+where `state_tree` constructs a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per <<state-tree>>
 ....
 state_tree(S) = {
   "time": S.system_time;
-  "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
+  "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+  "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
   "canister":
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
         { "controllers" : CBOR(S.controllers[canister_id]) } ∪
         { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
     | (canister_id, C) ∈ S.canisters };
-  "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }
 
 request_status_tree(Received) =
   { "status": "received" }
 request_status_tree(Processing) =
   { "status": "processing" }
-request_status_tree(Rejected (code,msg)) =
+request_status_tree(Rejected (code, msg)) =
   { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
 request_status_tree(Replied arg) =
   { "status": "replied"; "reply": arg }
 request_status_tree(Done) =
-  { "status": "Done" }
+  { "status": "done" }
 ....
 and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
 
