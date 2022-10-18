@@ -27,7 +27,7 @@ canister-change = {
   module_hash : bytes
   //
   kind : "controllers-change"
-  new_controllers : [* principal]
+  controllers : [* principal]
 }
 
 tagged<t> = #6.55799(t) ; the CBOR tag

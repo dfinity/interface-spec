@@ -2561,7 +2561,7 @@ CanisterChange
       module_hash : Blob;
     }
   | ControllersChange {
-      new_controllers : [PrincipalId];
+      controllers : [PrincipalId];
     }
 CanisterChangeEntry = {
   timestamp : Timestamp;
@@ -3168,7 +3168,7 @@ S with
       change_entries = {
         timestamp = CurrentTime
         origin = canister_change_origin(M.caller, M.origin)
-        kind = CanisterCreation
+        change = CanisterCreation
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3222,8 +3222,8 @@ S with
         change_entries = H · {
             timestamp = S.time[A.canister_id];
             origin = canister_change_origin(M.caller, M.origin);
-            kind = ControllersChange {
-              new_controllers = A.settings.controllers;
+            change = ControllersChange {
+              controllers = A.settings.controllers;
             };
           };
       }
@@ -3323,7 +3323,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          kind = CodeDeployment {
+          change = CodeDeployment {
             mode = A.mode;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3386,7 +3386,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          kind = CodeDeployment {
+          change = CodeDeployment {
             mode = Upgrade;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3428,7 +3428,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           origin = canister_change_origin(M.caller, M.origin);
-          kind = CodeUninstall;
+          change = CodeUninstall;
         };
     }
 
@@ -3712,7 +3712,7 @@ S with
       change_entries = {
         timestamp = CurrentTime
         origin = canister_change_origin(M.caller, M.origin)
-        kind = CanisterCreation
+        change = CanisterCreation
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3867,7 +3867,7 @@ S with
       change_entries = H · {
           timestamp = S.time[Canister_id];
           origin = FromSystem;
-          kind = CodeUninstall;
+          change = CodeUninstall;
         };
     }
 
