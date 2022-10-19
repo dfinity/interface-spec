@@ -437,24 +437,28 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 +
 The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`).
 
-* `/canister/<canister_id>/metadata/<name>` (blob):
+* `/canister/<canister_id>/history/<change_index>` (blob):
 +
-If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
-+
-It is recommended for the canister to have a custom section called "icp:public candid:service", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
-
-* `/canister/<canister_id>/history` (blob):
-+
-The history of the canister. The value consists of a CBOR value encoding the canister history according to the following CDDL (the https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR). You can also link:{attachmentsdir}/history.cddl[download the file].
+The canister history consists of a list of canister change entries whose individual entries are accessible via this path. The `<change_index>` is encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding. The value consists of a CBOR value encoding the canister history change entry according to the following CDDL (the https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR). You can also link:{attachmentsdir}/history.cddl[download the file].
 
 [source,bash]
 ----
 include::{example}history.cddl[]
 ----
 
-The canister history consists of a list of canister change entries and their total number. The system can drop the oldest canister change entries from the list to keep its length bounded (at least 1000 change entries are guaranteed to remain in the list), but the total number of changes records all canister changes even if the corresponding entries have already been dropped from the list, i.e., the total number of changes never decreases.
+The system can drop the oldest canister change entries from the list to keep its length bounded (at least 1000 change entries are guaranteed to remain in the list), but the indices of the remaining change entries are not affected.
 
 Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user, a canister, or system), and its kind (canister creation, code change, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code uninstall, code install, code reinstall, code upgrade) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
+
+* `/canister/<canister_id>/total_num_changes` (natural):
++
+The total number of canister change entries that have been ever recorded in the history, encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding. This value does not change if the system drops the oldest canister change entries from the list of change entries. In particular, if the value at this path is positive, then the latest change entry is available in the history at `<change_index>` equal to the value at this path minus one.
+
+* `/canister/<canister_id>/metadata/<name>` (blob):
++
+If the canister has a https://webassembly.github.io/spec/core/binary/modules.html#custom-section[custom section] called `icp:public <name>` or `icp:private <name>`, this path contains the content of the custom section. Otherwise, this path does not exist.
++
+It is recommended for the canister to have a custom section called "icp:public candid:service", which contains the UTF-8 encoding of https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar[the Candid interface] for the canister.
 
 [#http-interface]
 == HTTPS Interface
@@ -579,6 +583,7 @@ All requested paths must have one of the following paths as prefix:
  * `/canisters/<canister_id>/module_hash`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
  * `/canisters/<canister_id>/history`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
+ * `/canisters/<canister_id>/total_num_changes`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/metadata/<name>`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>` and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be requested by the controllers of the canister.
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see <<system-api-certified-data>>).
@@ -4023,13 +4028,14 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   else True
 may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
+may_read_path(S, _, ["canister", cid, "history"] · _) = cid == ECID
+may_read_path(S, _, ["canister", cid, "total_num_changes"]) = cid == ECID
 may_read_path(S, _, ["canister", cid, "metadata", name]) =
   if name ∈ dom(S.canisters[cid].public_custom_sections)
   then cid == ECID
   else if name ∈ dom(S.canisters[cid].private_custom_sections)
   then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
   else False
-may_read_path(S, _, ["canister", cid, "history"]) = cid == ECID
 may_read_path(S, _, _) = False
 ....
 
@@ -4046,8 +4052,9 @@ state_tree(S) = {
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
         { "controllers" : CBOR(S.controllers[canister_id]) } ∪
-        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } } ∪
-        { "history" : CBOR(S.canister_history[canister_id]) }
+        { "history" : { LEB128(i + S.canister_history[canister_id].total_num_changes - |S.canister_history[canister_id].change_entries|) : CBOR(S.canister_history[canister_id].change_entries[i]) | 0 ≤ i < |S.canister_history[canister_id].change_entries| } } ∪
+        { "total_num_changes" : LEB128(S.canister_history[canister_id].total_num_changes) } ∪
+        { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
     | (canister_id, C) ∈ S.canisters };
   "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
 }

@@ -1,13 +1,8 @@
-canister-history = tagged<{
-  total_num_changes : unsigned
-  change_entries : [* canister-change-entry]
-}>
-
-canister-change-entry = {
+canister-change-entry = tagged<{
   timestamp : timestamp
   origin : canister-change-origin
   change : canister-change
-}
+}>
 
 canister-change-origin = {
   from : "user"
