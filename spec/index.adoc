@@ -1103,7 +1103,7 @@ Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and
 [#system-api-canister-state-counter]
 === Canister state counter
 
-For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is incremented upon every change to the canister's state (except for changes affecting only the canister's balance or time), i.e., upon every successful message execution on that canister, successful management canister call (`update_settings`, `install_code`, `uninstall_code`, `stop_canister`, `start_canister`) on that canister, canister status (running, stopping, stopped) change of that canister, and code uninstallation due to that canister running out of cycles.
+For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is incremented upon every change to the canister's state (except for changes affecting only the canister's balance or time), i.e., upon every (successful and unsuccessful) message execution (ingress message, inter-canister call, callback execution) on that canister, successful management canister call (`update_settings`, `install_code`, `uninstall_code`, `stop_canister`, `start_canister`, `deposit_cycles`, and `provisional_top_up_canister`) on that canister, change of the canister status of that canister from stopping to stopped, code uninstallation due to that canister running out of cycles, successful `inspect_message` execution for ingress messages, and charging canisters for (compute and memory) resource allocation and usage.
 
 * `ic0.canister_state_counter : () -> i64`
 +
@@ -2721,6 +2721,7 @@ S with
     requests[E.content] = Received
     if E.content.canister_id ≠ ic_principal then
       balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
+      canister_state_counter[E.content.canister_id] = S.canister_state_counter[E.content.canister_id] + 1
 ....
 
 NOTE: This is not instantaneous (the IC takes some time to agree it accepts the request) nor guaranteed (a node could just drop the request, or maybe it did not pass validation). But once the request has entered the IC state like this, it will be acted upon.
@@ -2784,7 +2785,7 @@ Conditions::
 
 State after::
 ....
-    S.messages = Older_messages · Younger_messages  ·
+    messages = Older_messages · Younger_messages  ·
       ResponseMessage {
           origin = CM.origin;
           response = Reject (CANISTER_ERROR, "canister not running");
@@ -2973,6 +2974,7 @@ else
     balances[M.receiver] =
       (S.balances[M.receiver] + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - min (R.cycles_used, (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
+    canister_state_counter[M.receiver] = S.canister_state_counter[M.receiver] + 1
 ....
 
 
@@ -3544,6 +3546,7 @@ State after::
 S with
     balances[A.canister_id] =
       S.balances[A.canister_id] + M.transferred_cycles
+    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3626,6 +3629,7 @@ State after::
 ....
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
+    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
 ....
 
 ==== Callback invocation
@@ -3790,6 +3794,7 @@ State after::
 ....
 S with
     balances[CanisterId] = B1
+    canister_state_counter[CanisterId] = S.canister_state_counter[CanisterId] + 1
 ....
 
 Similarly, the system time, used to expire requests, progresses:

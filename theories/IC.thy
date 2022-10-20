@@ -657,13 +657,13 @@ definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) env
   "request_submission_post E ECID S = (
     let req = projl (content E);
     cid = request.canister_id req;
-    balances = (if cid \<noteq> ic_principal then
+    (balances, canister_state_counter) = (if cid \<noteq> ic_principal then
       (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) (request.canister_id req)) of
         (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
         let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
         (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
-          list_map_set (balances S) cid (bal - cycles_return.cycles_used ret)))
-      else balances S) in
+          (list_map_set (balances S) cid (bal - cycles_return.cycles_used ret), list_map_set (canister_state_counter S) cid (Suc idx))))
+      else (balances S, canister_state_counter S)) in
     S\<lparr>requests := list_map_set (requests S) req Received, balances := balances\<rparr>)"
 
 definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) envelope \<Rightarrow> 'p \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -710,7 +710,7 @@ lemma request_submission_ic_inv:
   shows "ic_inv (request_submission_post E ECID S)"
   using assms
   by (auto simp: ic_inv_def request_submission_pre_def request_submission_post_def Let_def
-      split: sum.splits message.splits call_origin.splits)
+      split: sum.splits message.splits call_origin.splits prod.splits)
 
 
 
@@ -984,7 +984,8 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
               canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>)
         else S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
           balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-            - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>))
+            - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)),
+          canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>))
     | _ \<Rightarrow> undefined)"
 
 definition message_execution_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -1038,7 +1039,8 @@ proof -
   note lm = list_map_sum_in[OF prod(2), where ?g=id, simplified] list_map_sum_in_ge[OF prod(2), where ?g=id, simplified]
     list_map_sum_in[OF prod(5), where ?g=call_ctxt_carried_cycles] list_map_sum_in_ge[OF prod(5), where ?g=call_ctxt_carried_cycles]
   define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-    balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>"
+    balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)),
+    canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>"
   define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
     cycles_accepted_res \<le> Available \<and>
     cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
@@ -1184,7 +1186,8 @@ lemma message_execution_cases:
       (no_response \<or> call_ctxt_needs_to_respond ctxt)) \<Longrightarrow>
     P n S (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
       balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-      - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+      - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)),
+      canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>)"
   shows "P n S (message_execution_post n S)"
   proof -
   obtain ctxt_id recv ep q can bal can_status t ctxt idx where msg: "messages S ! n = Func_message ctxt_id recv ep q"
@@ -1211,7 +1214,8 @@ lemma message_execution_cases:
   define older where "older = take n (messages S)"
   define younger where "younger = drop (Suc n) (messages S)"
   define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
-    balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>"
+    balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)),
+    canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>"
   define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
     cycles_accepted_res \<le> Available \<and>
     cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
@@ -1286,10 +1290,11 @@ proof (rule message_execution_cases[OF assms(1)])
     by (cases R)
        (force simp: ic_inv_def ic_can_status_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD list_map_range_setD)+
 next
-  fix recv bal Is_response cyc_used
+  fix recv bal Is_response cyc_used idx
   show "ic_inv (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
     balances := list_map_set (balances S) recv (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
-    - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+    - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)),
+    canister_state_counter := list_map_set (canister_state_counter S) recv (Suc idx)\<rparr>)"
     using assms(2)
     by (auto simp: ic_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD)
 qed
@@ -2227,16 +2232,18 @@ definition ic_depositing_cycles_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     cee = ic_principal \<and>
     mn = encode_string ''deposit_cycles'' \<and>
     (case candid_parse_cid a of Some cid \<Rightarrow>
-    (case list_map_get (balances S) cid of Some bal \<Rightarrow>
+    (case (list_map_get (balances S) cid, list_map_get (canister_state_counter S) cid) of (Some bal, Some idx) \<Rightarrow>
       True
     | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
 definition ic_depositing_cycles_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_depositing_cycles_post n S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
-    let cid = the (candid_parse_cid a) in
+    let cid = the (candid_parse_cid a);
+    idx = the (list_map_get (canister_state_counter S) cid) in
     (case list_map_get (balances S) cid of Some bal \<Rightarrow>
     S\<lparr>balances := list_map_set (balances S) cid (bal + trans_cycles),
+      canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) 0]\<rparr>))"
 
 lemma ic_depositing_cycles_cycles_monotonic:
@@ -2391,15 +2398,17 @@ definition ic_top_up_canister_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
       (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
       cee = ic_principal \<and>
       mn = encode_string ''provisional_top_up_canister'' \<and>
-      cid \<in> list_map_dom (balances S)
+      cid \<in> list_map_dom (balances S) \<and>
+      cid \<in> list_map_dom (canister_state_counter S)
     | _ \<Rightarrow> False) | _ \<Rightarrow> False))"
 
 definition ic_top_up_canister_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_top_up_canister_post n S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
     let cid = the (candid_parse_cid a);
+    idx = the (list_map_get (canister_state_counter S) cid);
     cyc = the (candid_parse_nat a [encode_string ''amount'']);
     bal = the (list_map_get (balances S) cid) in
-    S\<lparr>balances := list_map_set (balances S) cid (bal + cyc)\<rparr>)"
+    S\<lparr>balances := list_map_set (balances S) cid (bal + cyc), canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx)\<rparr>)"
 
 definition ic_top_up_canister_minted_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "ic_top_up_canister_minted_cycles n S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
@@ -2712,12 +2721,14 @@ lemma canister_time_progress_ic_inv:
 (* System transition: Time progressing and cycle consumption (cycle consumption) [DONE] *)
 
 definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "cycle_consumption_pre cid b1 S = (case list_map_get (balances S) cid of Some b0 \<Rightarrow>
+  "cycle_consumption_pre cid b1 S = (case (list_map_get (balances S) cid, list_map_get (canister_state_counter S) cid) of (Some b0, Some idx) \<Rightarrow>
       0 \<le> b1 \<and> b1 < b0
     | _ \<Rightarrow> False)"
 
 definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
+  "cycle_consumption_post cid b1 S = (
+    let idx = the (list_map_get (canister_state_counter S) cid) in
+    S\<lparr>balances := list_map_set (balances S) cid b1, canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx)\<rparr>)"
 
 definition cycle_consumption_burned_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "cycle_consumption_burned_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
