@@ -195,7 +195,6 @@ record ('p, 'canid, 's, 'b, 'c) method_call =
   arg :: 'b
   transferred_cycles :: nat
   callback :: 'c
-  canister_state_counter :: canister_state_counter
 
 record 'x cycles_return =
   return :: 'x

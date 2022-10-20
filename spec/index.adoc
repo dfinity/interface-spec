@@ -2307,7 +2307,6 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
-  canister_state_counter: CanisterStateCounter;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -4422,7 +4421,6 @@ ic0.call_new<es>(
       on_reject = Closure { fun = reject_fun; env = reject_env }
       on_cleanup = NoClosure
     };
-    canister_state_counter = es.params.sysenv.canister_state_counter;
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
