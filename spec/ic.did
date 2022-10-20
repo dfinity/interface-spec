@@ -111,6 +111,7 @@ service ic : {
   raw_rand : () -> (blob);
   http_request : (record {
     url : text;
+    custom_dns: opt text;
     max_response_bytes: opt nat64;
     method : variant { get; head; post };
     headers: vec http_header;
