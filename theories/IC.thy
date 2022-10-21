@@ -1447,7 +1447,7 @@ definition ic_canister_status_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
       cid \<in> list_map_dom (canister_status S) \<and>
       cid \<in> list_map_dom (balances S) \<and>
       cid \<in> list_map_dom (freezing_threshold S) \<and>
-    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls \<union> {principal_of_canid cid} | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
 definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
