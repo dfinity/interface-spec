@@ -574,7 +574,7 @@ All requested paths must have one of the following paths as prefix:
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
-If a path cannot be requested, then the HTTP response to the read state request has a 4xx status code.
+If a path cannot be requested, then the HTTP response to the read state request is undefined.
 
 Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
 
