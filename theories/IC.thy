@@ -2692,7 +2692,7 @@ lemma canister_out_of_cycles_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister time) [DONE] *)
 
 definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_time_progress_pre cid t1 S = (case list_map_get (time S) cid of Some t0 \<Rightarrow>
@@ -2718,7 +2718,7 @@ lemma canister_time_progress_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (cycle consumption) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (cycle consumption) [DONE] *)
 
 definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "cycle_consumption_pre cid b1 S = (case (list_map_get (balances S) cid, list_map_get (canister_state_counter S) cid) of (Some b0, Some idx) \<Rightarrow>
@@ -2751,7 +2751,7 @@ lemma cycle_consumption_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (system time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (system time) [DONE] *)
 
 definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "system_time_progress_pre t1 S = (system_time S < t1)"
@@ -2769,6 +2769,32 @@ lemma system_time_progress_ic_inv:
   shows "ic_inv (system_time_progress_post t1 S)"
   using assms
   by (auto simp: ic_inv_def system_time_progress_pre_def system_time_progress_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
+
+
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister state counter) [DONE] *)
+
+definition canister_state_counter_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "canister_state_counter_progress_pre cid n1 S = (case list_map_get (canister_state_counter S) cid of Some n0 \<Rightarrow>
+      n0 < n1
+    | _ \<Rightarrow> False)"
+
+definition canister_state_counter_progress_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "canister_state_counter_progress_post cid n1 S = (S\<lparr>canister_state_counter := list_map_set (canister_state_counter S) cid n1\<rparr>)"
+
+lemma canister_state_counter_progress_cycles_inv:
+  assumes "canister_state_counter_progress_pre cid n1 S"
+  shows "total_cycles S = total_cycles (canister_state_counter_progress_post cid n1 S)"
+  by (auto simp: canister_state_counter_progress_post_def total_cycles_def)
+
+lemma canister_state_counter_progress_ic_inv:
+  assumes "canister_state_counter_progress_pre cid n1 S" "ic_inv S"
+  shows "ic_inv (canister_state_counter_progress_post cid n1 S)"
+  using assms
+  by (auto simp: ic_inv_def canister_state_counter_progress_pre_def canister_state_counter_progress_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
       in_set_map_filter_vals)
@@ -2815,6 +2841,7 @@ inductive ic_steps :: "'sig itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm,
 | canister_time_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> canister_time_progress_pre cid t1 S \<Longrightarrow> ic_steps sig S0 minted burned (canister_time_progress_post cid t1 S)"
 | cycle_consumption: "ic_steps sig S0 minted burned S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig S0 minted (burned + cycle_consumption_burned_cycles cid b1 S) (cycle_consumption_post cid b1 S)"
 | system_time_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig S0 minted burned (system_time_progress_post t1 S)"
+| canister_state_counter_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> canister_state_counter_progress_pre cid n1 S \<Longrightarrow> ic_steps sig S0 minted burned (canister_state_counter_progress_post cid n1 S)"
 
 lemma total_cycles:
   assumes "ic_steps TYPE('sig) S0 minted burned S"
@@ -2857,6 +2884,7 @@ lemma total_cycles:
   using canister_time_progress_cycles_inv apply fastforce
   using cycle_consumption_cycles_monotonic apply fastforce
   using system_time_progress_cycles_inv apply fastforce
+  using canister_state_counter_progress_cycles_inv apply fastforce
   done
 
 lemma ic_inv:
@@ -2900,6 +2928,7 @@ lemma ic_inv:
   using canister_time_progress_ic_inv apply fastforce
   using cycle_consumption_ic_inv apply fastforce
   using system_time_progress_ic_inv apply fastforce
+  using canister_state_counter_progress_ic_inv apply fastforce
   done
 
 end
@@ -2939,6 +2968,7 @@ export_code request_submission_pre request_submission_post
   canister_time_progress_pre canister_time_progress_post
   cycle_consumption_pre cycle_consumption_post
   system_time_progress_pre system_time_progress_post
+  canister_state_counter_progress_pre canister_state_counter_progress_post
 in Haskell module_name IC file_prefix code
 
 end

@@ -1103,7 +1103,7 @@ Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and
 [#system-api-canister-state-counter]
 === Canister state counter
 
-For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is incremented upon every change to the canister's state (except for changes affecting only the canister's balance or time), i.e., upon every (successful and unsuccessful) message execution (ingress message, inter-canister call, callback execution) on that canister, successful management canister call (`update_settings`, `install_code`, `uninstall_code`, `stop_canister`, `start_canister`, `deposit_cycles`, and `provisional_top_up_canister`) on that canister, change of the canister status of that canister from stopping to stopped, code uninstallation due to that canister running out of cycles, successful `inspect_message` execution for ingress messages, and charging canisters for (compute and memory) resource allocation and usage.
+For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is guaranteed to be incremented upon every change to the canister's state (except for changes affecting only the canister's time), i.e., upon every (successful and unsuccessful) message execution (ingress message, inter-canister call, callback execution) on that canister, successful management canister call (`update_settings`, `install_code`, `uninstall_code`, `stop_canister`, `start_canister`, `deposit_cycles`, and `provisional_top_up_canister`) on that canister, change of the canister status of that canister from stopping to stopped, code uninstallation due to that canister running out of cycles, successful `inspect_message` execution for ingress messages, and charging canisters for (compute and memory) resource allocation and usage. The system can arbitrarily increment the state counter also if the canister's state does not change.
 
 * `ic0.canister_state_counter : () -> i64`
 +
@@ -3768,7 +3768,7 @@ S with
 ....
 
 
-==== Time progressing and cycle consumption
+==== Time progressing, cycle consumption, and canister state counter increments
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -3808,6 +3808,19 @@ State after::
 ....
 S with
     system_time = T1
+....
+
+Finally, the canister state counter can be incremented arbitrarily:
+
+Conditions::
+....
+    N0 = S.canister_state_counter[CanisterId]
+    N1 > N0
+....
+State after::
+....
+S with
+    canister_state_counter[CanisterId] = N1
 ....
 
 ==== Query call
