@@ -116,8 +116,8 @@ service ic : {
     headers: vec http_header;
     body : opt blob;
     transform : opt record {
-      function : func (record {response : http_response; context : blob}) -> (http_response) query;
-      context : blob
+      function : func (record {response : http_response; arg : blob}) -> (http_response) query;
+      arg : blob
     };
   }) -> (http_response);
 
