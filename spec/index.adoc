@@ -1658,18 +1658,19 @@ It is important to note the following for the usage of the `POST` method:
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-Each request can specify the maximal expected size for the response from the remote HTTP server. The upper limit on the size of a response defaults to `2MiB` if no maximal size value is specified.
-An error will be returned when the response is larger than the maximal size.
-The `2MiB` size limit also applies to the value returned by the `transform` function.
+Each request can specify the maximal expected size for the response body from the remote HTTP server. The upper limit on the size of a response body defaults to `2MiB` if no maximal size value is specified.
+An error will be returned when the response body is larger than the maximal size.
 
 The following parameters should be supplied for the call:
 
-- `url` - the requested URL. The URL may specify a custom port number.
-- `max_response_bytes` - optional, specifies the maximal size of the response in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
+- `url` - the requested URL. The URL must be valid according to https://www.ietf.org/rfc/rfc3986.txt[RFC-3986] and its length must not exceed 65534. The URL may specify a custom port number.
+- `max_response_bytes` - optional, specifies the maximal size of the response *body* in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
 - `method` - currently, only GET, HEAD, and POST are supported
 - `headers` - list of HTTP request headers and their corresponding values
 - `body` - optional, the content of the request's body
 - `transform` - an optional record that includes a function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
+
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
@@ -1679,6 +1680,8 @@ The returned response (and the response provided to the `transform` function, if
 
 The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc.
 When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
+
+The size of the response (from the remote server if no `transform` function is specified or after `transform`) in Candid encoding (including `status`, `headers`, and `body`) must not exceed 2045952 (`2MiB - 50KiB`).
 
 NOTE: The identity of the caller for a valid invocation of the `transform` function is `aaaaa-aa`. This information can be used by developers to implement access control mechanism for this function.
 
