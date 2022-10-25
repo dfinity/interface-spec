@@ -1664,7 +1664,7 @@ The `2MiB` size limit also applies to the value returned by the `transform` func
 
 The following parameters should be supplied for the call:
 
-- `url` - the requested URL. The URL may specify a custom port number. However, only ports 80, 443, and 20000-65535 can be used.
+- `url` - the requested URL. The URL may specify a custom port number.
 - `max_response_bytes` - optional, specifies the maximal size of the response in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
 - `method` - currently, only GET, HEAD, and POST are supported
 - `headers` - list of HTTP request headers and their corresponding values
