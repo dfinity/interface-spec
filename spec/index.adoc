@@ -1307,7 +1307,7 @@ This system call is experimental. It may be changed or removed in the future. Ca
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this _stable memory_ is to provide space to store data beyond upgrades.  The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
-The stable memory is initially empty.
+The stable memory is initially empty and can be grown up to 32 GiB (provided the subnet has capacity).
 
 * `ic0.stable_size : () -> (page_count : i32)`
 +
@@ -1344,32 +1344,24 @@ It also traps if `dst+size` exceeds the size of the WebAssembly memory or `offse
 * `ic0.stable64_size : () -> (page_count : i64)`
 +
 returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
-+
-This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64)`
 +
 tries to grow the memory by `new_pages` many pages containing zeroes.
 +
 If successful, returns the _previous_ size of the memory (in pages). Otherwise, returns `-1`.
-+
-This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ()`
 +
 Copies the data from location [src, src+size) of the canister memory to location [offset, offset+size) in the stable memory.
 +
 This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
-+
-This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 * `ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ()`
 +
 Copies the data from location [offset, offset+size) of the stable memory to the location [dst, dst+size) in the canister memory.
 +
 This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
-+
-This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 [#system-api-time]
 === System time
