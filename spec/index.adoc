@@ -2593,6 +2593,7 @@ CanisterChange
     }
 CanisterChangeEntry = {
   timestamp : Timestamp;
+  canister_state_counter : CanisterStateCounter;
   origin : CanisterChangeOrigin;
   change : CanisterChange;
 }
@@ -3199,6 +3200,7 @@ S with
       total_num_changes = 1
       change_entries = {
         timestamp = CurrentTime
+        canister_state_counter = 0
         origin = canister_change_origin(M.caller, M.origin)
         change = CanisterCreation
       }
@@ -3254,6 +3256,7 @@ S with
         total_num_changes = N + 1;
         change_entries = H · {
             timestamp = S.time[A.canister_id];
+            canister_state_counter = S.canister_state_counter[A.canister_id]
             origin = canister_change_origin(M.caller, M.origin);
             change = ControllersChange {
               controllers = A.settings.controllers;
@@ -3357,6 +3360,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
+          canister_state_counter = S.canister_state_counter[A.canister_id]
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeDeployment {
             mode = A.mode;
@@ -3422,6 +3426,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
+          canister_state_counter = S.canister_state_counter[A.canister_id]
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeDeployment {
             mode = Upgrade;
@@ -3465,6 +3470,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
+          canister_state_counter = S.canister_state_counter[A.canister_id]
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeUninstall;
         };
@@ -3751,6 +3757,7 @@ S with
       total_num_changes = 1
       change_entries = {
         timestamp = CurrentTime
+        canister_state_counter = 0
         origin = canister_change_origin(M.caller, M.origin)
         change = CanisterCreation
       }
@@ -3907,6 +3914,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[CanisterId];
+          canister_state_counter = S.canister_state_counter[CanisterId]
           origin = FromSystem;
           change = CodeUninstall;
         };

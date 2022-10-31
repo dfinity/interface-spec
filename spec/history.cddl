@@ -1,5 +1,6 @@
 canister-change-entry = tagged<{
   timestamp : timestamp
+  canister_state_counter : unsigned
   origin : canister-change-origin
   change : canister-change
 }>
@@ -10,7 +11,7 @@ canister-change-origin = {
   //
   from : "canister"
   canister_id : principal
-  canister_history_index : unsigned
+  canister_state_counter : unsigned
   //
   from : "system"
 }
