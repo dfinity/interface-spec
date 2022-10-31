@@ -2342,7 +2342,7 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
-  canister_history_index : CanisterHistoryIndex;
+  canister_state_counter : CanisterStateCounter;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -2428,10 +2428,10 @@ CallOrigin
   | FromCanister {
       calling_context : CallId;
       callback: Callback;
-      canister_history_index: CanisterHistoryIndex;
+      canister_state_counter: CanisterStateCounter;
     }
   | FromHeartbeat {
-      canister_history_index: CanisterHistoryIndex;
+      canister_state_counter: CanisterStateCounter;
     }
 CallCtxt = {
   canister : CanisterId;
@@ -2574,7 +2574,7 @@ CanisterChangeOrigin
     }
   | FromCanister {
       canister_id : CanisterId;
-      canister_history_index : CanisterHistoryIndex;
+      canister_state_counter : CanisterStateCounter;
     }
   | FromSystem
 CodeDeploymentMode
@@ -2630,13 +2630,13 @@ To convert `CallOrigin` into `CanisterChangeOrigin`, we define the following con
 canister_change_origin(principal, FromUser { … }) = FromUser {
     user_id = principal
   }
-canister_change_origin(principal, FromCanister { canister_history_index = N, … }) = FromCanister {
+canister_change_origin(principal, FromCanister { canister_state_counter = N, … }) = FromCanister {
     canister_id = principal
-    canister_history_index = N
+    canister_state_counter = N
   }
-canister_change_origin(principal, FromHeartbeat { canister_history_index = N, … }) = FromCanister {
+canister_change_origin(principal, FromHeartbeat { canister_state_counter = N, … }) = FromCanister {
     canister_id = principal
-    canister_history_index = N
+    canister_state_counter = N
   }
 ....
 
@@ -2955,7 +2955,7 @@ S with
     call_contexts[Ctxt_id] = {
       canister = C;
       origin = FromHeartbeat {
-          canister_history_index = S.canister_history[C].total_num_changes;
+          canister_state_counter = S.canister_state_counter[C];
         };
       needs_to_respond = false;
       deleted = false;
@@ -3029,7 +3029,7 @@ then
           origin = FromCanister {
             call_context = M.call_context;
             callback = call.callback;
-            canister_history_index = S.canister_history[M.receiver].total_num_changes;
+            canister_state_counter = S.canister_state_counter[M.receiver];
           };
           caller = M.receiver;
           callee = call.callee;
