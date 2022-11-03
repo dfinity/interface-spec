@@ -966,7 +966,9 @@ NOTE: While an implementation will likely try to keep the interval between `cani
 
 ==== Global timer
 
-For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer. Once the function `canister_global_timer` is scheduled, the canister's global timer is reset. The global timer is also reset upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
+For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer.
+
+Once the function `canister_global_timer` is scheduled, the canister's global timer is reset. The global timer is also reset upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
 `canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
 
