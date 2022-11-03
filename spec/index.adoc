@@ -968,7 +968,7 @@ NOTE: While an implementation will likely try to keep the interval between `cani
 
 For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer.
 
-Once the function `canister_global_timer` is scheduled, the canister's global timer is reset. The global timer is also reset upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
+Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
 `canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
 
@@ -1409,7 +1409,7 @@ The canister can set a global timer to make the system schedule a call to the ex
 
 The function returns the previous value of the timer. If no timer is set before invoking the function, then the function returns zero.
 
-Passing zero as an argument to the function resets the timer and thus prevents the system from scheduling calls to the canister's `canister_global_timer` Wasm method.
+Passing zero as an argument to the function deactivates the timer and thus prevents the system from scheduling calls to the canister's `canister_global_timer` Wasm method.
 
 [#system-api-performance-counter]
 === Performance counter
@@ -1424,7 +1424,7 @@ The argument `type` decides which performance counter to return:
 
 In the future, we might expose more performance counters.
 
-The system resets the counter at the beginning of each <<entry-points>> invocation.
+The system deactivates the counter at the beginning of each <<entry-points>> invocation.
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
@@ -2918,7 +2918,7 @@ S with
 
 * Call context creation: Global timer
 +
-If canister `C` exports a method with name `canister_global_timer`, the global timer of canister `C` is set, and the current time for canister `C` has passed the value of the global timer, the IC will create the corresponding call context and reset the global timer.
+If canister `C` exports a method with name `canister_global_timer`, the global timer of canister `C` is set, and the current time for canister `C` has passed the value of the global timer, the IC will create the corresponding call context and deactivate the global timer.
 +
 Conditions::
 +
