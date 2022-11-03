@@ -2352,7 +2352,7 @@ QueryFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
   response : Response;
   cycles_used : Nat;
 }
-SystemFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
+SystemTaskFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
   new_state : WasmState;
   new_global_timer : NoGlobalTimer | Nat;
   cycles_used : Nat;
@@ -2378,8 +2378,8 @@ CanisterModule = {
   }
   update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
   query_methods : MethodName ↦ ((Arg, CallerId, Env) -> QueryFunc)
-  heartbeat : (Env) -> SystemFunc
-  global_timer : (Env) -> SystemFunc
+  heartbeat : (Env) -> SystemTaskFunc
+  global_timer : (Env) -> SystemTaskFunc
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     status : Accept | Reject;
