@@ -966,11 +966,11 @@ NOTE: While an implementation will likely try to keep the interval between `cani
 
 ==== Global timer
 
-For periodic or time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer. Once the function `canister_global_timer` is scheduled, the canister's global timer is reset. In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
+For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer. Once the function `canister_global_timer` is scheduled, the canister's global timer is reset. The global timer is also reset upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
 `canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
 
-NOTE: While an implementation will likely try to keep the interval between the value of the global timer and the invocation of `canister_global_timer` within a few seconds, this is not formally part of this specification.
+NOTE: While an implementation will likely try to keep the interval between the value of the global timer and the time-stamp of the `canister_global_timer` invocation within a few seconds, this is not formally part of this specification.
 
 ==== Callbacks
 
@@ -2354,6 +2354,7 @@ QueryFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
 }
 SystemFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
   new_state : WasmState;
+  new_global_timer : NoGlobalTimer | Nat;
   cycles_used : Nat;
 }
 
@@ -2363,6 +2364,7 @@ RefundedCycles = Nat
 CanisterModule = {
   init : (CanisterId, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     new_state : WasmState;
+    new_global_timer : NoGlobalTimer | Nat;
     cycles_used : Nat;
   }
   pre_upgrade : (WasmState, Principal, Env) -> Trap { cycles_used : Nat; } | Return {
@@ -2371,6 +2373,7 @@ CanisterModule = {
   }
   post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     new_state : WasmState;
+    new_global_timer : NoGlobalTimer | Nat;
     cycles_used : Nat;
   }
   update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
@@ -2831,7 +2834,7 @@ State after::
 
 ==== Call context creation
 
-Before invoking a heartbeat or a message to a public entry point, a call context is created for bookkeeping purposes.
+Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes.
 For these invocations the canister must be running (so not stopped, or stopping).
 Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
@@ -2885,7 +2888,7 @@ Conditions::
 ....
     S.canisters[C] ≠ EmptyCanister
     S.canister_status[C] = Running
-    balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+    S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
@@ -2922,7 +2925,7 @@ Conditions::
     S.canister_status[C] = Running
     S.global_timer[C] ≠ 0
     S.time[C] ≥ S.global_timer[C]
-    balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+    S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom(S.call_contexts)
 ....
 +
@@ -3681,7 +3684,7 @@ State after::
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
-    global_timer[CanisterId] = CurrentTime
+    global_timer[CanisterId] = 0
     controllers[CanisterId] = [M.caller]
     freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = A.amount
