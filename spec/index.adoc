@@ -1403,7 +1403,7 @@ NOTE: While an implementation will likely try to keep the time returned by `ic0.
 [#global-timer]
 === Global timer
 
-The canister can set a global timer to make the system schedule a call to the exported `canister_global_timer` Wasm method after the specified time.
+The canister can set a global timer to make the system schedule a call to the exported `canister_global_timer` Wasm method after the specified time. The time must be provided as nanoseconds since 1970-01-01.
 
 `+ic0.global_timer_set : (timestamp : i64) -> i64+`
 
