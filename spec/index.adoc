@@ -446,7 +446,7 @@ The canister history consists of a list of canister change entries whose individ
 include::{example}history.cddl[]
 ----
 
-The system can drop the oldest canister change entries from the list to keep its length bounded (at least 1000 change entries are guaranteed to remain in the list), but the indices of the remaining change entries are not affected.
+The system state tree might not contain paths for all canister history change entries, but at least 20 most recent change entries (or all change entries if the canister history contains less than 20 change entries) are guaranteed to be present.
 
 Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user, a canister, or system), and its kind (canister creation, code change, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code uninstall, code install, code reinstall, code upgrade) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
@@ -3994,27 +3994,6 @@ S with
     canister_state_counter[CanisterId] = N1
 ....
 
-==== Trimming canister history
-
-The list of canister change entries can be trimmed, but the total number of recorded canister changes cannot be altered. At least 1000 change entries are guaranteed to remain in the list of change entries.
-
-Conditions::
-....
-  S.canister_history[CanisterId] = {
-      total_num_changes = N;
-      change_entries = Older_change_entries · Newer_change_entries;
-    }
-  |Newer_change_entries| ≥ 1000
-....
-State after::
-....
-S with
-    canister_history[CanisterId] = {
-      total_num_changes = N;
-      change_entries = Newer_change_entries;
-    }
-....
-
 ==== Query call
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which have a status of `Running` and are also not frozen.
@@ -4113,7 +4092,7 @@ state_tree(S) = {
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
         { "controllers" : CBOR(S.controllers[canister_id]) } ∪
-        { "history" : { LEB128(i + S.canister_history[canister_id].total_num_changes - |S.canister_history[canister_id].change_entries|) : CBOR(S.canister_history[canister_id].change_entries[i]) | 0 ≤ i < |S.canister_history[canister_id].change_entries| } } ∪
+        { "history" : { LEB128(i) : CBOR(S.canister_history[canister_id].change_entries[i]) | max(0, S.canister_history[canister_id].total_num_changes - 20) ≤ i < S.canister_history[canister_id].total_num_changes } } ∪
         { "total_num_changes" : LEB128(S.canister_history[canister_id].total_num_changes) } ∪
         { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
     | (canister_id, C) ∈ S.canisters };
