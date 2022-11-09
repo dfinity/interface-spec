@@ -1112,17 +1112,78 @@ proof -
   qed
 qed
 
-lemma message_execution_ic_inv:
-  assumes "message_execution_pre n S" "ic_inv S"
-  shows "ic_inv (message_execution_post n S)"
-proof -
+lemma message_execution_cases:
+  assumes "message_execution_pre n S"
+  "\<And>ctxt_id recv ep q can bal can_status t ctxt Mod Is_response Env Available F R cyc_used cycles_accepted_res new_calls_res New_balance no_response result new_call_to_message response_messages msgs new_ctxt cert_data idx.
+    messages S ! n = Func_message ctxt_id recv ep q \<Longrightarrow> list_map_get (canisters S) recv = Some (Some can) \<Longrightarrow> list_map_get (balances S) recv = Some bal \<Longrightarrow>
+    list_map_get (canister_status S) recv = Some can_status \<Longrightarrow>
+    list_map_get (time S) recv = Some t \<Longrightarrow>
+    list_map_get (call_contexts S) ctxt_id = Some ctxt \<Longrightarrow>
+    Mod = module can \<Longrightarrow>
+    Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) \<Longrightarrow>
+    Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr> \<Longrightarrow>
+    Available = call_ctxt_available_cycles ctxt \<Longrightarrow>
+    F = exec_function ep Env Available Mod \<Longrightarrow>
+    R = F (wasm_state can) \<Longrightarrow>
+    cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | Inl trap \<Rightarrow> cycles_return.cycles_used trap) \<Longrightarrow>
+    (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, update_return.new_calls res)) \<Longrightarrow>
+    New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res)) \<Longrightarrow>
+    no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) \<Longrightarrow>
+    \<not>isl R \<Longrightarrow> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<Longrightarrow>
+    cycles_accepted_res \<le> Available \<Longrightarrow>
+    cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+      bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<Longrightarrow>
+    New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<Longrightarrow>
+    (no_response \<or> call_ctxt_needs_to_respond ctxt) \<Longrightarrow>
+    result = projr R \<Longrightarrow>
+    new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (method_call.callback call)) (principal_of_canid recv)
+      (method_call.callee call) (method_call.method_name call) (method_call.arg call) (method_call.transferred_cycles call) (Queue (Canister recv) (method_call.callee call))) \<Longrightarrow>
+    response_messages = (case update_return.response result of None \<Rightarrow> []
+      | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)]) \<Longrightarrow>
+    msgs = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages \<Longrightarrow>
+    new_ctxt = (case update_return.response result of
+        None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
+      | Some _ \<Rightarrow> call_ctxt_respond ctxt) \<Longrightarrow>
+    cert_data = (case new_certified_data result of None \<Rightarrow> certified_data S
+      | Some cd \<Rightarrow> list_map_set (certified_data S) recv cd) \<Longrightarrow>
+    P n S (S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
+      messages := msgs, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
+      certified_data := cert_data, balances := list_map_set (balances S) recv New_balance\<rparr>)"
+  "\<And>ctxt_id recv ep q can bal can_status t ctxt Mod Is_response Env Available F R cyc_used cycles_accepted_res new_calls_res New_balance no_response idx.
+    messages S ! n = Func_message ctxt_id recv ep q \<Longrightarrow> list_map_get (canisters S) recv = Some (Some can) \<Longrightarrow> list_map_get (balances S) recv = Some bal \<Longrightarrow>
+    list_map_get (canister_status S) recv = Some can_status \<Longrightarrow>
+    list_map_get (time S) recv = Some t \<Longrightarrow>
+    list_map_get (call_contexts S) ctxt_id = Some ctxt \<Longrightarrow>
+    Mod = module can \<Longrightarrow>
+    Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) \<Longrightarrow>
+    Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr> \<Longrightarrow>
+    Available = call_ctxt_available_cycles ctxt \<Longrightarrow>
+    F = exec_function ep Env Available Mod \<Longrightarrow>
+    R = F (wasm_state can) \<Longrightarrow>
+    cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | Inl trap \<Rightarrow> cycles_return.cycles_used trap) \<Longrightarrow>
+    (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, update_return.new_calls res)) \<Longrightarrow>
+    New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res)) \<Longrightarrow>
+    no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) \<Longrightarrow>
+    \<not>(\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+      cycles_accepted_res \<le> Available \<and>
+      cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+      bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+      New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+      (no_response \<or> call_ctxt_needs_to_respond ctxt)) \<Longrightarrow>
+    P n S (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+      balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
+      - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+  shows "P n S (message_execution_post n S)"
+  proof -
   obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
     and prod: "list_map_get (canisters S) recv = Some (Some can)"
     "list_map_get (balances S) recv = Some bal"
     "list_map_get (canister_status S) recv = Some can_status"
     "list_map_get (time S) recv = Some t"
     "list_map_get (call_contexts S) ctxt_id = Some ctxt"
-    using assms
+    using assms(1)
     by (auto simp: message_execution_pre_def split: message.splits option.splits)
   define Mod where "Mod = can_state_rec.module can"
   define Is_response where "Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False)"
