@@ -1138,12 +1138,6 @@ proof -
   define no_response where "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
   define older where "older = take n (messages S)"
   define younger where "younger = drop (Suc n) (messages S)"
-  have msgs: "messages S = older @ Func_message ctxt_id recv ep q # younger"
-    "take n older = older" "drop (Suc n) older = []"
-    "take (n - length older) ws = []" "drop (Suc n - length older) (w # ws) = ws"
-    for w and ws :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message list"
-    using id_take_nth_drop[of n "messages S"] assms
-    by (auto simp: message_execution_pre_def msg older_def younger_def)
   define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
     balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>"
   define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
@@ -1161,19 +1155,11 @@ proof -
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric])
     then show ?thesis
-      using assms(2)
-      apply (auto simp: ic_inv_def S''_def msgs split: message.splits call_origin.splits)
-         apply force
-        apply fast
-       apply force
-      apply fast
-      done
+      using assms(3)[OF msg prod Mod_def Is_response_def Env_def Available_def F_def R_def cyc_used_def res New_balance_def no_response_def, folded cond_def S''_def] False
+      by auto
   next
     case True
     define result where "result = projr R"
-    have R_Inr: "R = Inr result"
-      using True
-      by (auto simp: cond_def result_def split: option.splits)
     define response_messages where "response_messages = (case update_return.response result of None \<Rightarrow> []
       | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
     define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
@@ -1188,12 +1174,6 @@ proof -
     define S' where "S' = S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
       messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
       certified_data := certified_data, balances := list_map_set (balances S) recv New_balance\<rparr>"
-    have cycles_accepted_res_def: "cycles_accepted_res = update_return.cycles_accepted result"
-      and new_calls_res_def: "new_calls_res = new_calls result"
-      using res
-      by (auto simp: R_Inr)
-    have no_response: "no_response = (update_return.response result = None)"
-      by (auto simp: no_response_def R_Inr)
     have msg_exec: "message_execution_post n S = S'"
       using True
       by (simp_all add: message_execution_post_def Let_def msg prod
@@ -1201,35 +1181,43 @@ proof -
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric]
           messages_def[symmetric] new_ctxt_def[symmetric] certified_data_def[symmetric] S'_def[symmetric]
           result_def[symmetric] response_messages_def[symmetric] new_call_to_message_def[symmetric])
-    have messages_msgs: "messages = older @ younger @ map new_call_to_message new_calls_res @ response_messages"
-      by (auto simp: messages_def older_def younger_def)
-    have ctxt_in_range: "ctxt \<in> list_map_range (call_contexts S)"
-      using prod(5)
-      by (simp add: list_map_get_range)
-    have response_msgsD: "msg \<in> set response_messages \<Longrightarrow> update_return.response result \<noteq> None \<and>
-      (\<exists>resp. msg = Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res))" for msg
-      by (auto simp: response_messages_def) metis
-    have call_ctxt_origin_new_ctxt: "call_ctxt_origin new_ctxt = call_ctxt_origin ctxt"
-      by (auto simp: new_ctxt_def split: option.splits)
-    have call_ctxt_needs_to_respond_new_ctxtD: "call_ctxt_needs_to_respond new_ctxt \<Longrightarrow> call_ctxt_needs_to_respond ctxt"
-      by (auto simp: new_ctxt_def split: option.splits)
     show ?thesis
-      using assms(2) ctxt_in_range True call_ctxt_not_needs_to_respond_available_cycles[of ctxt]
-      apply (auto simp: cond_def msg_exec S'_def ic_inv_def msgs messages_msgs new_call_to_message_def
-          no_response_def R_Inr call_ctxt_origin_new_ctxt
-          split: option.splits message.splits call_origin.splits
-          dest!: list_map_range_setD response_msgsD call_ctxt_needs_to_respond_new_ctxtD
-          intro: ic_can_status_inv_mono2)
-             apply blast
-            apply fast
-           apply blast
-          apply fast
-         apply blast
-        apply fast
-       apply blast
-      apply fast
-      done
+      using assms(2)[OF msg prod Mod_def Is_response_def Env_def Available_def F_def R_def cyc_used_def res New_balance_def no_response_def _ _ _ _ _ _ result_def
+          new_call_to_message_def response_messages_def messages_def new_ctxt_def certified_data_def, folded S'_def] True
+      by (auto simp: cond_def msg_exec)
   qed
+qed
+
+lemma message_execution_ic_inv:
+  assumes "message_execution_pre n S" "ic_inv S"
+  shows "ic_inv (message_execution_post n S)"
+proof (rule message_execution_cases[OF assms(1)])
+  fix recv msgs ctxt_id new_ctxt cert_data New_balance new_calls_res response_messages ctxt Available cycles_accepted_res no_response idx
+  fix can :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) can_state_rec"
+  fix result :: "('w, 'p, 'canid, 's, 'b, 'c) update_return"
+  fix new_call_to_message :: "('p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message"
+  fix R :: "unit cycles_return + ('w, 'p, 'canid, 's, 'b, 'c) update_return"
+  assume ctxt: "list_map_get (call_contexts S) ctxt_id = Some ctxt"
+  assume "msgs = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages"
+    "new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv) (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call)
+      (Queue (Canister recv) (callee call)))"
+    "response_messages = (case update_return.response result of None \<Rightarrow> [] | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
+    "no_response \<or> call_ctxt_needs_to_respond ctxt"
+    "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
+    "\<not> isl R" "result = projr R"
+    "new_ctxt = (case update_return.response result of None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt | Some x \<Rightarrow> call_ctxt_respond ctxt)"
+  then show "ic_inv (S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)), messages := msgs,
+    call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt, certified_data := cert_data, balances := list_map_set (balances S) recv New_balance\<rparr>)"
+    using assms(2) list_map_get_range[OF ctxt]
+    by (cases R)
+       (force simp: ic_inv_def ic_can_status_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD list_map_range_setD)+
+next
+  fix recv bal Is_response cyc_used idx
+  show "ic_inv (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+    balances := list_map_set (balances S) recv (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+    - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+    using assms(2)
+    by (auto simp: ic_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD)
 qed
 
 
@@ -1447,7 +1435,7 @@ definition ic_canister_status_pre :: "nat \<Rightarrow> nat \<Rightarrow> ('p, '
       cid \<in> list_map_dom (canister_status S) \<and>
       cid \<in> list_map_dom (balances S) \<and>
       cid \<in> list_map_dom (freezing_threshold S) \<and>
-    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls | _ \<Rightarrow> False) | _ \<Rightarrow> False)
+    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls \<union> {principal_of_canid cid} | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
 definition ic_canister_status_post :: "nat \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
@@ -1566,7 +1554,7 @@ lemma ic_code_installation_ic_inv:
   assumes "ic_code_installation_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_installation_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1666,7 +1654,7 @@ lemma ic_code_upgrade_ic_inv:
   assumes "ic_code_upgrade_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_upgrade_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m can ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m can ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1925,6 +1913,7 @@ definition ic_canister_stop_stopped_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid,
 
 definition ic_canister_stop_stopped_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_stop_stopped_post n S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid a) in
     S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
 lemma ic_canister_stop_stopped_cycles_inv:
@@ -2628,7 +2617,7 @@ definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p,
     | _ \<Rightarrow> False)"
 
 definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
+  "cycle_consumption_post cid b1 S = S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>"
 
 definition cycle_consumption_burned_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "cycle_consumption_burned_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
