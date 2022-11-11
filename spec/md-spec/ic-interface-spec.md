@@ -239,7 +239,8 @@ The canister status can be used to control whether the canister is processing ca
 
 In all cases, calls to the [management canister](#the-ic-management-canister) are processed, regardless of the state of the managed canister.
 
-The controllers of the canister can initiate transitions between these states using [`stop_canister`](#ic-stop_canister) and [`start_canister`](#ic-start_canister), and query the state using [`canister_status`](#ic-canister_status). The canister itself can also query its state using [`ic0.canister_status`](#system-api-canister-status).
+The controllers of the canister can initiate transitions between these states using [`stop_canister`](#ic-stop_canister) and [`start_canister`](#ic-start_canister), and query the state using [`canister_status`](#ic-canister_status). The canister itself can also query its state using [`ic0.canister_status`](#system-api-canister-status). (NB: this call returns additional information, such as the cycle balance of the canister). The canister itself can also query its state using [`ic0.canister_status`](#system-api-canister-status).
+
 
 :::note
 This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
@@ -554,31 +555,47 @@ The HTTP response to this request consists of a CBOR map with the following fiel
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)), unless
+    If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
 
-    -   the `effective_canister_id` is that of the Management Canister (`aaaaa-aa`),
-
-    -   all requested paths have `/time` or `/request_status/<request_id>` as prefix where the (single) original request referenced by `<request_id>` is an update call to the Management Canister (`aaaaa-aa`) and the method name is `provisional_create_canister_with_cycles`, and
-
-    -   whenever the certificate contains the path `/request_status/<request_id>/reply`, then its value is a Candid-encoded record with a `canister_id` field of type `principal` and the `canister_id` must be included in each delegation's canister id range.
-
-The returned certificate reveals all values whose path is a suffix of the list of requested paths. It also always reveals `/time`, even if not explicitly requested.
+The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
 
 All requested paths must have one of the following paths as prefix:
 
--   `/time`. Can be requested by anyone.
+- `/time`. Can always be requested.
 
--   `/subnet`. Can be requested by anyone.
+- `/subnet`. Can always be requested.
 
--   `/request_status/<request_id>`. Can only be requested by the same sender as the original request referenced by `<request_id>` and if the effective canister id of the original request matches `<effective_canister_id>`.
+- `/request_status/<request_id>`. Can be requested if no path with such a prefix exists in the state tree or
 
--   `/canisters/<canister_id>/module_hash`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`.
+   - the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
 
--   `/canisters/<canister_id>/controllers`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>`. The order may vary depending on the implementation.
+   - the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>`.
 
--   `/canisters/<canister_id>/metadata/<name>`. Can be requested by anyone if `<canister_id>` matches `<effective_canister_id>` and `<name>` is a public custom section. If `<name>` is a private custom section, it can only be requested by the controllers of the canister.
+-`/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
 
-Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canister themselves via the System API (see [Certified data](#system-api-certified-data)).
+-`/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
+
+-`/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
+
+   - canister with canister id `<canister_id>` does not exist or
+
+   - canister with canister id `<canister_id>` is empty or
+
+   - canister with canister id `<canister_id>` does not have `<name>` as its custom section or
+
+   - `<name>` is a public custom section or
+
+   - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
+
+If a path cannot be requested, then the HTTP response to the read state request is undefined.
+
+Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
+
+:::note
+The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
+:::
+
+Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see [Certified data](#system-api-certified-data)).
 
 See [The system state tree](#the-system-state-tree) for details on the state tree.
 
@@ -637,7 +654,7 @@ The `<effective_canister_id>` in the URL paths of requests is the *effective* de
 
     The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-    In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs, unless the request is an update call to the Management Canister (`aaaaa-aa`), the method name is `provisional_create_canister_with_cycles`, and the effective canister id is that of the Management Canister (`aaaaa-aa`).
+    In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
     :::
 
 ### Authentication
@@ -877,6 +894,7 @@ Applications can work around these problems. For the first problem, the query re
 ## Canister module format
 
 A canister module is simply a [WebAssembly module](https://webassembly.github.io/spec/core/index.html) in binary format (typically `.wasm`).
+If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to [RFC-1952](https://datatracker.ietf.org/doc/html/rfc1952.html) and then parses the output as a WebAssembly binary.
 
 ## Canister interface (System API) {#system-api}
 
@@ -1422,15 +1440,11 @@ The stable memory is initially empty.
 
     returns the current size of the stable memory in WebAssembly pages. (One WebAssembly page is 64KiB)
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.stable64_grow : (new_pages : i64) → (old_page_count : i64)`
 
     tries to grow the memory by `new_pages` many pages containing zeroes.
 
     If successful, returns the *previous* size of the memory (in pages). Otherwise, returns `-1`.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 -   `ic0.stable64_write : (offset : i64, src : i64, size : i64) → ()`
 
@@ -1438,15 +1452,11 @@ The stable memory is initially empty.
 
     This system call traps if `src+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.stable64_read : (dst : i64, offset : i64, size : i64) → ()`
 
     Copies the data from location \[offset, offset+size) of the stable memory to the location \[dst, dst+size) in the canister memory.
 
     This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 ### System time {#system-api-time}
 
@@ -1624,7 +1634,7 @@ This is atomic: If the response to this request is a `reject`, then this call ha
 Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks that are not marked as deleted, or be uninstalled first, to prevent outstanding callbacks from being invoked (by marking the corresponding call contexts as deleted). It is expected that the canister admin (or their tooling) does that separately.
 :::
 
-The `wasm_module` field specifies the canister module to be installed. The system supports multiple encodings of the `wasm_module` field:
+The `wasm_module` field specifies the canister module to be installed. The system supports multiple encodings of the `wasm_module` field, as described in [Canister module format](#canister-module-format):
 
 -   If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`, the system parses `wasm_module` as a raw WebAssembly binary.
 
@@ -1656,7 +1666,7 @@ Indicates various information about the canister. It contains:
 
 -   The cycle balance of the canister.
 
-Only the controllers of the canister can request its status.
+Only the controllers of the canister or the canister itself can request its status.
 
 ### IC method `stop_canister` {#ic-stop_canister}
 
@@ -1739,7 +1749,7 @@ Each request can specify the maximal expected size for the response from the rem
 
 The following parameters should be supplied for the call:
 
--   `url` - the requested URL
+-   `url` - the requested URL. The URL may specify a custom port number.
 
 -   `max_response_bytes` - optional, specifies the maximal size of the response in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
 
@@ -1747,7 +1757,9 @@ The following parameters should be supplied for the call:
 
 -   `headers` - list of HTTP request headers and their corresponding values
 
--   `transform` - an optional function that transforms raw responses to sanitized responses. If provided, the calling canister itself must export this function.
+-   `body` - optional, the content of the request's body
+
+-   `transform` - an optional function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
@@ -1758,6 +1770,10 @@ The returned response (and the response provided to the `transform` function, if
 -   `body` - the response's body
 
 The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
+
+:::note
+The identity of the caller for a valid invocation of the `transform` function is `aaaaa-aa`. This information can be used by developers to implement access control mechanism for this function.
+:::
 
 ### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
@@ -2774,7 +2790,7 @@ S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stoppin
 State after
 
 ```html
-S.messages = Older_messages · Younger_messages  ·
+messages = Older_messages · Younger_messages  ·
   ResponseMessage {
               origin = CM.origin;
       response = Reject (CANISTER_ERROR, "canister not running");
@@ -3100,7 +3116,10 @@ S with
       controllers[CanisterId] = A.settings.controllers
     else:
       controllers[CanisterId] = [M.caller]
-    freezing_threshold[CanisterId] = 2592000
+    if A.settings.freezing_threshold is not null:
+      freezing_threshold[CanisterId] = A.settings.freezing_threshold
+    else:
+      freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
@@ -3180,7 +3199,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'canister_status'
 M.arg = candid(A)
-M.caller ∈ S.controllers[A.canister_id]
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ```
 
 
@@ -3419,7 +3438,7 @@ Conditions
 
 ```html
         S.canister_status[Canister_id] = Stopping Origins
-        ∀ Ctxt_id. S.call_contexts[Ctxt_id].deleted or S.call_contexts[Ctxt_id].canister ≠ Canister_id
+        ∀ Ctxt_id. S.call_contexts[Ctxt_id].deleted or S.call_contexts[Ctxt_id].canister ≠ CanisterId
 ```
 
 
@@ -3653,9 +3672,18 @@ State after
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
-    controllers[CanisterId] = [M.caller]
-    freezing_threshold[CanisterId] = 2592000
-    balances[CanisterId] = A.amount
+    if A.settings.controllers is not null:
+      controllers[CanisterId] = A.settings.controllers
+    else:
+      controllers[CanisterId] = [M.caller]
+    if A.settings.freezing_threshold is not null:
+      freezing_threshold[CanisterId] = A.settings.freezing_threshold
+    else:
+      freezing_threshold[CanisterId] = 2592000
+    if A.amount is not null:
+      balances[CanisterId] = A.amount
+    else:
+      balances[CanisterId] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3968,7 +3996,7 @@ E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
-∀ ["request_status", Rid] · _ ∈ RS.paths.  ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid ∧ R.canister_id ∈ TS
+∀ ["request_status", Rid] · _ ∈ RS.paths.  ∃ R ∈ dom(S.requests) ∧ hash_of_map(R) = Rid ∧ R.canister_id ∈ TS
 ```
 
 
@@ -3979,49 +4007,51 @@ Read response
 
 The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path(S, _, ["time"]) = True
+    may_read_path(S, _, ["time"] · _) = True
+    may_read_path(S, _, ["subnet"] · _) = True
+      ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
+    may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+      (cid ∉ dom(S.canisters[cid]) ∨
+       S.canisters[cid] = EmptyCanister ∨
+       name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
+       name ∈ dom(S.canisters[cid].public_custom_sections) ∨
+       (name ∈ dom(S.canisters[cid].private_custom_sections) ∧ RS.sender ∈ S.controllers[cid])
+      )
     may_read_path(S, _, ["request_status", Rid] · _) =
-      if ∃ R ∈ S.requests ∧ hash_of_map(R) = Rid
-      then RS.sender == R.sender ∧ is_effective_canister_id(R, ECID)
-      else True
-    may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name]) =
-      if name ∈ dom(S.canisters[cid].public_custom_sections)
-      then cid == ECID
-      else if name ∈ dom(S.canisters[cid].private_custom_sections)
-      then cid == ECID ∧ RS.sender ∈ S.controllers[cid]
-      else False
     may_read_path(S, _, _) = False
+
+where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
 
     lookup(path, cert) = lookup_in_tree(path, state_tree(S))
 
-where `state_tree` constructs the a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per [The system state tree](#state-tree)
+where `state_tree` constructs a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per [The system state tree](#state-tree)
 
     state_tree(S) = {
       "time": S.system_time;
-      "request_id": { request_id(R): request_status_tree(S) | (R ↦ S) ∈ S.requests };
+      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+      "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
             { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
             { "controllers" : CBOR(S.controllers[canister_id]) } ∪
             { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
         | (canister_id, C) ∈ S.canisters };
-      "subnet": { subnet_id : { "public_key" : pub } | (subnet_id, subnet_pk) ∈ subnets };
     }
 
     request_status_tree(Received) =
       { "status": "received" }
     request_status_tree(Processing) =
       { "status": "processing" }
-    request_status_tree(Rejected (code,msg)) =
+    request_status_tree(Rejected (code, msg)) =
       { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
     request_status_tree(Replied arg) =
       { "status": "replied"; "reply": arg }
     request_status_tree(Done) =
-      { "status": "Done" }
+      { "status": "done" }
 
 and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
 
