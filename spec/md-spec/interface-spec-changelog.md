@@ -1,5 +1,10 @@
 ## Changelog {#changelog}
 
+## 0.18.8 (2022-11-09) {#0_18_8}
+* Updated HTTP request API
+* Canister status available to canister
+* 64-bit stable memory is no longer experimental
+
 ## 0.18.7 (2022-09-27) {#0_18_7}
 * HTTP request API
 * Reserved principals
