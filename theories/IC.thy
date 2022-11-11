@@ -175,6 +175,7 @@ type_synonym 'b arg = 'b
 type_synonym 'p caller_id = 'p
 
 type_synonym timestamp = nat
+type_synonym canister_state_counter = nat
 datatype status = Running | Stopping | Stopped
 record ('b) env =
   time :: timestamp
@@ -182,6 +183,7 @@ record ('b) env =
   freezing_limit :: nat
   certificate :: "'b option"
   status :: status
+  canister_state_counter :: canister_state_counter
 
 type_synonym reject_code = nat
 datatype ('b, 's) response =
@@ -381,6 +383,7 @@ record ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic =
   controllers :: "('canid,  'p set) list_map"
   freezing_threshold :: "('canid,  nat) list_map"
   canister_status :: "('canid,  ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status) list_map"
+  canister_state_counter :: "('canid, canister_state_counter) list_map"
   time :: "('canid,  timestamp) list_map"
   balances :: "('canid,  nat) list_map"
   certified_data :: "('canid,  'b) list_map"
@@ -402,6 +405,7 @@ definition initial_ic :: "nat \<Rightarrow> 'pk \<Rightarrow> ('p, 'uid, 'canid,
     controllers = list_map_empty,
     freezing_threshold = list_map_empty,
     canister_status = list_map_empty,
+    canister_state_counter = list_map_empty,
     time = list_map_empty,
     balances = list_map_empty,
     certified_data = list_map_empty,
@@ -638,9 +642,9 @@ definition request_submission_pre :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) enve
     \<or>
       (
         request.canister_id req \<noteq> ic_principal \<and>
-        (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
-          (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-          let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+        (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req), list_map_get (canister_state_counter S) (request.canister_id req)) of
+          (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+          let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
           (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
             cycles_return.return ret = Accept \<and> cycles_return.cycles_used ret \<le> bal
           | _ \<Rightarrow> False)
@@ -654,9 +658,9 @@ definition request_submission_post :: "('b, 'p, 'uid, 'canid, 's, 'pk, 'sig) env
     let req = projl (content E);
     cid = request.canister_id req;
     balances = (if cid \<noteq> ic_principal then
-      (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-        (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-        let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+      (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) (request.canister_id req)) of
+        (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+        let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
         (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
           list_map_set (balances S) cid (bal - cycles_return.cycles_used ret)))
       else balances S) in
@@ -667,9 +671,9 @@ definition request_submission_burned_cycles :: "('b, 'p, 'uid, 'canid, 's, 'pk, 
     let req = projl (content E);
     cid = request.canister_id req in
     (if request.canister_id req \<noteq> ic_principal then
-      (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
-        (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-        let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+      (case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req), list_map_get (canister_state_counter S) (request.canister_id req)) of
+        (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+        let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
         (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
           cycles_return.cycles_used ret))
       else 0))"
@@ -683,9 +687,9 @@ proof -
     by (auto simp: request_submission_pre_def split: sum.splits)
   {
     assume "request.canister_id req \<noteq> ic_principal"
-    then have "(case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req)) of
-      (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status\<rparr> in
+    then have "(case (list_map_get (canisters S) (request.canister_id req), list_map_get (time S) (request.canister_id req), list_map_get (balances S) (request.canister_id req), list_map_get (canister_status S) (request.canister_id req), list_map_get (canister_state_counter S) (request.canister_id req)) of
+      (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S (request.canister_id req), certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       (case canister_module_inspect_message (module can) (request.method_name req, wasm_state can, request.arg req, principal_of_uid (request.sender req), env) of Inr ret \<Rightarrow>
         cycles_return.return ret = Accept \<and> cycles_return.cycles_used ret \<le> bal
       | _ \<Rightarrow> False)
@@ -706,7 +710,7 @@ lemma request_submission_ic_inv:
   shows "ic_inv (request_submission_post E ECID S)"
   using assms
   by (auto simp: ic_inv_def request_submission_pre_def request_submission_post_def Let_def
-      split: sum.splits message.splits call_origin.splits)
+      split: sum.splits message.splits call_origin.splits prod.splits)
 
 
 
@@ -937,18 +941,18 @@ definition message_execution_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w
     (n < length (messages S) \<and> (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (q = Unordered \<or> (\<forall>j < n. message_queue (messages S ! j) \<noteq> Some q)) \<and>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
-      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
-      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> True | _ \<Rightarrow> False)
+      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id, list_map_get (canister_state_counter S) recv) of
+      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt, Some idx) \<Rightarrow> True | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
 definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "message_execution_post n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
-      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
-      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
+      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id, list_map_get (canister_state_counter S) recv) of
+      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt, Some idx) \<Rightarrow> (
         let Mod = module can;
         Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False);
-        Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>;
+        Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
@@ -985,11 +989,11 @@ definition message_execution_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
 definition message_execution_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "message_execution_burned_cycles n S = (case messages S ! n of Func_message ctxt_id recv ep q \<Rightarrow>
     (case (list_map_get (canisters S) recv, list_map_get (balances S) recv, list_map_get (canister_status S) recv,
-      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id) of
-      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt) \<Rightarrow> (
+      list_map_get (time S) recv, list_map_get (call_contexts S) ctxt_id, list_map_get (canister_state_counter S) recv) of
+      (Some (Some can), Some bal, Some can_status, Some t, Some ctxt, Some idx) \<Rightarrow> (
         let Mod = module can;
         Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False);
-        Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>;
+        Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
         Available = call_ctxt_available_cycles ctxt;
         F = exec_function ep Env Available Mod;
         R = F (wasm_state can);
@@ -1001,17 +1005,18 @@ lemma message_execution_cycles_monotonic:
   assumes pre: "message_execution_pre n S"
   shows "total_cycles S = total_cycles (message_execution_post n S) + message_execution_burned_cycles n S"
 proof -
-  obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
+  obtain ctxt_id recv ep q can bal can_status t ctxt idx where msg: "messages S ! n = Func_message ctxt_id recv ep q"
     and prod: "list_map_get (canisters S) recv = Some (Some can)"
     "list_map_get (balances S) recv = Some bal"
     "list_map_get (canister_status S) recv = Some can_status"
     "list_map_get (time S) recv = Some t"
     "list_map_get (call_contexts S) ctxt_id = Some ctxt"
+    "list_map_get (canister_state_counter S) recv = Some idx"
     using pre
     by (auto simp: message_execution_pre_def split: message.splits option.splits)
   define Mod where "Mod = can_state_rec.module can"
   define Is_response where "Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False)"
-  define Env :: "'b env" where "Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>"
+  define Env :: "'b env" where "Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>"
   define Available where "Available = call_ctxt_available_cycles ctxt"
   define F where "F = exec_function ep Env Available Mod"
   define R where "R = F (wasm_state can)"
@@ -1112,21 +1117,85 @@ proof -
   qed
 qed
 
-lemma message_execution_ic_inv:
-  assumes "message_execution_pre n S" "ic_inv S"
-  shows "ic_inv (message_execution_post n S)"
-proof -
-  obtain ctxt_id recv ep q can bal can_status t ctxt where msg: "messages S ! n = Func_message ctxt_id recv ep q"
+lemma message_execution_cases:
+  assumes "message_execution_pre n S"
+  "\<And>ctxt_id recv ep q can bal can_status t ctxt Mod Is_response Env Available F R cyc_used cycles_accepted_res new_calls_res New_balance no_response result new_call_to_message response_messages msgs new_ctxt cert_data idx.
+    messages S ! n = Func_message ctxt_id recv ep q \<Longrightarrow> list_map_get (canisters S) recv = Some (Some can) \<Longrightarrow> list_map_get (balances S) recv = Some bal \<Longrightarrow>
+    list_map_get (canister_status S) recv = Some can_status \<Longrightarrow>
+    list_map_get (time S) recv = Some t \<Longrightarrow>
+    list_map_get (call_contexts S) ctxt_id = Some ctxt \<Longrightarrow>
+    list_map_get (canister_state_counter S) recv = Some idx \<Longrightarrow>
+    Mod = module can \<Longrightarrow>
+    Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) \<Longrightarrow>
+    Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> \<Longrightarrow>
+    Available = call_ctxt_available_cycles ctxt \<Longrightarrow>
+    F = exec_function ep Env Available Mod \<Longrightarrow>
+    R = F (wasm_state can) \<Longrightarrow>
+    cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | Inl trap \<Rightarrow> cycles_return.cycles_used trap) \<Longrightarrow>
+    (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, update_return.new_calls res)) \<Longrightarrow>
+    New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res)) \<Longrightarrow>
+    no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) \<Longrightarrow>
+    \<not>isl R \<Longrightarrow> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<Longrightarrow>
+    cycles_accepted_res \<le> Available \<Longrightarrow>
+    cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+      bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<Longrightarrow>
+    New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<Longrightarrow>
+    (no_response \<or> call_ctxt_needs_to_respond ctxt) \<Longrightarrow>
+    result = projr R \<Longrightarrow>
+    new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (method_call.callback call)) (principal_of_canid recv)
+      (method_call.callee call) (method_call.method_name call) (method_call.arg call) (method_call.transferred_cycles call) (Queue (Canister recv) (method_call.callee call))) \<Longrightarrow>
+    response_messages = (case update_return.response result of None \<Rightarrow> []
+      | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)]) \<Longrightarrow>
+    msgs = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages \<Longrightarrow>
+    new_ctxt = (case update_return.response result of
+        None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt
+      | Some _ \<Rightarrow> call_ctxt_respond ctxt) \<Longrightarrow>
+    cert_data = (case new_certified_data result of None \<Rightarrow> certified_data S
+      | Some cd \<Rightarrow> list_map_set (certified_data S) recv cd) \<Longrightarrow>
+    P n S (S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
+      messages := msgs, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
+      certified_data := cert_data, balances := list_map_set (balances S) recv New_balance\<rparr>)"
+  "\<And>ctxt_id recv ep q can bal can_status t ctxt Mod Is_response Env Available F R cyc_used cycles_accepted_res new_calls_res New_balance no_response idx.
+    messages S ! n = Func_message ctxt_id recv ep q \<Longrightarrow> list_map_get (canisters S) recv = Some (Some can) \<Longrightarrow> list_map_get (balances S) recv = Some bal \<Longrightarrow>
+    list_map_get (canister_status S) recv = Some can_status \<Longrightarrow>
+    list_map_get (time S) recv = Some t \<Longrightarrow>
+    list_map_get (call_contexts S) ctxt_id = Some ctxt \<Longrightarrow>
+    list_map_get (canister_state_counter S) recv = Some idx \<Longrightarrow>
+    Mod = module can \<Longrightarrow>
+    Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False) \<Longrightarrow>
+    Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> \<Longrightarrow>
+    Available = call_ctxt_available_cycles ctxt \<Longrightarrow>
+    F = exec_function ep Env Available Mod \<Longrightarrow>
+    R = F (wasm_state can) \<Longrightarrow>
+    cyc_used = (case R of Inr res \<Rightarrow> update_return.cycles_used res | Inl trap \<Rightarrow> cycles_return.cycles_used trap) \<Longrightarrow>
+    (cycles_accepted_res, new_calls_res) = (case R of Inr res \<Rightarrow> (update_return.cycles_accepted res, update_return.new_calls res)) \<Longrightarrow>
+    New_balance = bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+      - (cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res)) \<Longrightarrow>
+    no_response = (case R of Inr result \<Rightarrow> update_return.response result = None) \<Longrightarrow>
+    \<not>(\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+      cycles_accepted_res \<le> Available \<and>
+      cyc_used + sum_list (map (\<lambda>x. MAX_CYCLES_PER_RESPONSE + transferred_cycles x) new_calls_res) \<le>
+      bal + cycles_accepted_res + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
+      New_balance \<ge> (if Is_response then 0 else ic_freezing_limit S recv) \<and>
+      (no_response \<or> call_ctxt_needs_to_respond ctxt)) \<Longrightarrow>
+    P n S (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+      balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
+      - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+  shows "P n S (message_execution_post n S)"
+  proof -
+  obtain ctxt_id recv ep q can bal can_status t ctxt idx where msg: "messages S ! n = Func_message ctxt_id recv ep q"
     and prod: "list_map_get (canisters S) recv = Some (Some can)"
     "list_map_get (balances S) recv = Some bal"
     "list_map_get (canister_status S) recv = Some can_status"
     "list_map_get (time S) recv = Some t"
     "list_map_get (call_contexts S) ctxt_id = Some ctxt"
-    using assms
+    "list_map_get (canister_state_counter S) recv = Some idx"
+    using assms(1)
     by (auto simp: message_execution_pre_def split: message.splits option.splits)
   define Mod where "Mod = can_state_rec.module can"
   define Is_response where "Is_response = (case ep of Callback _ _ _ \<Rightarrow> True | _ \<Rightarrow> False)"
-  define Env :: "'b env" where "Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status\<rparr>"
+  define Env :: "'b env" where "Env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S recv, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>"
   define Available where "Available = call_ctxt_available_cycles ctxt"
   define F where "F = exec_function ep Env Available Mod"
   define R where "R = F (wasm_state can)"
@@ -1138,12 +1207,6 @@ proof -
   define no_response where "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
   define older where "older = take n (messages S)"
   define younger where "younger = drop (Suc n) (messages S)"
-  have msgs: "messages S = older @ Func_message ctxt_id recv ep q # younger"
-    "take n older = older" "drop (Suc n) older = []"
-    "take (n - length older) ws = []" "drop (Suc n - length older) (w # ws) = ws"
-    for w and ws :: "('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message list"
-    using id_take_nth_drop[of n "messages S"] assms
-    by (auto simp: message_execution_pre_def msg older_def younger_def)
   define S'' where "S'' = S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
     balances := list_map_set (balances S) recv ((bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)) - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>"
   define cond where "cond = (\<not>isl R \<and> cyc_used \<le> (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE) \<and>
@@ -1161,19 +1224,11 @@ proof -
           Mod_def[symmetric] Is_response_def[symmetric] Env_def[symmetric] Available_def[symmetric] F_def[symmetric] R_def[symmetric] cyc_used_def[symmetric] res[symmetric]
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric])
     then show ?thesis
-      using assms(2)
-      apply (auto simp: ic_inv_def S''_def msgs split: message.splits call_origin.splits)
-         apply force
-        apply fast
-       apply force
-      apply fast
-      done
+      using assms(3)[OF msg prod Mod_def Is_response_def Env_def Available_def F_def R_def cyc_used_def res New_balance_def no_response_def, folded cond_def S''_def] False
+      by auto
   next
     case True
     define result where "result = projr R"
-    have R_Inr: "R = Inr result"
-      using True
-      by (auto simp: cond_def result_def split: option.splits)
     define response_messages where "response_messages = (case update_return.response result of None \<Rightarrow> []
       | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
     define new_call_to_message :: "(?'p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message" where
@@ -1188,12 +1243,6 @@ proof -
     define S' where "S' = S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)),
       messages := messages, call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt,
       certified_data := certified_data, balances := list_map_set (balances S) recv New_balance\<rparr>"
-    have cycles_accepted_res_def: "cycles_accepted_res = update_return.cycles_accepted result"
-      and new_calls_res_def: "new_calls_res = new_calls result"
-      using res
-      by (auto simp: R_Inr)
-    have no_response: "no_response = (update_return.response result = None)"
-      by (auto simp: no_response_def R_Inr)
     have msg_exec: "message_execution_post n S = S'"
       using True
       by (simp_all add: message_execution_post_def Let_def msg prod
@@ -1201,35 +1250,43 @@ proof -
           New_balance_def[symmetric] no_response_def[symmetric] S''_def[symmetric] cond_def[symmetric]
           messages_def[symmetric] new_ctxt_def[symmetric] certified_data_def[symmetric] S'_def[symmetric]
           result_def[symmetric] response_messages_def[symmetric] new_call_to_message_def[symmetric])
-    have messages_msgs: "messages = older @ younger @ map new_call_to_message new_calls_res @ response_messages"
-      by (auto simp: messages_def older_def younger_def)
-    have ctxt_in_range: "ctxt \<in> list_map_range (call_contexts S)"
-      using prod(5)
-      by (simp add: list_map_get_range)
-    have response_msgsD: "msg \<in> set response_messages \<Longrightarrow> update_return.response result \<noteq> None \<and>
-      (\<exists>resp. msg = Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res))" for msg
-      by (auto simp: response_messages_def) metis
-    have call_ctxt_origin_new_ctxt: "call_ctxt_origin new_ctxt = call_ctxt_origin ctxt"
-      by (auto simp: new_ctxt_def split: option.splits)
-    have call_ctxt_needs_to_respond_new_ctxtD: "call_ctxt_needs_to_respond new_ctxt \<Longrightarrow> call_ctxt_needs_to_respond ctxt"
-      by (auto simp: new_ctxt_def split: option.splits)
     show ?thesis
-      using assms(2) ctxt_in_range True call_ctxt_not_needs_to_respond_available_cycles[of ctxt]
-      apply (auto simp: cond_def msg_exec S'_def ic_inv_def msgs messages_msgs new_call_to_message_def
-          no_response_def R_Inr call_ctxt_origin_new_ctxt
-          split: option.splits message.splits call_origin.splits
-          dest!: list_map_range_setD response_msgsD call_ctxt_needs_to_respond_new_ctxtD
-          intro: ic_can_status_inv_mono2)
-             apply blast
-            apply fast
-           apply blast
-          apply fast
-         apply blast
-        apply fast
-       apply blast
-      apply fast
-      done
+      using assms(2)[OF msg prod Mod_def Is_response_def Env_def Available_def F_def R_def cyc_used_def res New_balance_def no_response_def _ _ _ _ _ _ result_def
+          new_call_to_message_def response_messages_def messages_def new_ctxt_def certified_data_def, folded S'_def] True
+      by (auto simp: cond_def msg_exec)
   qed
+qed
+
+lemma message_execution_ic_inv:
+  assumes "message_execution_pre n S" "ic_inv S"
+  shows "ic_inv (message_execution_post n S)"
+proof (rule message_execution_cases[OF assms(1)])
+  fix recv msgs ctxt_id new_ctxt cert_data New_balance new_calls_res response_messages ctxt Available cycles_accepted_res no_response idx
+  fix can :: "('p, 'canid, 'b, 'w, 'sm, 'c, 's) can_state_rec"
+  fix result :: "('w, 'p, 'canid, 's, 'b, 'c) update_return"
+  fix new_call_to_message :: "('p, 'canid, 's, 'b, 'c) method_call \<Rightarrow> ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) message"
+  fix R :: "unit cycles_return + ('w, 'p, 'canid, 's, 'b, 'c) update_return"
+  assume ctxt: "list_map_get (call_contexts S) ctxt_id = Some ctxt"
+  assume "msgs = take n (messages S) @ drop (Suc n) (messages S) @ map new_call_to_message new_calls_res @ response_messages"
+    "new_call_to_message = (\<lambda>call. Call_message (From_canister ctxt_id (callback call)) (principal_of_canid recv) (callee call) (method_call.method_name call) (method_call.arg call) (transferred_cycles call)
+      (Queue (Canister recv) (callee call)))"
+    "response_messages = (case update_return.response result of None \<Rightarrow> [] | Some resp \<Rightarrow> [Response_message (call_ctxt_origin ctxt) resp (Available - cycles_accepted_res)])"
+    "no_response \<or> call_ctxt_needs_to_respond ctxt"
+    "no_response = (case R of Inr result \<Rightarrow> update_return.response result = None)"
+    "\<not> isl R" "result = projr R"
+    "new_ctxt = (case update_return.response result of None \<Rightarrow> call_ctxt_deduct_cycles cycles_accepted_res ctxt | Some x \<Rightarrow> call_ctxt_respond ctxt)"
+  then show "ic_inv (S\<lparr>canisters := list_map_set (canisters S) recv (Some (can\<lparr>wasm_state := update_return.new_state result\<rparr>)), messages := msgs,
+    call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt, certified_data := cert_data, balances := list_map_set (balances S) recv New_balance\<rparr>)"
+    using assms(2) list_map_get_range[OF ctxt]
+    by (cases R)
+       (force simp: ic_inv_def ic_can_status_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD list_map_range_setD)+
+next
+  fix recv bal Is_response cyc_used idx
+  show "ic_inv (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
+    balances := list_map_set (balances S) recv (bal + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
+    - min cyc_used (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))\<rparr>)"
+    using assms(2)
+    by (auto simp: ic_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD)
 qed
 
 
@@ -1337,7 +1394,8 @@ definition ic_canister_creation_pre :: "nat \<Rightarrow> 'canid \<Rightarrow> n
       cid \<notin> list_map_dom (controllers S) \<and>
       cid \<notin> list_map_dom (balances S) \<and>
       cid \<notin> list_map_dom (certified_data S) \<and>
-      cid \<notin> list_map_dom (canister_status S)
+      cid \<notin> list_map_dom (canister_status S) \<and>
+      cid \<notin> list_map_dom (canister_state_counter S)
     | _ \<Rightarrow> False))"
 
 definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
@@ -1351,7 +1409,8 @@ definition ic_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> 
       certified_data := list_map_set (certified_data S) cid empty_blob,
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid
         (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_canid cid))])))) 0],
-      canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
+      canister_status := list_map_set (canister_status S) cid Running,
+      canister_state_counter := list_map_set (canister_state_counter S) cid 0\<rparr>)"
 
 lemma ic_canister_creation_cycles_inv:
   assumes "ic_canister_creation_pre n cid t S"
@@ -1393,7 +1452,7 @@ definition ic_update_settings_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, '
       cee = ic_principal \<and>
       mn = encode_string ''update_settings'' \<and>
       (case candid_parse_cid a of Some cid \<Rightarrow>
-      (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls
+      (case (list_map_get (controllers S) cid, list_map_get (canister_state_counter S) cid) of (Some ctrls, Some idx) \<Rightarrow> cer \<in> ctrls
       | _ \<Rightarrow> False) | _ \<Rightarrow> False)
     | _ \<Rightarrow> False))"
 
@@ -1402,8 +1461,10 @@ definition ic_update_settings_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 
     let cid = the (candid_parse_cid a);
     ctrls = (case candid_parse_controllers a of Some ctrls \<Rightarrow> list_map_set (controllers S) cid ctrls | _ \<Rightarrow> controllers S);
     freezing_thres = (case candid_nested_lookup a [encode_string '''settings'', encode_string ''freezing_threshold''] of Some (Candid_nat freeze) \<Rightarrow>
-      list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S) in
-    S\<lparr>controllers := ctrls, freezing_threshold := freezing_thres, messages := take n (messages S) @ drop (Suc n) (messages S) @
+      list_map_set (freezing_threshold S) cid freeze | _ \<Rightarrow> freezing_threshold S);
+    idx = the (list_map_get (canister_state_counter S) cid) in
+    S\<lparr>controllers := ctrls, freezing_threshold := freezing_thres, canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
+      messages := take n (messages S) @ drop (Suc n) (messages S) @
         [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
 lemma ic_update_settings_cycles_inv:
@@ -1506,9 +1567,9 @@ definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     (case parse_wasm_mod w of Some m \<Rightarrow>
       parse_public_custom_sections w \<noteq> None \<and>
       parse_private_custom_sections w \<noteq> None \<and>
-    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some ctrls, Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       ((mode = encode_string ''install'' \<and> (case list_map_get (canisters S) cid of Some None \<Rightarrow> True | _ \<Rightarrow> False)) \<or> mode = encode_string ''reinstall'') \<and>
       cer \<in> ctrls \<and>
       (case canister_module_init m (cid, ar, cer, env) of Inl _ \<Rightarrow> False
@@ -1523,13 +1584,14 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some mode, Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr>;
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
       (new_state, cyc_used) = (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> (cycles_return.return ret, cycles_return.cycles_used ret)) in
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
       balances := list_map_set (balances S) cid (bal - cyc_used),
+      canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))"
 
 definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -1538,9 +1600,9 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, '
     (case (candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> cycles_return.cycles_used ret))))))"
 
 lemma ic_code_installation_cycles_inv:
@@ -1566,7 +1628,7 @@ lemma ic_code_installation_ic_inv:
   assumes "ic_code_installation_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_installation_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1577,6 +1639,7 @@ proof -
     "list_map_get (time S) cid = Some t"
     "list_map_get (balances S) cid = Some bal"
     "list_map_get (canister_status S) cid = Some can_status"
+    "list_map_get (canister_state_counter S) cid = Some idx"
     using assms
     by (auto simp: ic_code_installation_pre_def split: message.splits option.splits)
   show ?thesis
@@ -1601,9 +1664,9 @@ definition ic_code_upgrade_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 
     (case parse_wasm_mod w of Some m \<Rightarrow>
       parse_public_custom_sections w \<noteq> None \<and>
       parse_private_custom_sections w \<noteq> None \<and>
-    (case (list_map_get (canisters S) cid, list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some (Some can), Some ctrls, Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+    (case (list_map_get (canisters S) cid, list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some (Some can), Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       mode = encode_string ''upgrade'' \<and>
       cer \<in> ctrls \<and>
       (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
@@ -1620,14 +1683,15 @@ definition ic_code_upgrade_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w,
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some mode, Some w, Some ar) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+    (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
       (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = cycles_return.return post_ret, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
       balances := list_map_set (balances S) cid (bal - (cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)),
+      canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))))"
 
 definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -1636,9 +1700,9 @@ definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some mode, Some w, Some ar) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid) of
-      (Some (Some can), Some t, Some bal, Some can_status) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status\<rparr> in
+    (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
+      (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
       (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
       (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
       cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)))))))"
@@ -1666,7 +1730,7 @@ lemma ic_code_upgrade_ic_inv:
   assumes "ic_code_upgrade_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_upgrade_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m can ctrls t bal can_status where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m can ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1678,6 +1742,7 @@ proof -
     "list_map_get (time S) cid = Some t"
     "list_map_get (balances S) cid = Some bal"
     "list_map_get (canister_status S) cid = Some can_status"
+    "list_map_get (canister_state_counter S) cid = Some idx"
     using assms
     by (auto simp: ic_code_upgrade_pre_def split: message.splits option.splits)
   show ?thesis
@@ -1697,7 +1762,7 @@ definition ic_code_uninstallation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, '
     cee = ic_principal \<and>
     mn = encode_string ''uninstall_code'' \<and>
     (case candid_parse_cid a of Some cid \<Rightarrow>
-    (case list_map_get (controllers S) cid of Some ctrls \<Rightarrow> cer \<in> ctrls
+    (case (list_map_get (controllers S) cid, list_map_get (canister_state_counter S) cid) of (Some ctrls, Some idx) \<Rightarrow> cer \<in> ctrls
     | _ \<Rightarrow> False) | _ \<Rightarrow> False)
   | _ \<Rightarrow> False))"
 
@@ -1708,8 +1773,10 @@ definition ic_code_uninstallation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 
       if call_ctxt_canister ctxt = cid \<and> call_ctxt_needs_to_respond ctxt then
         Some (Response_message (call_ctxt_origin ctxt) (response.Reject CANISTER_REJECT (encode_string ''Canister has been uninstalled'')) (call_ctxt_available_cycles ctxt))
       else None);
-    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) in
+    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt);
+    idx = the (list_map_get (canister_state_counter S) cid) in
     S\<lparr>canisters := list_map_set (canisters S) cid None, certified_data := list_map_set (certified_data S) cid empty_blob,
+      canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles] @
         List.map_filter call_ctxt_to_msg (list_map_vals (call_contexts S)),
       call_contexts := list_map_map call_ctxt_to_ctxt (call_contexts S)\<rparr>))"
@@ -1925,6 +1992,7 @@ definition ic_canister_stop_stopped_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid,
 
 definition ic_canister_stop_stopped_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
   "ic_canister_stop_stopped_post n S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
+    let cid = the (candid_parse_cid a) in
     S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)"
 
 lemma ic_canister_stop_stopped_cycles_inv:
@@ -2092,6 +2160,7 @@ definition ic_canister_deletion_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       controllers := list_map_del (controllers S) cid,
       freezing_threshold := list_map_del (freezing_threshold S) cid,
       canister_status := list_map_del (canister_status S) cid,
+      canister_state_counter := list_map_del (canister_state_counter S) cid,
       time := list_map_del (time S) cid,
       balances := list_map_del (balances S) cid,
       certified_data := list_map_del (certified_data S) cid,
@@ -2245,7 +2314,8 @@ definition ic_provisional_canister_creation_pre :: "nat \<Rightarrow> 'canid \<R
       cid \<notin> list_map_dom (controllers S) \<and>
       cid \<notin> list_map_dom (balances S) \<and>
       cid \<notin> list_map_dom (certified_data S) \<and>
-      cid \<notin> list_map_dom (canister_status S)
+      cid \<notin> list_map_dom (canister_status S) \<and>
+      cid \<notin> list_map_dom (canister_state_counter S)
     | _ \<Rightarrow> False) | _ \<Rightarrow> False))"
 
 definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
@@ -2259,7 +2329,8 @@ definition ic_provisional_canister_creation_post :: "nat \<Rightarrow> 'canid \<
       certified_data := list_map_set (certified_data S) cid empty_blob,
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid
         (Candid_record (list_map_init [(encode_string ''canister_id'', Candid_blob (blob_of_canid cid))])))) trans_cycles],
-      canister_status := list_map_set (canister_status S) cid Running\<rparr>)"
+      canister_status := list_map_set (canister_status S) cid Running,
+      canister_state_counter := list_map_set (canister_state_counter S) cid 0\<rparr>)"
 
 definition ic_provisional_canister_creation_minted_cycles :: "nat \<Rightarrow> 'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "ic_provisional_canister_creation_minted_cycles n cid t S = (case messages S ! n of Call_message orig cer cee mn a trans_cycles q \<Rightarrow>
@@ -2552,7 +2623,7 @@ lemma request_cleanup_expired_ic_inv:
 (* System transition: Canister out of cycles [DONE] *)
 
 definition canister_out_of_cycles_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
-  "canister_out_of_cycles_pre cid S = (case list_map_get (balances S) cid of Some 0 \<Rightarrow> True
+  "canister_out_of_cycles_pre cid S = (case (list_map_get (balances S) cid, list_map_get (canister_state_counter S) cid) of (Some 0, Some idx) \<Rightarrow> True
   | _ \<Rightarrow> False)"
 
 definition canister_out_of_cycles_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
@@ -2561,8 +2632,10 @@ definition canister_out_of_cycles_post :: "'canid \<Rightarrow> ('p, 'uid, 'cani
       if call_ctxt_canister ctxt = cid \<and> call_ctxt_needs_to_respond ctxt then
         Some (Response_message (call_ctxt_origin ctxt) (response.Reject CANISTER_REJECT (encode_string ''Canister has been uninstalled'')) (call_ctxt_available_cycles ctxt))
       else None);
-    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) in
+    call_ctxt_to_ctxt = (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt);
+    idx = the (list_map_get (canister_state_counter S) cid) in
     S\<lparr>canisters := list_map_set (canisters S) cid None, certified_data := list_map_set (certified_data S) cid empty_blob,
+      canister_state_counter := list_map_set (canister_state_counter S) cid (Suc idx),
       messages := messages S @ List.map_filter call_ctxt_to_msg (list_map_vals (call_contexts S)),
       call_contexts := list_map_map call_ctxt_to_ctxt (call_contexts S)\<rparr>)"
 
@@ -2594,7 +2667,7 @@ lemma canister_out_of_cycles_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (canister time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister time) [DONE] *)
 
 definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_time_progress_pre cid t1 S = (case list_map_get (time S) cid of Some t0 \<Rightarrow>
@@ -2620,7 +2693,7 @@ lemma canister_time_progress_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (cycle consumption) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (cycle consumption) [DONE] *)
 
 definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "cycle_consumption_pre cid b1 S = (case list_map_get (balances S) cid of Some b0 \<Rightarrow>
@@ -2628,7 +2701,7 @@ definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p,
     | _ \<Rightarrow> False)"
 
 definition cycle_consumption_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
-  "cycle_consumption_post cid b1 S = (S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>)"
+  "cycle_consumption_post cid b1 S = S\<lparr>balances := list_map_set (balances S) cid b1\<rparr>"
 
 definition cycle_consumption_burned_cycles :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
   "cycle_consumption_burned_cycles cid b1 S = the (list_map_get (balances S) cid) - b1"
@@ -2651,7 +2724,7 @@ lemma cycle_consumption_ic_inv:
 
 
 
-(* System transition: Time progressing and cycle consumption (system time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (system time) [DONE] *)
 
 definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "system_time_progress_pre t1 S = (system_time S < t1)"
@@ -2669,6 +2742,32 @@ lemma system_time_progress_ic_inv:
   shows "ic_inv (system_time_progress_post t1 S)"
   using assms
   by (auto simp: ic_inv_def system_time_progress_pre_def system_time_progress_post_def Let_def
+      split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
+      dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
+      in_set_map_filter_vals)
+
+
+
+(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister state counter) [DONE] *)
+
+definition canister_state_counter_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
+  "canister_state_counter_progress_pre cid n1 S = (case list_map_get (canister_state_counter S) cid of Some n0 \<Rightarrow>
+      n0 < n1
+    | _ \<Rightarrow> False)"
+
+definition canister_state_counter_progress_post :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
+  "canister_state_counter_progress_post cid n1 S = (S\<lparr>canister_state_counter := list_map_set (canister_state_counter S) cid n1\<rparr>)"
+
+lemma canister_state_counter_progress_cycles_inv:
+  assumes "canister_state_counter_progress_pre cid n1 S"
+  shows "total_cycles S = total_cycles (canister_state_counter_progress_post cid n1 S)"
+  by (auto simp: canister_state_counter_progress_post_def total_cycles_def)
+
+lemma canister_state_counter_progress_ic_inv:
+  assumes "canister_state_counter_progress_pre cid n1 S" "ic_inv S"
+  shows "ic_inv (canister_state_counter_progress_post cid n1 S)"
+  using assms
+  by (auto simp: ic_inv_def canister_state_counter_progress_pre_def canister_state_counter_progress_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
       in_set_map_filter_vals)
@@ -2715,6 +2814,7 @@ inductive ic_steps :: "'sig itself \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm,
 | canister_time_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> canister_time_progress_pre cid t1 S \<Longrightarrow> ic_steps sig S0 minted burned (canister_time_progress_post cid t1 S)"
 | cycle_consumption: "ic_steps sig S0 minted burned S \<Longrightarrow> cycle_consumption_pre cid b1 S \<Longrightarrow> ic_steps sig S0 minted (burned + cycle_consumption_burned_cycles cid b1 S) (cycle_consumption_post cid b1 S)"
 | system_time_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> system_time_progress_pre t1 S \<Longrightarrow> ic_steps sig S0 minted burned (system_time_progress_post t1 S)"
+| canister_state_counter_progress: "ic_steps sig S0 minted burned S \<Longrightarrow> canister_state_counter_progress_pre cid n1 S \<Longrightarrow> ic_steps sig S0 minted burned (canister_state_counter_progress_post cid n1 S)"
 
 lemma total_cycles:
   assumes "ic_steps TYPE('sig) S0 minted burned S"
@@ -2757,6 +2857,7 @@ lemma total_cycles:
   using canister_time_progress_cycles_inv apply fastforce
   using cycle_consumption_cycles_monotonic apply fastforce
   using system_time_progress_cycles_inv apply fastforce
+  using canister_state_counter_progress_cycles_inv apply fastforce
   done
 
 lemma ic_inv:
@@ -2800,6 +2901,7 @@ lemma ic_inv:
   using canister_time_progress_ic_inv apply fastforce
   using cycle_consumption_ic_inv apply fastforce
   using system_time_progress_ic_inv apply fastforce
+  using canister_state_counter_progress_ic_inv apply fastforce
   done
 
 end
@@ -2839,6 +2941,7 @@ export_code request_submission_pre request_submission_post
   canister_time_progress_pre canister_time_progress_post
   cycle_consumption_pre cycle_consumption_post
   system_time_progress_pre system_time_progress_post
+  canister_state_counter_progress_pre canister_state_counter_progress_post
 in Haskell module_name IC file_prefix code
 
 end
