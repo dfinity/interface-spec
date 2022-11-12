@@ -3192,7 +3192,10 @@ S with
       controllers[CanisterId] = A.settings.controllers
     else:
       controllers[CanisterId] = [M.caller]
-    freezing_threshold[CanisterId] = 2592000
+    if A.settings.freezing_threshold is not null:
+      freezing_threshold[CanisterId] = A.settings.freezing_threshold
+    else:
+      freezing_threshold[CanisterId] = 2592000
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
@@ -3687,15 +3690,24 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
-    controllers[CanisterId] = [M.caller]
-    freezing_threshold[CanisterId] = 2592000
-    balances[CanisterId] = A.amount
+    if A.settings.controllers is not null:
+      controllers[CanisterId] = A.settings.controllers
+    else:
+      controllers[CanisterId] = [M.caller]
+    if A.settings.freezing_threshold is not null:
+      freezing_threshold[CanisterId] = A.settings.freezing_threshold
+    else:
+      freezing_threshold[CanisterId] = 2592000
+    if A.amount is not null:
+      balances[CanisterId] = A.amount
+    else:
+      balances[CanisterId] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
     certified_data[CanisterId] = ""
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
         response = Reply (candid({canister_id = CanisterId}))
-        transferred_cycles = M.transferred_cycles
+        refunded_cycles = M.transferred_cycles
       }
     canister_status[CanisterId] = Running
     canister_state_counter[CanisterId] = 0
