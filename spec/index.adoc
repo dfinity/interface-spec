@@ -1695,7 +1695,7 @@ The returned response (and the response provided to the `transform` function, if
 - `headers` - list of HTTP response headers and their corresponding values
 - `body` - the response's body
 
-The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal size of the blob produced by the `transform` function is `2MB` (`2,000,000B`).
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal number of bytes representing the response produced by the `transform` function is `2MB` (`2,000,000B`).
 
 When the transform function was invoked by the system due to a canister HTTP request, the caller's identity is the principal of the management canister. This information can be used by developers to implement access control mechanism for this function.
 
