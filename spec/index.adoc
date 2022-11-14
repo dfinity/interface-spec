@@ -1125,6 +1125,8 @@ For each canister, the system maintains a _state counter_. Upon canister creatio
 +
 returns the current value of the state counter.
 
+During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
+
 [#system-api-call]
 === Inter-canister method calls
 
@@ -3231,7 +3233,7 @@ Conditions::
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
       status = simple_status(S.canister_status[A.canister_id]);
-      canister_state_counter = S.canister_state_counter[A.canister_id];
+      canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
     }
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
@@ -3281,10 +3283,15 @@ Conditions::
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
       status = simple_status(S.canister_status[A.canister_id]);
+    }
+    Env1 = Env with {
       canister_state_counter = S.canister_state_counter[A.canister_id];
     }
-    Old_module.pre_upgrade(Old_State, M.caller, Env) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
-    Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used';}
+    Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
+    Env2 = Env with {
+      canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
+    }
+    Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; cycles_used = Cycles_used';}
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
