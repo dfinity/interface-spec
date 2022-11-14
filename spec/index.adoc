@@ -1695,14 +1695,14 @@ The returned response (and the response provided to the `transform` function, if
 - `headers` - list of HTTP response headers and their corresponding values
 - `body` - the response's body
 
-The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal size of the blob produced by the `transform` function is `2MB` (`2,000,000B`). When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal size of the blob produced by the `transform` function is `2MB` (`2,000,000B`).
+
+When the transform function was invoked by the system due to a canister HTTP request, the caller's identity is the principal of the management canister. This information can be used by developers to implement access control mechanism for this function.
 
 The following additional limits apply to HTTP requests and HTTP responses from the remote sever:
 - the number of headers must not exceed `64`,
 - the number of bytes representing a header name must not exceed `32KiB`, and
 - the total number of bytes representing the header names and values must not exceed `48KiB`.
-
-NOTE: The identity of the caller for a valid invocation of the `transform` function is `aaaaa-aa`. This information can be used by developers to implement access control mechanism for this function.
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
