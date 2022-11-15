@@ -1569,7 +1569,7 @@ definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
       parse_private_custom_sections w \<noteq> None \<and>
     (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr> in
       ((mode = encode_string ''install'' \<and> (case list_map_get (canisters S) cid of Some None \<Rightarrow> True | _ \<Rightarrow> False)) \<or> mode = encode_string ''reinstall'') \<and>
       cer \<in> ctrls \<and>
       (case canister_module_init m (cid, ar, cer, env) of Inl _ \<Rightarrow> False
@@ -1586,7 +1586,7 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr>;
       (new_state, cyc_used) = (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> (cycles_return.return ret, cycles_return.cycles_used ret)) in
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
@@ -1602,7 +1602,7 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, '
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
+      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr> in
       (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> cycles_return.cycles_used ret))))))"
 
 lemma ic_code_installation_cycles_inv:
@@ -1666,11 +1666,12 @@ definition ic_code_upgrade_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 
       parse_private_custom_sections w \<noteq> None \<and>
     (case (list_map_get (canisters S) cid, list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some (Some can), Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
+      let env1 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
+        env2 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr> in
       mode = encode_string ''upgrade'' \<and>
       cer \<in> ctrls \<and>
-      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
-      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
+      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env1) of Inr pre_ret \<Rightarrow>
+      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env2) of Inr post_ret \<Rightarrow>
         cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret \<le> bal
       | _ \<Rightarrow> False) | _ \<Rightarrow> False) \<and>
       list_map_dom (canister_module_update_methods m) \<inter> list_map_dom (canister_module_query_methods m) = {}
@@ -1685,9 +1686,10 @@ definition ic_code_upgrade_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w,
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
-      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
-      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
+      let env1 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
+        env2 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr> in
+      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env1) of Inr pre_ret \<Rightarrow>
+      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env2) of Inr post_ret \<Rightarrow>
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = cycles_return.return post_ret, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
       balances := list_map_set (balances S) cid (bal - (cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)),
@@ -1702,9 +1704,10 @@ definition ic_code_upgrade_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid
     (case parse_wasm_mod w of Some m \<Rightarrow>
     (case (list_map_get (canisters S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_state_counter S) cid) of
       (Some (Some can), Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
-      let env = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr> in
-      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env) of Inr pre_ret \<Rightarrow>
-      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env) of Inr post_ret \<Rightarrow>
+      let env1 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = idx\<rparr>;
+        env2 = \<lparr>env.time = t, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_state_counter = Suc idx\<rparr> in
+      (case canister_module_pre_upgrade (module can) (wasm_state can, cer, env1) of Inr pre_ret \<Rightarrow>
+      (case canister_module_post_upgrade m (cid, cycles_return.return pre_ret, ar, cer, env2) of Inr post_ret \<Rightarrow>
       cycles_return.cycles_used pre_ret + cycles_return.cycles_used post_ret)))))))"
 
 lemma ic_code_upgrade_cycles_inv:
