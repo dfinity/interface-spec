@@ -1765,8 +1765,8 @@ For a newly discovered block, a regular Bitcoin (full) node therefore provides a
 than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
 to gain confidence in the correctness of the returned UTXOs.
 
-There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently large UTXOs,
-the partial set of the address' UTXOs are returned along with a page reference.
+There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs,
+a partial set of the address's UTXOs are returned along with a page reference.
 
 In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to
 collect UTXOs starting from the corresponding "page".
@@ -1810,12 +1810,7 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the
 specified Bitcoin network.
-
-The Bitcoin component periodically forwards the transaction
-until the transaction appears in a block appended to the blockchain or the transaction
-times out after 24 hours. As soon as it appears in a block or expires,
-the Bitcoin component drops the transaction.
-It follows that the function does not provide any guarantees that a submitted
+Note that the function does not provide any guarantees that a submitted
 transaction will ever appear in a block.
 
 [#ic-bitcoin_get_current_fee_percentiles]
@@ -1825,8 +1820,11 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 pending transactions.
 It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
-This function returns the 100 fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e.,
+This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e.,
 over the transactions in the last approximately 4-10 blocks.
+
+The https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method[standard nearest-rank estimation method], inclusive, with the addition of a 0th percentile is used.
+Concretely, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
 [#certification]
 == Certification
