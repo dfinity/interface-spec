@@ -5,6 +5,12 @@
 === ∞ (unreleased)
 * Spec: User delegations include a principal scope
 
+[#0_18_8]
+=== 0.18.8 (2022-11-09)
+* Updated HTTP request API
+* Canister status available to canister
+* 64-bit stable memory is no longer experimental
+
 [#0_18_7]
 === 0.18.7 (2022-09-27)
 * HTTP request API
