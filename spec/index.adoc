@@ -1426,7 +1426,7 @@ The argument `type` decides which performance counter to return:
 
 In the future, we might expose more performance counters.
 
-The system deactivates the counter at the beginning of each <<entry-points>> invocation.
+The system resets the counter at the beginning of each <<entry-points>> invocation.
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
