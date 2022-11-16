@@ -1706,7 +1706,7 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 - the number of bytes representing a header name must not exceed `32KiB`, and
 - the total number of bytes representing the header names and values must not exceed `48KiB`.
 
-NOTE: The Internet Computer blockchain mainnet only supports ipv6 URLs in HTTP requests at the moment.
+NOTE: Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
