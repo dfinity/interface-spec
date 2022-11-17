@@ -4198,6 +4198,7 @@ pre_upgrade = λ (old_state, caller, sysenv) →
   if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
+  if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
   Return {stable_memory = es.wasm_state.stable_mem; cycles_used = es.cycles_used;}
 ....
 
@@ -4264,6 +4265,8 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
   if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   if es.response = NoResponse then Trap {cycles_used = es.cycles_used;}
+  if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
+  if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
   Return {
     response = es.response;
     cycles_used = es.cycles_used;
@@ -4372,6 +4375,7 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     if es'.calls ≠ [] then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
     if es'.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
     if es'.response ≠ NoResponse then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
     Return {
       new_state = es'.wasm_state;
       new_global_timer = es'.new_global_timer;
@@ -4411,6 +4415,8 @@ inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
    try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
    if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
    if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
+   if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
+   if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
    Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
 ....
 
