@@ -4106,6 +4106,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
+  context : I | G | U | Q | Ry | Rt | C | F | H;
 }
 ....
 
@@ -4146,6 +4147,7 @@ empty_execution_state = {
   new_certified_data = NoCertifiedData;
   new_global_timer = NoGlobalTimer;
   ingress_filter = Reject;
+  context = (undefined);
 }
 ....
 
@@ -4167,11 +4169,9 @@ init = λ (self_id, arg, caller, sysenv) →
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
       params = empty_params with { arg = arg; caller = caller; sysenv }
       balance = sysenv.balance
+      context = I
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-  if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {new_state = es.wasm_state; new_global_timer = es.new_global_timer; cycles_used = es.cycles_used;}
 ....
 +
@@ -4193,12 +4193,9 @@ pre_upgrade = λ (old_state, caller, sysenv) →
       wasm_state = old_state
       params = { empty_params with caller = caller; sysenv }
       balance = sysenv.balance
+      context = G
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-  if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-  if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
   Return {stable_memory = es.wasm_state.stable_mem; cycles_used = es.cycles_used;}
 ....
 
@@ -4220,11 +4217,9 @@ post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
       wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
       params = { empty_params with arg = arg; caller = caller; sysenv }
       balance = sysenv.balance
+      context = I
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-  if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {new_state = es.wasm_state; new_global_timer = es.new_global_timer; cycles_used = es.cycles_used;}
 ....
 
@@ -4237,9 +4232,9 @@ update_methods[method] = λ (arg, caller, sysenv, available) → λ wasm_state �
       params = empty_params with { arg = arg; caller = caller; sysenv }
       balance = sysenv.balance
       cycles_available = available;
+      context = U
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
@@ -4259,14 +4254,9 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
       wasm_state = wasm_state;
       params = empty_params with { arg = arg; caller = caller; sysenv }
       balance = sysenv.balance
+      context = Q
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-  if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-  if es.response = NoResponse then Trap {cycles_used = es.cycles_used;}
-  if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
-  if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
   Return {
     response = es.response;
     cycles_used = es.cycles_used;
@@ -4285,11 +4275,9 @@ heartbeat = λ (sysenv) → λ wasm_state →
     wasm_state = wasm_state;
     params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
     balance = sysenv.balance
+    context = H
   }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-  if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   Return {
     new_state = es.wasm_state;
     new_global_timer = es.new_global_timer;
@@ -4309,11 +4297,9 @@ global_timer = λ (sysenv) → λ wasm_state →
     wasm_state = wasm_state;
     params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
     balance = sysenv.balance
+    context = H
   }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-  if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   Return {
     new_state = es.wasm_state;
     new_global_timer = es.new_global_timer;
@@ -4333,18 +4319,19 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     sysenv
     cycles_refunded = refund_cycles;
   }
-  let (fun, env, params) = match response with
+  let (fun, env, params, context) = match response with
     Reply data ->
       (callbacks.on_reply.fun, callbacks.on_reply.env,
-        { params0 with data})
+        { params0 with data}, Ry)
     Reject (reject_code, reject_message)->
       (callbacks.on_reject.fun, callbacks.on_reject.env,
-        { params0 with reject_code; reject_message})
+        { params0 with reject_code; reject_message}, Rt)
   let es = ref {empty_execution_state with
     wasm_state = wasm_state;
     params = params;
     balance = sysenv.balance;
     cycles_available = available;
+    context = context;
   }
   try
     if fun > |es.wasm_state.store.table| then Trap
@@ -4369,13 +4356,9 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
 
     let es' = ref { empty_execution_state with
       wasm_state = wasm_state;
+      context = C;
     }
     try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-    if es'.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-    if es'.calls ≠ [] then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-    if es'.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-    if es'.response ≠ NoResponse then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-    if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
     Return {
       new_state = es'.wasm_state;
       new_global_timer = es'.new_global_timer;
@@ -4411,12 +4394,9 @@ inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
       }
       balance = sysenv.balance;
       cycles_available = 0; // ingress requests have no funds
+      context = F;
     }
    try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-   if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-   if es.new_certified_data ≠ NoCertifiedData then Trap {cycles_used = es.cycles_used;}
-   if es.new_global_timer ≠ NoGlobalTimer then Trap {cycles_used = es.cycles_used;}
    Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
 ....
 
@@ -4453,67 +4433,85 @@ The pseudo-code below does _not_ explicitly enforce the restrictions of which im
 
 ....
 ic0.msg_arg_data_size<es>() : i32 =
+  if es.context ∉ {I, U, Q, Ry, F} then Trap {cycles_used = es.cycles_used;}
   return |es.params.arg|
 
 ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
+  if es.context ∉ {I, U, Q, Ry, F} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.arg)
 
 ic0.msg_caller_size() : i32 =
+  if es.context ∉ {I, G, U, Q, F} then Trap {cycles_used = es.cycles_used;}
   return |es.params.caller|
 
 ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
+  if es.context ∉ {I, G, U, Q, F} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
+  if es.context ∉ {Ry, Rt} then Trap {cycles_used = es.cycles_used;}
   es.params.reject_code
 
 ic0.msg_reject_msg_size<es>() : i32 =
+  if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
   return |es.params.reject_msg|
 
 ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+  if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
 ic0.msg_reply_data_append<es>(src : i32, size : i32) =
+  if es.context ∉ {U, Q, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
 ic0.msg_reply<es>() =
+  if es.context ∉ {U, Q, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.response := Reply (es.reply_params.arg)
   es.cycles_available := 0
 
 ic0.msg_reject<es>(src : i32, size : i32) =
+  if es.context ∉ {U, Q, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
   es.cycles_available := 0
 
 ic0.msg_cycles_available<es>() : i64 =
+  if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   if es.cycles_available >= 2^64^ then Trap {cycles_used = es.cycles_used;}
   return es.cycles_available
 
 ic0.msg_cycles_available128<es>(dst : i32) =
+  if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let amount = es.cycles_available
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.msg_cycles_refunded<es>() : i64 =
+  if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   if es.params.cycles_refunded >= 2^64^ then Trap {cycles_used = es.cycles_used;}
   return es.params.cycles_refunded
 
 ic0.msg_cycles_refunded128<es>(dst : i32) =
+  if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let amount = es.params.cycles_refunded
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.accept_message<es>() =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
   if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
   es.ingress_filter = Accept
 
 ic0.msg_method_name_size<es>() : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
   return |es.method_name|
 
 ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
 ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
+  if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let amount = min(max_amount, es.cycles_available)
   es.cycles_available := es.cycles_available - amount
   es.cycles_accepted := es.cycles_accepted + amount
@@ -4521,6 +4519,7 @@ ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   return amount
 
 ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
+  if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let max_amount = max_amount_high * 2^64^ + max_amount_low
   let amount = min(max_amount, es.cycles_available)
   es.cycles_available := es.cycles_available - amount
@@ -4561,6 +4560,8 @@ ic0.call_new<es>(
     reject_fun  : i32,
     reject_env  : i32,
   ) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+
   discard_pending_call<es>()
 
   if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
@@ -4588,10 +4589,12 @@ ic0.call_new<es>(
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
   if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
@@ -4599,6 +4602,7 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
 ic0.call_cycles_add<es>(amount : i64) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.balance < amount then Trap {cycles_used = es.cycles_used;}
 
@@ -4606,6 +4610,7 @@ ic0.call_cycles_add<es>(amount : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   let amount = amount_high * 2^64^ + amount_low
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.balance < amount then Trap {cycles_used = es.cycles_used;}
@@ -4614,6 +4619,7 @@ ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_peform<es>() : ( err_code : i32 ) =
+  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
   // are we below the threezing threshold?
@@ -4690,6 +4696,7 @@ ic0.time<es>() : i32 =
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
+  if es.context ∉ {I, U, Ry, Rt, C, H} then Trap {cycles_used = es.cycles_used;}
   if es.new_global_timer = NoGlobalTimer
   then
     es.new_global_timer := timestamp
@@ -4700,6 +4707,7 @@ ic0.global_timer_set<es>(timestamp: i64) : i64 =
     return prev_global_timer
 
 ic0.certified_data_set<es>(src: i32, size: i32) =
+  if es.context ∉ {I, G, U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
   es.new_certified_data := es.wasm_state[src..src+size]
 
 ic0.data_certificate_present<es>() : i32 =
