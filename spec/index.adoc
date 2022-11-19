@@ -2361,6 +2361,8 @@ QueryFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
 }
 SystemTaskFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
   new_state : WasmState;
+  new_calls : List MethodCall;
+  new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   cycles_used : Nat;
 }
@@ -2371,15 +2373,18 @@ RefundedCycles = Nat
 CanisterModule = {
   init : (CanisterId, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     new_state : WasmState;
+    new_certified_data : NoCertifiedData | Blob;
     new_global_timer : NoGlobalTimer | Nat;
     cycles_used : Nat;
   }
   pre_upgrade : (WasmState, Principal, Env) -> Trap { cycles_used : Nat; } | Return {
     stable_memory : StableMemory;
+    new_certified_data : NoCertifiedData | Blob;
     cycles_used : Nat;
   }
   post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     new_state : WasmState;
+    new_certified_data : NoCertifiedData | Blob;
     new_global_timer : NoGlobalTimer | Nat;
     cycles_used : Nat;
   }
@@ -3106,8 +3111,8 @@ system_task_as_update(f, env) = λ wasm_state →
     Trap trap → Trap trap
     Return res → Return {
       new_state = res.new_state;
-      new_calls = [];
-      new_certified_data = NoCertifiedData;
+      new_calls = res.new_calls;
+      new_certified_data = res.new_certified_data;
       new_global_timer = res.new_global_timer;
       response = NoResponse;
       cycles_accepted = 0;
@@ -4314,8 +4319,6 @@ heartbeat = λ (sysenv) → λ wasm_state →
     new_calls = es.calls;
     new_certified_data = es.certified_data;
     new_global_timer = es.new_global_timer;
-    response = NoResponse;
-    cycles_accepted = 0;
     cycles_used = es.cycles_used;
   }
 ....
@@ -4340,8 +4343,6 @@ global_timer = λ (sysenv) → λ wasm_state →
     new_calls = es.calls;
     new_certified_data = es.certified_data;
     new_global_timer = es.new_global_timer;
-    response = NoResponse;
-    cycles_accepted = 0;
     cycles_used = es.cycles_used;
   }
 ....
