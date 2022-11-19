@@ -3321,7 +3321,7 @@ Conditions::
       status = simple_status(S.canister_status[A.canister_id]);
       canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
     }
-    Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
+    Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 
@@ -3336,9 +3336,14 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
+    if New_certified_data ≠ NoCertifiedData:
+      certified_data[A.canister_id] = New_certified_data
+    if New_global_timer ≠ NoGlobalTimer:
+      global_timer[A.canister_id] = New_global_timer
+    else:
+      global_timer[A.canister_id] = 0
     canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
-    global_timer[A.canister_id] = 0
+    balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3375,11 +3380,11 @@ Conditions::
     Env1 = Env with {
       canister_state_counter = S.canister_state_counter[A.canister_id];
     }
-    Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
+    Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
     Env2 = Env with {
       canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
     }
-    Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; cycles_used = Cycles_used';}
+    Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ....
@@ -3393,9 +3398,16 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
+    if New_certified_data' ≠ NoCertifiedData:
+      certified_data[A.canister_id] = New_certified_data'
+    else if New_certified_data ≠ NoCertifiedData:
+      certified_data[A.canister_id] = New_certified_data
+    if New_global_timer ≠ NoGlobalTimer:
+      global_timer[A.canister_id] = New_global_timer
+    else:
+      global_timer[A.canister_id] = 0
     canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
-    global_timer[A.canister_id] = 0
+    balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4158,7 +4170,12 @@ If the WebAssembly module does not export a function called under the name `cani
 +
 ....
 init = λ (self_id, arg, caller, sysenv) →
-  Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }; cycles_used = 0;}
+  Return {
+    new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" };
+    new_certified_data = NoCertifiedData;
+    new_global_timer = NoGlobalTimer;
+    cycles_used = 0;
+  }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
@@ -4172,7 +4189,12 @@ init = λ (self_id, arg, caller, sysenv) →
       context = I
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  Return {new_state = es.wasm_state; new_global_timer = es.new_global_timer; cycles_used = es.cycles_used;}
+  Return {
+    new_state = es.wasm_state;
+    new_certified_data = es.new_certified_data;
+    new_global_timer = es.new_global_timer;
+    cycles_used = es.cycles_used;
+  }
 ....
 +
 This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
@@ -4182,7 +4204,7 @@ This formulation checks afterwards that the system calls `call.perform` or `msg.
 If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 +
 ....
-pre_upgrade = λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; cycles_used = 0;}
+pre_upgrade = λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; new_certified_data = NoCertifiedData; cycles_used = 0;}
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
@@ -4196,7 +4218,11 @@ pre_upgrade = λ (old_state, caller, sysenv) →
       context = G
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  Return {stable_memory = es.wasm_state.stable_mem; cycles_used = es.cycles_used;}
+  Return {
+    stable_memory = es.wasm_state.stable_mem;
+    new_certified_data = es.new_certified_data;
+    cycles_used = es.cycles_used;
+  }
 ....
 
 
@@ -4206,7 +4232,7 @@ If the WebAssembly module does not export a function called under the name `cani
 +
 ....
 post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
-  Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }; cycles_used = 0;}
+  Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }; new_certified_data = NoCertifiedData; new_global_timer = NoGlobalTimer; cycles_used = 0;}
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
@@ -4220,7 +4246,12 @@ post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
       context = I
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  Return {new_state = es.wasm_state; new_global_timer = es.new_global_timer; cycles_used = es.cycles_used;}
+  Return {
+    new_state = es.wasm_state;
+    new_certified_data = es.new_certified_data;
+    new_global_timer = es.new_global_timer;
+    cycles_used = es.cycles_used;
+  }
 ....
 
 * The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
@@ -4238,11 +4269,11 @@ update_methods[method] = λ (arg, caller, sysenv, available) → λ wasm_state �
   Return {
     new_state = es.wasm_state;
     new_calls = es.calls;
+    new_certified_data = es.new_certified_data;
+    new_global_timer = es.new_global_timer;
     response = es.response;
     cycles_accepted = es.cycles_accepted;
     cycles_used = es.cycles_used;
-    new_certified_data = es.new_certified_data;
-    new_global_timer = es.new_global_timer;
   }
 ....
 
@@ -4280,7 +4311,11 @@ heartbeat = λ (sysenv) → λ wasm_state →
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
     new_state = es.wasm_state;
+    new_calls = es.calls;
+    new_certified_data = es.certified_data;
     new_global_timer = es.new_global_timer;
+    response = NoResponse;
+    cycles_accepted = 0;
     cycles_used = es.cycles_used;
   }
 ....
@@ -4302,7 +4337,11 @@ global_timer = λ (sysenv) → λ wasm_state →
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
     new_state = es.wasm_state;
+    new_calls = es.calls;
+    new_certified_data = es.certified_data;
     new_global_timer = es.new_global_timer;
+    response = NoResponse;
+    cycles_accepted = 0;
     cycles_used = es.cycles_used;
   }
 ....
@@ -4342,11 +4381,11 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     Return {
       new_state = es.wasm_state;
       new_calls = es.calls;
+      new_certified_data = es.certified_data;
+      new_global_timer = es.new_global_timer;
       response = es.response;
       cycles_accepted = es.cycles_accepted;
       cycles_used = es.cycles_used;
-      new_certified_data = es.certified_data;
-      new_global_timer = es.global_timer;
     }
   with Trap
     if callbacks.on_cleanup = NoClosure then Trap {cycles_used = es.cycles_used;}
@@ -4361,8 +4400,9 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
     Return {
       new_state = es'.wasm_state;
-      new_global_timer = es'.new_global_timer;
       new_calls = [];
+      new_certified_data = NoCertifiedData;
+      new_global_timer = es'.new_global_timer;
       response = NoResponse;
       cycles_accepted = 0;
       cycles_used = es.cycles_used + es'.cycles_used;
