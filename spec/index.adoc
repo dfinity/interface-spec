@@ -4697,14 +4697,11 @@ ic0.time<es>() : i32 =
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
   if es.context ∉ {I, U, Ry, Rt, C, H} then Trap {cycles_used = es.cycles_used;}
-  if es.new_global_timer = NoGlobalTimer
-  then
-    es.new_global_timer := timestamp
-    return es.params.sysenv.global_timer
-  else
-    let prev_global_timer = es.new_global_timer
-    es.new_global_timer := timestamp
-    return prev_global_timer
+  let prev_global_timer = es.new_global_timer
+  es.new_global_timer := timestamp
+  if prev_global_timer = NoGlobalTimer
+  then return es.params.sysenv.global_timer
+  else return prev_global_timer
 
 ic0.certified_data_set<es>(src: i32, size: i32) =
   if es.context ∉ {I, G, U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
