@@ -1002,8 +1002,8 @@ The comment after each function lists from where these functions may be invoked:
 * `C`: from a cleanup callback
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
-* `H`: from `canister_heartbeat` or `canister_global_timer`
-* `*` = `I G U Q Ry Rt C F H` (NB: Not `(start)`)
+* `T`: _system task_ (`canister_heartbeat` or `canister_global_timer`)
+* `*` = `I G U Q Ry Rt C F T` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -4106,7 +4106,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
-  context : I | G | U | Q | Ry | Rt | C | F | H;
+  context : I | G | U | Q | Ry | Rt | C | F | T;
 }
 ....
 
@@ -4275,7 +4275,7 @@ heartbeat = λ (sysenv) → λ wasm_state →
     wasm_state = wasm_state;
     params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
     balance = sysenv.balance
-    context = H
+    context = T
   }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
@@ -4297,7 +4297,7 @@ global_timer = λ (sysenv) → λ wasm_state →
     wasm_state = wasm_state;
     params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
     balance = sysenv.balance
-    context = H
+    context = T
   }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
@@ -4560,7 +4560,7 @@ ic0.call_new<es>(
     reject_fun  : i32,
     reject_env  : i32,
   ) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
 
   discard_pending_call<es>()
 
@@ -4589,12 +4589,12 @@ ic0.call_new<es>(
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
   if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
@@ -4602,7 +4602,7 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
 ic0.call_cycles_add<es>(amount : i64) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.balance < amount then Trap {cycles_used = es.cycles_used;}
 
@@ -4610,7 +4610,7 @@ ic0.call_cycles_add<es>(amount : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   let amount = amount_high * 2^64^ + amount_low
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.balance < amount then Trap {cycles_used = es.cycles_used;}
@@ -4619,7 +4619,7 @@ ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_peform<es>() : ( err_code : i32 ) =
-  if es.context ∉ {U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
   // are we below the threezing threshold?
@@ -4696,7 +4696,7 @@ ic0.time<es>() : i32 =
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
-  if es.context ∉ {I, U, Ry, Rt, C, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
   let prev_global_timer = es.new_global_timer
   es.new_global_timer := timestamp
   if prev_global_timer = NoGlobalTimer
@@ -4704,7 +4704,7 @@ ic0.global_timer_set<es>(timestamp: i64) : i64 =
   else return prev_global_timer
 
 ic0.certified_data_set<es>(src: i32, size: i32) =
-  if es.context ∉ {I, G, U, Ry, Rt, H} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   es.new_certified_data := es.wasm_state[src..src+size]
 
 ic0.data_certificate_present<es>() : i32 =
