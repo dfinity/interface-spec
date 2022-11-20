@@ -3376,17 +3376,18 @@ Conditions::
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
-      global_timer = S.global_timer[A.canister_id];
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
       status = simple_status(S.canister_status[A.canister_id]);
     }
     Env1 = Env with {
+      global_timer = S.global_timer[A.canister_id];
       canister_state_counter = S.canister_state_counter[A.canister_id];
     }
     Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
     Env2 = Env with {
+      global_timer = 0;
       canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
     }
     Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
