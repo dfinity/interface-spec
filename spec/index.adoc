@@ -1128,14 +1128,14 @@ Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 +
 Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
-[#system-api-canister-state-counter]
-=== Canister state counter
+[#system-api-canister-version]
+=== Canister version
 
-For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the state counter also if the canister's code and settings do not change.
+For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
 * `ic0.canister_version : () -> i64`
 +
-returns the current value of the state counter.
+returns the current canister version.
 
 During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
 
@@ -2325,7 +2325,7 @@ Arg = Blob;
 CallerId = Principal;
 
 Timestamp = Nat;
-CanisterStateCounter = Nat;
+CanisterVersion = Nat;
 Env = {
   time : Timestamp;
   global_timer : Nat;
@@ -2333,7 +2333,7 @@ Env = {
   freezing_limit : Nat;
   certificate : NoCertificate | Blob;
   status : Running | Stopping | Stopped;
-  canister_version : CanisterStateCounter;
+  canister_version : CanisterVersion;
 }
 
 RejectCode = Nat
@@ -2583,7 +2583,7 @@ S = {
   controllers : CanisterId ↦ Set Principal;
   freezing_threshold : CanisterId ↦ Nat;
   canister_status: CanisterId ↦ CanStatus;
-  canister_version: CanisterId ↦ CanisterStateCounter;
+  canister_version: CanisterId ↦ CanisterVersion;
   time : CanisterId ↦ Timestamp;
   global_timer : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
@@ -3895,7 +3895,7 @@ S with
 ....
 
 
-==== Time progressing, cycle consumption, and canister state counter increments
+==== Time progressing, cycle consumption, and canister version increments
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -3936,7 +3936,7 @@ S with
     system_time = T1
 ....
 
-Finally, the canister state counter can be incremented arbitrarily:
+Finally, the canister version can be incremented arbitrarily:
 
 Conditions::
 ....

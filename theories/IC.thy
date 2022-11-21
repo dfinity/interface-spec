@@ -1667,6 +1667,7 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       global_timer := list_map_set (global_timer S) cid (case new_global_timer of None \<Rightarrow> 0 | Some new_timer \<Rightarrow> new_timer),
       canister_version := list_map_set (canister_version S) cid (Suc idx),
       balances := list_map_set (balances S) cid (bal - cyc_used),
+      canister_version := list_map_set (canister_version S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))"
 
 definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
@@ -2756,7 +2757,7 @@ lemma canister_out_of_cycles_ic_inv:
 
 
 
-(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister version increments (canister time) [DONE] *)
 
 definition canister_time_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_time_progress_pre cid t1 S = (case list_map_get (time S) cid of Some t0 \<Rightarrow>
@@ -2782,7 +2783,7 @@ lemma canister_time_progress_ic_inv:
 
 
 
-(* System transition: Time progressing, cycle consumption, and canister state counter increments (cycle consumption) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister version increments (cycle consumption) [DONE] *)
 
 definition cycle_consumption_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "cycle_consumption_pre cid b1 S = (case list_map_get (balances S) cid of Some b0 \<Rightarrow>
@@ -2813,7 +2814,7 @@ lemma cycle_consumption_ic_inv:
 
 
 
-(* System transition: Time progressing, cycle consumption, and canister state counter increments (system time) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister version increments (system time) [DONE] *)
 
 definition system_time_progress_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "system_time_progress_pre t1 S = (system_time S < t1)"
@@ -2837,7 +2838,7 @@ lemma system_time_progress_ic_inv:
 
 
 
-(* System transition: Time progressing, cycle consumption, and canister state counter increments (canister state counter) [DONE] *)
+(* System transition: Time progressing, cycle consumption, and canister version increments (canister version) [DONE] *)
 
 definition canister_version_progress_pre :: "'canid \<Rightarrow> nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "canister_version_progress_pre cid n1 S = (case list_map_get (canister_version S) cid of Some n0 \<Rightarrow>
