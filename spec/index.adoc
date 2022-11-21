@@ -1116,14 +1116,14 @@ Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 +
 Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
-[#system-api-canister-state-counter]
-=== Canister state counter
+[#system-api-canister-version]
+=== Canister version
 
-For each canister, the system maintains a _state counter_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the state counter also if the canister's code and settings do not change.
+For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
-* `ic0.canister_state_counter : () -> i64`
+* `ic0.canister_version : () -> i64`
 +
-returns the current value of the state counter.
+returns the current canister version.
 
 During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
 
@@ -2302,14 +2302,14 @@ Arg = Blob;
 CallerId = Principal;
 
 Timestamp = Nat;
-CanisterStateCounter = Nat;
+CanisterVersion = Nat;
 Env = {
   time : Timestamp
   balance : Nat;
   freezing_limit : Nat;
   certificate : NoCertificate | Blob;
   status : Running | Stopping | Stopped;
-  canister_state_counter : CanisterStateCounter;
+  canister_version : CanisterVersion;
 }
 
 RejectCode = Nat
@@ -2548,7 +2548,7 @@ S = {
   controllers : CanisterId ↦ Set Principal;
   freezing_threshold : CanisterId ↦ Nat;
   canister_status: CanisterId ↦ CanStatus;
-  canister_state_counter: CanisterId ↦ CanisterStateCounter;
+  canister_version: CanisterId ↦ CanisterVersion;
   time : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
   certified_data: CanisterId ↦ Blob;
@@ -2576,7 +2576,7 @@ The initial state of the IC is
   controllers = ();
   freezing_threshold = ();
   canister_status = ();
-  canister_state_counter = ();
+  canister_version = ();
   time = ();
   balances = ();
   certified_data = ();
@@ -2721,7 +2721,7 @@ Conditions::
         freezing_limit = freezing_limit(S, E.content.canister_id);
         certificate = NoCertificate;
         status = simple_status(S.canister_status[E.content.canister_id]);
-        canister_state_counter = S.canister_state_counter[E.content.canister_id];
+        canister_version = S.canister_version[E.content.canister_id];
       }
       S.canisters[E.content.canister_id].module.inspect_message
         (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
@@ -2912,7 +2912,7 @@ Conditions::
       freezing_limit = freezing_limit(S, M.receiver);
       certificate = NoCertificate;
       status = simple_status(S.canister_status[M.receiver]);
-      canister_state_counter = S.canister_state_counter[M.receiver];
+      canister_version = S.canister_version[M.receiver];
     }
 
     Available = S.call_contexts[M.call_contexts].available_cycles
@@ -3128,7 +3128,7 @@ S with
         refunded_cycles = 0
       }
     canister_status[CanisterId] = Running
-    canister_state_counter[CanisterId] = 0
+    canister_version[CanisterId] = 0
 ....
 
 This uses the predicate
@@ -3166,7 +3166,7 @@ S with
       controllers[A.canister_id] = A.settings.controllers
     if A.settings.freezing_threshold is not null:
       freezing_threshold[A.canister_id] = A.settings.freezing_threshold
-    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3236,7 +3236,7 @@ Conditions::
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
       status = simple_status(S.canister_status[A.canister_id]);
-      canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
+      canister_version = S.canister_version[A.canister_id] + 1;
     }
     Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
     Cycles_used ≤ S.balances[A.canister_id]
@@ -3254,7 +3254,7 @@ S with
       private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
-    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3288,11 +3288,11 @@ Conditions::
       status = simple_status(S.canister_status[A.canister_id]);
     }
     Env1 = Env with {
-      canister_state_counter = S.canister_state_counter[A.canister_id];
+      canister_version = S.canister_version[A.canister_id];
     }
     Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
     Env2 = Env with {
-      canister_state_counter = S.canister_state_counter[A.canister_id] + 1;
+      canister_version = S.canister_version[A.canister_id] + 1;
     }
     Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; cycles_used = Cycles_used';}
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
@@ -3309,7 +3309,7 @@ S with
       private_custom_sections = Private_custom_sections;
     }
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
-    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3337,7 +3337,7 @@ State after::
 S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
-    canister_state_counter[A.canister_id] = S.canister_state_counter[A.canister_id] + 1
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
 
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3530,7 +3530,7 @@ S with
     controllers[A.canister_id] = (deleted)
     freezing_threshold[A.canister_id] = (deleted)
     canister_status[A.canister_id] = (deleted)
-    canister_state_counter[A.canister_id] = (deleted)
+    canister_version[A.canister_id] = (deleted)
     time[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
@@ -3631,7 +3631,7 @@ S with
         refunded_cycles = M.transferred_cycles
       }
     canister_status[CanisterId] = Running
-    canister_state_counter[CanisterId] = 0
+    canister_version[CanisterId] = 0
 ....
 
 ==== IC Management Canister: Top up canister
@@ -3766,7 +3766,7 @@ State after::
 S with
     canisters[CanisterId] = EmptyCanister
     certified_data[CanisterId] = ""
-    canister_state_counter[CanisterId] = S.canister_state_counter[CanisterId] + 1
+    canister_version[CanisterId] = S.canister_version[CanisterId] + 1
 
     messages = S.messages ·
       [ ResponseMessage {
@@ -3787,7 +3787,7 @@ S with
 ....
 
 
-==== Time progressing, cycle consumption, and canister state counter increments
+==== Time progressing, cycle consumption, and canister version increments
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -3828,17 +3828,17 @@ S with
     system_time = T1
 ....
 
-Finally, the canister state counter can be incremented arbitrarily:
+Finally, the canister version can be incremented arbitrarily:
 
 Conditions::
 ....
-    N0 = S.canister_state_counter[CanisterId]
+    N0 = S.canister_version[CanisterId]
     N1 > N0
 ....
 State after::
 ....
 S with
-    canister_state_counter[CanisterId] = N1
+    canister_version[CanisterId] = N1
 ....
 
 ==== Query call
@@ -3867,7 +3867,7 @@ Conditions::
     freezing_limit = freezing_limit(S, Q.canister_id);
     certificate = Cert;
     status = simple_status(S.canister_status[Q.receiver]);
-    canister_state_counter = S.canister_state_counter[Q.receiver];
+    canister_version = S.canister_version[Q.receiver];
   }
 ....
 Read response::
@@ -4421,8 +4421,8 @@ ic0.canister_status<es>() : i32 =
     Stopping -> return 2
     Stopped  -> return 3
 
-ic0.canister_state_counter<es>() : i64 =
-  return es.params.sysenv.canister_state_counter
+ic0.canister_version<es>() : i64 =
+  return es.params.sysenv.canister_version
 
 ic0.call_new<es>(
     callee_src  : i32,
