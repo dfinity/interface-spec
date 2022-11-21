@@ -1667,7 +1667,6 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
       global_timer := list_map_set (global_timer S) cid (case new_global_timer of None \<Rightarrow> 0 | Some new_timer \<Rightarrow> new_timer),
       canister_version := list_map_set (canister_version S) cid (Suc idx),
       balances := list_map_set (balances S) cid (bal - cyc_used),
-      canister_version := list_map_set (canister_version S) cid (Suc idx),
       messages := take n (messages S) @ drop (Suc n) (messages S) @ [Response_message orig (Reply (blob_of_candid Candid_empty)) trans_cycles]\<rparr>)))))"
 
 definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> nat" where
