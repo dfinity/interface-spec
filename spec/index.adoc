@@ -1700,7 +1700,7 @@ It is important to note the following for the usage of the `POST` method:
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-The *size* of an HTTP request or response is the total number of bytes representing the names and values of HTTP headers and the HTTP body. Each request can specify a maximal size for the response from the remote HTTP server. The upper limit on the maximal size for the response is `2MB` (`2,000,000B`) and this value also applies if no maximal size value is specified.
+The *size* of an HTTP response from the remote server is the total number of bytes representing the names and values of HTTP headers and the HTTP body. Each request can specify a maximal size for the response from the remote HTTP server. The upper limit on the maximal size for the response is `2MB` (`2,000,000B`) and this value also applies if no maximal size value is specified.
 An error will be returned when the response is larger than the maximal size.
 
 The following parameters should be supplied for the call:
@@ -1720,7 +1720,7 @@ The returned response (and the response provided to the `transform` function, if
 - `headers` - list of HTTP response headers and their corresponding values
 - `body` - the response's body
 
-The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal number of bytes representing the response produced by the `transform` function is `2MB` (`2,000,000B`).
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal number of bytes representing the response produced by the `transform` function is `2MB` (`2,000,000B`). Note that the number of bytes representing the response produced by the `transform` function includes the serialization overhead of the encoding produced by the canister.
 
 When the transform function is invoked by the system due to a canister HTTP request, the caller's identity is the principal of the management canister. This information can be used by developers to implement access control mechanism for this function.
 
@@ -1728,6 +1728,8 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 - the number of headers must not exceed `64`,
 - the number of bytes representing a header name must not exceed `32KiB`, and
 - the total number of bytes representing the header names and values must not exceed `48KiB`.
+
+NOTE: Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
 
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
