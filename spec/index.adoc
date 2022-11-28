@@ -1700,8 +1700,8 @@ It is important to note the following for the usage of the `POST` method:
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-The *size* of an HTTP response from the remote server is the total number of bytes representing the names and values of HTTP headers and the HTTP body. Each request can specify a maximal size for the response from the remote HTTP server. The upper limit on the maximal size for the response is `2MB` (`2,000,000B`) and this value also applies if no maximal size value is specified.
-An error will be returned when the response is larger than the maximal size.
+The *size* of an HTTP request from the canister or an HTTP response from the remote HTTP server is the total number of bytes representing the names and values of HTTP headers and the HTTP body. The maximal size for the request from the canister is `2MB` (`2,000,000B`). Each request can specify a maximal size for the response from the remote HTTP server. The upper limit on the maximal size for the response is `2MB` (`2,000,000B`) and this value also applies if no maximal size value is specified.
+An error will be returned when the request or response is larger than the maximal size.
 
 The following parameters should be supplied for the call:
 
@@ -1726,7 +1726,7 @@ When the transform function is invoked by the system due to a canister HTTP requ
 
 The following additional limits apply to HTTP requests and HTTP responses from the remote sever:
 - the number of headers must not exceed `64`,
-- the number of bytes representing a header name must not exceed `32KiB`, and
+- the number of bytes representing a header name or value must not exceed `8KiB`, and
 - the total number of bytes representing the header names and values must not exceed `48KiB`.
 
 NOTE: Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
