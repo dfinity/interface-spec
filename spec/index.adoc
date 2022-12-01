@@ -1759,7 +1759,7 @@ NOTE: The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be
 
 The Bitcoin functionality is exposed via the management canister.
 Information about Bitcoin can be found in the https://developer.bitcoin.org/devguide/[Bitcoin developer guides].
-Invoking the functions of the Bitcoin API will cost cycles. The concrete costs for each function are yet to be determined.
+Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs) for information of pricing for the feature for Bitcoin Testnet and Mainnet.
 
 [#ic-bitcoin_get_utxos]
 === IC method `bitcoin_get_utxos`
@@ -1797,7 +1797,7 @@ For a newly discovered block, a regular Bitcoin (full) node therefore provides a
 than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
 to gain confidence in the correctness of the returned UTXOs.
 
-There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs,
+There is an upper bound of 1,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs,
 a partial set of the address's UTXOs are returned along with a page reference.
 
 In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to
