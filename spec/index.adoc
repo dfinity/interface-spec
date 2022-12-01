@@ -1797,7 +1797,7 @@ For a newly discovered block, a regular Bitcoin (full) node therefore provides a
 than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6,
 to gain confidence in the correctness of the returned UTXOs.
 
-There is an upper bound of 1,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs,
+There is an upper bound of 10,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs,
 a partial set of the address's UTXOs are returned along with a page reference.
 
 In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to
