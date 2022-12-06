@@ -23,6 +23,7 @@ ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
 ic0.canister_cycle_balance : () -> i64;                                     // *
 ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
 ic0.canister_status : () -> i32;                                            // *
+ic0.canister_version : () -> i64;                                           // *
 
 ic0.msg_method_name_size : () -> i32;                                       // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
