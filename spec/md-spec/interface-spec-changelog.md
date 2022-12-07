@@ -1,5 +1,11 @@
 ## Changelog {#changelog}
 
+## 0_18_9 (2022-11-06) {#0_18_9}
+* Global timers
+* Canister version
+* Clarifications for HTTP requests & Bitcoin integration costs
++
+
 ## 0.18.8 (2022-11-09) {#0_18_8}
 * Updated HTTP request API
 * Canister status available to canister

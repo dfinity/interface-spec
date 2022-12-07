@@ -233,9 +233,9 @@ The canister status can be used to control whether the canister is processing ca
 
 -   In status `running`, calls to the canister are processed as normal.
 
--   In status `stopping`, calls to the canister are rejected by the IC, but responses to the canister are processed as normal.
+-   In status `stopping`, calls to the canister are rejected by the IC with reject code `CANISTER_ERROR` (5), but responses to the canister are processed as normal.
 
--   In status `stopped`, calls to the canister are rejected by the IC, and there are no outstanding responses to call contexts that are not marked as deleted.
+-   In status `stopped`, calls to the canister are rejected by the IC with reject code `CANISTER_ERROR` (5), and there are no outstanding responses to call contexts that are not marked as deleted.
 
 In all cases, calls to the [management canister](#the-ic-management-canister) are processed, regardless of the state of the managed canister.
 
@@ -243,7 +243,7 @@ The controllers of the canister can initiate transitions between these states us
 
 
 :::note
-This status is orthogonal to the question of whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected, but because the canister is empty.
+This status is orthogonal to whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected by the IC with an HTTP error, but because the canister is empty.
 :::
 
 ### Signatures
@@ -920,6 +920,8 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 -   If it exports a function called `canister_heartbeat`, the function must have type `() -> ()`.
 
+-   If it exports a function called `canister_global_timer`, the function must have type `+() -> ()+`.
+
 -   If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `() -> ()`.
 
 -   It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
@@ -949,6 +951,8 @@ The canister provides entry points which are invoked by the IC under various cir
 -   The canister may export functions with name `canister_inspect_message` with type `() -> ()`.
 
 -   The canister may export a function with name `canister_heartbeat` with type `() -> ()`.
+
+-   The canister may export a function with name `canister_global_timer` with type `+() -> ()+`.
 
 -   The canister may export functions with name `canister_update <name>` and type `() -> ()`.
 
@@ -996,10 +1000,22 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined.
 
-`canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject.
+`canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_heartbeat` can initiate new calls.
 
 :::note
 While an implementation will likely try to keep the interval between `canister_heartbeat` invocations to within a few seconds, this is not formally part of this specification.
+:::
+
+#### Global timer {#timer}
+
+For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer.
+
+Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
+
+`canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
++
+:::note
+While an implementation will likely try to keep the interval between the value of the global timer and the time-stamp of the `canister_global_timer` invocation within a few seconds, this is not formally part of this specification.
 :::
 
 #### Callbacks {#callbacks}
@@ -1038,12 +1054,12 @@ The following sections describe various System API functions, also referred to a
     ic0.canister_cycle_balance : () -> i64;                                     // *
     ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
     ic0.canister_status : () -> i32;                                            // *
-
+    ic0.canister_version : () -> i64;                                           // *  
     ic0.msg_method_name_size : () -> i32                                        // F
     ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
     ic0.accept_message : () -> ();                                              // F
 
-    ic0.call_new :                                                              // U Ry Rt H
+    ic0.call_new :                                                              // U Ry Rt T
       ( callee_src  : i32,
         callee_size : i32,
         name_src : i32,
@@ -1053,11 +1069,11 @@ The following sections describe various System API functions, also referred to a
         reject_fun : i32,
         reject_env : i32
       ) -> ();
-    ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
-    ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
-    ic0.call_cycles_add : (amount : i64) -> ();                               // U Ry Rt H
-    ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();      // U Ry Rt H
-    ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
+    ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt T
+    ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt T
+    ic0.call_cycles_add : (amount : i64) -> ();                               // U Ry Rt T
+    ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();      // U Ry Rt T
+    ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt T
 
     ic0.stable_size : () -> (page_count : i32);                                 // *
     ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
@@ -1068,12 +1084,13 @@ The following sections describe various System API functions, also referred to a
     ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();           // *
     ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();            // *
 
-    ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt H
+    ic0.certified_data_set : (src: i32, size: i32) -> ()                        // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32                                    // *
     ic0.data_certificate_size : () -> i32                                       // *
     ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()        // *
 
     ic0.time : () -> (timestamp : i64);                                         // *
+    ic0.global_timer_set : (timestamp : i64) -> i64;                            // I U Ry Rt C T
     ic0.performance_counter : (type : i32) -> (counter : i64);                  // * s
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
@@ -1099,9 +1116,9 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `F`: from `canister_inspect_message`
 
--   `H`: from `canister_heartbeat`
+-   `T`: from _system task_ (`canister_heartbeat` or `canister_global_timer`)
 
--   `*` = `I G U Q Ry Rt C F H` (NB: Not `(start)`)
+-   `*` = `I G U Q Ry Rt C F T` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -1221,6 +1238,18 @@ This function allows a canister to find out if it is running, stopping or stoppe
     Status `1` indicates running, `2` indicates stopping, and `3` indicates stopped.
 
     Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
+
+
+### Canister version {#system-api-canister-version}
+
+For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+
+* `ic0.canister_version : () -> i64`
+
+returns the current canister version.
+
+During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
+
 
 ### Inter-canister method calls {#system-api-call}
 
@@ -1475,6 +1504,19 @@ The times observed by different canisters are unrelated, and calls from one cani
 :::note
 While an implementation will likely try to keep the time returned by `ic0.time` close to the real time, this is not formally part of this specification.
 :::
+
+### Global timer {#global-timer}
+
+
+The canister can set a global timer to make the system schedule a call to the exported `canister_global_timer` Wasm method after the specified time. The time must be provided as nanoseconds since 1970-01-01.
+
+`+ic0.global_timer_set : (timestamp : i64) -> i64+`
+
+The function returns the previous value of the timer. If no timer is set before invoking the function, then the function returns zero.
+
+Passing zero as an argument to the function deactivates the timer and thus prevents the system from scheduling calls to the canister's `canister_global_timer` Wasm method.
+
+
 
 ### Performance counter {#system-api-performance-counter}
 
@@ -1745,13 +1787,14 @@ It is important to note the following for the usage of the `POST` method: - The 
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
-Each request can specify the maximal expected size for the response from the remote HTTP server. The upper limit on the size of a response defaults to `2MiB` if no maximal size value is specified. An error will be returned when the response is larger than the maximal size. The `2MiB` size limit also applies to the value returned by the `transform` function.
+The *size* of an HTTP request from the canister or an HTTP response from the remote HTTP server is the total number of bytes representing the names and values of HTTP headers and the HTTP body. The maximal size for the request from the canister is `2MB` (`2,000,000B`). Each request can specify a maximal size for the response from the remote HTTP server. The upper limit on the maximal size for the response is `2MB` (`2,000,000B`) and this value also applies if no maximal size value is specified.
+An error will be returned when the request or response is larger than the maximal size.
 
 The following parameters should be supplied for the call:
 
--   `url` - the requested URL. The URL may specify a custom port number.
+-   `url` - the requested URL. The URL must be valid according to https://www.ietf.org/rfc/rfc3986.txt[RFC-3986] and its length must not exceed `8192`. The URL may specify a custom port number.
 
--   `max_response_bytes` - optional, specifies the maximal size of the response in bytes. Any value less than or equal to `2MiB` is accepted. The call will be charged based on this parameter. If not provided, the maximum of `2MiB` will be used.
+-   `max_response_bytes` - optional, specifies the maximal size of the response in bytes. If provided, the value must not exceed `2MB` (`2,000,000B`). The call will be charged based on this parameter. If not provided, the maximum of `2MB` will be used.
 
 -   `method` - currently, only GET, HEAD, and POST are supported
 
@@ -1761,6 +1804,8 @@ The following parameters should be supplied for the call:
 
 -   `transform` - an optional function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
 -   `status` - the response status (e.g., 200, 404)
@@ -1769,7 +1814,19 @@ The returned response (and the response provided to the `transform` function, if
 
 -   `body` - the response's body
 
-The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. When the transform function was invoked due to a canister HTTP request, the caller's identity is the principal of the management canister.
+The `transform` function may, for example, transform the body in any way, add or remove headers, modify headers, etc. The maximal number of bytes representing the response produced by the `transform` function is `2MB` (`2,000,000B`). Note that the number of bytes representing the response produced by the `transform` function includes the serialization overhead of the encoding produced by the canister.
+
+When the transform function is invoked by the system due to a canister HTTP request, the caller's identity is the principal of the management canister. This information can be used by developers to implement access control mechanism for this function.
+
+The following additional limits apply to HTTP requests and HTTP responses from the remote sever:
+- the number of headers must not exceed `64`,
+- the number of bytes representing a header name or value must not exceed `8KiB`, and
+- the total number of bytes representing the header names and values must not exceed `48KiB`.
+
+:::note
+Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
+:::
+
 
 :::note
 The identity of the caller for a valid invocation of the `transform` function is `aaaaa-aa`. This information can be used by developers to implement access control mechanism for this function.
@@ -1799,7 +1856,7 @@ This method is only available in local development instances.
 The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 :::
 
-The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. The concrete costs for each function are yet to be determined.
+The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs) for information on pricing for the Bitcoin mainnet and testnet.
 
 ### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
 
@@ -1825,7 +1882,7 @@ There is an upper bound of 144 on the minimum number of confirmations. If a larg
 
 It is important to note that the validity of transactions is not verified in the Bitcoin component. The Bitcoin component relies on the proof of work that goes into the blocks and the verification of the blocks in the Bitcoin network. For a newly discovered block, a regular Bitcoin (full) node therefore provides a higher level of security than the Bitcoin component, which implies that it is advisable to set the number of confirmations to a reasonably large value, such as 6, to gain confidence in the correctness of the returned UTXOs.
 
-There is an upper bound of 100,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently large UTXOs, the partial set of the address\' UTXOs are returned along with a page reference.
+There is an upper bound of 10,000 UTXOs that can be returned in a single request. For addresses that contain sufficiently many UTXOs, a partial set of the address's UTXOs are returned along with a page reference.
 
 In the second case, a page reference (a series of bytes) must be provided, which instructs the Bitcoin component to collect UTXOs starting from the corresponding \"page\".
 
@@ -1857,13 +1914,16 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the specified Bitcoin network.
 
-The Bitcoin component periodically forwards the transaction until the transaction appears in a block appended to the blockchain or the transaction times out after 24 hours. As soon as it appears in a block or expires, the Bitcoin component drops the transaction. It follows that the function does not provide any guarantees that a submitted transaction will ever appear in a block.
+Note that the function does not provide any guarantees that a submitted  that a submitted transaction will ever appear in a block.
 
 ### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin_get_current_fee_percentiles}
 
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
-This function returns the 100 fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
+This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
+
+The https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method[standard nearest-rank estimation method], inclusive, with the addition of a 0th percentile is used.
+Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
 ## Certification
 
@@ -2323,16 +2383,19 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         CallerId = Principal;
 
         Timestamp = Nat;
+        CanisterVersion = Nat;
         Env = {
-          time : Timestamp
+          time : Timestamp;
+          global_timer : Nat;
           balance : Nat;
           freezing_limit : Nat;
-          certificate : NoCertificate | Blob
-          status : Running | Stopping | Stopped
+          certificate : NoCertificate | Blob;
+          status : Running | Stopping | Stopped;
+          canister_version : CanisterVersion;
         }
 
-        RejectCode = Nat
-        Response = Reply Blob | Reject (RejectCode, Text)
+        RejectCode = Nat;
+        Response = Reply Blob | Reject (RejectCode, Text);
         MethodCall = {
           callee : CanisterId;
           method_name: MethodName;
@@ -2344,7 +2407,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
           new_state : WasmState;
           new_calls : List MethodCall;
-          new_certified_data : NoCertifiedData | Blob
+          new_certified_data : NoCertifiedData | Blob;
+          new_global_timer : NoGlobalTimer | Nat;
           response : NoResponse | Response;
           cycles_accepted : Nat;
           cycles_used : Nat;
@@ -2353,8 +2417,11 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           response : Response;
           cycles_used : Nat;
         }
-        HeartbeatFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
+        SystemTaskFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
           new_state : WasmState;
+          new_calls : List MethodCall;
+          new_certified_data : NoCertifiedData | Blob;
+          new_global_timer : NoGlobalTimer | Nat;
           cycles_used : Nat;
         }
 
@@ -2364,19 +2431,25 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         CanisterModule = {
           init : (CanisterId, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
             new_state : WasmState;
+            new_certified_data : NoCertifiedData | Blob;
+            new_global_timer : NoGlobalTimer | Nat;
             cycles_used : Nat;
           }
           pre_upgrade : (WasmState, Principal, Env) -> Trap { cycles_used : Nat; } | Return {
             stable_memory : StableMemory;
+            new_certified_data : NoCertifiedData | Blob;
             cycles_used : Nat;
           }
           post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
             new_state : WasmState;
+            new_certified_data : NoCertifiedData | Blob;
+            new_global_timer : NoGlobalTimer | Nat;
             cycles_used : Nat;
           }
           update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
           query_methods : MethodName ↦ ((Arg, CallerId, Env) -> QueryFunc)
-          heartbeat : (Env) -> HeartbeatFunc
+          heartbeat : (Env) -> SystemTaskFunc
+          global_timer : (Env) -> SystemTaskFunc
           callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
           inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
             status : Accept | Reject;
@@ -2421,7 +2494,7 @@ To ensure that only one response is generated, and also to detect when no respon
           calling_context : CallId;
           callback: Callback
         }
-      | FromHeartbeat
+      | FromSystem
           CallCtxt = {
       canister : CanisterId;
       origin : CallOrigin;
@@ -2441,6 +2514,7 @@ Therefore, a message can have different shapes:
       = PublicMethod MethodName Principal Blob
       | Callback Callback Response RefundedCycles
       | Heartbeat
+      | GlobalTimer
 
     Message
       = CallMessage {
@@ -2547,12 +2621,14 @@ Finally, we can describe the state of the IC as a record having the following fi
       | Stopping (List (CallOrigin, Nat))
       | Stopped
     S = {
-      requests : Request ↦ RequestStatus;
+      requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
       controllers : CanisterId ↦ Set Principal;
       freezing_threshold : CanisterId ↦ Nat;
       canister_status: CanisterId ↦ CanStatus;
+      canister_version: CanisterId ↦ CanisterVersion;
       time : CanisterId ↦ Timestamp;
+      global_timer : CanisterId ↦ Timestamp;
       balances: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       system_time : Timestamp
@@ -2577,7 +2653,9 @@ The initial state of the IC is
       controllers = ();
       freezing_threshold = ();
       canister_status = ();
+      canister_version = ();
       time = ();
+      global_timer = ();
       balances = ();
       certified_data = ();
       system_time = T;
@@ -2699,10 +2777,12 @@ is_effective_canister_id(E.content, ECID)
           S.canisters[E.content.canister_id] ≠ EmptyCanister
           Env = {
             time = S.time[E.content.canister_id];
+            global_timer = S.global_timer[E.content.canister_id];
             balance = S.balances[E.content.canister_id]
             freezing_limit = freezing_limit(S, E.content.canister_id);
             certificate = NoCertificate;
             status = simple_status(S.canister_status[E.content.canister_id]);
+            canister_version = S.canister_version[E.content.canister_id];
           }
           S.canisters[E.content.canister_id].module.inspect_message
             (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
@@ -2714,7 +2794,7 @@ State after
 
 ```html
 S with
-  requests[E.content] = Received
+  requests[E.content] = (Received, ECID)
   if E.content.canister_id ≠ ic_principal then
     balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 ```
@@ -2730,7 +2810,7 @@ The IC may reject a received message for internal reasons (high load, low resour
 Conditions: 
 
 ```html
-S.requests[R] = Received
+S.requests[R] = (Received, ECID)
 Code = SYS_FATAL or Code = SYS_TRANSIENT
 ```
         
@@ -2739,7 +2819,7 @@ State after
 
 ```html
 S with
-  requests[R] = Rejected (Code, Msg)
+  requests[R] = (Rejected (Code, Msg), ECID)
 ```
     
 
@@ -2753,7 +2833,7 @@ The IC does not make any guarantees about the order of incoming messages.
 
 Conditions
 ```html
-S.requests[R] = Received
+S.requests[R] = (Received, ECID)
 S.system_time <= R.ingress_expiry
 C = S.canisters[R.canister_id]
 ```
@@ -2762,7 +2842,7 @@ C = S.canisters[R.canister_id]
 State after
 ```html
 S with
-    requests[R] = Processing
+    requests[R] = (Processing, ECID)
     messages =
       CallMessage {
         origin = FromUser { request = R };
@@ -2801,7 +2881,7 @@ messages = Older_messages · Younger_messages  ·
 
 #### Call context creation {#call_context_creation}
 
-Before invoking a heartbeat or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped, or stopping). Additionally, these invocations only happen for \"real\" canisters, not the IC management canister.
+Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped, or stopping). Additionally, these invocations only happen for \"real\" canisters, not the IC management canister.
 
 This "bookkeeping transition" must be immediately followed by the corresponding ["Message execution" transition](#rule-message-execution).
 
@@ -2812,18 +2892,18 @@ This "bookkeeping transition" must be immediately followed by the corresponding 
     The position of the message in the queue is unchanged.
 
     Conditions
-    ```
+ ```html 
       S.messages = Older_messages · CallMessage CM · Younger_messages
       S.canisters[CM.callee] ≠ EmptyCanister
       S.canister_status[CM.callee] = Running
       S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
       Ctxt_id ∉ dom(S.call_contexts)
-    ```
+ ``` 
 
     State after
 
-  
-    ```
+
+ ``` html
     S with
       messages =
         Older_messages ·
@@ -2842,7 +2922,7 @@ This "bookkeeping transition" must be immediately followed by the corresponding 
         available_cycles = CM.transferred_cycles;
       }
       balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
-      ```
+ ``` 
 
 -   Call context creation: Heartbeat
 
@@ -2850,16 +2930,16 @@ This "bookkeeping transition" must be immediately followed by the corresponding 
 
     Conditions
 
-    ```       
+```html       
     S.canisters[C] ≠ EmptyCanister
     S.canister_status[C] = Running
-    balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+    S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
     Ctxt_id ∉ dom(S.call_contexts)
-    ```
+```  
 
     State after
 
-    ```   
+```html 
     S with
       messages =
         FuncMessage {
@@ -2871,13 +2951,52 @@ This "bookkeeping transition" must be immediately followed by the corresponding 
         · S.messages
       call_contexts[Ctxt_id] = {
         canister = C;
-        origin = FromHeartbeat;
+        origin = FromSystem;
         needs_to_respond = false;
         deleted = false;
         available_cycles = 0;
       }
       balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
-  ```
+```  
+
+
+- Call context creation: Global timer
+If canister `C` exports a method with name `canister_global_timer`, the global timer of canister `C` is set, and the current time for canister `C` has passed the value of the global timer, the IC will create the corresponding call context and deactivate the global timer.
+
+Conditions::
+
+```html
+    S.canisters[C] ≠ EmptyCanister
+    S.canister_status[C] = Running
+    S.global_timer[C] ≠ 0
+    S.time[C] ≥ S.global_timer[C]
+    S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+    Ctxt_id ∉ dom(S.call_contexts)
+```
+
+State after::
+
+ ``` html
+S with
+    messages =
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = C;
+        entry_point = GlobalTimer;
+        queue = Queue { from = System; to = C };
+      }
+      · S.messages
+    call_contexts[Ctxt_id] = {
+      canister = C;
+      origin = FromSystem;
+       needs_to_respond = false;
+       deleted = false;
+       available_cycles = 0;
+     }
+    global_timer[C] = 0
+     balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+```
+
 
 The IC can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field. The actual message execution, if successful, may enqueue further messages and --- if the function returns a response --- record this response. The new call and response messages are enqueued at the end.
 
@@ -2898,10 +3017,12 @@ Is_response = M.entry_point == Callback _ _ _
 
 Env = {
   time = S.time[M.receiver];
+  global_timer = S.global_timer[M.receiver];
   balance = S.balances[M.receiver]
   freezing_limit = freezing_limit(S, M.receiver);
   certificate = NoCertificate;
   status = simple_status(S.canister_status[M.receiver]);
+  canister_version = S.canister_version[M.receiver];
 }
 
 Available = S.call_contexts[M.call_contexts].available_cycles
@@ -2914,9 +3035,12 @@ or
 )
 or
 ( M.entry_point = Heartbeat
-  F = heartbeat_as_update(Mod.heartbeat, Env)
+  F = system_task_as_update(Mod.heartbeat, Env)
 )
-
+or
+( M.entry_point = GlobalTimer
+  F = system_task_as_update(Mod.global_timer, Env)
+)
 R = F(S.canisters[M.receiver].wasm_state)
 ```
 
@@ -2969,6 +3093,9 @@ then
     if res.new_certified_data ≠ NoCertifiedData:
       certified_data[M.receiver] = res.new_certified_data
 
+    if res.new_global_timer ≠ NoGlobalTimer:
+      global_timer[M.receiver] = res.new_global_timer
+
     balances[M.receiver] = New_balance
 else
   S with
@@ -2998,7 +3125,7 @@ If message execution [*returns* (in the sense of a Wasm function)](#define-wasm-
 
 Note that returning does *not* imply that the call associated with this message now *succeeds* in the sense defined in [section responding](#responding); that would require a (unique) call to `ic0.reply`. Note also that the state changes are persisted even when the IC is set to synthesize a [CANISTER_ERROR](#CANISTER_ERROR) reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see [Call context starvation](#rule-starvation)).
 
-The functions `query_as_update` and `heartbeat_as_update` turns a query function resp the heartbeat into an update function; this is merely a notational trick to simplify the rule:
+The functions `query_as_update` and `system_task_as_update` turns a query function resp the heartbeat or global timer into an update function; this is merely a notational trick to simplify the rule:
 
     query_as_update(f, arg, env) = λ wasm_state →
       match f(arg, env)(wasm_state) with
@@ -3007,18 +3134,20 @@ The functions `query_as_update` and `heartbeat_as_update` turns a query function
           new_state = wasm_state;
           new_calls = [];
           new_certified_data = NoCertifiedData;
+          new_global_timer = NoGlobalTimer;
           response = res.response;
           cycles_accepted = 0;
           cycles_used = res.cycles_used;
         }
 
-    heartbeat_as_update(f, env) = λ wasm_state →
+    system_task_as_update(f, env) = λ wasm_state →
       match f(env)(wasm_state) with
         Trap trap → Trap trap
         Return res → Return {
           new_state = res.new_state;
-          new_calls = [];
-          new_certified_data = NoCertifiedData;
+          new_calls = res.new_calls;
+          new_certified_data = res.new_certified_data;
+          new_global_timer = res.new_global_timer;
           response = NoResponse;
           cycles_accepted = 0;
           cycles_used = res.cycles_used;
@@ -3028,12 +3157,12 @@ Note that by construction, a query function will either trap or return with a re
 
 #### Call context starvation {#rule-starvation}
 
-If the call context is not for heartbeat and there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
+If the call context is not for heartbeat or global timer and there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is _not_ indicative. In particular, if the IC has an idea about _why_ this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
 Conditions
 ```html
         S.call_contexts[Ctxt_id].needs_to_respond = true
-        S.call_contexts[Ctxt_id].origin ≠ FromHeartbeat
+        S.call_contexts[Ctxt_id].origin ≠ FromSystem
         ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
         ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
         ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
@@ -3058,7 +3187,7 @@ S with
 
 #### Call context removal {#call_context_removal}
 
-If there is no call, downstream calling context, or response that references a call context, and the call context has been replied to or the call context corresponds to a heartbeat that had already been executed, then the call context can be removed.
+If there is no call, downstream calling context, or response that references a call context, and the call context has been replied to or the call context corresponds to a heartbeat or global timer that had already been executed, then the call context can be removed.
 
 Conditions
 
@@ -3067,7 +3196,7 @@ Conditions
   S.call_contexts[Ctxt_id].needs_to_respond = false
 ) or
 (
-  S.call_contexts[Ctxt_id].origin = FromHeartbeat
+  S.call_contexts[Ctxt_id].origin = FromHSystem
   ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
 )
         ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
@@ -3112,6 +3241,7 @@ State after
 S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
+    global_timer[CanisterId] = 0
     if A.settings.controllers is not null:
       controllers[CanisterId] = A.settings.controllers
     else:
@@ -3129,6 +3259,7 @@ S with
         refunded_cycles = 0
       }
     canister_status[CanisterId] = Running
+    canister_version[CanisterId] = 0
 ```
 
 
@@ -3174,6 +3305,7 @@ State after
           controllers[A.canister_id] = A.settings.controllers
         if A.settings.freezing_threshold is not null:
           freezing_threshold[A.canister_id] = A.settings.freezing_threshold
+        canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
         messages = Older_messages · Younger_messages ·
           ResponseMessage {
             origin = M.origin
@@ -3246,12 +3378,14 @@ Conditions
         M.caller ∈ S.controllers[A.canister_id]
         Env = {
           time = S.time[A.canister_id];
+          global_timer = S.global_timer[A.canister_id];
           balance = S.balances[A.canister_id];
           freezing_limit = freezing_limit(S, A.canister_id);
           certificate = NoCertificate;
           status = simple_status(S.canister_status[A.canister_id]);
+          canister_version = S.canister_version[A.canister_id]
         }
-        Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used;}
+        Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
         Cycles_used ≤ S.balances[A.canister_id]
         dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ```
@@ -3268,6 +3402,13 @@ State after
           public_custom_sections = Public_custom_sections;
           private_custom_sections = Private_custom_sections;
         }
+        if New_certified_data ≠ NoCertifiedData:
+          certified_data[A.canister_id] = New_certified_data
+        if New_global_timer ≠ NoGlobalTimer:
+          global_timer[A.canister_id] = New_global_timer
+        else:
+          global_timer[A.canister_id] = 0
+        canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
         balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
         messages = Older_messages · Younger_messages ·
           ResponseMessage {
@@ -3303,8 +3444,16 @@ Conditions
           certificate = NoCertificate;
           status = simple_status(S.canister_status[A.canister_id]);
         }
-        Old_module.pre_upgrade(Old_State, M.caller, Env) = Return {stable_memory = Stable_memory; cycles_used = Cycles_used;}
-        Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env) = Return {new_state = New_state; cycles_used = Cycles_used';}
+        Env1 = Env with {
+          global_timer = S.global_timer[A.canister_id];
+          canister_version = S.canister_version[A.canister_id];
+        }
+        Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+        Env2 = Env with {
+          global_timer = 0;
+          canister_version = S.canister_version[A.canister_id] + 1;
+        }
+        Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
         Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
         dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 ```
@@ -3321,6 +3470,15 @@ State after
           public_custom_sections = Public_custom_sections;
           private_custom_sections = Private_custom_sections;
         }
+        if New_certified_data' ≠ NoCertifiedData:
+          certified_data[A.canister_id] = New_certified_data'
+        else if New_certified_data ≠ NoCertifiedData:
+          certified_data[A.canister_id] = New_certified_data
+        if New_global_timer ≠ NoGlobalTimer:
+          global_timer[A.canister_id] = New_global_timer
+        else:
+          global_timer[A.canister_id] = 0
+        canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
         balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
         messages = Older_messages · Younger_messages ·
           ResponseMessage {
@@ -3353,6 +3511,8 @@ State after
 S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
+    global_timer[A.canister_id] = 0
 
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3578,7 +3738,9 @@ State after
         controllers[A.canister_id] = (deleted)
         freezing_threshold[A.canister_id] = (deleted)
         canister_status[A.canister_id] = (deleted)
+        canister_version[A.canister_id] = (deleted)
         time[A.canister_id] = (deleted)
+        global_timer[A.canister_id] = (deleted)
         balances[A.canister_id] = (deleted)
         certified_data[A.canister_id] = (deleted)
         messages = Older_messages · Younger_messages ·
@@ -3671,6 +3833,7 @@ State after
 ```html
 S with
     canisters[CanisterId] = EmptyCanister
+    global_timer[CanisterId] = 0
     time[CanisterId] = CurrentTime
     if A.settings.controllers is not null:
       controllers[CanisterId] = A.settings.controllers
@@ -3692,6 +3855,7 @@ S with
         transferred_cycles = M.transferred_cycles
       }
     canister_status[CanisterId] = Running
+    canister_version[CanisterId] = 0
 ```
 
 
@@ -3787,7 +3951,7 @@ Conditions
 
 S.messages = Older_messages · ResponseMessage RM · Younger_messages
 RM.origin = FromUser { request = M }
-S.requests[M] = Processing
+S.requests[M] = (Processing, ECID)
 ```
 
 
@@ -3797,8 +3961,8 @@ State after
 S with
     messages = Older_messages · Younger_messages
     requests[M] =
-      | Replied R        if M.response = Reply R
-      | Rejected (c, R)  if M.response = Reject (c, R)
+      | (Replied R, ECID)        if M.response = Reply R
+      | (Rejected (c, R), ECID)  if M.response = Reject (c, R)
 ```
 
 NB: The refunded cycles, `RM.refunded_cycles` are, by construction, empty.
@@ -3810,7 +3974,7 @@ The IC will keep the data for a completed or rejected request around for a certa
 Conditions
 
 ```html
-(S.requests[M] = Replied _) or (S.requests[M] = Rejected _)
+(S.requests[M] = (Replied _, ECID)) or (S.requests[M] = (Rejected _, ECID))
 ```
 
 
@@ -3818,7 +3982,7 @@ State after
 
 ```html
 S with
-    requests[M] = Done
+    requests[M] = (Done, ECID)
 ```
 
 
@@ -3827,7 +3991,7 @@ At the same or some later point, the request will be removed from the state of t
 Conditions
 
 ```html
-(S.requests[M] = Replied _) or (S.requests[M] = Rejected _) or (S.requests[M] = Done)
+(S.requests[M] = (Replied _, _)) or (S.requests[M] = (Rejected _, _)) or (S.requests[M] = (Done, _))
 M.ingress_expiry < S.system_time
 ```
 
@@ -3856,7 +4020,9 @@ State after
 ```html
 S with
     canisters[CanisterId] = EmptyCanister
-    certified_data[Canister_id] = ""
+    certified_data[CanisterId] = ""
+    canister_version[CanisterId] = S.canister_version[CanisterId] + 1
+    global_timer[CanisterId] = 0
 
     messages = S.messages ·
       [ ResponseMessage {
@@ -3877,7 +4043,7 @@ S with
 ```
 
 
-#### Time progressing and cycle consumption {#time_progressing_and_cycle_consumption}
+#### Time progressing, cycle consumption, and canister version increments {#time_progressing_and_cycle_consumption}
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -3932,6 +4098,23 @@ S with
     system_time = T1
 ```
 
+Finally, the canister version can be incremented arbitrarily:
+
+Conditions
+
+```html
+    N0 = S.canister_version[CanisterId]
+    N1 > N0
+```
+   State after
+
+```html
+
+    S with
+        canister_version[CanisterId] = N1
+
+```
+    
 
 #### Query call {#query_call}
 
@@ -3959,6 +4142,7 @@ lookup(["canister",Q.canister_id,"certified_data"], Cert) = Found S.certified_da
 lookup(["time"], Cert) = Found S.system_time // or “recent enough”
 Env = {
   time = S.time[Q.receiver];
+  global_timer = S.global_timer[Q.receiver];
   balance = S.balances[Q.canister_id];
   freezing_limit = freezing_limit(S, Q.canister_id);
   certificate = Cert;
@@ -4111,7 +4295,9 @@ We can model the execution of WebAssembly functions as stateful functions that h
       pending_call : MethodCall | NoPendingCall;
       calls : List MethodCall;
       new_certified_data : NoCertifiedData | Blob;
+      new_global_timer : NoGlobalTimer | Nat;
       ingress_filter : Accept | Reject;
+      context : I | G | U | Q | Ry | Rt | C | F | T;
     }
 
 This allows us to model WebAssembly functions, including host-provided imports, as functions with implicit mutable access to an `ExecutionState`, dubbed *execution functions*. Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `(x : i32) -> ()`). The lifetime of the `ExecutionState` data structure is that of one such function invocation.
@@ -4122,7 +4308,7 @@ It is nonsensical to pass to an execution function a WebAssembly store `S` that 
 
 #### The concrete `CanisterModule` {#the_concrete_canistermodule}
 
-Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+Finally, we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
 
 -   The `initial_wasm_store` mentioned below is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WasmModule contained in the [canister module](#canister-module-format), including executing a potential `(start)` function.
 
@@ -4149,7 +4335,9 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
           pending_call = NoPendingCall;
           calls = [];
           new_certified_data = NoCertifiedData;
+          new_global_timer = NoGlobalTimer;
           ingress_filter = Reject;
+          context = (undefined);
         }
 
 -   The `init` field of the `CanisterModule` is defined as follows:
@@ -4157,50 +4345,49 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
     If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 
         init = λ (self_id, arg, caller, sysenv) →
-          Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }; cycles_used = 0;}
+           Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }; new_certified_data = NoCertifiedData; new_global_timer = NoGlobalTimer; cycles_used = 0;}
+  - 
 
-    Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
+      Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 
-        init = λ (self_id, arg, caller, sysenv) →
-          let es = ref {empty_execution_state with
-              wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-              params = empty_params with { arg = arg; caller = caller; sysenv }
-              balance = sysenv.balance
-            }
-          try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-          if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          Return {new_state = es.wasm_state; cycles_used = es.cycles_used;}
+          init = λ (self_id, arg, caller, sysenv) →
+            let es = ref {empty_execution_state with
+                wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
+                params = empty_params with { arg = arg; caller = caller; sysenv }
+                balance = sysenv.balance
+                context = I
+              }
+            try func<es>() with Trap then Trap {cycles_used = es.cycles_used;} 
+            Return {new_state = es.wasm_state; new_certified_data = es.new_certified_data; new_global_timer = new_global_timer; cycles_used = es.cycles_used;
+             }
+          
+      This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
 
-    This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
+    -   The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 
--   The `pre_upgrade` field of the `CanisterModule` is defined as follows:
+        If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 
-    If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
+            pre_upgrade =  λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; new_certified_data = NoCertifiedData; cycles_used = 0;}
 
-        pre_upgrade = λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; cycles_used = 0;}
+        Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 
-    Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
-
-        pre_upgrade = λ (old_state, caller, sysenv) →
-          let es = ref {empty_execution_state with
-              wasm_state = old_state
-              params = { empty_params with caller = caller; sysenv }
-              balance = sysenv.balance
-            }
-          try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-          if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          Return {stable_memory = es.wasm_state.stable_mem; cycles_used = es.cycles_used;}
+            pre_upgrade = λ (old_state, caller, sysenv) →
+              let es = ref {empty_execution_state with
+                  wasm_state = old_state
+                  params = { empty_params with caller = caller; sysenv }
+                  balance = sysenv.balance
+                }
+              try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
+              Return { new_state = es.wasm_state; new_certified_data = es.new_certified_data; cycles_used = es.cycles_used;
+              }
+            
 
 -   The `post_upgrade` field of the `CanisterModule` is defined as follows:
 
     If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then the argument blob is ignored and the `initial_wasm_store` is returned:
 
         post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
-          Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }; cycles_used = 0;}
+          Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }; new_certified_data = NoCertifiedData; new_global_timer = NoGlobalTimer; cycles_used = 0;}
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
 
@@ -4209,12 +4396,11 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
               wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
               params = { empty_params with arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
+              contex = I
             }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-          if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          Return {new_state = es.wasm_state; cycles_used = es.cycles_used;}
+          Return {new_state = es.wasm_state; new_certified_data = es.new_certified_data; new_global_timer = es.new_global_timer; cycles_used = es.cycles_used;
+          }
 
 -   The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 
@@ -4224,17 +4410,18 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
               params = empty_params with { arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
               cycles_available = available;
+              context = U
+              }
+            try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
+            Return {
+              new_state = es.wasm_state;
+              new_calls = es.calls;
+              new_certified_data = es.new_certified_data;
+              new_global_timer = es.new_global_timer;
+              response = es.response;
+              cycles_accepted = es.cycles_accepted;
+              cycles_used = es.cycles_used;
             }
-          try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          Return {
-            new_state = es.wasm_state;
-            new_calls = es.calls;
-            response = es.response;
-            cycles_accepted = es.cycles_accepted;
-            cycles_used = es.cycles_used;
-            new_certified_data = es.new_certified_data;
-          }
 
 -   The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 
@@ -4243,12 +4430,9 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
               wasm_state = wasm_state;
               params = empty_params with { arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
+              context = Q
             }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-          if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          if es.response = NoResponse then Trap {cycles_used = es.cycles_used;}
           Return {
             response = es.response;
             cycles_used = es.cycles_used;
@@ -4265,22 +4449,47 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
             wasm_state = wasm_state;
             params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
             balance = sysenv.balance
+            context = T
           }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          if es.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used;}
-          if es.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used;}
-          if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
           Return {
             new_state = es.wasm_state;
+            new_calls = es.calls;
+            new_certified_data = es.certified_data;
+            new_global_timer = es.new_global_timer; 
             cycles_used = es.cycles_used;
           }
 
     otherwise it is
 
 ```html
-heartbeat = λ (sysenv) → λ wasm_state → Trap
-```
     heartbeat = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
+```
+
+- The function `global_timer` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_global_timer`, and has value
+
+```html 
+global_timer = λ (sysenv) → λ wasm_state →
+  let es = ref {empty_execution_state with
+    wasm_state = wasm_state;
+    params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
+    balance = sysenv.balance
+    context = T
+  }
+   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
+   Return {
+    new_state = es.wasm_state;
+    new_calls = es.calls;
+    new_certified_data = es.certified_data;
+    new_global_timer = es.new_global_timer;
+    cycles_used = es.cycles_used;
+  }
+```
+   otherwise it is
+```html
+  global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
+
+```
 
 -   The function `callbacks` of the `CanisterModule` is defined as follows
 
@@ -4289,18 +4498,19 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
             sysenv
             cycles_refunded = refund_cycles;
           }
-          let (fun, env, params) = match response with
+          let (fun, env, params, context) = match response with
             Reply data ->
               (callbacks.on_reply.fun, callbacks.on_reply.env,
-                { params0 with data})
+                { params0 with data}, Ry)
             Reject (reject_code, reject_message)->
               (callbacks.on_reject.fun, callbacks.on_reject.env,
-                { params0 with reject_code; reject_message})
+                { params0 with reject_code; reject_message}, Rt)
             let es = ref {empty_execution_state with
               wasm_state = wasm_state;
               params = params;
               balance = sysenv.balance;
               cycles_available = available;
+              context = context;
             }
           try
             if fun > |es.wasm_state.store.table| then Trap
@@ -4311,10 +4521,11 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
             Return {
               new_state = es.wasm_state;
               new_calls = es.calls;
+              new_certified_data = es.certified_data;
+              new_global_timer = es.new_global_timer;
               response = es.response;
               cycles_accepted = es.cycles_accepted;
               cycles_used = es.cycles_used;
-              new_certified_data = es.certified_data;
             }
           with Trap
             if callbacks.on_cleanup = NoClosure then Trap {cycles_used = es.cycles_used;}
@@ -4324,15 +4535,14 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
 
             let es' = ref { empty_execution_state with
               wasm_state = wasm_state;
+              context = C
             }
             try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-            if es'.cycles_accepted ≠ 0 then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-            if es'.calls ≠ [] then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-            if es'.ingress_filter ≠ Reject then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
-            if es'.response ≠ NoResponse then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
             Return {
               new_state = es'.wasm_state;
               new_calls = [];
+              new_certified_data = NoCertifiedData;
+              new_global_timer = es'.new_global_timer;
               response = NoResponse;
               cycles_accepted = 0;
               cycles_used = es.cycles_used + es'.cycles_used;
@@ -4345,7 +4555,7 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
     If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
 
         inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
-          Return {status = Accept; cycles_used = 0;}
+          Return {status = Accept; cycles_used = 0; context = F; }
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_inspect_message`, it is
 
@@ -4362,8 +4572,6 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap
               cycles_available = 0; // ingress requests have no funds
             }
            try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-           if es.calls ≠ [] then Trap {cycles_used = es.cycles_used;}
-           if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
            Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
 
 #### Helper functions {#helper_functions}
@@ -4393,67 +4601,85 @@ Upon *instantiation* of the WebAssembly module, we can provide the following fun
 The pseudo-code below does *not* explicitly enforce the restrictions of which imports are available in which contexts; for that the table in [Overview of imports](#system-api-imports) is authoritative, and is assumed to be part of the implementation.
 
     ic0.msg_arg_data_size<es>() : i32 =
+      if es.context ∉ {I, U, Q, Ry, F} then Trap {cycles_used = es.cycles_used;}
       return |es.params.arg|
 
     ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
+      if es.context ∉ {I, U, Q, Ry, F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
     ic0.msg_caller_size() : i32 =
+      if es.context ∉ {I, G, U, Q, F} then Trap {cycles_used = es.cycles_used;}
       return |es.params.caller|
 
     ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
+      if es.context ∉ {I, G, U, Q, F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.caller)
 
     ic0.msg_reject_code<es>() : i32 =
+      if es.context ∉ {Ry, Rt} then Trap {cycles_used = es.cycles_used;}
       es.params.reject_code
 
     ic0.msg_reject_msg_size<es>() : i32 =
+      if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
       return |es.params.reject_msg|
 
     ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
+      if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
     ic0.msg_reply_data_append<es>(src : i32, size : i32) =
+      if es.context ∉ {U, Q, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
     ic0.msg_reply<es>() =
+      if es.context ∉ {U, Q, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.response := Reply (es.reply_params.arg)
       es.cycles_available := 0
 
     ic0.msg_reject<es>(src : i32, size : i32) =
+      if es.context ∉ {U, Q, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
       es.cycles_available := 0
 
     ic0.msg_cycles_available<es>() : i64 =
+      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       if es.cycles_available >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.cycles_available
 
     ic0.msg_cycles_available128<es>(dst : i32) =
+      if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = es.cycles_available
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.msg_cycles_refunded<es>() : i64 =
+      if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       if es.params.cycles_refunded >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.params.cycles_refunded
 
     ic0.msg_cycles_refunded128<es>(dst : i32) =
+      if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = es.params.cycles_refunded
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.accept_message<es>() =
+      if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;} 
       if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
       es.ingress_filter = Accept
 
     ic0.msg_method_name_size<es>() : i32 =
+      if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
       return |es.method_name|
 
     ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
+      if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.method_name)
 
     ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
+      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
       es.cycles_accepted := es.cycles_accepted + amount
@@ -4461,6 +4687,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return amount
 
     ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
+      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let max_amount = max_amount_high * 2^64 + max_amount_low
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
@@ -4488,6 +4715,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         Stopping -> return 2
         Stopped  -> return 3
 
+    ic0.canister_version<es>() : i64 =
+      return es.params.sysenv.canister_version
+
+
     ic0.call_new<es>(
         callee_src  : i32,
         callee_size : i32,
@@ -4498,7 +4729,8 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         reject_fun  : i32,
         reject_env  : i32,
       ) =
-      discard_pending_call<es>()
+    if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}  
+    discard_pending_call<es>()
 
       if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
       es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
@@ -4525,10 +4757,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       }
 
     ic0.call_data_append<es> (src : i32, size : i32) =
+      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
     ic0.call_on_cleanup<es> (fun : i32, env : i32) =
+      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
       if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
@@ -4536,6 +4770,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
     ic0.call_cycles_add<es>(amount : i64) =
+      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
 
@@ -4543,6 +4778,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
     ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
+      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
@@ -4551,6 +4787,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
     ic0.call_peform<es>() : ( err_code : i32 ) =
+      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
       // are we below the threezing threshold?
@@ -4624,9 +4861,19 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
     ic0.time<es>() : i32 =
-      return es.params.time
+      return es.params.sysnev.time
+
+    ic0.global_timer_set<es>(timestamp: i64) : i64 =
+      if es.context ∉ {I, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+      let prev_global_timer = es.new_global_timer
+      es.new_global_timer := timestamp
+      if prev_global_timer = NoGlobalTimer
+      then return es.params.sysenv.global_timer
+      else return prev_global_timer
+
 
     ic0.certified_data_set<es>(src: i32, size: i32) =
+      if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       es.new_certified_data := es.wasm_state[src..src+size]
 
     ic0.data_certificate_present<es>() : i32 =
