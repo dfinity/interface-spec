@@ -356,21 +356,12 @@ https://cbor.io[cbor.io] and  https://en.wikipedia.org/wiki/CBOR[wikipedia.org] 
 
 For example, the following CBOR hex:
 ....
-D9 D9 F7 A3 67 63 6F 6E 74 65 6E 74 A4 6C 72 65 71 75 65 73 74 5F 74 79 70 65 64 63 61 6C 6C 6B 63 61 6E 69 73 74 65 72 5F 69 64 43 AB CD 01 6B 6D 65 74 68 6F 64 5F 6E 61 6D 65 69 73 61 79 5F 68 65 6C 6C 6F 63 61 72 67 48 00 61 73 6D 01 00 00 00 6A 73 65 6E 64 65 72 5F 73 69 67 44 DE AD BE EF 6D 73 65 6E 64 65 72 5F 70 75 62 6B 65 79 58 20 B7 A3 C1 2D C0 C8 C7 48 AB 07 52 5B 70 11 22 B8 8B D7 8F 60 0C 76 34 2D 27 F2 5E 5F 92 44 4C DE
+82 61 61 a1 61 62 61 63
 ....
 
 Can be converted into the following CBOR diagnostic format:
 ....
-55799({
-  "content": {
-    "request_type": "call",
-    "canister_id": h'ABCD01',
-    "method_name": "say_hello",
-    "arg": h'0061736D01000000'
-  },
-  "sender_sig": h'DEADBEEF',
-  "sender_pubkey": h'B7A3C12DC0C8C748AB07525B701122B88BD78F600C76342D27F25E5F92444CDE'
-})
+["a", {"b": "c"}]
 ....
 
 Particular concepts to note from the spec are:
