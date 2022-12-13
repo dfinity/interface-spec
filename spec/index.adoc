@@ -365,6 +365,7 @@ Can be converted into the following CBOR diagnostic format:
 ....
 
 Particular concepts to note from the spec are:
+
 * https://www.rfc-editor.org/rfc/rfc8949#name-specification-of-the-cbor-e[Specification of the CBOR Encoding]
 * https://www.rfc-editor.org/rfc/rfc8949#name-major-types[CBOR Major Types]
 * https://www.rfc-editor.org/rfc/rfc8949#self-describe[CBOR Self-Describe]
