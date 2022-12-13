@@ -301,7 +301,7 @@ You can also view the wrapping in https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQ
 ====
 --
 
-* The signature is a CBOR value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a map with three mandatory fields:
+* The signature is a CBOR (see <<cbor>>) value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799`, followed by a map with three mandatory fields:
   - `authenticator_data` (`blob`): WebAuthn authenticator data.
   - `client_data_json` (`text`): WebAuthn client data in JSON representation.
   - `signature` (`blob`): Signature as specified in the https://www.w3.org/TR/webauthn/#signature-attestation-types[WebAuthn w3c recommendation], which means DER encoding in the case of an ECDSA signature.
@@ -319,7 +319,7 @@ More concretely, it uses the `SubjectPublicKeyInfo` type used for other types of
 +
 The `BIT STRING` field `subjectPublicKey` is the blob `|signing_canister_id| · signing_canister_id · seed`, where `|signing_canister_id|` is the one-byte encoding of the the length of the `signing_canister_id` and `·` denotes blob concatenation.
 
-* The signature is a CBOR value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a map with two mandatory fields:
+* The signature is a CBOR (see <<cbor>>) value consisting of a data item with major type 6 (“Semantic tag”) and tag value `55799`, followed by a map with two mandatory fields:
 +
 --
 - `certificate` (`blob`): A CBOR-encoded certificate as per <<certification-encoding>>.
@@ -344,6 +344,36 @@ where `signing_canister_id` is the id of the signing canister and `reconstruct` 
 where `s` is the SHA-256 hash of the `seed` used in the public key and `m` is the SHA-256 hash of the payload.
 --
 
+[#supplementary-technologies]
+=== Supplementary Technologies
+
+[#cbor]
+==== CBOR
+
+https://www.rfc-editor.org/rfc/rfc8949[Concise Binary Object Representation (CBOR)] is a data format with a small code footprint, small message size and an extensible interface. CBOR is used extensively throughout the Internet Computer as the primary format for data exchange between components within the system.
+
+https://cbor.io[cbor.io] and  https://en.wikipedia.org/wiki/CBOR[wikipedia.org] contain a lot of helpful background information and relevant tools. https://cbor.me[cbor.me] in particular, is very helpful for converting between CBOR hex and diagnostic information.
+
+For example, the following CBOR hex:
+....
+82 61 61 a1 61 62 61 63
+....
+
+Can be converted into the following CBOR diagnostic format:
+....
+["a", {"b": "c"}]
+....
+
+Particular concepts to note from the spec are:
+
+* https://www.rfc-editor.org/rfc/rfc8949#name-specification-of-the-cbor-e[Specification of the CBOR Encoding]
+* https://www.rfc-editor.org/rfc/rfc8949#name-major-types[CBOR Major Types]
+* https://www.rfc-editor.org/rfc/rfc8949#self-describe[CBOR Self-Describe]
+
+[#cddl]
+==== CDDL
+
+The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. It is used at various points throughout this document to describe how certain data structures are encoded with CBOR.
 
 [#state-tree]
 == The system state tree
@@ -374,7 +404,7 @@ The public key of the subnet (a DER-encoded BLS key, see <<certification>>)
 
 * `/subnet/<subnet_id>/canister_ranges` (blob)
 +
-The set of canister ids assigned to this subnet, represented as a list of closed intervals of canister ids, ordered lexicographically, and encoded as CBOR according to this CDDL:
+The set of canister ids assigned to this subnet, represented as a list of closed intervals of canister ids, ordered lexicographically, and encoded as CBOR (see <<cbor>>) according to this CDDL (see <<cddl>>):
 +
 ....
 canister_ranges = tagged<[*canister_range]>
@@ -435,7 +465,7 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 
 * `/canister/<canister_id>/controllers` (blob):
 +
-The current controllers of the canister. The value consists of a CBOR data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`).
+The current controllers of the canister. The value consists of a CBOR (see <<cbor>>) data item with major type 6 (“Semantic tag”) and tag value `55799`, followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`, see <<cddl>>).
 
 * `/canister/<canister_id>/metadata/<name>` (blob):
 +
@@ -546,7 +576,7 @@ In order to read parts of the <<state-tree>>, the user makes a POST request to `
 * `sender`, `nonce`, `ingress_expiry`: See <<authentication>>
 * `paths` (sequence of paths): A list of paths, where a path is itself a sequence of blobs.
 
-The HTTP response to this request consists of a CBOR map with the following fields:
+The HTTP response to this request consists of a CBOR (see <<cbor>>) map with the following fields:
 
 * `certificate` (`blob`): A certificate (see <<certification>>).
 +
@@ -596,7 +626,7 @@ In order to make a query call to canister, the user makes a POST request to `/ap
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-If the call resulted in a reply, the response is a CBOR map with the following fields:
+If the call resulted in a reply, the response is a CBOR (see <<cbor>>) map with the following fields:
 
 * `status` (`text`): `replied`
 * `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
@@ -703,7 +733,7 @@ The following encodings of field values as blobs are used
 
 When signing requests or querying the status of a request (see <<state-tree-request-status>>) in the state tree, the user identifies the request using a _request id_, which is the <<hash-of-map, representation-independent hash>> of the `content` map of the original request. A request id must have length of 32 bytes.
 
-NOTE: The request id is independent of the representation of the request (currently only CBOR), and does not change if the specification adds further optional fields to a request type.
+NOTE: The request id is independent of the representation of the request (currently only CBOR, see <<cbor>>), and does not change if the specification adds further optional fields to a request type.
 
 NOTE: The recommended textual representation of a request id is a hexadecimal string with lower-case letters prefixed with '0x'.
 E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 1A, 1B, 1C, 1D, 1E, 1F]` should be displayed as `0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`.
@@ -771,9 +801,9 @@ Additionally, the Internet Computer provides an API endpoint to obtain various s
 /api/v2/status
 ....
 
-For this endpoint, the user performs a GET request, and receives a CBOR value with the following fields. The IC may include additional implementation-specific fields.
+For this endpoint, the user performs a GET request, and receives a CBOR (see <<cbor>>) value with the following fields. The IC may include additional implementation-specific fields.
 
-* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the internet computer aims to support, e.g. `0.8.1`. The implementation may also return `unversioned` to indicate that it does _not_ comply to a particular version, e.g. in between releases.
+* `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the Internet Computer aims to support, e.g. `0.8.1`. The implementation may also return `unversioned` to indicate that it does _not_ comply to a particular version, e.g. in between releases.
 * `impl_source` (string, optional): Identifies the implementation of the Internet Computer Protocol, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/ic`).
 * `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer Protocol implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
 * `impl_revision` (string, optional): The precise git revision of the Internet Computer Protocol implementation
@@ -788,9 +818,9 @@ possibly be signed by the node.
 [#api-cbor]
 === CBOR encoding of requests and responses
 
-Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in the body of the HTTP request or response, however, is https://en.wikipedia.org/wiki/CBOR[CBOR].
+Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in the body of the HTTP request or response, however, is CBOR (see <<cbor>>).
 
-Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799` (see https://tools.ietf.org/html/rfc7049#section-2.4.5[Self-Describe CBOR]), followed by a record.
+Concretely, it consists of a data item with major type 6 (“Semantic tag”) and tag value `55799`, followed by a record.
 
 Requests consist of an envelope record with keys `sender_sig` (a blob), `sender_pubkey` (a blob) and `content` (a record). The first two are metadata that are used for request authentication, while the last one is the actual content of the request.
 
@@ -798,18 +828,18 @@ The following encodings are used:
 
 * Strings: Major type 3 (“Text string”).
 * Blobs: Major type 2 (“Byte string”).
-* Nats: Major type 0 (“Unsigned integer”) if small enough to fit that type, else the https://tools.ietf.org/html/rfc7049#section-2.4.2[Bignum] format is used.
+* Nats: Major type 0 (“Unsigned integer”) if small enough to fit that type, else the https://www.rfc-editor.org/rfc/rfc8949#name-bignums[Bignum] format is used.
 * Records: Major type 5 (“Map of pairs of data items”), followed by the fields, where keys are encoded with major type 3 (“Text string”).
 * Arrays: Major type 4 ("Array of data items").
 
-As advised by https://tools.ietf.org/html/rfc7049#section-3[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
+As advised by https://www.rfc-editor.org/rfc/rfc8949#name-creating-cbor-based-protoco[section “Creating CBOR-Based Protocols”] of the CBOR spec, we clarify that:
 
 * Floating-point numbers may not be used to encode integers.
 * Duplicate keys are prohibited in CBOR maps.
 
 [TIP]
 ====
-A typical request would be (written in https://tools.ietf.org/html/rfc7049#section-6[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
+A typical request would be (written in https://www.rfc-editor.org/rfc/rfc8949#name-diagnostic-notation[CBOR diagnostic notation], which can be checked and converted on http://cbor.me/[cbor.me]):
 ....
 55799({
   "content": {
@@ -828,7 +858,7 @@ A typical request would be (written in https://tools.ietf.org/html/rfc7049#secti
 [#api-cddl]
 === CDDL description of requests and responses
 
-The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:{attachmentsdir}/requests.cddl[download the file].
+This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also link:{attachmentsdir}/requests.cddl[download the file] and see <<cddl>> for more information.
 
 [source,bash]
 ----
@@ -2014,7 +2044,7 @@ Delegations are _scoped_, i.e., they indicate which set of canister principals t
 [#certification-encoding]
 === Encoding of certificates
 
-The binary encoding of a certificate is a CBOR value according to the following CDDL. You can also link:{attachmentsdir}/certificates.cddl[download the file].
+The binary encoding of a certificate is a CBOR (see <<cbor>>) value according to the following CDDL (see <<cddl>>). You can also link:{attachmentsdir}/certificates.cddl[download the file].
 
 [source,bash]
 ----
@@ -2053,7 +2083,7 @@ avoided), but it is valid.
 // The following is checked in `impl/src/IC/Test/HashTree.hs`, so please keep
 // in sync
 
-This tree has the following CBOR encoding
+This tree has the following CBOR (see <<cbor>>) encoding
 ....
 8301830183024161830183018302417882034568656c6c6f810083024179820345776f726c6483024162820344676f6f648301830241638100830241648203476d6f726e696e67
 ....
