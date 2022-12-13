@@ -348,7 +348,7 @@ where `s` is the SHA-256 hash of the `seed` used in the public key and `m` is th
 === Supplementary Technologies
 
 [#cbor]
-=== CBOR
+==== CBOR
 
 https://www.rfc-editor.org/rfc/rfc8949[Concise Binary Object Representation (CBOR)] is a data format with a small code footprint, small message size and an extensible interface. CBOR is used extensively throughout the Internet Computer as the primary format for data exchange between components within the system.
 
