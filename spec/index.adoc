@@ -371,7 +371,7 @@ Particular concepts to note from the spec are:
 * https://www.rfc-editor.org/rfc/rfc8949#self-describe[CBOR Self-Describe]
 
 [#cddl]
-=== CDDL
+==== CDDL
 
 The https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR. It is used at various points throughout this document to describe how certain data structures are encoded with CBOR.
 
