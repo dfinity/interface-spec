@@ -345,7 +345,7 @@ where `s` is the SHA-256 hash of the `seed` used in the public key and `m` is th
 --
 
 [#supplementary-technologies]
-== Supplementary Technologies
+=== Supplementary Technologies
 
 [#cbor]
 === CBOR
