@@ -2642,7 +2642,7 @@ CanisterChangeOrigin
     }
   | FromCanister {
       canister_id : CanisterId;
-      canister_version : CanisterVersion;
+      canister_version : CanisterVersion | NoCanisterVersion;
     }
   | FromSystem
 CodeDeploymentMode
@@ -3123,6 +3123,7 @@ State after::
 ....
 if
   R = Return res
+  validate_sender_canister_version(res.new_calls, S.canister_version[M.receiver])
   res.cycles_used ≤ (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE)
   res.cycles_accepted ≤ Available
   (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
@@ -3198,6 +3199,12 @@ If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function
 
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would require a (unique) call to `ic0.reply`.
 Note also that the state changes are persisted even when the IC is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<rule-starvation>>).
+
+The function `validate_sender_canister_version` checks that the `sender_canister_version` matches the actual canister version of the sender in all calls to the management canister:
+....
+validate_sender_canister_version(new_calls, canister_version_from_system) =
+  ∀ call ∈ new_calls. (call.callee = ic_principal and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
+....
 
 The functions `query_as_update` and `system_task_as_update` turns a query function resp the heartbeat or global timer into an update function; this is merely a notational trick to simplify the rule:
 ....
