@@ -2499,11 +2499,8 @@ CallOrigin
   | FromCanister {
       calling_context : CallId;
       callback: Callback;
-      canister_version: CanisterVersion;
     }
-  | FromSystemTask {
-      canister_version: CanisterVersion;
-    }
+  | FromSystemTask
 CallCtxt = {
   canister : CanisterId;
   origin : CallOrigin;
@@ -2701,16 +2698,16 @@ simple_status(Stopped) = Stopped
 
 To convert `CallOrigin` into `CanisterChangeOrigin`, we define the following conversion function:
 ....
-canister_change_origin(principal, FromUser { … }) = FromUser {
+canister_change_origin(principal, _, FromUser { … }) = FromUser {
     user_id = principal
   }
-canister_change_origin(principal, FromCanister { canister_version = N, … }) = FromCanister {
+canister_change_origin(principal, sender_canister_version, FromCanister { … }) = FromCanister {
     canister_id = principal
-    canister_version = N
+    canister_version = sender_canister_version
   }
-canister_change_origin(principal, FromSystemTask { canister_version = N, … }) = FromCanister {
+canister_change_origin(principal, sender_canister_version, FromSystemTask) = FromCanister {
     canister_id = principal
-    canister_version = N
+    canister_version = sender_canister_version
   }
 ....
 
@@ -3030,9 +3027,7 @@ S with
       · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
-      origin = FromSystemTask {
-          canister_version = S.canister_version[C];
-      };
+      origin = FromSystemTask;
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
@@ -3069,9 +3064,7 @@ S with
       · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
-      origin = FromSystemTask {
-          canister_version = S.canister_version[C];
-      };
+      origin = FromSystemTask;
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
@@ -3150,7 +3143,6 @@ then
           origin = FromCanister {
             call_context = M.call_context;
             callback = call.callback;
-            canister_version = S.canister_version[M.receiver];
           };
           caller = M.receiver;
           callee = call.callee;
@@ -3330,7 +3322,7 @@ S with
       change_entries = {
         timestamp = CurrentTime
         canister_version = 0
-        origin = canister_change_origin(M.caller, M.origin)
+        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
         change = CanisterCreation
       }
     }
@@ -3386,7 +3378,7 @@ S with
         change_entries = H · {
             timestamp = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
-            origin = canister_change_origin(M.caller, M.origin);
+            origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
             change = ControllersChange {
               controllers = A.settings.controllers;
             };
@@ -3498,7 +3490,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, M.origin);
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeDeployment {
             mode = A.mode;
             module_hash = SHA-256(A.wasm_module);
@@ -3580,7 +3572,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, M.origin);
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeDeployment {
             mode = Upgrade;
             module_hash = SHA-256(A.wasm_module);
@@ -3624,7 +3616,7 @@ S with
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, M.origin);
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeUninstall;
         };
     }
@@ -3923,7 +3915,7 @@ S with
       change_entries = {
         timestamp = CurrentTime
         canister_version = 0
-        origin = canister_change_origin(M.caller, M.origin)
+        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
         change = CanisterCreation
       }
     }

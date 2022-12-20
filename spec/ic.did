@@ -16,6 +16,36 @@ type definite_canister_settings = record {
   freezing_threshold : nat;
 };
 
+type canister_change_origin = variant {
+  from_user : record {
+    user_id : user_id;
+  };
+  from_canister : record {
+    canister_id : canister_id;
+    canister_version : opt nat64;
+  };
+  from_system;
+}
+
+type canister_change = variant {
+  canister_creation;
+  code_uninstall;
+  code_deployment : record {
+    mode : variant {install; reinstall; upgrade};
+    module_hash : blob;
+  };
+  controllers_change : record {
+    controllers : vec principal;
+  };
+}
+
+type canister_change_entry = record {
+  timestamp : nat64;
+  canister_version : nat64;
+  origin : canister_change_origin;
+  change : canister_change;
+}
+
 type http_header = record { name: text; value: text };
 
 type http_response = record {
