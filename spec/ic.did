@@ -25,7 +25,7 @@ type canister_change_origin = variant {
     canister_version : opt nat64;
   };
   from_system;
-}
+};
 
 type canister_change = variant {
   canister_creation;
@@ -37,14 +37,14 @@ type canister_change = variant {
   controllers_change : record {
     controllers : vec principal;
   };
-}
+};
 
 type canister_change_entry = record {
   timestamp : nat64;
   canister_version : nat64;
   origin : canister_change_origin;
   change : canister_change;
-}
+};
 
 type http_header = record { name: text; value: text };
 

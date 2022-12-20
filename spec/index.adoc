@@ -1666,7 +1666,7 @@ The following parameters should be supplied for the call:
 The returned response contains the following fields:
 
 * `total_num_change_entries`: the total number of canister change entries that have been ever recorded in the history. This value does not change if the system drops the oldest canister change entries from the list of change entries.
-* `change_entries`: the list containing the most recent canister change entries. If `num_requested_change_entries` is provided, then this list contains that number of change entries or all change entries available in the system if more change entries are requested.
+* `change_entries`: the list containing the most recent canister change entries. If `num_requested_change_entries` is provided, then this list contains that number of change entries or all change entries available in the system if more change entries are requested than available in the system.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
@@ -2666,7 +2666,7 @@ CanisterChangeEntry = {
   change : CanisterChange;
 }
 CanisterHistory = {
-  total_num_changes : Nat;
+  total_num_change_entries : Nat;
   change_entries : [CanisterChangeEntry];
 }
 S = {
@@ -3324,7 +3324,7 @@ S with
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
-      total_num_changes = 1
+      total_num_change_entries = 1
       change_entries = {
         timestamp = CurrentTime
         canister_version = 0
@@ -3370,7 +3370,7 @@ Conditions::
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history[A.canister_id] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = H;
     }
 ....
@@ -3380,7 +3380,7 @@ S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
       canister_history[A.canister_id] = {
-        total_num_changes = N + 1;
+        total_num_change_entries = N + 1;
         change_entries = H · {
             timestamp = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
@@ -3469,7 +3469,7 @@ Conditions::
     Cycles_used ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history[A.canister_id] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = H;
     }
 ....
@@ -3492,7 +3492,7 @@ S with
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     canister_history[A.canister_id] = {
-      total_num_changes = N + 1;
+      total_num_change_entries = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
@@ -3549,7 +3549,7 @@ Conditions::
     Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history[A.canister_id] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = H;
     }
 ....
@@ -3574,7 +3574,7 @@ S with
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     canister_history[A.canister_id] = {
-      total_num_changes = N + 1;
+      total_num_change_entries = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
@@ -3608,7 +3608,7 @@ Conditions::
     M.arg = candid(A)
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history[A.canister_id] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = H;
     }
 ....
@@ -3618,7 +3618,7 @@ S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
     canister_history[A.canister_id] = {
-      total_num_changes = N + 1;
+      total_num_change_entries = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
@@ -3917,7 +3917,7 @@ S with
       balances[CanisterId] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
-      total_num_changes = 1
+      total_num_change_entries = 1
       change_entries = {
         timestamp = CurrentTime
         canister_version = 0
@@ -3964,7 +3964,6 @@ Conditions::
     RM.origin = FromCanister {
         call_context = Ctxt_id
         callback = Callback
-        …
       }
     not S.call_contexts[Ctxt_id].deleted
     S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
@@ -3994,7 +3993,6 @@ Conditions::
     RM.origin = FromCanister {
         call_context = Ctxt_id
         callback = Callback
-        …
       }
     S.call_contexts[Ctxt_id].deleted
     S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
@@ -4064,7 +4062,7 @@ Conditions::
 ....
     S.balances[CanisterId] = 0
     S.canister_history[CanisterId] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = H;
     }
 ....
@@ -4074,7 +4072,7 @@ S with
     canisters[CanisterId] = EmptyCanister
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
-      total_num_changes = N + 1;
+      total_num_change_entries = N + 1;
       change_entries = H · {
           timestamp = S.time[CanisterId];
           canister_version = S.canister_version[CanisterId] + 1
@@ -4165,7 +4163,7 @@ The list of canister change entries can be trimmed, but the total number of reco
 Conditions::
 ....
   S.canister_history[CanisterId] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = Older_change_entries · Newer_change_entries;
     }
   |Newer_change_entries| ≥ 1000
@@ -4174,7 +4172,7 @@ State after::
 ....
 S with
     canister_history[CanisterId] = {
-      total_num_changes = N;
+      total_num_change_entries = N;
       change_entries = Newer_change_entries;
     }
 ....
