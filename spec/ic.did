@@ -143,7 +143,7 @@ service ic : {
   provisional_create_canister_with_cycles : (record {
     amount: opt nat;
     settings : opt canister_settings;
-    specified_id: opt canister_id
+    specified_id: opt canister_id;
   }) -> (record {canister_id : canister_id});
   provisional_top_up_canister :
     (record { canister_id: canister_id; amount: nat }) -> ();
