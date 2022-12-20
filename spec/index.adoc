@@ -1664,8 +1664,9 @@ The following parameters should be supplied for the call:
 * `num_requested_change_entries`: optional, specifies the number of requested canister change entries. The call will be charged based on this parameter. If not provided, the maximum of `1000` will be used.
 
 The returned response contains the following fields:
+
 * `total_num_change_entries`: the total number of canister change entries that have been ever recorded in the history. This value does not change if the system drops the oldest canister change entries from the list of change entries.
-* `change_entries`: the list containing the most recent canister change entries. The list contains at most `num_requested_change_entries` canister change entries.
+* `change_entries`: the list containing the most recent canister change entries. If `num_requested_change_entries` is provided, then this list contains that number of change entries or all change entries available in the system if more change entries are requested.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
@@ -2500,7 +2501,7 @@ CallOrigin
       callback: Callback;
       canister_version: CanisterVersion;
     }
-  | FromSystem {
+  | FromSystemTask {
       canister_version: CanisterVersion;
     }
 CallCtxt = {
@@ -2707,7 +2708,7 @@ canister_change_origin(principal, FromCanister { canister_version = N, … }) = 
     canister_id = principal
     canister_version = N
   }
-canister_change_origin(principal, FromHeartbeat { canister_version = N, … }) = FromCanister {
+canister_change_origin(principal, FromSystemTask { canister_version = N, … }) = FromCanister {
     canister_id = principal
     canister_version = N
   }
@@ -3029,7 +3030,7 @@ S with
       · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
-      origin = FromSystem {
+      origin = FromSystemTask {
           canister_version = S.canister_version[C];
       };
       needs_to_respond = false;
@@ -3068,7 +3069,7 @@ S with
       · S.messages
     call_contexts[Ctxt_id] = {
       canister = C;
-      origin = FromSystem {
+      origin = FromSystemTask {
           canister_version = S.canister_version[C];
       };
       needs_to_respond = false;
@@ -3245,7 +3246,7 @@ If the call context is not for heartbeat or global timer and there is no call, d
 Conditions::
 ....
     S.call_contexts[Ctxt_id].needs_to_respond = true
-    S.call_contexts[Ctxt_id].origin ≠ FromSystem
+    S.call_contexts[Ctxt_id].origin ≠ FromSystemTask
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
@@ -3274,7 +3275,7 @@ Conditions::
       S.call_contexts[Ctxt_id].needs_to_respond = false
     ) or
     (
-      S.call_contexts[Ctxt_id].origin = FromSystem
+      S.call_contexts[Ctxt_id].origin = FromSystemTask
       ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
     )
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
@@ -3384,7 +3385,7 @@ S with
         total_num_changes = N + 1;
         change_entries = H · {
             timestamp = S.time[A.canister_id];
-            canister_version = S.canister_version[A.canister_id]
+            canister_version = S.canister_version[A.canister_id] + 1;
             origin = canister_change_origin(M.caller, M.origin);
             change = ControllersChange {
               controllers = A.settings.controllers;
@@ -3496,7 +3497,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
-          canister_version = S.canister_version[A.canister_id]
+          canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeDeployment {
             mode = A.mode;
@@ -3578,7 +3579,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
-          canister_version = S.canister_version[A.canister_id]
+          canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeDeployment {
             mode = Upgrade;
@@ -3622,7 +3623,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[A.canister_id];
-          canister_version = S.canister_version[A.canister_id]
+          canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, M.origin);
           change = CodeUninstall;
         };
@@ -4078,7 +4079,7 @@ S with
       total_num_changes = N + 1;
       change_entries = H · {
           timestamp = S.time[CanisterId];
-          canister_version = S.canister_version[CanisterId]
+          canister_version = S.canister_version[CanisterId] + 1
           origin = FromSystem;
           change = CodeUninstall;
         };
