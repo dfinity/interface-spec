@@ -2403,7 +2403,6 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
-  canister_version : CanisterVersion;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
