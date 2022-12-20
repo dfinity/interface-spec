@@ -3753,6 +3753,7 @@ S with
       canister_id = A.specified_id
     else:
       canister_id = CanisterId
+    canisters[canister_id] = EmptyCanister
     time[canister_id] = CurrentTime
     global_timer[canister_id] = 0
     if A.settings.controllers is not null:
