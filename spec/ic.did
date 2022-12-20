@@ -83,19 +83,25 @@ type millisatoshi_per_byte = nat64;
 
 service ic : {
   create_canister : (record {
-    settings : opt canister_settings
+    settings : opt canister_settings;
+    sender_canister_version : opt nat64;
   }) -> (record {canister_id : canister_id});
   update_settings : (record {
     canister_id : principal;
-    settings : canister_settings
+    settings : canister_settings;
+    sender_canister_version : opt nat64;
   }) -> ();
   install_code : (record {
     mode : variant {install; reinstall; upgrade};
     canister_id : canister_id;
     wasm_module : wasm_module;
     arg : blob;
+    sender_canister_version : opt nat64;
   }) -> ();
-  uninstall_code : (record {canister_id : canister_id}) -> ();
+  uninstall_code : (record {
+    canister_id : canister_id;
+    sender_canister_version : opt nat64;
+  }) -> ();
   start_canister : (record {canister_id : canister_id}) -> ();
   stop_canister : (record {canister_id : canister_id}) -> ();
   canister_status : (record {canister_id : canister_id}) -> (record {
@@ -105,6 +111,13 @@ service ic : {
       memory_size: nat;
       cycles: nat;
       idle_cycles_burned_per_day: nat;
+  });
+  canister_history : (record {
+      canister_id : canister_id;
+      num_requested_change_entries : opt nat64;
+  }) -> (record {
+      total_num_change_entries : nat64;
+      change_entries : vec canister_change_entry;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();

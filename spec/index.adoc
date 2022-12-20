@@ -219,7 +219,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, and _history_ are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, and _history_ (including canister _version_) are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
@@ -455,7 +455,7 @@ The certified data of the canister with the given id, see <<system-api-certified
 [#state-tree-canister-information]
 === Canister information
 
-Users have the ability to learn about the hash of the canister's module, its current controllers, history, and metadata in a certified way.
+Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
 
 * `/canister/<canister_id>/module_hash` (blob):
 +
@@ -466,23 +466,6 @@ If the canister is not empty, it exists and contains the SHA256 hash of the curr
 * `/canister/<canister_id>/controllers` (blob):
 +
 The current controllers of the canister. The value consists of a CBOR (see <<cbor>>) data item with major type 6 (“Semantic tag”) and tag value `55799`, followed by an array of principals in their binary form (CDDL `#6.55799([* bytes .size (0..29)])`, see <<cddl>>).
-
-* `/canister/<canister_id>/history/<change_index>` (blob):
-+
-The canister history consists of a list of canister change entries whose individual entries are accessible via this path. The `<change_index>` is encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding. The value consists of a CBOR value encoding the canister history change entry according to the following CDDL (the https://tools.ietf.org/html/rfc8610[Concise Data Definition Language (CDDL)] is a data description language for CBOR). You can also link:{attachmentsdir}/history.cddl[download the file].
-
-[source,bash]
-----
-include::{example}history.cddl[]
-----
-
-The system can drop the oldest canister change entries from the list to keep its length bounded (at least 1000 change entries are guaranteed to remain in the list), but the indices of the remaining change entries are not affected. The system state tree might not contain paths for all canister history change entries, but at least 20 most recent change entries (or all change entries if the canister history contains less than 20 change entries) are guaranteed to be present in the system state tree.
-
-Every canister change entry consists of the system timestamp at which the change was performed, its origin (a user, a canister, or system), and its kind (canister creation, code change, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the index into the originator's canister history when the originator initiated the change (represented as the total number of the originator's changes at that time). Code changes are described by their kind (code uninstall, code install, code reinstall, code upgrade) and, if applicable, the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
-
-* `/canister/<canister_id>/total_num_changes` (natural):
-+
-The total number of canister change entries that have been ever recorded in the history, encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding. This value does not change if the system drops the oldest canister change entries from the list of change entries. In particular, if the value at this path is positive, then the latest change entry is available in the history at `<change_index>` equal to the value at this path minus one.
 
 * `/canister/<canister_id>/metadata/<name>` (blob):
 +
@@ -610,8 +593,6 @@ All requested paths must have one of the following paths as prefix:
    - the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
- * `/canisters/<canister_id>/history`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
- * `/canisters/<canister_id>/total_num_changes`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
  * `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
    - canister with canister id `<canister_id>` does not exist or
    - canister with canister id `<canister_id>` is empty or
@@ -1589,6 +1570,8 @@ If set to 0, then memory growth of the canister will be best-effort and subject 
 +
 Default value: 0
 
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
 * `freezing_threshold` (`nat`)
@@ -1608,6 +1591,8 @@ Default value: 2592000 (approximately 30 days).
 Only _controllers_ of the canister can update settings. See <<ic-create_canister>> for a description of settings.
 
 Not including a setting in the `settings` record means not changing that field. The defaults described above are only relevant during canister creation.
+
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 [#ic-install_code]
 === IC method `install_code`
@@ -1634,6 +1619,8 @@ The system supports multiple encodings of the `wasm_module` field, as described 
   * If the `wasm_module` starts with byte sequence `[0x00, 'a', 's', 'm']`,  the system parses `wasm_module` as a raw WebAssembly binary.
   * If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
 [#ic-uninstall_code]
 === IC method `uninstall_code`
 
@@ -1647,6 +1634,8 @@ The canister is now <<canister-lifecycle,empty>>. In particular, any incoming or
 
 A canister after _uninstalling_ retains its _cycles_ balance, _controllers_, status, and allocations.
 
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
 [#ic-canister_status]
 === IC method `canister_status`
 
@@ -1659,6 +1648,24 @@ Indicates various information about the canister. It contains:
 * The cycle balance of the canister.
 
 Only the controllers of the canister or the canister itself can request its status.
+
+[#ic-canister-history]
+=== IC method `canister_history`
+
+Provides the history of the canister. Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller’s balance implicitly (e.g., as for inter-canister calls). Anyone can call this method.
+
+The canister history consists of a list of canister change entries. Every canister change entry consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user, a canister, or system), and its kind (canister creation, code uninstallation, code deployment, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change. Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
+
+The system can drop the oldest canister change entries from the list to keep its length bounded (at least `1000` change entries are guaranteed to remain in the list).
+
+The following parameters should be supplied for the call:
+
+* `canister_id`: the canister ID of the canister whose history is requested.
+* `num_requested_change_entries`: optional, specifies the number of requested canister change entries. The call will be charged based on this parameter. If not provided, the maximum of `1000` will be used.
+
+The returned response contains the following fields:
+* `total_num_change_entries`: the total number of canister change entries that have been ever recorded in the history. This value does not change if the system drops the oldest canister change entries from the list of change entries.
+* `change_entries`: the list containing the most recent canister change entries. The list contains at most `num_requested_change_entries` canister change entries.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
@@ -2395,7 +2402,7 @@ MethodCall = {
   arg: Blob;
   transferred_cycles: Nat;
   callback: Callback;
-  canister_version : CanisterStateCounter;
+  canister_version : CanisterVersion;
 }
 
 UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -2491,10 +2498,10 @@ CallOrigin
   | FromCanister {
       calling_context : CallId;
       callback: Callback;
-      canister_version: CanisterStateCounter;
+      canister_version: CanisterVersion;
     }
   | FromSystem {
-      canister_version: CanisterStateCounter;
+      canister_version: CanisterVersion;
     }
 CallCtxt = {
   canister : CanisterId;
@@ -2638,7 +2645,7 @@ CanisterChangeOrigin
     }
   | FromCanister {
       canister_id : CanisterId;
-      canister_version : CanisterStateCounter;
+      canister_version : CanisterVersion;
     }
   | FromSystem
 CodeDeploymentMode
@@ -2657,7 +2664,7 @@ CanisterChange
     }
 CanisterChangeEntry = {
   timestamp : Timestamp;
-  canister_version : CanisterStateCounter;
+  canister_version : CanisterVersion;
   origin : CanisterChangeOrigin;
   change : CanisterChange;
 }
@@ -4245,8 +4252,6 @@ may_read_path(S, _, ["request_status", Rid] · _) =
   ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
 may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
 may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
-may_read_path(S, _, ["canister", cid, "history"] · _) = cid == ECID
-may_read_path(S, _, ["canister", cid, "total_num_changes"] · _) = cid == ECID
 may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
   (cid ∉ dom(S.canisters[cid]) ∨
    S.canisters[cid] = EmptyCanister ∨
@@ -4272,8 +4277,6 @@ state_tree(S) = {
     { canister_id :
         { "module_hash" : SHA256(C.raw_module) | if C ≠ EmptyCanister } ∪
         { "controllers" : CBOR(S.controllers[canister_id]) } ∪
-        { "history" : { LEB128(i) : CBOR(S.canister_history[canister_id].change_entries[i]) | max(0, S.canister_history[canister_id].total_num_changes - 20) ≤ i < S.canister_history[canister_id].total_num_changes } } ∪
-        { "total_num_changes" : LEB128(S.canister_history[canister_id].total_num_changes) } ∪
         { "metadata": { name: blob | (name, blob) ∈ S.canisters[canister_id].public_custom_sections ∪ S.canisters[canister_id].private_custom_sections } }
     | (canister_id, C) ∈ S.canisters };
 }
