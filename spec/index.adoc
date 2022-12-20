@@ -1791,7 +1791,7 @@ NOTE: Currently, the Internet Computer mainnet only supports URLs that resolve t
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 
-As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`).
+As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister’s balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id.
 
 Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
 
@@ -3896,27 +3896,32 @@ Conditions::
     M.arg = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom(S.canisters)
+    A.specified_id ∉ dom(S.canisters)
 ....
 State after::
 ....
 S with
-    canisters[CanisterId] = EmptyCanister
-    time[CanisterId] = CurrentTime
-    global_timer[CanisterId] = 0
+    if A.specified_id is not null:
+      canister_id = A.specified_id
+    else:
+      canister_id = CanisterId
+    canisters[canister_id] = EmptyCanister
+    time[canister_id] = CurrentTime
+    global_timer[canister_id] = 0
     if A.settings.controllers is not null:
-      controllers[CanisterId] = A.settings.controllers
+      controllers[canister_id] = A.settings.controllers
     else:
-      controllers[CanisterId] = [M.caller]
+      controllers[canister_id] = [M.caller]
     if A.settings.freezing_threshold is not null:
-      freezing_threshold[CanisterId] = A.settings.freezing_threshold
+      freezing_threshold[canister_id] = A.settings.freezing_threshold
     else:
-      freezing_threshold[CanisterId] = 2592000
+      freezing_threshold[canister_id] = 2592000
     if A.amount is not null:
-      balances[CanisterId] = A.amount
+      balances[canister_id] = A.amount
     else:
-      balances[CanisterId] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
-    certified_data[CanisterId] = ""
-    canister_history[CanisterId] = {
+      balances[canister_id] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
+    certified_data[canister_id] = ""
+    canister_history[canister_id] = {
       total_num_change_entries = 1
       change_entries = {
         timestamp = CurrentTime
@@ -3928,11 +3933,11 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = canister_id}))
         refunded_cycles = M.transferred_cycles
       }
-    canister_status[CanisterId] = Running
-    canister_version[CanisterId] = 0
+    canister_status[canister_id] = Running
+    canister_version[canister_id] = 0
 ....
 
 ==== IC Management Canister: Top up canister
