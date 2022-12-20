@@ -3744,7 +3744,6 @@ Conditions::
     is_system_assigned CanisterId
     CanisterId ∉ dom(S.canisters)
     A.specified_id ∉ dom(S.canisters)
-
 ....
 State after::
 ....
