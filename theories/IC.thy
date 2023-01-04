@@ -1639,9 +1639,9 @@ definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     (case parse_wasm_mod w of Some m \<Rightarrow>
       parse_public_custom_sections w \<noteq> None \<and>
       parse_private_custom_sections w \<noteq> None \<and>
-    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some ctrls, Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
+    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
       ((mode = encode_string ''install'' \<and> (case list_map_get (canisters S) cid of Some None \<Rightarrow> True | _ \<Rightarrow> False)) \<or> mode = encode_string ''reinstall'') \<and>
       cer \<in> ctrls \<and>
       (case canister_module_init m (cid, ar, cer, env) of Inl _ \<Rightarrow> False
@@ -1656,9 +1656,9 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some mode, Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr>;
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr>;
       (new_state, new_certified_data, new_global_timer, cyc_used) = (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow>
         (init_return.new_state ret, init_return.new_certified_data ret, init_return.new_global_timer ret, init_return.cycles_used ret)) in
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
@@ -1675,9 +1675,9 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, '
     (case (candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
       (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> init_return.cycles_used ret))))))"
 
 lemma ic_code_installation_cycles_inv:
@@ -1703,7 +1703,7 @@ lemma ic_code_installation_ic_inv:
   assumes "ic_code_installation_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_installation_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx timer where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1715,7 +1715,6 @@ proof -
     "list_map_get (balances S) cid = Some bal"
     "list_map_get (canister_status S) cid = Some can_status"
     "list_map_get (canister_version S) cid = Some idx"
-    "list_map_get (global_timer S) cid = Some timer"
     using assms
     by (auto simp: ic_code_installation_pre_def split: message.splits option.splits)
   show ?thesis
