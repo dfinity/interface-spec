@@ -3351,7 +3351,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
       time = S.time[A.canister_id];
-      global_timer = S.global_timer[A.canister_id];
+      global_timer = 0;
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
