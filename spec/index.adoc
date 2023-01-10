@@ -2742,7 +2742,7 @@ delegated_senders(D)
 A `Request` has an effective canister id according to the rules in <<#http-effective-canister-id>>:
 
 ....
-is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ....
@@ -4775,7 +4775,7 @@ ic0.time<es>() : i32 =
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
-  if es.context ∉ {I, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
   let prev_global_timer = es.new_global_timer
   es.new_global_timer := timestamp
   if prev_global_timer = NoGlobalTimer
