@@ -2742,7 +2742,7 @@ delegated_senders(D)
 A `Request` has an effective canister id according to the rules in <<#http-effective-canister-id>>:
 
 ....
-is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, p)
+is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ....
