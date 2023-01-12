@@ -24,7 +24,6 @@ type canister_change_origin = variant {
     canister_id : canister_id;
     canister_version : opt nat64;
   };
-  from_system;
 };
 
 type canister_change = variant {

@@ -219,7 +219,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, and _history_ (including canister _version_) are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, canister _version_, and total number of canister change entries are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
@@ -1654,9 +1654,9 @@ Only the controllers of the canister or the canister itself can request its stat
 
 Provides the history of the canister. Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller’s balance implicitly (e.g., as for inter-canister calls). Anyone can call this method.
 
-The canister history consists of a list of canister change entries. Every canister change entry consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user, a canister, or system), and its kind (canister creation, code uninstallation, code deployment, or controllers change). The change origin can be from system if a canister is uninstalled because it ran out of cycles. Otherwise, the change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change. Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
+The canister history consists of a list of canister change entries. Every canister change entry consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its kind (canister creation, code uninstallation, code deployment, or controllers change). The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change. Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
-The system can drop the oldest canister change entries from the list to keep its length bounded (at least `1000` change entries are guaranteed to remain in the list).
+The system can drop the oldest canister change entries from the list to keep its length bounded (at least `1000` change entries are guaranteed to remain in the list). The system also drop all canister change entries if the canister runs out of cycles.
 
 The following parameters should be supplied for the call:
 
@@ -2644,7 +2644,6 @@ CanisterChangeOrigin
       canister_id : CanisterId;
       canister_version : CanisterVersion | NoCanisterVersion;
     }
-  | FromSystem
 CodeDeploymentMode
   = Install
   | Reinstall
@@ -4061,7 +4060,7 @@ S with
 
 ==== Canister out of cycles
 
-Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstall>>) and the allocations are set to zero (NB: allocations are currently not modeled in the formal model):
+Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstall>>), the canister history change entries dropped, and the allocations are set to zero (NB: allocations are currently not modeled in the formal model):
 
 Conditions::
 ....
@@ -4077,13 +4076,8 @@ S with
     canisters[CanisterId] = EmptyCanister
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
-      total_num_change_entries = N + 1;
-      change_entries = H · {
-          timestamp = S.time[CanisterId];
-          canister_version = S.canister_version[CanisterId] + 1
-          origin = FromSystem;
-          change = CodeUninstall;
-        };
+      total_num_change_entries = N;
+      change_entries = [];
     }
     canister_version[CanisterId] = S.canister_version[CanisterId] + 1
     global_timer[CanisterId] = 0
