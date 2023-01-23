@@ -1,6 +1,16 @@
 [#changelog]
 == Changelog
 
+[#unreleased]
+=== ∞ (unreleased)
+* Spec: User delegations include a principal scope
+
+[#0_18_9]
+=== 0.18.9 (2022-12-06)
+* Global timers 
+* Canister version
+* Clarifications for HTTP requests & Bitcoin integration costs
+
 [#0_18_8]
 === 0.18.8 (2022-11-09)
 * Updated HTTP request API
