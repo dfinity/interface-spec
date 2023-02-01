@@ -1656,7 +1656,7 @@ Provides the history of the canister. Cycles to pay for the call must be explici
 
 The canister history consists of a list of canister change entries. Every canister change entry consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its kind (canister creation, code uninstallation, code deployment, or controllers change). The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change. Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
-The system can drop the oldest canister change entries from the list to keep its length bounded (at least `1000` change entries are guaranteed to remain in the list). The system also drop all canister change entries if the canister runs out of cycles.
+The system can drop the oldest canister change entries from the list to keep its length bounded (at least `1000` change entries are guaranteed to remain in the list). The system also drops all canister change entries if the canister runs out of cycles.
 
 The following parameters should be supplied for the call:
 
@@ -2640,10 +2640,10 @@ CanStatus
   | Stopped
 CanisterChangeOrigin
   = FromUser {
-      user_id : UserId;
+      user_id : PrincipalId;
     }
   | FromCanister {
-      canister_id : CanisterId;
+      canister_id : PrincipalId;
       canister_version : CanisterVersion | NoCanisterVersion;
     }
 CodeDeploymentMode

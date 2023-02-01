@@ -1,5 +1,4 @@
 type canister_id = principal;
-type user_id = principal;
 type wasm_module = blob;
 
 type canister_settings = record {
@@ -18,10 +17,10 @@ type definite_canister_settings = record {
 
 type canister_change_origin = variant {
   from_user : record {
-    user_id : user_id;
+    user_id : principal;
   };
   from_canister : record {
-    canister_id : canister_id;
+    canister_id : principal;
     canister_version : opt nat64;
   };
 };
