@@ -975,7 +975,7 @@ During these steps, no other entry point of the old or new canister is invoked. 
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
-[#system-api-eviction]
+[#system-api-canister-eviction]
 ==== Canister eviction
 
 Eviction is a special type of canister upgrade that skips execution of the `canister_pre_upgrade` method on the old canister instance.
