@@ -985,7 +985,7 @@ NOTE: Canister eviction can lead to data loss. Use it only as the last resort an
 
 The IC executes canister eviction as follows:
 
- 1. Discard the old canister version except of its <<stable memory>>.
+ 1. Discard the old canister version except of its <<system-api-stable-memory,stable memory>>.
  2. Instantiate the new module, including the execution of `(start)`, with a fresh WebAssembly state.
  3. Invoke `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call (<<ic-install_code>>).
 
