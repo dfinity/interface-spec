@@ -2183,7 +2183,7 @@ The Gateway needs to know the canister id of the canister to talk to, and obtain
 
 4. Check whether there is a `canisterID` parameter in the URL.
 
-5. Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id`- and `x-ic-gateway`-header, use the canister ID specified in the header.
+5. Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID specified in the header.
 
 6. Else fail and handle the request as a Web2 request.
 
