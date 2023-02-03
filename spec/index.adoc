@@ -2165,22 +2165,27 @@ NOTE: Canisters not using these features can completely leave out the `streaming
 
 The Gateway needs to know the canister id of the canister to talk to, and obtains that information from the hostname as follows:
 
-1. Check that the hostname, taken from the `Host` field of the HTTP request, is of the form `<name>.raw.ic0.app` or `<name>.ic0.app`, or fail.
-
-2. If the `<name>` is in the following table, use the given canister ids:
+1. If the hostname is in the following table, use the given canister ids:
 +
 .Canister hostname resolution
-|============================================
-| Hostname     | Canister id
-| `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
-| `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai`
-| `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai`
-| `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
-|============================================
+|=====================================================
+| Hostname             | Canister id
+| `identity.ic0.app`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
+| `nns.ic0.app`        | `qoctq-giaaa-aaaaa-aaaea-cai`
+| `dscvr.one`          | `h5aet-waaaa-aaaab-qaamq-cai`
+| `dscvr.ic0.app`      | `h5aet-waaaa-aaaab-qaamq-cai`
+| `personhood.ic0.app` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
+|=====================================================
 
-3. Else, if `<name>` is a valid textual encoding of a principal, use that principal as the canister id.
+2. Check whether the hostname is a _raw_ hostname (e.g., `<name>.raw.ic0.app`). If it is the case, fail and handle the request as a Web2 request, otherwise continue.
 
-4. Else fail.
+3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. If there is a canister ID embedded in the hostname, use it.
+
+4. Check whether there is a `canisterID` parameter in the URL.
+
+5. Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id`- and `x-ic-gateway`-header, use the canister ID specified in the header.
+
+6. Else fail and handle the request as a Web2 request.
 
 If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app` it is a _raw_ hostname.
 
