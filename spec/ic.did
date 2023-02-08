@@ -90,7 +90,7 @@ service ic : {
     settings : canister_settings
   }) -> ();
   install_code : (record {
-    mode : variant {install; reinstall; upgrade};
+    mode : variant {install; reinstall; upgrade; upgrade_and_drop_stable_memory};
     canister_id : canister_id;
     wasm_module : wasm_module;
     arg : blob;
