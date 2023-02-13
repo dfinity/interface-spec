@@ -1570,8 +1570,6 @@ If set to 0, then memory growth of the canister will be best-effort and subject 
 +
 Default value: 0
 
-Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
-
 * `freezing_threshold` (`nat`)
 +
 Must be a number between 0 and 2^64^-1, inclusively, and indicates a length of time in seconds.
@@ -1582,6 +1580,7 @@ Calls to a frozen canister will be rejected (like for a stopping canister). Addi
 +
 Default value: 2592000 (approximately 30 days).
 
+Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
 [#ic-update_settings]
 === IC method `update_settings`
