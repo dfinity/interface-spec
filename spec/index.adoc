@@ -2181,7 +2181,11 @@ The Gateway needs to know the canister id of the canister to talk to, and obtain
 
 3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. The part of the hostname to the right of the canister ID, is the gateway (e.g., `ic0.app` is the gateway for `rdmx6-jaaaa-aaaaa-aaadq-cai.ic0.app`). If there is a canister ID embedded in the hostname, use it.
 
-4. Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID with the gateway specified in the headers.
+4. Check whether the canister is hosted on the IC using a custom domain. There are two options:
+
+  * Check whether there is a TXT record containing a canister ID at the `_canister-id`-subdomain (e.g., to see whether `foo.com` is hosted on the IC, make a DNS lookup for the TXT record of `_canister-id.foo.com`);
+
+  * Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID with the gateway specified in the headers.
 
 5. Else fail and handle the request as a Web2 request.
 
