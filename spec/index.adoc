@@ -562,7 +562,7 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 
 The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
 
-This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister change will not be changed by sending a call request type for a query method.
+This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
 NOTE: The functionality exposed via the <<ic-management-canister>> can be used this way.
 
