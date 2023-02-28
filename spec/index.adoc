@@ -1467,8 +1467,7 @@ The canister can check whether a given principal is one of its controllers.
 
 `+ic0.is_controller : (src : i32, size: i32) -> (result: i32)+`
 
-Checks whether the principal identified by `src`/`size` is one of the controllers of the canister. If yes, then a value of 1 is returned,
-otherwise a 0 is returned. It can be called multiple times.
+Checks whether the principal identified by `src`/`size` is one of the controllers of the canister. If yes, then a value of 1 is returned, otherwise a 0 is returned. It can be called multiple times.
 
 This system call traps if `src+size` exceeds the size of the WebAssembly memory.
 
