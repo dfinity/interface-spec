@@ -637,7 +637,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 * `status` (`text`): `rejected`
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
-* `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
+* `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
@@ -664,7 +664,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 * `status` (`text`): `rejected`
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
-* `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
+* `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
