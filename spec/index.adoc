@@ -4076,7 +4076,7 @@ Conditions::
   }
 ....
 Read response::
-* If `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Trap trap` then
+* If `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Trap trap` or `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Return {response = NoResponse; …}` then
 +
 ....
 {status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>}
