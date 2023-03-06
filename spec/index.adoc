@@ -4175,12 +4175,12 @@ Conditions::
   S.system_time <= Q.ingress_expiry
 ....
 Read response::
-* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = Return {response = Reject (code, msg); …}` (note that `code = CANISTER_REJECT` in this case) then
+* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (code, msg), _)` (note that `code = CANISTER_REJECT` in this case) then
 +
 ....
 {status: rejected; reject_code: CANISTER_REJECT: reject_message: <msg>, error_code: <implementation-specific>}
 ....
-* Else if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = Return {response = Reply R; …}` then
+* Else if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
 +
 ....
 {status: success; reply: { arg : R } }
