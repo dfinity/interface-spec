@@ -478,7 +478,7 @@ It is recommended for the canister to have a custom section called "icp:public c
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
 
-* At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, state-changing) calls.
+* At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
 * At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 * At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
 * At `/api/v2/status` the user can retrieve status information about the Internet Computer.
@@ -562,7 +562,7 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 
 The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
 
-This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response.
+This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
 NOTE: The functionality exposed via the <<ic-management-canister>> can be used this way.
 
@@ -725,6 +725,8 @@ The following encodings of field values as blobs are used
 * Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
 * Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+* Integers are encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Signed_LEB128[Signed LEB128] encoding.
+  For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
 * Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
 * Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
 
@@ -1570,10 +1572,6 @@ If set to 0, then memory growth of the canister will be best-effort and subject 
 +
 Default value: 0
 
-The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
-
-Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
-
 * `freezing_threshold` (`nat`)
 +
 Must be a number between 0 and 2^64^-1, inclusively, and indicates a length of time in seconds.
@@ -1584,6 +1582,9 @@ Calls to a frozen canister will be rejected (like for a stopping canister). Addi
 +
 Default value: 2592000 (approximately 30 days).
 
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
+Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
 [#ic-update_settings]
 === IC method `update_settings`
@@ -2194,22 +2195,29 @@ NOTE: Canisters not using these features can completely leave out the `streaming
 
 The Gateway needs to know the canister id of the canister to talk to, and obtains that information from the hostname as follows:
 
-1. Check that the hostname, taken from the `Host` field of the HTTP request, is of the form `<name>.raw.ic0.app` or `<name>.ic0.app`, or fail.
-
-2. If the `<name>` is in the following table, use the given canister ids:
+1. If the hostname is in the following table, use the given canister ids:
 +
 .Canister hostname resolution
-|============================================
-| Hostname     | Canister id
-| `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
-| `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai`
-| `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai`
-| `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
-|============================================
+|=====================================================
+| Hostname             | Canister id
+| `identity.ic0.app`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
+| `nns.ic0.app`        | `qoctq-giaaa-aaaaa-aaaea-cai`
+| `dscvr.one`          | `h5aet-waaaa-aaaab-qaamq-cai`
+| `dscvr.ic0.app`      | `h5aet-waaaa-aaaab-qaamq-cai`
+| `personhood.ic0.app` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
+|=====================================================
 
-3. Else, if `<name>` is a valid textual encoding of a principal, use that principal as the canister id.
+2. Check whether the hostname is a _raw_ hostname (e.g., `<name>.raw.ic0.app`). If it is the case, fail and handle the request as a Web2 request, otherwise continue.
 
-4. Else fail.
+3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. The part of the hostname to the right of the canister ID, is the gateway (e.g., `ic0.app` is the gateway for `rdmx6-jaaaa-aaaaa-aaadq-cai.ic0.app`). If there is a canister ID embedded in the hostname, use it.
+
+4. Check whether the canister is hosted on the IC using a custom domain. The client-side implementation can choose one of the following two options:
+
+  * Check whether there is a TXT record containing a canister ID at the `_canister-id`-subdomain (e.g., to see whether `foo.com` is hosted on the IC, make a DNS lookup for the TXT record of `_canister-id.foo.com`);
+
+  * Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID with the gateway specified in the headers.
+
+5. Else fail and handle the request as a Web2 request.
 
 If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app` it is a _raw_ hostname.
 
