@@ -4103,6 +4103,7 @@ Canister composite query calls to `/api/v2/canister/<ECID>/composite_query` can 
 
 During the execution of a composite query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
+We define an auxiliary method that handles calls from composite query methods by performing a DFS call graph traversal.
 ....
 composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
   let Mod = S.canisters[Canister_id].module
