@@ -4494,6 +4494,7 @@ composite_query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
+    new_state = es.wasm_state;
     new_calls = es.calls;
     response = es.response;
     cycles_used = es.cycles_used;
