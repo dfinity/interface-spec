@@ -4490,7 +4490,7 @@ composite_query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
       wasm_state = wasm_state;
       params = empty_params with { arg = arg; caller = caller; sysenv }
       balance = sysenv.balance
-      context = Q
+      context = CQ
     }
   try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
   Return {
