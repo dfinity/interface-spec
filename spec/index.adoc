@@ -2669,6 +2669,7 @@ S = {
   freezing_threshold : CanisterId ↦ Nat;
   canister_status: CanisterId ↦ CanStatus;
   canister_version: CanisterId ↦ CanisterVersion;
+  canister_subnet : CanisterId ↦ Principal;
   time : CanisterId ↦ Timestamp;
   global_timer : CanisterId ↦ Timestamp;
   balances: CanisterId ↦ Nat;
@@ -2698,6 +2699,7 @@ The initial state of the IC is
   freezing_threshold = ();
   canister_status = ();
   canister_version = ();
+  canister_subnet = ();
   time = ();
   global_timer = ();
   balances = ();
@@ -3303,6 +3305,7 @@ S with
       }
     canister_status[CanisterId] = Running
     canister_version[CanisterId] = 0
+    canister_subnet[CanisterId] = Subnet
 ....
 
 This uses the predicate
@@ -3727,6 +3730,7 @@ S with
     freezing_threshold[A.canister_id] = (deleted)
     canister_status[A.canister_id] = (deleted)
     canister_version[A.canister_id] = (deleted)
+    canister_subnet[A.canister_id] = (deleted)
     time[A.canister_id] = (deleted)
     global_timer[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
@@ -3835,6 +3839,7 @@ S with
       }
     canister_status[canister_id] = Running
     canister_version[canister_id] = 0
+    canister_subnet[canister_id] = Subnet
 ....
 
 ==== IC Management Canister: Top up canister
@@ -4135,9 +4140,10 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
               let (Call, _) = Calls
               let (Response', Cycles_used') = composite_query_helper(S, Cycles, Canister_id, Call.callee, Call.method_name, Call.arg)
               Cycles := Cycles - Cycles_used'
-              if Cycles < MAX_CYCLES_PER_RESPONSE
+              if Cycles < MAX_CYCLES_PER_RESPONSE or
+                 S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
               then
-                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles or calling to another subnet
               let F' = Mod.callbacks(Call.callback, Response', 0, Env, 0)
               let R'' = F'(W')
               if R'' = Trap trap''
