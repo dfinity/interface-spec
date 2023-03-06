@@ -644,7 +644,7 @@ Canister methods that do not change the canister state can be executed more effi
 [#http-composite-query]
 === Request: Composite query call
 
-A composite query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “composite query methods” or “query methods” by the canister can be called this way. In contrast to a query call, a composite query call can make further calls to composite query methods of canisters on the same subnet.
+A composite query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “composite query methods” or “query methods” by the canister can be called this way. In contrast to a query call, a composite query call can make further calls to query and composite query methods of canisters on the same subnet.
 
 In order to make a composite query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/composite_query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
@@ -4122,7 +4122,7 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
   if S.canisters[Canister_id] ≠ EmptyCanister and
      S.canister_status[Canister_id] = Running and
      S.balances[Canister_id] >= freezing_limit(S, Canister_id) and
-     Method_name ∈ dom(S.canisters[Canister_id].module.composite_query_methods) and
+     Method_name ∈ dom(Mod.composite_query_methods) and
      Cycles >= MAX_CYCLES_PER_MESSAGE
   then
      let W = S.canisters[Canister_id].wasm_state
@@ -4137,13 +4137,15 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
         then
            while Calls ≠ []
            do
-              let (Call, _) = Calls
+              let [Call; _] = Calls
+              if S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
+              then
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
               let (Response', Cycles_used') = composite_query_helper(S, Cycles, Canister_id, Call.callee, Call.method_name, Call.arg)
               Cycles := Cycles - Cycles_used'
-              if Cycles < MAX_CYCLES_PER_RESPONSE or
-                 S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
+              if Cycles < MAX_CYCLES_PER_RESPONSE
               then
-                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles or calling to another subnet
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
               let F' = Mod.callbacks(Call.callback, Response', 0, Env, 0)
               let R'' = F'(W')
               if R'' = Trap trap''
@@ -4173,7 +4175,7 @@ Conditions::
   S.system_time <= Q.ingress_expiry
 ....
 Read response::
-* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = Return {response = Reject (code, msg); …}` then `code = CANISTER_REJECT` and
+* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, Q.sender, Q.canister_id, Q.method_name, Q.arg) = Return {response = Reject (code, msg); …}` (note that `code = CANISTER_REJECT` in this case) then
 +
 ....
 {status: rejected; reject_code: CANISTER_REJECT: reject_message: <msg>, error_code: <implementation-specific>}
