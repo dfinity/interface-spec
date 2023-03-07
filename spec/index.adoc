@@ -4103,7 +4103,7 @@ Canister composite query calls to `/api/v2/canister/<ECID>/composite_query` can 
 
 During the execution of a composite query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
-We define an auxiliary method that handles calls from composite query methods by performing a DFS call graph traversal.
+We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal.
 ....
 composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
   let Mod = S.canisters[Canister_id].module
@@ -4138,7 +4138,8 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
         then
            while Calls ≠ []
            do
-              let [Call; _] = Calls
+              let Calls' · Call · Calls''  = Calls
+              Calls := Calls' · Calls''
               if S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
@@ -4157,7 +4158,7 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
                  Cycles := Cycles - Cycles_used''
                  if Response'' = NoResponse
                  then
-                    Calls := Calls'' · Calls // DFS call graph traversal
+                    Calls := Calls'' · Calls
                  else
                     Return (Response'', Cycles)
            Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // canister did not respond
