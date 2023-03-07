@@ -561,13 +561,12 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 * `arg` (`blob`): Argument to pass to the canister method
 
 The HTTP response to this request can have the following responses:
+
 * 202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use <<http-read-state,`read_state`>> to determine the status of the call.
 * 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
-....
-`reject_code` (`nat`): The reject code (see <<reject-codes>>).
-`reject_message` (`text`): a textual diagnostic message.
-`error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
-....
+** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+** `reject_message` (`text`): a textual diagnostic message.
+** `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
 * 4xx HTTP status when the is error caused by the client.
 * 5xx HTTP status when the server is aware that it has encountered an error or is otherwise incapable of performing the request. 
 
