@@ -725,6 +725,8 @@ The following encodings of field values as blobs are used
 * Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
 * Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128[Unsigned LEB128] encoding.
   For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+* Integers are encoded using the shortest form https://en.wikipedia.org/wiki/LEB128#Signed_LEB128[Signed LEB128] encoding.
+  For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
 * Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
 * Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
 
