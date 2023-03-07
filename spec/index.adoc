@@ -71,7 +71,7 @@ The public entry points of canisters are called _methods_. Methods can be declar
 
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
-External calls can be update calls, which can call update and query methods, query calls, which can _only_ call query methods, and composite query calls, which can _only_ call query and composite query methods.
+External calls can be update calls, which can call update and query methods, and query calls, which can _only_ call query and composite query methods.
 Inter-canister calls can call update and query methods (just like update calls). Note that calls from a canister to itself also count as "inter-canister".
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
@@ -139,7 +139,7 @@ NOTE: Derived IDs are currently not explicitly used in this document, but they m
 
 4. _Anonymous id_
 +
-This has the form `0x04`, and is used for the anonymous caller. It can be used in call, query, and composite query requests without a signature.
+This has the form `0x04`, and is used for the anonymous caller. It can be used in call and query requests without a signature.
 
 5. _Reserved ids_
 +
@@ -481,12 +481,11 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 * At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
 * At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 * At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
-* At `/api/v2/canister/<effective_canister_id>/composite_query` the user can perform (synchronous, non-state-changing) composite query calls.
 * At `/api/v2/status` the user can retrieve status information about the Internet Computer.
 
 In these paths, the `<effective_canister_id>` is the <<textual-ids,textual representation>> of the <<http-effective-canister-id,_effective_ canister id>>.
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/canister/<effective_canister_id>/query`, and `/api/v2/canister/<effective_canister_id>/composite_query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per <<authentication>>) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per <<authentication>>) and request-specific content as described below.
 
 NOTE: This document does not yet explain how to find the location and port of the Internet Computer.
 
@@ -617,38 +616,11 @@ See <<state-tree>> for details on the state tree.
 [#http-query]
 === Request: Query call
 
-A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “query methods” by the canister can be called this way.
+A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “query methods” and “composite query methods” by the canister can be called this way. In contrast to a query method, a composite query method can make further calls to query and composite query methods of canisters on the same subnet.
 
 In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 * `request_type` (`text`): Always `query`.
-* `sender`, `nonce`, `ingress_expiry`: See <<authentication>>.
-* `canister_id` (`blob`): The principal of the canister to call.
-* `method_name` (`text`): Name of the canister method to call.
-* `arg` (`blob`): Argument to pass to the canister method.
-
-If the call resulted in a reply, the response is a CBOR (see <<cbor>>) map with the following fields:
-
-* `status` (`text`): `replied`
-* `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
-
-If the call resulted in a reject, the response is a CBOR map with the following fields:
-
-* `status` (`text`): `rejected`
-* `reject_code` (`nat`): The reject code (see <<reject-codes>>).
-* `reject_message` (`text`): a textual diagnostic message.
-* `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
-
-Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
-
-[#http-composite-query]
-=== Request: Composite query call
-
-A composite query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “composite query methods” or “query methods” by the canister can be called this way. In contrast to a query call, a composite query call can make further calls to query and composite query methods of canisters on the same subnet.
-
-In order to make a composite query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/composite_query`. The request body consists of an authentication envelope with a `content` map with the following fields:
-
-* `request_type` (`text`): Always `composite_query`.
 * `sender`, `nonce`, `ingress_expiry`: See <<authentication>>.
 * `canister_id` (`blob`): The principal of the canister to call.
 * `method_name` (`text`): Name of the canister method to call.
@@ -678,7 +650,7 @@ The `<effective_canister_id>` in the URL paths of requests is the _effective_ de
    - Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
    - Otherwise, the call is rejected by the system independently of the effective canister id.
 
-* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query or composite query call, then the effective canister id must be the `canister_id` in the request.
+* If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
 +
 [NOTE]
@@ -914,11 +886,11 @@ More precisely:
 
 This document describes the Internet Computer as having a single global state that can be modified and queried. In reality, it consists of many nodes, which may not be perfectly in sync.
 
-As long as you talk to one (honest) node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call to a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a query or composite query call to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
+As long as you talk to one (honest) node only, the observed behavior is nicely sequential. If you issue an update (i.e. state-mutating) call to a canister (e.g. bump a counter), and node A indicates that the call has been executed, and you then issue a query call to node A, then A's response is guaranteed to include the effect of the update call (and you will receive the updated counter value).
 
 If you then (quickly) issue a read request to node B, it may be that B responds to your read query based on the old state of the canister (and you might receive the old counter value).
 
-A related problem is that query and composite query calls are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result. However, it is (currently) not possible to query a _specific_ state.
+A related problem is that query calls are not certified, and nodes may be dishonest in their response. In that case, the user might want to get more assurance by querying multiple nodes and comparing the result. However, it is (currently) not possible to query a _specific_ state.
 
 NOTE: Applications can work around these problems. For the first problem, the query result could be such that the user can tell if the update has been received or not. For the second problem, even if using <<system-api-certified-data,certified data>> is not possible, if replies are monotonic in some sense the user can get assurance in their intersection (e.g. if the query returns a list of events that grows over time, then even if different nodes return different lists, the user can get assurance in those events that are reported by many nodes).
 
@@ -1163,7 +1135,7 @@ In `canister_inspect_message`, the canister can accept the message by invoking
 This function traps if invoked twice.
 If the canister traps in `canister_inspect_message` or does not call `ic0.accept_message`, then the access is denied.
 
-NOTE: The `canister_inspect_message` is _not_ invoked for query and composite query calls, inter-canister calls or calls to the management canister.
+NOTE: The `canister_inspect_message` is _not_ invoked for query calls, inter-canister calls or calls to the management canister.
 
 [#system-api-canister-self]
 === Self-identification
@@ -1501,13 +1473,13 @@ For each canister, the IC keeps track of “certified data”, a canister-define
 +
 The canister can update the certified data with this call. The passed data must be no larger than 32 bytes. This can be used any number of times.
 
-When executing a query method via a query call and a query or composite query method via a composite query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
+When executing a query or composite query method via a query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
 
 * `+ic0.data_certificate_present : () -> i32+`
 +
 returns `1` if a certificate is present, and `0` otherwise.
 +
-This will return `1` when called from a query method when invoked via a query call and when called from a query or composite query method via a composite query call.
+This will return `1` when called from a query or composite query method via a query call.
 +
 This will return `0` for update methods and if a query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
 
@@ -2569,7 +2541,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 ==== API requests
 
-We distinguish between the _asynchronous_ API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the _synchronous_ API requests passed to `/api/v2/…/read_state`, `/api/v2/…/query`, and `/api/v2/…/composite_query`, which are only ephemeral.
+We distinguish between the _asynchronous_ API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the _synchronous_ API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
 These are the synchronous read messages:
 ....
@@ -2754,7 +2726,7 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 
  * Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
  * Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
- * Responses to reads (i.e. `/api/v2/…/read_state`, `/api/v2/…/query`, and `/api/v2/…/composite_query`). By definition, these do _not_ change the state of the IC, and merely describe the response based on the read request (or query and composite query, respectively) and the current state.
+ * Responses to reads (i.e. `/api/v2/…/read_state` and `/api/v2/…/query`). By definition, these do _not_ change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
@@ -4052,58 +4024,11 @@ S with
 
 ==== Query call
 
-Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly.  They can only be executed against canisters which have a status of `Running` and are also not frozen.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against canisters which have a status of `Running` and are also not frozen.
 
 During the execution of a query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
-Submitted request:: `E`
-Conditions::
-....
-  E.content = CanisterQuery Q
-  Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
-  is_effective_canister_id(E.content, ECID)
-  S.system_time <= Q.ingress_expiry
-  S.canisters[Q.canister_id] ≠ EmptyCanister
-  S.canister_status[Q.canister_id] = Running ∧ S.balances[Q.canister_id] >= freezing_limit(S, Q.canister_id)
-  C = S.canisters[Q.canister_id]
-  F = C.module.query_methods[Q.method_name]
-  verify_cert(Cert)
-  lookup(["canister",Q.canister_id,"certified_data"], Cert) = Found S.certified_data[Q.canister_id]
-  lookup(["time"], Cert) = Found S.system_time // or “recent enough”
-  Env = {
-    time = S.time[Q.canister_id];
-    global_timer = S.global_timer[Q.canister_id];
-    balance = S.balances[Q.canister_id];
-    freezing_limit = freezing_limit(S, Q.canister_id);
-    certificate = Cert;
-    status = simple_status(S.canister_status[Q.canister_id]);
-    canister_version = S.canister_version[Q.canister_id];
-  }
-....
-Read response::
-* If `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Trap trap` or `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Return {response = NoResponse; …}` then
-+
-....
-{status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>}
-....
-* Else if `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Return {response = Reject (code, msg); …}` then `code = CANISTER_REJECT` and
-+
-....
-{status: rejected; reject_code: CANISTER_REJECT: reject_message: <msg>, error_code: <implementation-specific>}
-....
-* Else if `F(Q.Arg, Q.sender, Env)(S.canisters[Q.canister_id].wasm_state) = Return {response = Reply R; …}` then
-+
-....
-{status: success; reply: { arg : R } }
-....
-
-==== Composite query call
-
-Canister composite query calls to `/api/v2/canister/<ECID>/composite_query` can be executed directly. They can only be executed against canisters which have a status of `Running` and are also not frozen.
-
-During the execution of a composite query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
-
-We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal.
+We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal. It can also be (trivially) invoked for query methods that do not make further calls.
 ....
 composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
   let Mod = S.canisters[Canister_id].module
