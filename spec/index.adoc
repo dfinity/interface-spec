@@ -71,8 +71,8 @@ The public entry points of canisters are called _methods_. Methods can be declar
 
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
-External calls can be update calls, which can call both kinds of methods, query calls, which can _only_ call query methods, and composite query calls, which can _only_ call query and composite query methods.
-Inter-canister calls can also call both kinds of methods. Note that calls from a canister to itself also count as "inter-canister".
+External calls can be update calls, which can call update and query methods, query calls, which can _only_ call query methods, and composite query calls, which can _only_ call query and composite query methods.
+Inter-canister calls can call update and query methods (just like update calls). Note that calls from a canister to itself also count as "inter-canister".
 
 Internally, a call or a response is transmitted as a _message_ from a _sender_ to a _receiver_. Messages do not have a response.
 
