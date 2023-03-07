@@ -2669,7 +2669,7 @@ CanisterChange
       controllers : [PrincipalId];
     }
 CanisterChangeEntry = {
-  timestamp : Timestamp;
+  timestamp_nanos : Timestamp;
   canister_version : CanisterVersion;
   origin : CanisterChangeOrigin;
   change : CanisterChange;
@@ -3335,7 +3335,7 @@ S with
     canister_history[CanisterId] = {
       total_num_change_entries = 1
       change_entries = {
-        timestamp = CurrentTime
+        timestamp_nanos = CurrentTime
         canister_version = 0
         origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
         change = CanisterCreation
@@ -3391,7 +3391,7 @@ S with
       canister_history[A.canister_id] = {
         total_num_change_entries = N + 1;
         change_entries = H · {
-            timestamp = S.time[A.canister_id];
+            timestamp_nanos = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
             origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
             change = ControllersChange {
@@ -3503,7 +3503,7 @@ S with
     canister_history[A.canister_id] = {
       total_num_change_entries = N + 1;
       change_entries = H · {
-          timestamp = S.time[A.canister_id];
+          timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeDeployment {
@@ -3585,7 +3585,7 @@ S with
     canister_history[A.canister_id] = {
       total_num_change_entries = N + 1;
       change_entries = H · {
-          timestamp = S.time[A.canister_id];
+          timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeDeployment {
@@ -3629,7 +3629,7 @@ S with
     canister_history[A.canister_id] = {
       total_num_change_entries = N + 1;
       change_entries = H · {
-          timestamp = S.time[A.canister_id];
+          timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
           change = CodeUninstall;
@@ -3933,7 +3933,7 @@ S with
     canister_history[canister_id] = {
       total_num_change_entries = 1
       change_entries = {
-        timestamp = CurrentTime
+        timestamp_nanos = CurrentTime
         canister_version = 0
         origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
         change = CanisterCreation
