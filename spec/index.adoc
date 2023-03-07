@@ -2561,14 +2561,6 @@ APIReadRequest
     method_name : Text;
     arg : Blob;
   }
-  | CanisterCompositeQuery = {
-    nonce : Blob;
-    ingress_expiry : Nat;
-    sender : UserId;
-    canister_id : CanisterId;
-    method_name : Text;
-    arg : Blob;
-  }
 ....
 
 Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
@@ -4096,7 +4088,7 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
 Submitted request:: `E`
 Conditions::
 ....
-  E.content = CanisterCompositeQuery Q
+  E.content = CanisterQuery Q
   Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
   is_effective_canister_id(E.content, ECID)
   S.system_time <= Q.ingress_expiry
