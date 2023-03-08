@@ -2379,6 +2379,7 @@ Timestamp = Nat;
 CanisterVersion = Nat;
 Env = {
   time : Timestamp;
+  controllers : List Principal;
   global_timer : Nat;
   balance : Nat;
   freezing_limit : Nat;
@@ -2805,6 +2806,7 @@ Conditions::
       S.canisters[E.content.canister_id] ≠ EmptyCanister
       Env = {
         time = S.time[E.content.canister_id];
+        controllers = S.controllers[E.content.canister_id];
         global_timer = S.global_timer[E.content.canister_id];
         balance = S.balances[E.content.canister_id]
         freezing_limit = freezing_limit(S, E.content.canister_id);
@@ -3035,6 +3037,7 @@ Conditions::
 
     Env = {
       time = S.time[M.receiver];
+      controllers = S.controllers[M.receiver];
       global_timer = S.global_timer[M.receiver];
       balance = S.balances[M.receiver]
       freezing_limit = freezing_limit(S, M.receiver);
@@ -3370,6 +3373,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       global_timer = 0;
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
@@ -3427,6 +3431,7 @@ Conditions::
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
@@ -4027,6 +4032,7 @@ Conditions::
   lookup(["time"], Cert) = Found S.system_time // or “recent enough”
   Env = {
     time = S.time[Q.receiver];
+    controllers = S.controllers[Q.receiver];
     global_timer = S.global_timer[Q.receiver];
     balance = S.balances[Q.canister_id];
     freezing_limit = freezing_limit(S, Q.canister_id);
@@ -4170,7 +4176,6 @@ ExecutionState = {
   wasm_state : WasmState;
   params : Params;
   response : NoResponse | Response;
-  controllers: List Principal;
   cycles_accepted : Nat;
   cycles_available : Nat;
   cycles_used : Nat;
@@ -4824,7 +4829,7 @@ ic0.performance_counter<es>(counter_type : i32) : i64 =
 
 ic0.is_controller<es>(src: i32, size: i32) : (result: i32) =
   principal = copy_from_canister<es>(src, size)
-  if principal ∉ es.controllers
+  if principal ∉ es.params.sysenv.controllers
   then return 0
   else return 1
 
