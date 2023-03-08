@@ -566,7 +566,7 @@ The HTTP response to this request can have the following responses:
 * 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
 ** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 ** `reject_message` (`text`): a textual diagnostic message.
-** `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
+** `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
 * 4xx HTTP status when the error is caused by the client.
 * 5xx HTTP status when the server is aware that it has encountered an error or is otherwise incapable of performing the request. 
 
