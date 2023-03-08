@@ -67,7 +67,7 @@ To get some consistency in this document, we try to use the following terms with
 
 We avoid the term “client”, as it could be the client of the Internet Computer or the client inside the distributed network that makes up the Internet Computer. Instead, we use the term _user_ to denote the external entity interacting with the Internet Computer, even if in most cases it will be some code (sometimes called “agent”) acting on behalf of a (human) user.
 
-The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved), _query methods_ (state mutation is discarded, no further calls can be made), or _composite query_ methods (state mutation is discarded, calls can be made to canisters on the same subnet).
+The public entry points of canisters are called _methods_. Methods can be declared to be either _update methods_ (state mutation is preserved), _query methods_ (state mutation is discarded, no further calls can be made), or _composite query_ methods (state mutation is discarded, calls can be made to query and composite query methods of canisters on the same subnet).
 
 Methods can be _called_, from _caller_ to _callee_, and will eventually incur a _response_ which is either a _reply_ or a _reject_. A method may have _parameters_, which are provided with concrete _arguments_ in a method call.
 
