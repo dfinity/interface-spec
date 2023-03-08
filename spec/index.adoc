@@ -618,6 +618,11 @@ See <<state-tree>> for details on the state tree.
 
 A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as “query methods” and “composite query methods” by the canister can be called this way. In contrast to a query method, a composite query method can make further calls to query and composite query methods of canisters on the same subnet.
 
+[NOTE]
+====
+Composite query methods are EXPERIMENTAL and there might be breaking changes of their behavior in the future. Use at your own risk!
+====
+
 In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 * `request_type` (`text`): Always `query`.
@@ -4019,6 +4024,11 @@ S with
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against canisters which have a status of `Running` and are also not frozen.
 
 During the execution of a query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
+
+[NOTE]
+====
+Composite query methods are EXPERIMENTAL and there might be breaking changes of their behavior in the future. Use at your own risk!
+====
 
 We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal. It can also be (trivially) invoked for query methods that do not make further calls.
 ....
