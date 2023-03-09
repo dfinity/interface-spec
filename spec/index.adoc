@@ -4060,6 +4060,9 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
      else if R = Return {new_state = W'; new_calls = Calls; response = Response; cycles_used = Cycles_used}
      then
         W := W'
+        if Cycles_used > MAX_CYCLES_PER_MESSAGE
+        then
+           Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_MESSAGE) // single message execution out of cycles
         Cycles := Cycles - Cycles_used
         if Response = NoResponse
         then
@@ -4082,6 +4085,9 @@ composite_query_helper(S, Cycles, Caller, Canister_id, Method_name, Arg) =
               else if R'' = Return {new_state = W''; new_calls = Calls''; response = Response''; cycles_used = Cycles_used''}
               then
                  W := W''
+                 if Cycles_used'' > MAX_CYCLES_PER_RESPONSE
+                 then
+                    Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_RESPONSE) // single message execution out of cycles
                  Cycles := Cycles - Cycles_used''
                  if Response'' = NoResponse
                  then
