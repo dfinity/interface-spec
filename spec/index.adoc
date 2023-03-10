@@ -4081,8 +4081,8 @@ composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) 
               if S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
-              let (Response', Cycles_used') = composite_query_helper(S, Cycles, Depth + 1, Canister_id, Call.callee, Call.method_name, Call.arg)
-              Cycles := Cycles - Cycles_used'
+              let (Response', Cycles') = composite_query_helper(S, Cycles, Depth + 1, Canister_id, Call.callee, Call.method_name, Call.arg)
+              Cycles := Cycles'
               if Cycles < MAX_CYCLES_PER_RESPONSE
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
