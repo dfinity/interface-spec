@@ -4,26 +4,26 @@
 
 The HTTP Gateway Protocol is an extension of the Internet Computer Protocol that allows conventional HTTP clients to interact with the Internet Computer network. This is important for software such as web browsers to be able to fetch and render client-side canister code, including HTML, CSS, and JavaScript as well as other static assets such as images or videos. The HTTP Gateway does this by translating between standard HTTP requests and [API canister calls](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-interface) that the Internet Computer Protocol will understand.
 
-Such a Gateway could be a stand-alone proxy, it could be implemented in web browsers (natively, via a plugin or a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete Gateway so that all Gateway implementations can be compatible.
+Such an HTTP Gateway could be a stand-alone proxy, it could be implemented in web browsers (natively, via a plugin or a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete HTTP Gateway so that all HTTP Gateway Protocol implementations can be compatible.
 
 ## Overview
 
 An HTTP request by an HTTP client is handled by these steps:
 
-1. An HTTP client makes a request
-2. The HTTP Gateway intercepts the request
-3. The HTTP Gateway resolves the canister ID that the request is intended for
-4. The HTTP Gateway Candid encodes the HTTP request
-5. The HTTP Gateway invokes the canister via a query call to the `http_request` interface
-6. The canister handles the request and returns an HTTP response, encoded in Candid, together with additional metadata
+1. An HTTP client makes a request.
+2. The HTTP Gateway intercepts the request.
+3. The HTTP Gateway resolves the canister ID that the request is intended for.
+4. The HTTP Gateway Candid encodes the HTTP request.
+5. The HTTP Gateway invokes the canister via a query call to the `http_request` interface.
+6. The canister handles the request and returns an HTTP response, encoded in Candid, together with additional metadata.
 7. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
-8. If applicable, the HTTP Gateway fetches further body data via streaming query calls.
+8. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
 9. If applicable, the HTTP Gateway validates the certificate of the response.
 10. The HTTP Gateway Candid decodes the response and returns it to the HTTP client.
 
 ## Canister ID Resolution
 
-The Gateway needs to know the canister ID of the canister to talk to, and obtains that information from the hostname as follows:
+The HTTP Gateway needs to know the canister ID of the canister to talk to, and obtains that information from the hostname as follows:
 
 1. If the hostname is in the following table, use the given canister ids:
 
@@ -37,17 +37,21 @@ The Gateway needs to know the canister ID of the canister to talk to, and obtain
 
 2. Check whether the hostname is _raw_ (e.g., `<name>.raw.ic0.app`). If it is the case, fail and handle the request as a Web2 request, otherwise, continue.
 
-3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. The part of the hostname to the right of the canister ID is the gateway (e.g., `ic0.app` is the gateway for `rdmx6-jaaaa-aaaaa-aaadq-cai.ic0.app`). If there is a canister ID embedded in the hostname, use it.
+3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. If there is a canister ID embedded in the hostname, use it.
 
 4. Check whether the canister is hosted on the IC using a custom domain. There are two options:
 
    - Check whether there is a TXT record containing a canister ID at the `_canister-id`-subdomain (e.g., to see whether `foo.com` is hosted on the IC, make a DNS lookup for the TXT record of `_canister-id.foo.com`) and use the specified canister ID;
 
-   - Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID with the gateway specified in the headers.
+   - Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` header, use the value of this header as the canister ID.
 
 5. Else fail and handle the request as a Web2 request.
 
-If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname.
+If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname. Note that other domains may also be used to access canisters, such as `icp0.io`. The same logic concerning \_raw\_\_ domains is also be applied to these alternative domains.
+
+## API Gateway Resolution
+
+An API Gateway forwards Candid encoded HTTP requests to the relevant replica node. Any requests to the Internet Computer made by an HTTP Gateway are forwarded through these API gateways. The hostname of the API gateways is always `icp-api.io`.
 
 ## HTTP Request Encoding
 
@@ -67,16 +71,17 @@ type HttpRequest = record {
 
 The full [Candid](https://github.com/dfinity/candid/blob/master/spec/Candid.md) interface is described in [Canister HTTP Interface](#canister-http-interface).
 
-The `certificate_version` field indicates the maximum supported version of [response verification](#response-verification). A value of `2` will request the current standard of [response verification](#response-verification), while a missing version or version 1 will request the [legacy standard](#legacy-response-verification).
-
-- The method field contains the HTTP method in all upper case letters, e.g. `"GET"`.
-- The URL field contains the URL from the HTTP request line, i.e. without protocol or hostname, and includes query parameters.
-- The headers field contains the headers of the HTTP request.
-- The body field contains the body of the HTTP request (without any content encodings processed by the Gateway).
+- The `method` field contains the HTTP method in all upper case letters, e.g. `"GET"`.
+- The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and includes query parameters.
+- The `headers` field contains the headers of the HTTP request.
+- The `body` field contains the body of the HTTP request (without any content encodings processed by the HTTP Gateway).
+- The `certificate_version` field indicates the maximum supported version of [response verification](#response-verification).
+  - A value of `2` will request the current standard of [response verification](#response-verification), while a missing version or a value of `1` will request the [legacy standard](#legacy-response-verification).
+  - Current HTTP Gateway implementations will always request version 2, but older HTTP Gateways may still request version 1.
 
 ## Query Calls
 
-The encoded HTTP request is sent as a query call according to the [HTTPS Interface](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-query).
+The encoded HTTP request is sent as a query call according to the [HTTPS Interface](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-query) via the API Gateway resolved according to [API Gateway Resolution](#api-gateway-resolution).
 
 ## HTTP Response Decoding
 
@@ -96,9 +101,9 @@ type HttpResponse = record {
 
 The full [Candid](https://github.com/dfinity/candid/blob/master/spec/Candid.md) interface is described in [Canister HTTP Interface](#canister-http-interface).
 
-- The HTTP response status code is taken from the status_code field.
-- The HTTP response headers are taken from the headers field.
-- The HTTP response body is initialized with the value of the body field and further assembled as per the streaming protocol.
+- The HTTP response status code is taken from the `status_code` field.
+- The HTTP response headers are taken from the `headers` field.
+- The HTTP response body is initialized with the value of the `body` field and further assembled as per the [response body streaming protocol](#response-body-streaming).
 
 Notes:
 
@@ -114,9 +119,7 @@ Notes:
 
 The HTTP Gateway will primarily be used to load static assets needed to run frontend canister code, so both low latency and security are essential for providing a good experience to end users. [Query calls](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-query) are more performant but less secure than [Update calls](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-call).
 
-Response verification fills the security gap left by query calls. It is a versioned subprotocol that allows for an HTTP Gateway to verify a certified response received as a result of performing a query call to the Internet Computer. Two versions are currently supported, the older version 1 only supports verification of the response body, whereas the newer version 2 supports verifying the full response, including headers, status code, and optionally the full request.
-
-Response verification comes in two flavors, the current version is covered in this section and the legacy version is covered in [another section](#legacy-response-verification). The legacy version of response verification only includes a mapping of the request URL to the response body so it is quite limiting in what it can verify. The current version builds on the legacy version by optionally including the following extra parameters in the certification process:
+Response verification fills the security gap left by query calls. It is a versioned subprotocol that allows for an HTTP Gateway to verify a certified response received as a result of performing a query call to the Internet Computer. Two versions are currently supported, the current version of response verification is covered in this section and the legacy version is covered in [another section](#legacy-response-verification). The legacy version only includes a mapping of the request URL to the response body so it is quite limiting in what it can verify. The current version builds on the legacy version by optionally including the following extra parameters in the certification process:
 
 - Request URL query params
 - Request method
@@ -135,20 +138,20 @@ Response verification comes in two flavors, the current version is covered in th
    - If the `version` field is missing or equal to `1` then proceed with [legacy response verification](#legacy-response-verification).
    - If the `version` field is equal to `2` then continue.
    - Otherwise, verification fails.
-5. Parse the `expr_path` fields from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
-6. Case-insensitive search for the `IC-CertificationExpression` header.
+5. Parse the `expr_path` field from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
+6. Validate that `expr_path` is the most specific expression path in the tree for the given request URL path.
+   - If the absence of a more specific path cannot be proven (a lookup of more specific paths must return `Absent`) as per [lookup](https://internetcomputer.org/docs/current/references/ic-interface-spec/#lookup), verification fails.
+   - If the first segment of the path is not `http_expr`, verification fails.
+7. Case-insensitive search for the `IC-CertificationExpression` header.
    - If no such header is found, verification fails.
    - If the header value is not structured as per [the certificate expression header](#the-certificate-expression-header), verification fails.
-7. Validate that `expr_path` is the most specific expression path in the tree for the given request URL path.
-   - If the absence of a more specific path cannot be proven (a lookup of more specific paths must return `Absent`) as per [lookup](https://internetcomputer.org/docs/current/references/ic-interface-spec/#lookup), verification fails.
 8. Let `expr_hash` be the label of the node in the tree at path `expr_path`.
    - If no such label exists, verification fails.
-   - If this node has sibling nodes, verification fails.
    - If `expr_hash` does not match the sha256 hash of the `IC-CertificateExpression` header value, verification fails.
    - If `no_certification` is set, verification succeeds.
    - Let `response_hash` be the response hash calculated according to [Response Hash Calculation](#response-hash-calculation)
    - If `no_request_certification` is set:
-     - If the `expr_hash` label node has an empty leaf node at the subpath `[response_hash]`, verification succeeds.
+     - If the `expr_hash` label node has an empty leaf node at the subpath `["", response_hash]`, verification succeeds.
      - Otherwise, verification fails.
    - Let `request_hash` be the request hash calculated according to [Request Hash Calculation](#request-hash-calculation).
      - If there is not an empty leaf node at the subpath `[request_hash, response_hash]`, verification fails.
@@ -157,13 +160,13 @@ Response verification comes in two flavors, the current version is covered in th
 
 The `IC-Certificate` header is a structured header according to [RFC 8941](https://www.rfc-editor.org/rfc/rfc8941.html) with the following mandatory fields:
 
-- `certificate`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decodes into a valid [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec/#certification).
-- `tree`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decodes into a valid hash tree as per [certificate encoding](https://internetcomputer.org/docs/current/references/ic-interface-spec/#certification-encoding).
+- `certificate`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decode into a valid [certificate](https://internetcomputer.org/docs/current/references/ic-interface-spec/#certification).
+- `tree`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decode into a valid hash tree as per [certificate encoding](https://internetcomputer.org/docs/current/references/ic-interface-spec/#certification-encoding).
 
 The following additional fields are mandatory for response verification version 2 and upwards:
 
 - `version`: String representation of an integer that represents the version of response verification that was used to build the `tree`.
-- `expr_path`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decodes into an array of strings, where each string is a segment of a path in the `tree` corresponding to the current request URL.
+- `expr_path`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decode into an array of strings, where each string is a segment of a path in the `tree` corresponding to the current request URL. The first segment is always `http_expr`.
 
 ### Certificate Validation
 
@@ -172,7 +175,7 @@ Certificate validation is performed as part of [response verification](#response
 1. Case-insensitive search for a response header called `IC-Certificate`.
 2. The value of the header corresponds to the format described in [the certificate header](#the-certificate-header) section.
 3. The decoded `certificate` must pass the following validations:
-   - The certificate is signed by the root key or a subnet delegation signed by the root key.
+   - The certificate is signed by the root key of the NNS subnet or by a subnet delegation signed by that same root key.
    - If the certificate contains a subnet delegation, the delegation must be valid for the given canister.
    - The timestamp at the `/time` path must be recent, e.g. 5 minutes.
    - The subnet state tree in the certificate must reveal the canister's [certified data](https://internetcomputer.org/docs/current/references/ic-interface-spec/#system-api-certified-data).
@@ -209,9 +212,9 @@ The properties supplied to this function are as follows:
   - Mutually exclusive with the `certified_response_headers` property.
 - `no_request_certification` - disables certification of the request for this HTTP response.
   - Mutually exclusive with the `certified_request_headers` and `certified_query_parameters` properties.
-  - This feature has security implications. If it is used on a path that serves dynamic content using the [upgrade to update call](#upgrade-to-update-calls) feature, malicious replicas can always return the certified response, instead of setting the upgrade flag on the response.
+  - This feature has security implications. If it is used on a path that serves dynamic content using the [upgrade to update call](#upgrade-to-update-calls) feature, malicious replica nodes can always return the certified response, instead of setting the upgrade flag on the response.
 - `no_certification` - disables certification for this HTTP request/response pair.
-  - This feature has security implications. Clients will not be able to verify the authenticity of the response content if it is used. Dynamic content can be returned securely by making use of the [upgrade to update](#upgrade-to-update-calls) feature. Only use `no_certification` if the content is dynamic and the latency of an update call is too high.
+  - This feature has security implications. Clients will not be able to verify the authenticity of the response content if it is used. Dynamic content can be returned securely by making use of the [upgrade to update](#upgrade-to-update-calls) feature. Only use `no_certification` if the content is dynamic, the latency of an update call is too high and the impact of a malicious response on that path is benign.
 
 The `ValidationArgs` object has the following [Protocol Buffer 3](https://protobuf.dev/reference/protobuf/proto3-spec/) definition:
 
@@ -306,13 +309,21 @@ The response hash is calculated as follows:
 2. Let `response_body_hash` be the sha256 of the response body.
 3. Concatenate `response_headers_hash` and `response_body_hash` and calculate the sha256 of that concatenation.
 
+### Multiple CEL Expression Hashes Per Expression Path
+
+Adding one CEL expression hash per expression path should be the default and most common case as it is the most secure approach. It is, however, possible to add multiple CEL expression hashes per expression path, if the flexibility is needed by a canister. This feature is quite dangerous and must be used with extreme caution. By adding a 2nd CEL expression hash, a canister is giving a malicious replica node freedom to choose a different CEL expression hash for a request than what is intended by the canister. This could be used to expose a potential vulnerability that does not exist if the intended CEL expression hash is used. This should only be used in cases where the difference in CEL expression hashes is benign and will not pose a security threat to the canister, or there is not sufficient overlap between the CEL expressions to allow the replica node to freely choose between them.
+
+### Multiple Response Hashes Per Request Hash
+
+Similar to [Multiple CEL Expression Hashes Per Expression Path](#multiple-cel-expression-hashes-per-expression-path), this is a feature that is intended to allow for flexibility when it is needed. It is also dangerous and must be used with great care. By adding multiple response hashes for a single request hash, a malicious replica can freely choose between any of those response hashes for that request hash. This should only be used in cases where the difference between the responses is benign and will not pose a security threat to the canister.
+
 ## Response Body Streaming
 
-The HTTP Gateway protocol has provisions to transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is independent of any possible streaming of data between the HTTP Gateway and the HTTP client. The gateway may assemble the response as a whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the Gateway is certifying the response, it must not pass on uncertified chunks.
+The HTTP Gateway protocol has provisions to transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is independent of any possible streaming of data between the HTTP Gateway and the HTTP client. The HTTP Gateway may assemble the response as a whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the HTTP Gateway is certifying the response, it must not pass on uncertified chunks.
 
 If the `streaming_strategy` field of the `HttpResponse` is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
 
-If the function reference in the callback field of the `streaming_strategy` is not a method of the given canister, the Gateway fails the request.
+If the function reference in the callback field of the `streaming_strategy` is not a method of the given canister, the HTTP Gateway fails the request.
 
 Else, it makes a query call to the given method, passing the token value given in the `streaming_strategy` as the argument.
 
@@ -322,7 +333,7 @@ The type of the token value is chosen by the canister; the HTTP Gateway obtains 
 
 ## Upgrade to Update Calls
 
-If the canister sets `upgrade = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the response. The Gateway performs an [update](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses the resulting response from `http_request_update` instead.
+If the canister sets `upgrade = opt true` in the `HttpResponse` reply from the `http_request` call, then the HTTP Gateway ignores all other fields of the response. The HTTP Gateway performs an [update](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses the resulting response from `http_request_update` instead.
 
 The value of the `upgrade` field returned from `http_request_update` is ignored.
 
@@ -340,12 +351,20 @@ Version 1 response verification only supports verifying a request path and respo
 The steps for response verification are as follows:
 
 - See the [response verification outline](#response-verification-outline) for the full subprotocol description.
+- Assert that the canister returning the response does not have support for response verification v2 via [Response Verification Version Assertion](#response-verification-version-assertion).
+  - If the canister reports that it has support for response verification v2, verification fails.
+  - Otherwise, continue.
 - The path `["http_assets", <url>]` exists in the `tree` and is a leaf with a value, where `<url>` is the utf8-encoded URL from the `HttpRequest`.
 - Otherwise, the path `["http_assets", "/index.html"]` must exist in the `tree` and be a leaf.
 - That leaf must contain the SHA-256 hash of the decoded body.
   - If the `streaming_strategy` field of the `HttpResponse` is set, all chunks are streamed and concatenated according to [response body streaming](#response-body-streaming) before decoding.
-  - The body is decoded according to the `Content-Encoding` header if present.
-  - Supported values for the `Content-Encoding` header include `gzip` and `deflate`.
+  - The body is decoded according to the `Content-Encoding` header if present. Supported values for the `Content-Encoding` header include `gzip` and `deflate`.
+
+## Response Verification Version Assertion
+
+Canisters can report the versions of response verification that they support using public metadata in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). This metadata is a comma-delimited string of versions under the key "supported_certificate_versions”, for example: "1,2". This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added, then the HTTP Gateway will allow for whatever version the canister has responded with.
+
+The request for the metadata will only be made by the HTTP Gateway if there is a downgrade. If the HTTP Gateway requests v2 and the canister responds with v2, then a request will not be made. If the HTTP Gateway requests v2 and the canister responds with v1, a request will be made. If a request is made, the HTTP Gateway will not accept any response from the canister that is below the max version supported by both the HTTP Gateway and the canister. This will guarantee that a canister supporting both v1 and v2 will always have v2 security when accessed by an HTTP Gateway that supports v2.
 
 ## Canister HTTP Interface
 
@@ -393,6 +412,8 @@ service : {
     http_request_update: (request: HttpRequest) -> (HttpResponse);
 }
 ```
+
+You can also [download the file](./http-gateway.did).
 
 Not all of this interface is required. The following sections detail what can be optionally omitted depending on the requirements of the canister in question.
 
