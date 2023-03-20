@@ -956,7 +956,7 @@ The canister provides entry points which are invoked by the IC under various cir
 * The canister may export functions with name `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions with name `canister_query <name>` and type `+() -> ()+`.
 * The canister may export functions with name `canister_composite_query <name>` and type `+() -> ()+`.
-* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls and composite query methods.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
@@ -1038,11 +1038,14 @@ The comment after each function lists from where these functions may be invoked:
 * `CQ`: from `canister_composite_query …`
 * `Ry`: from a reply callback
 * `Rt`: from a reject callback
+* `CRy`: from a reply callback in composite query
+* `CRt`: from a reject callback in composite query
 * `C`: from a cleanup callback
+* `CC`: from a cleanup callback in composite query
 * `s`: the `(start)` module initialization function
 * `F`: from `canister_inspect_message`
 * `T`: from _system task_ (`canister_heartbeat` or `canister_global_timer`)
-* `*` = `I G U Q CQ Ry Rt C F T` (NB: Not `(start)`)
+* `*` = `I G U Q CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -2447,6 +2450,7 @@ CanisterModule = {
   heartbeat : (Env) -> SystemTaskFunc
   global_timer : (Env) -> SystemTaskFunc
   callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
+  composite_callbacks : (Callback, Response, Env) -> UpdateFunc
   inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
     status : Accept | Reject;
     cycles_used : Nat;
@@ -4086,7 +4090,7 @@ composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) 
               if Cycles < MAX_CYCLES_PER_RESPONSE
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
-              let F' = Mod.callbacks(Call.callback, Response', 0, Env, 0)
+              let F' = Mod.composite_callbacks(Call.callback, Response', Env)
               let R'' = F'(W')
               if R'' = Trap trap''
               then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap''.cycles_used)
@@ -4257,7 +4261,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
-  context : I | G | U | Q | Ry | Rt | C | F | T;
+  context : I | G | U | Q | Ry | Rt | CRy | CRt | C | CC | F | T;
 }
 ....
 
@@ -4564,6 +4568,60 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
 Note that if the initial callback handler traps, the cleanup callback (if
 present) is executed, and the canister has the chance to update its state.
 
+* The function `composite_callbacks` of the `CanisterModule` is defined  as follows
++
+....
+composite_callbacks = λ(callbacks, response, sysenv) → λ wasm_state →
+  let params0 = { empty_params with
+    sysenv
+  }
+  let (fun, env, params, context) = match response with
+    Reply data ->
+      (callbacks.on_reply.fun, callbacks.on_reply.env,
+        { params0 with data}, CRy)
+    Reject (reject_code, reject_message)->
+      (callbacks.on_reject.fun, callbacks.on_reject.env,
+        { params0 with reject_code; reject_message}, CRt)
+  let es = ref {empty_execution_state with
+    wasm_state = wasm_state;
+    params = params;
+    balance = sysenv.balance;
+    context = context;
+  }
+  try
+    if fun > |es.wasm_state.store.table| then Trap
+    let func = es.wasm_state.store.table[fun]
+    if typeof(func) ≠ func (i32) -> () then Trap
+
+    func<es>(env)
+    Return {
+      new_state = es.wasm_state;
+      new_calls = es.calls;
+      response = es.response;
+      cycles_used = es.cycles_used;
+    }
+  with Trap
+    if callbacks.on_cleanup = NoClosure then Trap {cycles_used = es.cycles_used;}
+    if callbacks.on_cleanup.fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
+    let func = es.wasm_state.store.table[callbacks.on_cleanup.fun]
+    if typeof(func) ≠ func (i32) -> () then Trap {cycles_used = es.cycles_used;}
+
+    let es' = ref { empty_execution_state with
+      wasm_state = wasm_state;
+      context = CC;
+    }
+    try func<es'>(callbacks.on_cleanup.env) with Trap then Trap {cycles_used = es.cycles_used + es'.cycles_used;}
+    Return {
+      new_state = es'.wasm_state;
+      new_calls = [];
+      response = NoResponse;
+      cycles_used = es.cycles_used + es'.cycles_used;
+    }
+....
++
+Note that if the initial callback handler traps, the cleanup callback (if
+present) is executed.
+
 * The `inspect_message` field of the `CanisterModule` is defined as follows.
 +
 If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
@@ -4625,11 +4683,11 @@ The pseudo-code below does _not_ explicitly enforce the restrictions of which im
 
 ....
 ic0.msg_arg_data_size<es>() : i32 =
-  if es.context ∉ {I, U, Q, CQ, Ry, F} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, U, Q, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
   return |es.params.arg|
 
 ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
-  if es.context ∉ {I, U, Q, CQ, Ry, F} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, U, Q, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.arg)
 
 ic0.msg_caller_size() : i32 =
@@ -4641,30 +4699,30 @@ ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
   copy_to_canister<es>(dst, offset, size, es.params.caller)
 
 ic0.msg_reject_code<es>() : i32 =
-  if es.context ∉ {Ry, Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
   es.params.reject_code
 
 ic0.msg_reject_msg_size<es>() : i32 =
-  if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {Rt, CRt} then Trap {cycles_used = es.cycles_used;}
   return |es.params.reject_msg|
 
 ic0.msg_reject_msg_copy<es>(dst:i32, offset:i32, size:i32) : i32 =
-  if es.context ∉ {Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {Rt, CRt} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
 ic0.msg_reply_data_append<es>(src : i32, size : i32) =
-  if es.context ∉ {U, Q, CQ, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
 ic0.msg_reply<es>() =
-  if es.context ∉ {U, Q, CQ, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.response := Reply (es.reply_params.arg)
   es.cycles_available := 0
 
 ic0.msg_reject<es>(src : i32, size : i32) =
-  if es.context ∉ {U, Q, CQ, Ry, Rt} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
   if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
   es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
   es.cycles_available := 0
@@ -4752,7 +4810,7 @@ ic0.call_new<es>(
     reject_fun  : i32,
     reject_env  : i32,
   ) =
-  if es.context ∉ {U, CQ, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
 
   discard_pending_call<es>()
 
@@ -4781,12 +4839,12 @@ ic0.call_new<es>(
   }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
-  if es.context ∉ {U, CQ, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
-  if es.context ∉ {U, CQ, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
   if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
@@ -4811,7 +4869,7 @@ ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
 
 ic0.call_peform<es>() : ( err_code : i32 ) =
-  if es.context ∉ {U, CQ, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
   // are we below the threezing threshold?
