@@ -4043,7 +4043,6 @@ We define an auxiliary method that handles calls from composite query methods by
 ....
 composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) =
   let Mod = S.canisters[Canister_id].module
-  let F = Mod.composite_query_methods[Method_name]
   let Cert <- { Cert | verify_cert(Cert) and
                        lookup(["canister", Canister_id, "certified_data"], Cert) = Found S.certified_data[Canister_id] and
                        lookup(["time"], Cert) = Found S.system_time // or “recent enough”
@@ -4059,10 +4058,11 @@ composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) 
   if S.canisters[Canister_id] ≠ EmptyCanister and
      S.canister_status[Canister_id] = Running and
      S.balances[Canister_id] >= freezing_limit(S, Canister_id) and
-     Method_name ∈ dom(Mod.composite_query_methods) and
+     (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
      Cycles >= MAX_CYCLES_PER_MESSAGE
   then
      let W = S.canisters[Canister_id].wasm_state
+     let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
      let R = F(Arg, Caller, Env)(W)
      if R = Trap trap
      then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used)
