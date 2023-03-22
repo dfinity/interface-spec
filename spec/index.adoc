@@ -1681,7 +1681,7 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 NOTE: The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
 This method returns a https://www.secg.org/sec1-v2.pdf[SEC1] encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
-The `derivation_path` is a vector of variable length byte strings.
+The `derivation_path` is a vector of variable length byte strings, containing at most 255 byte strings.
 The `key_id` is a struct specifying both a curve and a name.
 The availability of a particular `key_id` depends on implementation.
 
