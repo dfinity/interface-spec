@@ -47,7 +47,7 @@ The HTTP Gateway needs to know the canister ID of the canister to talk to, and o
 
 5. Else fail and handle the request as a Web2 request.
 
-If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname. Note that other domains may also be used to access canisters, such as `icp0.io`. The same logic concerning \_raw\_\_ domains is also be applied to these alternative domains.
+If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname. Note that other domains may also be used to access canisters, such as `icp0.io`. The same logic concerning \_raw\_\_ domains can also be applied to these alternative domains.
 
 ## API Gateway Resolution
 
