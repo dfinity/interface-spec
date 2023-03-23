@@ -65,7 +65,7 @@ type HttpRequest = record {
     url: text;
     headers: vec HeaderField;
     body: blob;
-    certificate_version: opt nat;
+    certificate_version: opt nat16;
 };
 ```
 
@@ -333,7 +333,7 @@ The type of the token value is chosen by the canister; the HTTP Gateway obtains 
 
 ## Upgrade to Update Calls
 
-If the canister sets `upgrade = opt true` in the `HttpResponse` reply from the `http_request` call, then the HTTP Gateway ignores all other fields of the response. The HTTP Gateway performs an [update](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses the resulting response from `http_request_update` instead.
+If the canister sets `upgrade = opt true` in the `HttpResponse` reply from the `http_request` call, then the HTTP Gateway ignores all other fields of the response. The HTTP Gateway performs an [update](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) call to `http_request_update`, passing an `HttpUpdateRequest` record as the argument, and uses the resulting response from `http_request_update` instead. The `HttpUpdateRequest` record is identical to the original `HttpRequest`, with the `certificate_version` field excluded.
 
 The value of the `upgrade` field returned from `http_request_update` is ignored.
 
@@ -378,7 +378,7 @@ type HttpRequest = record {
     url: text;
     headers: vec HeaderField;
     body: blob;
-    certificate_version: opt nat;
+    certificate_version: opt nat16;
 };
 
 type HttpResponse = record {
@@ -423,16 +423,23 @@ The `certificate_version` field of the `HttpRequest` interface is optional depen
 
 ```
 type HttpRequest = record {
-  // ...
-  certificate_version: opt nat;
+    // ...
+    certificate_version: opt nat16;
 };
 ```
 
 ### Upgrade to Update Calls Interface
 
-The `http_request_update` method of the `service` interface along with the `upgrade` field of the `HttpResponse` interface is optional depending on whether the canister needs to use the [upgrade to update calls](#upgrade-to-update-calls) feature.
+The `http_request_update` method of the `service` interface along with the `upgrade` field of the `HttpResponse` interface is optional depending on whether the canister needs to use the [upgrade to update calls](#upgrade-to-update-calls) feature. Not that the `HttpUpdateRequest` type is the same as the `HttpRequest` type, but excludes the `certificate_version` field since this should not affect the response to an [update](https://internetcomputer.org/docs/current/references/ic-interface-spec#http-call) call from a canister.
 
 ```
+type HttpUpdateRequest = record {
+    method: text;
+    url: text;
+    headers: vec HeaderField;
+    body: blob;
+};
+
 type HttpResponse = record {
     // ...
     upgrade : opt bool;
