@@ -142,10 +142,10 @@ service ic : {
   });
   canister_history : (record {
       canister_id : canister_id;
-      num_requested_change_entries : opt nat64;
+      num_requested_changes : opt nat64;
   }) -> (record {
-      total_num_change_entries : nat64;
-      change_entries : vec canister_change_entry;
+      total_num_changes : nat64;
+      changes : vec canister_change;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();
