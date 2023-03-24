@@ -37,7 +37,7 @@ type canister_change_details = variant {
   };
 };
 
-type canister_change_entry = record {
+type canister_change = record {
   timestamp_nanos : nat64;
   canister_version : nat64;
   change_origin : canister_change_origin;
