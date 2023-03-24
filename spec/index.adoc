@@ -600,14 +600,9 @@ All requested paths must have one of the following paths as prefix:
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
+Moreover, all paths with prefix `/request_status/<request_id>` must refer to the same request ID `<request_id>`.
+
 If a path cannot be requested, then the HTTP response to the read state request is undefined.
-
-Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
-
-[NOTE]
-====
-The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
-====
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
 
