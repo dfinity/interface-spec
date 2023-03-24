@@ -25,7 +25,7 @@ type canister_change_origin = variant {
   };
 };
 
-type canister_change = variant {
+type canister_change_details = variant {
   canister_creation;
   canister_code_uninstall;
   canister_code_deployment : record {
@@ -40,8 +40,8 @@ type canister_change = variant {
 type canister_change_entry = record {
   timestamp_nanos : nat64;
   canister_version : nat64;
-  origin : canister_change_origin;
-  change : canister_change;
+  change_origin : canister_change_origin;
+  change_details : canister_change_details;
 };
 
 type http_header = record { name: text; value: text };
