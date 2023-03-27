@@ -3378,6 +3378,8 @@ S with
     }
     if New_certified_data ≠ NoCertifiedData:
       certified_data[A.canister_id] = New_certified_data
+    else:
+      certified_data[A.canister_id] = NoCertifiedData
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
