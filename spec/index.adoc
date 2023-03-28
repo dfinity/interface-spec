@@ -1683,11 +1683,11 @@ NOTE: The ECDSA API is considered EXPERIMENTAL. Canister developers must be awar
 This method returns a https://www.secg.org/sec1-v2.pdf[SEC1] encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller.
 The `derivation_path` is a vector of variable length byte strings.
 The `key_id` is a struct specifying both a curve and a name.
-The availability of a particular `key_id` depends on implementation.
+The availability of a particular `key_id` depends on the implementation.
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see https://ia.cr/2021/1330[ia.cr/2021/1330, Appendix D]). To derive (non-hardened) https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032]-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2^31^.
 
-The return result is an extended public key consisting of an ECDSA `public_key`, encoded in https://www.secg.org/sec2-v2.pdf[SEC1] compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+The return value is an extended public key consisting of an ECDSA `public_key`, encoded in https://www.secg.org/sec2-v2.pdf[SEC1] compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
 This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id.
 Otherwise it will be rejected.
@@ -1704,6 +1704,67 @@ The signatures are encoded as the concatenation of the https://www.secg.org/sec2
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long.
 Otherwise it will be rejected.
+
+[#ic-vetkd_public_key]
+=== IC method `vetkd_public_key`
+
+NOTE: The vetKD API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+This method returns a (derived) vetKD public key for the given canister using the given derivation path.
+
+If the `canister_id` is unspecified, it will default to the canister id of the caller.
+The `derivation_path` is a vector of variable length byte strings, containing at most 255 byte strings.
+The `key_id` is a struct specifying both a curve and a name.
+The availability of a particular `key_id` depends on the implementation.
+
+For curve `bls12_381`, the following holds:
+
+* The returned `public_key` is a G~2~ element in compressed form encoded according to the https://docs.rs/bls12_381/0.8.0/bls12_381/notes/serialization/index.html[Zcash] rules.
+TODO: Would it make any sense for the curve `bls12_381` to reuse the encoding we also expect of BLS public keys for certificates, namely DER encoding, following https://tools.ietf.org/html/rfc5480[RFC5480] using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+
+* The public key is an encryption key in a Boneh-Franklin identity-based encryption (BF-IBE) scheme for identity `derivation_path`, where the corresponding decryption key can be obtained by calling `vetkd_encrypted_key` with the same `derivation_path` and `key_id` as used here. See http://todo.com[TODO] for more details on how to perform asymmetric (identity-based) encryption.
+
+This call requires that the vetKD feature is enabled, and the `canister_id` meets the requirement of a canister id.
+Otherwise it will be rejected.
+
+[#ic-vetkd_encrypted_key]
+=== IC method `vetkd_encrypted_key`
+
+NOTE: The vetKD API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+This method returns a vetKD key, encrypted under a user-provided transport public_key, using the given derivation information comprising `derivation_path` and `derivation_id`.
+TODO: explain significance of these two (e.g., why is there a `derivation_id` in addition to the `derivation_path` also used in `vetkd_public_key`).
+The `derivation_path` is a vector of variable length byte strings, containing at most 255 byte strings.
+The `key_id` is a struct specifying both a curve and a name.
+The availability of a particular `key_id` depends on the implementation.
+
+For curve `bls12_381`, the following holds:
+
+* The `transport_public_key` is a G~1~ element in compressed form in https://docs.rs/bls12_381/0.8.0/bls12_381/notes/serialization/index.html[Zcash] encoding. Transport public keys can be obtained by calculating g~1~^tsk^, where the transport secret key _tsk_ is chosen uniformly at random from Z~p~, and g~1~ is a generator of G~1~.
+
+* The returned `encrypted_key` is the blob `E~1~ · E~2~ · E~3~`, where E~1~ and E~3~ are G~1~ elements and E~2~ is a G~2~ element, all in compressed form in https://docs.rs/bls12_381/0.8.0/bls12_381/notes/serialization/index.html[Zcash] encoding, and `·` denotes blob concatenation.
++
+Before usage, the key must be verified by ensuring _e(E~1~, g~2~) = e(g~1~, E~2~)_ and ... TODO: finish.
+
+* The decrypted vetKD key _k_ is obtained by calculating E~3~ · E~1~^-tsk^, where the tsk ∈ Z~p~ is the transport secret key that was used to create the `transport_public_key`.
++
+Before usage, the key must be verified by ensuring _e(k, g~2~) = e(H(dpk || `derivation_id`), dpk)_, where `e: G~1~ x G~2~ -> G~T~` is the pairing, _H_ hashes into G~1~ (TODO: specify!), and _dpk_ is obtained by calling IC method `vetkd_public_key` with the same `derivation_path` and `key_id`, and with the canister id of the caller.
+
+* The (decrypted) vetKD key can act as decryption key in a Boneh-Franklin identity-based encryption (BF-IBE) scheme for identity `derivation_path`, where the corresponding encryption key can be obtained by calling `vetkd_public_key` with the same `derivation_path` and `key_id` as used here. See http://todo.com[TODO] for more details on how to perform asymmetric (identity-based) encryption.
+TODO: is the `derivation_id` relevant for the BF-IBE identity?
+
+* If the `derivation_path` is an empty vector, the decrypted vetKD key is a standard https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature[BLS signature] conforming to the https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature#name-message-augmentation[message augmentation scheme], where the `derivation_id` acts as the message that is signed.
+TODO: verify this with Andrea!
+
+The (decrypted) vetKD key can be used to derive a key for a symmetric encryption scheme (e.g., AES). See http://todo.com[TODO] for more details.
+
+This call requires that the vetKD feature is enabled and the caller is a canister.
+Otherwise it will be rejected.
+
+TODOs:
+* refer to section describing how to BF-IBE encrypt and decrypt.
+* specify further constraints on input data (e.g., max size of `derivation_id`, etc.), if any
+* https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki[BIP-0032]-compatibility is not a topic here, so we don't need to talk about that, or our BIP32 generalization, right?
 
 [#ic-http_request]
 === IC method `http_request`
@@ -1952,7 +2013,7 @@ is the https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04#section-4[BL
 ....
 extract_der : Blob -> Blob
 ....
-implements DER decoding of the public key, following https://tools.ietf.org/html/rfc5480[RFC4580] using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+implements DER decoding of the public key, following https://tools.ietf.org/html/rfc5480[RFC5480] using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
 
 All state trees include the time at path `/time` (see <<state-tree-time>>). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 

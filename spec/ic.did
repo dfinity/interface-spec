@@ -25,6 +25,7 @@ type http_response = record {
 };
 
 type ecdsa_curve = variant { secp256k1; };
+type vetkd_curve = variant { bls12_381; };
 
 type satoshi = nat64;
 
@@ -132,6 +133,19 @@ service ic : {
     derivation_path : vec blob;
     key_id : record { curve: ecdsa_curve; name: text };
   }) -> (record { signature : blob });
+
+  // Threshold key derivation
+  vetkd_public_key : (record {
+    canister_id : opt canister_id;
+    derivation_path : vec blob;
+    key_id : record { curve : vetkd_curve; name : text };
+  }) -> (record { public_key : blob; });
+  vetkd_encrypted_key : (record {
+    derivation_path : vec blob;
+    derivation_id : blob;
+    key_id : record { curve : vetkd_curve; name : text };
+    transport_public_key : blob;
+  }) -> (record { encrypted_key : blob; });
 
   // bitcoin interface
   bitcoin_get_balance: (get_balance_request) -> (satoshi);
