@@ -1460,7 +1460,7 @@ The main purpose of this counter is to facilitate in-canister performance profil
 [#system-api-certified-data]
 === Certified data
 
-For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
 * `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
 +
@@ -3376,8 +3376,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
+    certified_data[A.canister_id] = NoCertifiedData
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
