@@ -600,14 +600,9 @@ All requested paths must have one of the following paths as prefix:
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
+Moreover, all paths with prefix `/request_status/<request_id>` must refer to the same request ID `<request_id>`.
+
 If a path cannot be requested, then the HTTP response to the read state request is undefined.
-
-Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
-
-[NOTE]
-====
-The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
-====
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
 
@@ -1476,7 +1471,7 @@ This system call traps if `src+size` exceeds the size of the WebAssembly memory 
 [#system-api-certified-data]
 === Certified data
 
-For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
 * `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
 +
@@ -3396,8 +3391,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
+    certified_data[A.canister_id] = NoCertifiedData
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
