@@ -381,6 +381,13 @@ type HttpRequest = record {
     certificate_version: opt nat16;
 };
 
+type HttpUpdateRequest = record {
+    method: text;
+    url: text;
+    headers: vec HeaderField;
+    body: blob;
+};
+
 type HttpResponse = record {
     status_code: nat16;
     headers: vec HeaderField;
@@ -409,7 +416,7 @@ type StreamingStrategy = variant {
 
 service : {
     http_request: (request: HttpRequest) -> (HttpResponse) query;
-    http_request_update: (request: HttpRequest) -> (HttpResponse);
+    http_request_update: (request: HttpUpdateRequest) -> (HttpResponse);
 }
 ```
 
@@ -448,7 +455,7 @@ type HttpResponse = record {
 
 service : {
     // ...
-    http_request_update: (request: HttpRequest) -> (HttpResponse);
+    http_request_update: (request: HttpUpdateRequest) -> (HttpResponse);
 }
 ```
 
