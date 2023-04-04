@@ -3391,7 +3391,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    certified_data[A.canister_id] = NoCertifiedData
+    certified_data[A.canister_id] = New_certified_data
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
