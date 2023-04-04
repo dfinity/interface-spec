@@ -926,7 +926,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
   - declare more than 50,000 functions, or
   - declare more than 300 globals, or
   - declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
-  - the total length of `<name>` in exported functions called `canister_update <name>` or `canister_query <name>` exceeds 10,000, or
+  - the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 10,000, or
   - the total size of the exported custom sections exceeds 1MiB.
 
 === Interpretation of numbers
