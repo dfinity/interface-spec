@@ -139,9 +139,7 @@ Response verification fills the security gap left by query calls. It is a versio
    - If the `version` field is equal to `2` then continue.
    - Otherwise, verification fails.
 5. Parse the `expr_path` field from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
-6. Validate that `expr_path` is the most specific expression path in the tree for the given request URL path.
-   - If the absence of a more specific path cannot be proven (a lookup of more specific paths must return `Absent`) as per [lookup](https://internetcomputer.org/docs/current/references/ic-interface-spec/#lookup), verification fails.
-   - If the first segment of the path is not `http_expr`, verification fails.
+6. The parsed `expr_path` is valid as per [Expression Path](#expression-path) otherwise, verification fails.
 7. Case-insensitive search for the `IC-CertificationExpression` header.
    - If no such header is found, verification fails.
    - If the header value is not structured as per [the certificate expression header](#the-certificate-expression-header), verification fails.
@@ -166,7 +164,19 @@ The `IC-Certificate` header is a structured header according to [RFC 8941](https
 The following additional fields are mandatory for response verification version 2 and upwards:
 
 - `version`: String representation of an integer that represents the version of response verification that was used to build the `tree`.
-- `expr_path`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decode into an array of strings, where each string is a segment of a path in the `tree` corresponding to the current request URL. The first segment is always `http_expr`.
+- `expr_path`: [Base64 encoded](https://www.rfc-editor.org/rfc/rfc4648#section-4) string of self-describing, [CBOR-encoded](https://www.rfc-editor.org/rfc/rfc8949.html) bytes that decode into an array of strings.
+
+### Expression Path
+
+The decoded `expr_path` field of [The Certificate Header](#the-certificate-header) is an array of strings that corresponds to a path in the `tree` field of the same header:
+
+- The first segment is always `http_expr`.
+- The last segment is always `<$>` or `<*>`.
+- No segment, aside from the last segment, will be `<$>` or `<*>`.
+- Each segment between `http_expr` and `<$>` or `<*>` will contain a [percent-encoded](https://www.rfc-editor.org/rfc/rfc3986#section-2) segment of the current request URL.
+- The path must be the most specific path for the current request URL in the tree, i.e. a lookup of more specific paths must return `Absent` as per [lookup](https://internetcomputer.org/docs/current/references/ic-interface-spec/#lookup).
+- An `expr_path` that ends in `<$>` is an exact match for the current request URL.
+- `<*>` is treated as a wildcard, so an `expr_path` that ends in `<*>` is a partial match for the current request URL.
 
 ### Certificate Validation
 
