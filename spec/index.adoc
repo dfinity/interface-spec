@@ -1652,12 +1652,12 @@ Provides the history of the canister. Cycles to pay for the call must be explici
 
 The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
 
-The system can drop the oldest canister changes from the list to keep its length bounded (at least `1000` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
+The system can drop the oldest canister changes from the list to keep its length bounded (at least `20` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
 
 The following parameters should be supplied for the call:
 
 * `canister_id`: the canister ID of the canister whose history is requested.
-* `num_requested_changes`: optional, specifies the number of requested canister changes. The call will be charged based on this parameter. If not provided, the maximum of `1000` will be used.
+* `num_requested_changes`: optional, specifies the number of requested canister changes. The call will be charged based on this parameter. If not provided, the maximum of `20` will be used.
 
 The returned response contains the following fields:
 
@@ -4162,7 +4162,7 @@ S with
 
 ==== Trimming canister history
 
-The list of canister changes can be trimmed, but the total number of recorded canister changes cannot be altered. At least 1000 changes are guaranteed to remain in the list of changes.
+The list of canister changes can be trimmed, but the total number of recorded canister changes cannot be altered. At least 20 changes are guaranteed to remain in the list of changes.
 
 Conditions::
 ....
@@ -4170,7 +4170,7 @@ Conditions::
       total_num_changes = N;
       changes = Older_changes · Newer_changes;
     }
-  |Newer_changes| ≥ 1000
+  |Newer_changes| ≥ 20
 ....
 State after::
 ....
