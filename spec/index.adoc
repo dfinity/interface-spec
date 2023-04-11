@@ -1662,7 +1662,7 @@ The following parameters should be supplied for the call:
 The returned response contains the following fields:
 
 * `total_num_changes`: the total number of canister changes that have been ever recorded in the history. This value does not change if the system drops the oldest canister changes from the list of changes.
-* `changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or all changes available in the history if more changes are requested than available in the history.
+* `changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or, if more changes are requested than available in the history, then this list contains all changes available in the history. If `num_requested_changes` is not specified, then this list contains all changes in the history.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
