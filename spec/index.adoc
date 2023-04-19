@@ -560,7 +560,15 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
+The HTTP response to this request can have the following responses:
+
+* 202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use <<http-read-state,`read_state`>> to determine the status of the call.
+* 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+** `reject_message` (`text`): a textual diagnostic message.
+** `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
+* 4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+* 5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
@@ -1457,10 +1465,21 @@ The system resets the counter at the beginning of each <<entry-points>> invocati
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
+[#system-api-controller-check]
+=== Controller check
+
+The canister can check whether a given principal is one of its controllers.
+
+`+ic0.is_controller : (src : i32, size: i32) -> (result: i32)+`
+
+Checks whether the principal identified by `src`/`size` is one of the controllers of the canister. If yes, then a value of 1 is returned, otherwise a 0 is returned. It can be called multiple times.
+
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or the principal identified by `src`/`size` is not a valid binary encoding of a principal.
+
 [#system-api-certified-data]
 === Certified data
 
-For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
 * `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
 +
@@ -2363,6 +2382,7 @@ Timestamp = Nat;
 CanisterVersion = Nat;
 Env = {
   time : Timestamp;
+  controllers : List Principal;
   global_timer : Nat;
   balance : Nat;
   freezing_limit : Nat;
@@ -2789,6 +2809,7 @@ Conditions::
       S.canisters[E.content.canister_id] ≠ EmptyCanister
       Env = {
         time = S.time[E.content.canister_id];
+        controllers = S.controllers[E.content.canister_id];
         global_timer = S.global_timer[E.content.canister_id];
         balance = S.balances[E.content.canister_id]
         freezing_limit = freezing_limit(S, E.content.canister_id);
@@ -3019,6 +3040,7 @@ Conditions::
 
     Env = {
       time = S.time[M.receiver];
+      controllers = S.controllers[M.receiver];
       global_timer = S.global_timer[M.receiver];
       balance = S.balances[M.receiver]
       freezing_limit = freezing_limit(S, M.receiver);
@@ -3354,6 +3376,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       global_timer = 0;
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
@@ -3376,8 +3399,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
+    certified_data[A.canister_id] = New_certified_data
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
@@ -3411,6 +3433,7 @@ Conditions::
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
@@ -4011,6 +4034,7 @@ Conditions::
   lookup(["time"], Cert) = Found S.system_time // or “recent enough”
   Env = {
     time = S.time[Q.receiver];
+    controllers = S.controllers[Q.receiver];
     global_timer = S.global_timer[Q.receiver];
     balance = S.balances[Q.canister_id];
     freezing_limit = freezing_limit(S, Q.canister_id);
@@ -4804,6 +4828,15 @@ ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
 
 ic0.performance_counter<es>(counter_type : i32) : i64 =
   arbitrary()
+
+ic0.is_controller<es>(src: i32, size: i32) : (result: i32) =
+  bytes = copy_from_canister<es>(src, size)
+  if bytes encode a principal then
+    if bytes ∉ es.params.sysenv.controllers
+    then return 0
+    else return 1
+  else
+    Trap {cycles_used = es.cycles_used;}
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return

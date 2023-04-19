@@ -1663,7 +1663,7 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
         (init_return.new_state ret, init_return.new_certified_data ret, init_return.new_global_timer ret, init_return.cycles_used ret)) in
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
-      certified_data := (case new_certified_data of None \<Rightarrow> certified_data S | Some cd \<Rightarrow> list_map_set (certified_data S) cid cd),
+      certified_data := list_map_set (certified_data S) cid (case new_certified_data of None \<Rightarrow> empty_blob | Some cd \<Rightarrow> cd),
       global_timer := list_map_set (global_timer S) cid (case new_global_timer of None \<Rightarrow> 0 | Some new_timer \<Rightarrow> new_timer),
       canister_version := list_map_set (canister_version S) cid (Suc idx),
       balances := list_map_set (balances S) cid (bal - cyc_used),
