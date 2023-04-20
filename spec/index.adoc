@@ -560,7 +560,15 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
+The HTTP response to this request can have the following responses:
+
+* 202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use <<http-read-state,`read_state`>> to determine the status of the call.
+* 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+** `reject_message` (`text`): a textual diagnostic message.
+** `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
+* 4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+* 5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
@@ -600,14 +608,9 @@ All requested paths must have one of the following paths as prefix:
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
+Moreover, all paths with prefix `/request_status/<request_id>` must refer to the same request ID `<request_id>`.
+
 If a path cannot be requested, then the HTTP response to the read state request is undefined.
-
-Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
-
-[NOTE]
-====
-The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
-====
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
 
@@ -928,10 +931,12 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
 * It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
 * The IC may reject WebAssembly modules that
-  + declare more than 6000 functions, or
-  + declare more than 200 globals, or
-  + declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
-  + the total size of the exported custom sections exceeds 1MiB
+  - declare more than 50,000 functions, or
+  - declare more than 300 globals, or
+  - declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
+  - the number of all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 1,000, or
+  - the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
+  - the total size of the exported custom sections exceeds 1MiB.
 
 === Interpretation of numbers
 
@@ -1462,10 +1467,21 @@ The system resets the counter at the beginning of each <<entry-points>> invocati
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
+[#system-api-controller-check]
+=== Controller check
+
+The canister can check whether a given principal is one of its controllers.
+
+`+ic0.is_controller : (src : i32, size: i32) -> (result: i32)+`
+
+Checks whether the principal identified by `src`/`size` is one of the controllers of the canister. If yes, then a value of 1 is returned, otherwise a 0 is returned. It can be called multiple times.
+
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or the principal identified by `src`/`size` is not a valid binary encoding of a principal.
+
 [#system-api-certified-data]
 === Certified data
 
-For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
 * `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
 +
@@ -2368,6 +2384,7 @@ Timestamp = Nat;
 CanisterVersion = Nat;
 Env = {
   time : Timestamp;
+  controllers : List Principal;
   global_timer : Nat;
   balance : Nat;
   freezing_limit : Nat;
@@ -2794,6 +2811,7 @@ Conditions::
       S.canisters[E.content.canister_id] ≠ EmptyCanister
       Env = {
         time = S.time[E.content.canister_id];
+        controllers = S.controllers[E.content.canister_id];
         global_timer = S.global_timer[E.content.canister_id];
         balance = S.balances[E.content.canister_id]
         freezing_limit = freezing_limit(S, E.content.canister_id);
@@ -3024,6 +3042,7 @@ Conditions::
 
     Env = {
       time = S.time[M.receiver];
+      controllers = S.controllers[M.receiver];
       global_timer = S.global_timer[M.receiver];
       balance = S.balances[M.receiver]
       freezing_limit = freezing_limit(S, M.receiver);
@@ -3359,6 +3378,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       global_timer = 0;
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
@@ -3381,8 +3401,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
+    certified_data[A.canister_id] = New_certified_data
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
@@ -3416,6 +3435,7 @@ Conditions::
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
@@ -4016,6 +4036,7 @@ Conditions::
   lookup(["time"], Cert) = Found S.system_time // or “recent enough”
   Env = {
     time = S.time[Q.receiver];
+    controllers = S.controllers[Q.receiver];
     global_timer = S.global_timer[Q.receiver];
     balance = S.balances[Q.canister_id];
     freezing_limit = freezing_limit(S, Q.canister_id);
@@ -4169,7 +4190,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
-  context : I | G | U | Q | Ry | Rt | C | F | T;
+  context : I | G | U | Q | Ry | Rt | C | F | T | s;
 }
 ....
 
@@ -4177,12 +4198,6 @@ This allows us to model WebAssembly functions, including host-provided imports, 
 Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that of one such function invocation.
 
 WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function.
-
-==== The concrete `CanisterModule`
-
-Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
-
-* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
 
 * For more convenience when creating a new `ExecutionState`, we define the following partial records:
 +
@@ -4192,6 +4207,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
+  sysenv = (undefined);
   cycles_refunded = 0;
   method_name = NoText;
 }
@@ -4214,6 +4230,17 @@ empty_execution_state = {
 }
 ....
 
+==== The concrete `CanisterModule`
+
+Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function under the following execution state
+....
+ref {empty_execution_state with
+    context = s
+  }
+....
+Note that `wasm_state` and `params` are undefined in the `(start)` function's execution state which is fine because the System API does not have access to those parts of the execution state during the execution of the `(start)` function.
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
@@ -4247,8 +4274,6 @@ init = λ (self_id, arg, caller, sysenv) →
     cycles_used = es.cycles_used;
   }
 ....
-+
-This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
 
 * The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 +
@@ -4344,8 +4369,6 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
     cycles_used = es.cycles_used;
   }
 ....
-+
-This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
@@ -4584,19 +4607,6 @@ ic0.msg_cycles_refunded128<es>(dst : i32) =
   let amount = es.params.cycles_refunded
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
-ic0.accept_message<es>() =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
-  es.ingress_filter = Accept
-
-ic0.msg_method_name_size<es>() : i32 =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  return |es.method_name|
-
-ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  copy_to_canister<es>(dst, offset, size, es.params.method_name)
-
 ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let amount = min(max_amount, es.cycles_available)
@@ -4615,27 +4625,46 @@ ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : 
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_self_size<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.self_id|
 
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.balance >= 2^64^ then Trap {cycles_used = es.cycles_used;}
   return es.balance
 
 ic0.canister_cycles_balance128<es>(dst : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   let amount = es.balance
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_status<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   match es.params.sysenv.canister_status with
     Running  -> return 1
     Stopping -> return 2
     Stopped  -> return 3
 
 ic0.canister_version<es>() : i64 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.canister_version
+
+ic0.msg_method_name_size<es>() : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  return |es.method_name|
+
+ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  copy_to_canister<es>(dst, offset, size, es.params.method_name)
+
+ic0.accept_message<es>() =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
+  es.ingress_filter = Accept
 
 ic0.call_new<es>(
     callee_src  : i32,
@@ -4675,11 +4704,6 @@ ic0.call_new<es>(
     };
   }
 
-ic0.call_data_append<es> (src : i32, size : i32) =
-  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
-  if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-  es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
-
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
@@ -4687,6 +4711,11 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
+
+ic0.call_data_append<es> (src : i32, size : i32) =
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
+  es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_cycles_add<es>(amount : i64) =
   if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
@@ -4727,11 +4756,13 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   page_count := |es.wasm_state.stable_mem| / 64k
   return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if arbitrary() then return -1
   else
@@ -4742,6 +4773,7 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
     return old_size
 
 ic0.stable_write<es>(offset : i32, src : i32, size : i32)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
@@ -4749,6 +4781,7 @@ ic0.stable_write<es>(offset : i32, src : i32, size : i32)
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
@@ -4756,9 +4789,11 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
 ic0.stable64_size<es>() : (page_count : i64) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.stable_mem| / 64k
 
 ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if arbitrary()
   then return -1
   else
@@ -4768,18 +4803,41 @@ ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
     return old_size
 
 ic0.stable64_write<es>(offset : i64, src : i64, size : i64)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable64_read<es>(dst : i64, offset : i64, size : i64)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
+ic0.certified_data_set<es>(src: i32, size: i32) =
+  if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  es.new_certified_data := es.wasm_state[src..src+size]
+
+ic0.data_certificate_present<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate
+  then return 0
+  else return 1
+
+ic0.data_certificate_size<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
+  return |es.params.sysenv.certificate|
+
+ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
+  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
+
 ic0.time<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
@@ -4790,25 +4848,17 @@ ic0.global_timer_set<es>(timestamp: i64) : i64 =
   then return es.params.sysenv.global_timer
   else return prev_global_timer
 
-ic0.certified_data_set<es>(src: i32, size: i32) =
-  if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
-  es.new_certified_data := es.wasm_state[src..src+size]
-
-ic0.data_certificate_present<es>() : i32 =
-  if es.params.sysenv.certificate = NoCertificate
-  then return 0
-  else return 1
-
-ic0.data_certificate_size<es>() : i32 =
-  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
-  return |es.params.sysenv.certificate|
-
-ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
-  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
-
 ic0.performance_counter<es>(counter_type : i32) : i64 =
   arbitrary()
+
+ic0.is_controller<es>(src: i32, size: i32) : (result: i32) =
+  bytes = copy_from_canister<es>(src, size)
+  if bytes encode a principal then
+    if bytes ∉ es.params.sysenv.controllers
+    then return 0
+    else return 1
+  else
+    Trap {cycles_used = es.cycles_used;}
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return
