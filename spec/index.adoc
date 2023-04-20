@@ -4199,12 +4199,6 @@ Syntactically, we express this using an implicit argument of type `ref Execution
 
 WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function.
 
-==== The concrete `CanisterModule`
-
-Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
-
-* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
-
 * For more convenience when creating a new `ExecutionState`, we define the following partial records:
 +
 ....
@@ -4213,6 +4207,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
+  sysenv = (undefined);
   cycles_refunded = 0;
   method_name = NoText;
 }
@@ -4235,6 +4230,17 @@ empty_execution_state = {
 }
 ....
 
+==== The concrete `CanisterModule`
+
+Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function under the following execution state
+....
+ref {empty_execution_state with
+    context = s
+  }
+....
+Note that `wasm_state` and `params` are undefined in the `(start)` function's execution state which is fine because the System API does not have access to those parts of the execution state during the execution of the `(start)` function.
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
@@ -4268,8 +4274,6 @@ init = λ (self_id, arg, caller, sysenv) →
     cycles_used = es.cycles_used;
   }
 ....
-+
-This formulation checks afterwards that the system calls `call.perform` or `msg.reply` were not invoked; an implementation can of course trap as soon as these system calls are invoked.
 
 * The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 +
@@ -4365,8 +4369,6 @@ query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
     cycles_used = es.cycles_used;
   }
 ....
-+
-This formulation checks afterwards that the system call `ic0.call_perform` was not invoked; an implementation can of course trap already when these system calls have been invoked.
 +
 By construction, the (possibly modified) `es.wasm_state` is discarded.
 
@@ -4623,32 +4625,32 @@ ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : 
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_self_size<es>() : i32 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.self_id|
 
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.balance >= 2^64^ then Trap {cycles_used = es.cycles_used;}
   return es.balance
 
 ic0.canister_cycles_balance128<es>(dst : i32) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   let amount = es.balance
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_status<es>() : i32 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   match es.params.sysenv.canister_status with
     Running  -> return 1
     Stopping -> return 2
     Stopped  -> return 3
 
 ic0.canister_version<es>() : i64 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.canister_version
 
 ic0.msg_method_name_size<es>() : i32 =
@@ -4754,13 +4756,13 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   page_count := |es.wasm_state.stable_mem| / 64k
   return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if arbitrary() then return -1
   else
@@ -4771,7 +4773,7 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
     return old_size
 
 ic0.stable_write<es>(offset : i32, src : i32, size : i32)
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
@@ -4779,7 +4781,7 @@ ic0.stable_write<es>(offset : i32, src : i32, size : i32)
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
@@ -4787,11 +4789,11 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
 ic0.stable64_size<es>() : (page_count : i64) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.stable_mem| / 64k
 
 ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if arbitrary()
   then return -1
   else
@@ -4801,14 +4803,14 @@ ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
     return old_size
 
 ic0.stable64_write<es>(offset : i64, src : i64, size : i64)
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable64_read<es>(dst : i64, offset : i64, size : i64)
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
 
@@ -4819,23 +4821,23 @@ ic0.certified_data_set<es>(src: i32, size: i32) =
   es.new_certified_data := es.wasm_state[src..src+size]
 
 ic0.data_certificate_present<es>() : i32 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.params.sysenv.certificate = NoCertificate
   then return 0
   else return 1
 
 ic0.data_certificate_size<es>() : i32 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
   return |es.params.sysenv.certificate|
 
 ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
 ic0.time<es>() : i32 =
-  if es.context ∉ {s} then Trap {cycles_used = es.cycles_used;}
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
