@@ -560,7 +560,15 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
+The HTTP response to this request can have the following responses:
+
+* 202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use <<http-read-state,`read_state`>> to determine the status of the call.
+* 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+** `reject_message` (`text`): a textual diagnostic message.
+** `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
+* 4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+* 5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
 This request type can _also_ be used to call a query method. A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
