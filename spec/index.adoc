@@ -1889,8 +1889,8 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the
 specified Bitcoin network.
-Note that the function does not provide any guarantees that a submitted
-transaction will ever appear in a block.
+Note that the function does not provide any guarantees that the transaction will make it into the mempool or that
+the transaction will ever appear in a block.
 
 [#ic-bitcoin_get_current_fee_percentiles]
 === IC method `bitcoin_get_current_fee_percentiles`
