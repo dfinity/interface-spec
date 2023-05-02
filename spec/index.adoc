@@ -560,7 +560,15 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-The HTTP response to this request has an empty body and HTTP status 202, or a HTTP error (4xx or 5xx). Paranoid agents should not trust this response, and use <<http-read-state,`read_state`>> to determine the status of the call.
+The HTTP response to this request can have the following responses:
+
+* 202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use <<http-read-state,`read_state`>> to determine the status of the call.
+* 200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+** `reject_code` (`nat`): The reject code (see <<reject-codes>>).
+** `reject_message` (`text`): a textual diagnostic message.
+** `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
+* 4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+* 5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
 This request type can _also_ be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper <<http-query>> below, if they want to get a _certified_ response. Note that the canister state will not be changed by sending a call request type for a query method.
 
@@ -600,14 +608,9 @@ All requested paths must have one of the following paths as prefix:
    - `<name>` is a public custom section or
    - `<name>` is a private custom section and the sender of the read state request is a controller of the canister.
 
+Moreover, all paths with prefix `/request_status/<request_id>` must refer to the same request ID `<request_id>`.
+
 If a path cannot be requested, then the HTTP response to the read state request is undefined.
-
-Read state requests containing many requested paths might be rejected with a 4xx HTTP status code.
-
-[NOTE]
-====
-The Internet Computer blockchain mainnet might reject read state requests that request more than 1 path with prefix `/request_status/<request_id>`.
-====
 
 Note that the paths `/canisters/<canister_id>/certified_data` are not accessible with this method; these paths are only exposed to the canisters themselves via the System API (see <<system-api-certified-data>>).
 
@@ -933,10 +936,12 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 * It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
 * It may not have other custom sections the names of which start with the prefix `icp:` besides the `icp:public ` and `icp:private `.
 * The IC may reject WebAssembly modules that
-  + declare more than 6000 functions, or
-  + declare more than 200 globals, or
-  + declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
-  + the total size of the exported custom sections exceeds 1MiB
+  - declare more than 50,000 functions, or
+  - declare more than 300 globals, or
+  - declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
+  - the number of all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 1,000, or
+  - the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
+  - the total size of the exported custom sections exceeds 1MiB.
 
 === Interpretation of numbers
 
@@ -1472,10 +1477,21 @@ The system resets the counter at the beginning of each <<entry-points>> invocati
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
+[#system-api-controller-check]
+=== Controller check
+
+The canister can check whether a given principal is one of its controllers.
+
+`+ic0.is_controller : (src : i32, size: i32) -> (result: i32)+`
+
+Checks whether the principal identified by `src`/`size` is one of the controllers of the canister. If yes, then a value of 1 is returned, otherwise a 0 is returned. It can be called multiple times.
+
+This system call traps if `src+size` exceeds the size of the WebAssembly memory or the principal identified by `src`/`size` is not a valid binary encoding of a principal.
+
 [#system-api-certified-data]
 === Certified data
 
-For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters, this blob is the empty blob (`""`).
+For each canister, the IC keeps track of “certified data”, a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
 * `+ic0.certified_data_set : (src: i32, size : i32) -> ()+`
 +
@@ -1772,6 +1788,8 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 
 NOTE: Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
 
+WARNING: If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB` response will be charged for, which is expensive in terms of cycles. Always set the parameter to a reasonable upper bound of the expected network response size to not incur unnecessary cycles costs for your request.
+
 [#ic-provisional_create_canister_with_cycles]
 === IC method `provisional_create_canister_with_cycles`
 
@@ -1883,8 +1901,8 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the
 specified Bitcoin network.
-Note that the function does not provide any guarantees that a submitted
-transaction will ever appear in a block.
+Note that the function does not provide any guarantees that the transaction will make it into the mempool or that
+the transaction will ever appear in a block.
 
 [#ic-bitcoin_get_current_fee_percentiles]
 === IC method `bitcoin_get_current_fee_percentiles`
@@ -2140,150 +2158,7 @@ lookup_path(["e"],      pruned_tree) = Absent
 [#http-gateway]
 == The HTTP Gateway protocol
 
-This section specifies the _HTTP Gateway protocol_, which allows canisters to handle conventional HTTP requests.
-
-This feature involves the help of a _HTTP Gateway_ that translates between HTTP requests and the IC protocol. Such a gateway could be a stand-alone proxy, it could be implemented in a web browsers (natively, via plugin or via a service worker) or in other ways. This document describes the interface and semantics of this protocol independent of a concrete Gateway, so that all Gateway implementations can be compatible.
-
-Conceptually, this protocol builds on top of the interface specified in the remainder of this document, and therefore is an “application-level” interface, not a feature of the core Internet Computer system described in the other sections, and could be a separate document. We nevertheless include this protocol in the Internet Computer Interface Specification because of its important role in the ecosystem and due to the importance of keeping multiple Gateway implementations in sync.
-
-=== Overview
-
-A HTTP request by an HTTP client is handled by these steps:
-
-1. The Gateway resolves the Host of the request to a canister id.
-2. The Gateway Candid-encodes the HTTP request data.
-3. The Gateway invokes the canister via a query call to `http_request`.
-4. The canister handles the request and returns a HTTP response, encoded in Candid, together with additional metadata.
-5. If requested by the canister, the Gateway sends the request again via an update call to `http_request_update`.
-6. If applicable, the Gateway fetches further body data via streaming query calls.
-7. If applicable, the Gateway validates the certificate of the response.
-8. The Gateway sends the response to the HTTP client.
-
-[#http-gateway-interface]
-=== Candid interface
-
-The following interface description, in https://github.com/dfinity/candid/blob/master/spec/Candid.md[Candid syntax], describes the expected Canister interface. You can also link:{attachmentsdir}/http-gateway.did[download the file].
-----
-include::{example}http-gateway.did[]
-----
-
-Only canisters that use the “Upgrade to update calls” feature need to provide the `http_request_update` method.
-
-NOTE: Canisters not using these features can completely leave out the `streaming_strategy` and/or `upgrade` fields in the `HttpResponse` they return, due to how Candid subtyping works. This might simplify their code.
-
-[#http-gateway-name-resolution]
-=== Canister resolution
-
-The Gateway needs to know the canister id of the canister to talk to, and obtains that information from the hostname as follows:
-
-1. If the hostname is in the following table, use the given canister ids:
-+
-.Canister hostname resolution
-|=====================================================
-| Hostname             | Canister id
-| `identity.ic0.app`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
-| `nns.ic0.app`        | `qoctq-giaaa-aaaaa-aaaea-cai`
-| `dscvr.one`          | `h5aet-waaaa-aaaab-qaamq-cai`
-| `dscvr.ic0.app`      | `h5aet-waaaa-aaaab-qaamq-cai`
-| `personhood.ic0.app` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
-|=====================================================
-
-2. Check whether the hostname is a _raw_ hostname (e.g., `<name>.raw.ic0.app`). If it is the case, fail and handle the request as a Web2 request, otherwise continue.
-
-3. Check whether the canister ID is embedded in the hostname by splitting the hostname and finding the first occurrence of a valid canister ID from the right. The part of the hostname to the right of the canister ID, is the gateway (e.g., `ic0.app` is the gateway for `rdmx6-jaaaa-aaaaa-aaadq-cai.ic0.app`). If there is a canister ID embedded in the hostname, use it.
-
-4. Check whether the canister is hosted on the IC using a custom domain. The client-side implementation can choose one of the following two options:
-
-  * Check whether there is a TXT record containing a canister ID at the `_canister-id`-subdomain (e.g., to see whether `foo.com` is hosted on the IC, make a DNS lookup for the TXT record of `_canister-id.foo.com`);
-
-  * Make a `HEAD` request to the hostname. If the response contains an `x-ic-canister-id` and `x-ic-gateway` header, use the canister ID with the gateway specified in the headers.
-
-5. Else fail and handle the request as a Web2 request.
-
-If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app` it is a _raw_ hostname.
-
-=== Request encoding
-
-The HTTP request is encoded into the `HttpRequest` Candid structure.
-
-* The `method` field contains the HTTP method (e.g. `HTTP`), in upper case.
-
-* The `url` field contains the URL from the HTTP request line, i.e. without protocol or hostname, and including query parameters.
-
-* The `headers` field contains the headers of the HTTP request.
-
-* The `body` field contains the body of the HTTP request (without any content encodings processed by the Gateway).
-
-=== Upgrade to update calls
-
-If the canister sets `upgrade = opt true` in the `HttpResponse` reply from `http_request`, then the Gateway ignores all other fields of the reply. The Gateway performs an _update_ call to `http_request_update`, passing the same `HttpRequest` record as the argument, and uses that response instead.
-
-The value of the `upgrade` field returned from `http_request_update` is ignored.
-
-=== Response decoding
-
-The Gateway assembles the HTTP response from the given `HttpResponse` record:
-
-* The HTTP response status code is taken from the `status_code` field.
-
-* The HTTP response headers are taken from the `headers` field.
-+
-NOTE: Not all Gateway implementations may be able to pass on all forms of headers. In particular, Service Workers are unable to pass on the `Set-Cookie` header.
-+
-[NOTE]
-====
-HTTP Gateways may add additional headers. In particular, the following headers may be set:
-
-....
-access-control-allow-origin: *
-access-control-allow-methods: GET, POST, HEAD, OPTIONS
-access-control-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Cookie
-access-control-expose-headers: Content-Length,Content-Range
-x-cache-status: MISS
-....
-====
-
-* The HTTP response body is initialized with the value of the `body` field, and further assembled as per the <<http-gateway-streaming,streaming protocol>>.
-
-[#http-gateway-streaming]
-=== Response body streaming
-
-The HTTP Gateway protocol has provisions to transfer further chunks of the body data from the canister to the HTTP Gateway, to overcome the message limit of the Internet Computer. This streaming protocol is independent of any possible streaming of data between the HTTP Gateway and the HTTP client. The gateway may assemble the response in whole before passing it on, or pass the chunks on directly, on the TCP or HTTP level, as it sees fit. When the Gateway is <<http-gateway-certification,certifying the response>>, it must not pass on uncertified chunks.
-
-If the `streaming_strategy` field of the `HttpResponse` is set, the HTTP Gateway then uses further query calls to obtain further chunks to append to the body:
-
-1. If the function reference in the `callback` field of the `streaming_strategy` is not a method of the given canister, the Gateway fails the request.
-
-2. Else, it makes a query call to the given method, passing the `token` value given in the `streaming_strategy` as the argument.
-
-3. That query method returns a `StreamingCallbackHttpResponse`. The `body` therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the `token` field, until that field is `null`.
-
-WARNING: The type of the `token` value is chosen by the canister; the HTTP Gateway obtains the Candid type of the encoded message from the canister, and uses it when passing the token back to the canister. This generic use of Candid is not covered by the Candid specification, and may not be possible in some cases (e.g. when using “future types”). Canister authors may have to use “simple” types.
-
-
-[#http-gateway-certification]
-=== Response certification
-
-If the hostname was safe, the HTTP Gateway performs _certificate validation_:
-
-1. It searches for a response header called `Ic-Certificate` (case-insensitive).
-
-2. The value of the header must be a structured header according to RFC 8941 with fields `certificate` and `tree`, both being byte sequences.
-
-3. The `certificate` must be a valid certificate as per <<certification>>, signed by the root key. If the certificate contains a subnet delegation, the delegation must be valid for the given canister. The timestamp in `/time` must be recent. The subnet state tree in the certificate must reveal the canister’s <<state-tree-certified-data,certified data>>.
-
-4. The `tree` must be a hash tree as per <<certification-encoding>>.
-
-5. The root hash of that `tree` must match the canister’s certified data.
-
-6. The path `["http_assets",<url>]`, where `url` is the utf8-encoded `url` from the `HttpRequest` must exist and be a leaf.  Else, if it does not exist, `["http_assets","/index.html"]` must exist and be a leaf.
-
-7. That leaf must contain the SHA-256 hash of the _decoded_ body.
-+
-The decoded body is the body of the HTTP response (in particular, after assembling streaming chunks), decoded according to the `Content-Encoding` header, if present. Supported encodings for `Content-Encoding` are `gzip` and `deflate.`
-
-WARNING: The certification protocol only covers the mapping from request URL to response body. It completely ignores the request method and headers, and does not cover the response headers and status code.
-
+The HTTP Gateway Protocol has been moved into its own [specification](https://internetcomputer.org/docs/current/references/http-gateway-protocol-spec). 
 
 [#abstract-behavior]
 == Abstract behavior
@@ -2378,6 +2253,7 @@ Timestamp = Nat;
 CanisterVersion = Nat;
 Env = {
   time : Timestamp;
+  controllers : List Principal;
   global_timer : Nat;
   balance : Nat;
   freezing_limit : Nat;
@@ -2816,6 +2692,7 @@ Conditions::
       S.canisters[E.content.canister_id] ≠ EmptyCanister
       Env = {
         time = S.time[E.content.canister_id];
+        controllers = S.controllers[E.content.canister_id];
         global_timer = S.global_timer[E.content.canister_id];
         balance = S.balances[E.content.canister_id]
         freezing_limit = freezing_limit(S, E.content.canister_id);
@@ -3046,6 +2923,7 @@ Conditions::
 
     Env = {
       time = S.time[M.receiver];
+      controllers = S.controllers[M.receiver];
       global_timer = S.global_timer[M.receiver];
       balance = S.balances[M.receiver]
       freezing_limit = freezing_limit(S, M.receiver);
@@ -3382,6 +3260,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       global_timer = 0;
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
@@ -3406,8 +3285,7 @@ S with
       public_custom_sections = Public_custom_sections;
       private_custom_sections = Private_custom_sections;
     }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
+    certified_data[A.canister_id] = New_certified_data
     if New_global_timer ≠ NoGlobalTimer:
       global_timer[A.canister_id] = New_global_timer
     else:
@@ -3441,6 +3319,7 @@ Conditions::
     S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
     Env = {
       time = S.time[A.canister_id];
+      controllers = S.controllers[A.canister_id];
       balance = S.balances[A.canister_id];
       freezing_limit = freezing_limit(S, A.canister_id);
       certificate = NoCertificate;
@@ -4261,7 +4140,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
-  context : I | G | U | Q | Ry | Rt | CRy | CRt | C | CC | F | T;
+  context : I | G | U | Q | Ry | Rt | CRy | CRt | C | CC | F | T | s;
 }
 ....
 
@@ -4269,12 +4148,6 @@ This allows us to model WebAssembly functions, including host-provided imports, 
 Syntactically, we express this using an implicit argument of type `ref ExecutionState` in angle brackets (e.g. `func<es>(x)` for the invocation of a WebAssembly function with type `+(x : i32) -> ()+`).  The lifetime of the `ExecutionState` data structure is that of one such function invocation.
 
 WARNING: It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function.
-
-==== The concrete `CanisterModule`
-
-Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
-
-* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function.
 
 * For more convenience when creating a new `ExecutionState`, we define the following partial records:
 +
@@ -4284,6 +4157,7 @@ empty_params = {
   caller = NoCaller;
   reject_code = 0;
   reject_message = "";
+  sysenv = (undefined);
   cycles_refunded = 0;
   method_name = NoText;
 }
@@ -4306,6 +4180,17 @@ empty_execution_state = {
 }
 ....
 
+==== The concrete `CanisterModule`
+
+Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
+
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function under the following execution state
+....
+ref {empty_execution_state with
+    context = s
+  }
+....
+Note that `wasm_state` and `params` are undefined in the `(start)` function's execution state which is fine because the System API does not have access to those parts of the execution state during the execution of the `(start)` function.
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
@@ -4747,19 +4632,6 @@ ic0.msg_cycles_refunded128<es>(dst : i32) =
   let amount = es.params.cycles_refunded
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
-ic0.accept_message<es>() =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
-  es.ingress_filter = Accept
-
-ic0.msg_method_name_size<es>() : i32 =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  return |es.method_name|
-
-ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
-  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
-  copy_to_canister<es>(dst, offset, size, es.params.method_name)
-
 ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
   if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
   let amount = min(max_amount, es.cycles_available)
@@ -4778,27 +4650,46 @@ ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : 
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_self_size<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.self_id|
 
 ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
 ic0.canister_cycle_balance<es>() : i64 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if es.balance >= 2^64^ then Trap {cycles_used = es.cycles_used;}
   return es.balance
 
 ic0.canister_cycles_balance128<es>(dst : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   let amount = es.balance
   copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
 ic0.canister_status<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   match es.params.sysenv.canister_status with
     Running  -> return 1
     Stopping -> return 2
     Stopped  -> return 3
 
 ic0.canister_version<es>() : i64 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.canister_version
+
+ic0.msg_method_name_size<es>() : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  return |es.method_name|
+
+ic0.msg_method_name_copy<es>(dst : i32, offset : i32, size : i32) : i32 =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  copy_to_canister<es>(dst, offset, size, es.params.method_name)
+
+ic0.accept_message<es>() =
+  if es.context ∉ {F} then Trap {cycles_used = es.cycles_used;}
+  if es.ingress_filter = Accept then Trap {cycles_used = es.cycles_used;}
+  es.ingress_filter = Accept
 
 ic0.call_new<es>(
     callee_src  : i32,
@@ -4838,11 +4729,6 @@ ic0.call_new<es>(
     };
   }
 
-ic0.call_data_append<es> (src : i32, size : i32) =
-  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
-  if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-  es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
-
 ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
@@ -4850,6 +4736,11 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
+
+ic0.call_data_append<es> (src : i32, size : i32) =
+  if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
+  if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
+  es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
 ic0.call_cycles_add<es>(amount : i64) =
   if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
@@ -4890,11 +4781,13 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   page_count := |es.wasm_state.stable_mem| / 64k
   return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if arbitrary() then return -1
   else
@@ -4905,6 +4798,7 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
     return old_size
 
 ic0.stable_write<es>(offset : i32, src : i32, size : i32)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
@@ -4912,6 +4806,7 @@ ic0.stable_write<es>(offset : i32, src : i32, size : i32)
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
@@ -4919,9 +4814,11 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
 ic0.stable64_size<es>() : (page_count : i64) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.stable_mem| / 64k
 
 ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if arbitrary()
   then return -1
   else
@@ -4931,18 +4828,41 @@ ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
     return old_size
 
 ic0.stable64_write<es>(offset : i64, src : i64, size : i64)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable64_read<es>(dst : i64, offset : i64, size : i64)
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
+ic0.certified_data_set<es>(src: i32, size: i32) =
+  if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  es.new_certified_data := es.wasm_state[src..src+size]
+
+ic0.data_certificate_present<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate
+  then return 0
+  else return 1
+
+ic0.data_certificate_size<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
+  return |es.params.sysenv.certificate|
+
+ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
+  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
+
 ic0.time<es>() : i32 =
+  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.time
 
 ic0.global_timer_set<es>(timestamp: i64) : i64 =
@@ -4953,25 +4873,17 @@ ic0.global_timer_set<es>(timestamp: i64) : i64 =
   then return es.params.sysenv.global_timer
   else return prev_global_timer
 
-ic0.certified_data_set<es>(src: i32, size: i32) =
-  if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
-  es.new_certified_data := es.wasm_state[src..src+size]
-
-ic0.data_certificate_present<es>() : i32 =
-  if es.params.sysenv.certificate = NoCertificate
-  then return 0
-  else return 1
-
-ic0.data_certificate_size<es>() : i32 =
-  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
-  return |es.params.sysenv.certificate|
-
-ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-  if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
-  copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
-
 ic0.performance_counter<es>(counter_type : i32) : i64 =
   arbitrary()
+
+ic0.is_controller<es>(src: i32, size: i32) : (result: i32) =
+  bytes = copy_from_canister<es>(src, size)
+  if bytes encode a principal then
+    if bytes ∉ es.params.sysenv.controllers
+    then return 0
+    else return 1
+  else
+    Trap {cycles_used = es.cycles_used;}
 
 ic0.debug_print<es>(src : i32, size : i32) =
   return
