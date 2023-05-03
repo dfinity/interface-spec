@@ -680,7 +680,7 @@ The envelope, i.e. the overall request, has the following keys:
 
 * `content` (`record`): the actual request content
 * `sender_pubkey` (`blob`, optional): Public key used to authenticate this request. Since a user may in the future have more than one key, this field tells the IC which key is used.
-* `sender_delegation` (`array` of maps, optional): a chain of delegations, starting with the one signed by `sender_pubkey` and ending with the one delegating to the key relating to `sender_sig`.
+* `sender_delegation` (`array` of maps, optional): a chain of delegations, starting with the one signed by `sender_pubkey` and ending with the one delegating to the key relating to `sender_sig`. Every public key in the chain of delegations should appear exactly once: cycles (a public key delegates to another public key that already previously appeared in the chain) or self-signed delegations (a public key delegates to itself) are not allowed and such requests will be refused by the IC.
 * `sender_sig` (`blob`, optional): Signature to authenticate this request.
 
 The public key must authenticate the `sender` principal:
@@ -699,7 +699,7 @@ If delegation is used, then the `sender_delegation` field contains an array of d
  * `delegation` (`map`): Map with fields:
    - `pubkey` (`blob`): Public key as described in <<signatures>>.
    - `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
-   - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list.
+   - `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list. The list must contain no more than 1000 elements; otherwise, the request will not be accepted by the IC.
    - `senders` (`array` of `Principal`, optional): If this field is set, the delegation only applies for requests originating from the principals in the list.
  * `signature` (`blob`): Signature on the 32-byte <<hash-of-map, representation-independent hash>> of the map contained in the `delegation` field as described in <<signatures>>, using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 +
@@ -707,7 +707,7 @@ For the first delegation in the array, this signature is created with the key co
 
 The `sender_sig` field is calculated by signing the concatenation of the 11 bytes `\x0Aic-request` (the domain separator) and the 32 byte <<request-id, request id>> with the secret key that belongs to the key specified in the last delegation or, if no delegations are present, the public key specified in `sender_pubkey`.
 
-The delegation field, if present, must not contain more than four delegations.
+The delegation field, if present, must not contain more than 20 delegations.
 
 [#hash-of-map]
 === Representation-independent hashing of structured data
