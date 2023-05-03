@@ -4093,45 +4093,88 @@ empty_execution_state = {
 
 Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
 
-* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, including executing a potential `(start)` function under the following execution state
+* The `initial_wasm_store` mentioned below is the store of the WebAssembly module after _instantiation_ (as per WebAssembly spec) of the WasmModule contained in the <<canister-module-format,canister module>>, before executing a potential `(start)` function.
+
+* We define a helper function
++
 ....
-ref {empty_execution_state with
-    context = s
+start : (CanisterId) -> Trap { cycles_used : Nat; } | Return {
+    new_state : WasmState;
+    cycles_used : Nat;
   }
 ....
-Note that `wasm_state` and `params` are undefined in the `(start)` function's execution state which is fine because the System API does not have access to those parts of the execution state during the execution of the `(start)` function.
++
+modelling execution of a potential `(start)` function.
++
+If the WebAssembly module does not export a function called under the name `start`, then
++
+....
+start = λ (self_id) →
+  Return {
+    new_state = {store = initial_wasm_store; self_id = self_id; stable_mem = ""};
+    cycles_used = 0;
+  }
+....
++
+Otherwise, if the WebAssembly module exports a function `func` under the name `start`, it is
++
+....
+start = λ (self_id) →
+  let es = ref {empty_execution_state with
+    wasm_state = {store = initial_wasm_store; self_id = self_id; stable_mem = ""};
+    context = s;
+  }
+  try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
+  Return {
+    new_state = es.wasm_state;
+    cycles_used = es.cycles_used;
+  }
+....
++
+Note that `params` are undefined in the `(start)` function's execution state which is fine because the System API does not have access to that part of the execution state during the execution of the `(start)` function.
 
 * The `init` field of the `CanisterModule` is defined as follows:
 +
-If the WebAssembly module does not export a function called under the name `canister_init`, then the argument blob is ignored and the `initial_wasm_store` is returned:
+If the WebAssembly module does not export a function called under the name `canister_init`, then
 +
 ....
 init = λ (self_id, arg, caller, sysenv) →
-  Return {
-    new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" };
-    new_certified_data = NoCertifiedData;
-    new_global_timer = NoGlobalTimer;
-    cycles_used = 0;
-  }
+  match start(self_id) with
+    Trap trap → Trap trap
+    Return res → Return {
+        new_state = res.wasm_state;
+        new_certified_data = NoCertifiedData;
+        new_global_timer = NoGlobalTimer;
+        cycles_used = res.cycles_used;
+      }
 ....
 +
 Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 +
 ....
 init = λ (self_id, arg, caller, sysenv) →
-  let es = ref {empty_execution_state with
-      wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = "" }
-      params = empty_params with { arg = arg; caller = caller; sysenv }
-      balance = sysenv.balance
-      context = I
-    }
-  try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-  Return {
-    new_state = es.wasm_state;
-    new_certified_data = es.new_certified_data;
-    new_global_timer = es.new_global_timer;
-    cycles_used = es.cycles_used;
-  }
+  match start(self_id) with
+    Trap trap → Trap trap
+    Return res →
+      let es = ref {empty_execution_state with
+          wasm_state = res.wasm_state
+          params = empty_params with {
+              arg = arg;
+              caller = caller;
+              sysenv = sysenv with {
+                  balance = sysenv.balance - res.cycles_used
+                }
+            }
+          balance = sysenv.balance - res.cycles_used
+          context = I
+        }
+      try func<es>() with Trap then Trap {cycles_used = res.cycles_used + es.cycles_used;}
+      Return {
+          new_state = es.wasm_state;
+          new_certified_data = es.new_certified_data;
+          new_global_timer = es.new_global_timer;
+          cycles_used = res.cycles_used + es.cycles_used;
+        }
 ....
 
 * The `pre_upgrade` field of the `CanisterModule` is defined as follows:
@@ -4615,13 +4658,11 @@ discard_pending_call<es>() =
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   page_count := |es.wasm_state.stable_mem| / 64k
   return page_count
 
 ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if arbitrary() then return -1
   else
@@ -4632,7 +4673,6 @@ ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
     return old_size
 
 ic0.stable_write<es>(offset : i32, src : i32, size : i32)
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
@@ -4640,7 +4680,6 @@ ic0.stable_write<es>(offset : i32, src : i32, size : i32)
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
@@ -4648,11 +4687,9 @@ ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
   es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
 ic0.stable64_size<es>() : (page_count : i64) =
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   return |es.wasm_state.stable_mem| / 64k
 
 ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if arbitrary()
   then return -1
   else
@@ -4662,14 +4699,12 @@ ic0.stable64_grow<es>(new_pages : i64) : (old_page_count : i64) =
     return old_size
 
 ic0.stable64_write<es>(offset : i64, src : i64, size : i64)
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
 
   es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
 ic0.stable64_read<es>(dst : i64, offset : i64, size : i64)
-  if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
   if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
   if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
 
