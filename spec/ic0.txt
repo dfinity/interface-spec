@@ -28,7 +28,18 @@ ic0.msg_method_name_size : () -> i32;                                       // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
 ic0.accept_message : () -> ();                                              // F
 
+
 ic0.call_new :                                                              // U Ry Rt H
+  ( callee_src  : i32,
+    callee_size : i32,
+    name_src : i32,
+    name_size : i32,
+    reply_fun : i32,
+    reply_env : i32,
+    reject_fun : i32,
+    reject_env : i32
+  ) -> ();
+ic0.call_new_name_callbacks :                                                              // U Ry Rt H
   ( callee_src      : i32,
     callee_size     : i32,
     name_src        : i32,
@@ -41,6 +52,7 @@ ic0.call_new :                                                              // U
     reject_env      : i64,
   ) -> ();
 ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
+ic0.call_on_cleanup_name : (fun_src : i32, fun_size : i32, env : i64) -> () // U Ry Rt H
 ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
 ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt H
 ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt H

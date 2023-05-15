@@ -866,6 +866,7 @@ In section <<host-references>>, we outline some of the proposed uses of WebAssem
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
 * If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
+* If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
@@ -899,7 +900,8 @@ The canister provides entry points which are invoked by the IC under various cir
 * The canister may export a function with name `canister_heartbeat` with type `+() -> ()+`.
 * The canister may export functions with name `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions with name `canister_query <name>` and type `+() -> ()+`.
-* The canister may export functions named `canister_callback <name>` and type `+(env : i64) -> ()+`.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls made with the ic0.call_new function.
+* The canister may export functions named `canister_callback <name>` and type `+(env : i64) -> ()+` which are used as callbacks for inter-canister calls made with the ic0.call_new_name_callbacks function.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
@@ -947,7 +949,8 @@ NOTE: While an implementation will likely try to keep the interval between `cani
 
 ==== Callbacks
 
-Callbacks are addressed by a _callback name_, and delivered to an exported function named `canister_callback <name>` with type `+(env : i64) -> () +`.
+Callbacks for inter-canister calls made with the `ic0.call_new` function are addressed by their table index (as a proxy for a Wasm `funcref`).
+Callbacks for inter-canister calls made with the `ic0.call_new_name_callbacks` function are addressed by a _callback name_, and delivered to an exported function named `canister_callback <name>` with type `+(env : i64) -> () +`.
 
 In the reply callback the argument (`ic0.msg_arg_data_*`) refers to the data replied. In the reject callback, no argument is available.
 
@@ -1102,12 +1105,39 @@ Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and
 [#system-api-call]
 === Inter-canister method calls
 
-When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
+When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new` or `ic0.call_new_name_callbacks`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
 
 * {blank}
 +
 --
   ic0.call_new :
+    ( callee_src : i32,
+      callee_size : i32,
+      name_src : i32,
+      name_size : i32,
+      reply_fun : i32,
+      reply_env : i32,
+      reject_fun : i32,
+      reject_env : i32,
+    ) -> ()
+
+Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
+
+This traps if the blob indicated by `name_src/_size` is not a valid utf8-encoded https://webassembly.github.io/spec/core/syntax/values.html#syntax-name[name].
+
+The IC records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `+(env : i32) -> ()+`, and passed the corresponding `*_env` value.
+
+The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
+
+The reject callback is executed if the method call fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
+
+This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
+--
+
+* {blank}
++
+--
+  ic0.call_new_name_callbacks :
     ( callee_src : i32,
       callee_size : i32,
       name_src : i32,
@@ -1120,36 +1150,55 @@ When handling an update call (or a callback), a canister can do further calls to
       reject_env : i64,
     ) -> ()
 
-Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
 
-This trap if the blob indicated by `name_src/_size`, `reply_fun/_size` or `reject_fun/_size` is not a valid utf8-encoded https://webassembly.github.io/spec/core/syntax/values.html#syntax-name[name].
+
+This method begins assembling a call like `ic0.call_new` but with registering the callbacks by their function names and with using a callback function of type `+(env : i64) -> ()+`.
+
+This traps if the blob indicated by `name_src/_size`, `reply_fun/_size` or `reject_fun/_size` is not a valid utf8-encoded https://webassembly.github.io/spec/core/syntax/values.html#syntax-name[name].
 
 When the response comes back, then
 
- * If the response is a reply, the function `canister_callback <name>`, where `name` is the blob indicated in `reply_fun_src/size`, is executed with the corresponding `reply_env` value. It can query the reply using `ic0.msg_arg_data_*`.
- * If the response is a reject, the function `canister_callback <name>`, where `name` is the blob indicated by `reject_fun_src/size`, is executed with the corresponding `reject_env` value. It can query the reject code and message `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
+ * If the response is a reply, the function `canister_callback <name>`, where `name` is the blob indicated in `reply_fun_src/size`, is executed with the corresponding `reply_env` value.
+ * If the response is a reject, the function `canister_callback <name>`, where `name` is the blob indicated by `reject_fun_src/size`, is executed with the corresponding `reject_env` value.
 
-If the canister does not export the `canister_callback <name>` function, the function is treated as immediately trapping.
 
-Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
+NOTE: Each new call can be made with either `ic0.call_new` or `ic0.call_new_name_callbacks`. 
+
+Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new` or `ic0.call_new_name_callbacks`.)
 --
 
 * {blank}
 +
 --
-  ic0.call_on_cleanup : (fun_src : i32, fun_size : i32, env : i64) -> ()
-
-This traps if the blob indicated by `fun_src/_size` is not a valid utf8-encoded name.
-
+  ic0.call_on_cleanup : (fun : i32, env : i32) -> ()
+  
 If a cleanup callback (of type `+(env : i32) -> ()+`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
-
-In that case, the function `canister_callback <name>`, where `name` is the blob indicated in `fun_src/size`, is executed with the corresponding `env` value.
 
 During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
 
 If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
 
-There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
+There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` or `ic0.call_new_name_callbacks` and `ic0.call_perform`.
+--
+
+* {blank}
++
+--
+  ic0.call_on_cleanup_name : (fun_src : i32, fun_size : i32, env : i64) -> ()
+
+This method is an alternative to `ic0.call_on_cleanup` but with registering the cleanup callback by its name and with the type `+(env : i64) -> ()+`.
+
+This traps if the blob indicated by `fun_src/_size` is not a valid utf8-encoded name.
+
+If and only if the `reply` or the `reject` callback was executed and trapped (for any reason), the function `canister_callback <name>`, where `name` is the blob indicated in `fun_src/size`, is executed with the corresponding `env` value.
+
+During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
+
+If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
+
+There must be at most one call to `ic0.call_on_cleanup_name` between `ic0.call_new` or `ic0.call_new_name_callbacks` and `ic0.call_perform`.
+
+NOTE: One of either `ic0.call_on_cleanup` or `ic0.call_on_cleanup_name` can be used to specify a cleanup callback but not both.
 --
 
 * `+ic0.call_data_append : (src : i32, size : i32) -> ()+`
@@ -3722,21 +3771,27 @@ WasmState = {
 }
 ....
 
-As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory; in the following, _the_ memory and the field `mem` of `S` refer to that. Any system call that accesses the memory will trap if the module does not import the memory.
+As explained in Section “<<system-api-module>>”, the WebAssembly module imports at most _one_ memory and at most _one_ table; in the following, _the_ memory (resp. table) and the fields `mem` and `table` of `S` refer to that. Any system call that accesses the memory (resp. table) will trap if the module does not import the memory (resp. table).
 
-We model `mem` as an array of bytes.
+We model `mem` as an array of bytes, and `table` as an array of execution functions.
 
 The abstract `Callback` type above models an entry point for responses:
 ....
+
 Closure = {
+    fun   : i32,
+    env   : i32,
+}
+
+ClosureNameCallback = {
     fun : blob,
     env : i64,
 }
 
 Callback = {
-  on_reply : Closure;
-  on_reject : Closure;
-  on_cleanup : Closure | NoClosure;
+  on_reply : Closure | ClosureNameCallback;
+  on_reject : Closure | ClosureNameCallback;
+  on_cleanup : Closure | ClosureNameCallback | NoClosure;
 }
 ....
 
@@ -3945,10 +4000,12 @@ otherwise it is
 heartbeat = λ (sysenv) → λ wasm_state → Trap
 ....
 
-* The function `callbacks` of the `CanisterModule` is defined as follows, where `exports` is the set of exported functions.
+* The function `callbacks` of the `CanisterModule` is defined as follows.
 +
 ....
-invoke_callback(es, callback) =
+
+For callbacks registered by name, the following function applies, where `exports` is the set of exported functions.
+invoke_name_callback(es, callback) =
   let export_name  = "canister_callback " · callback.fun
   if exports[export_name] does not exist then Trap
   if typeof(exports[export_name]) ≠ func (i64) -> () then Trap
@@ -3972,7 +4029,14 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
       balance = sysenv.balance;
       cycles_available = available;
     }
-    invoke_callback(es, callback)
+    if callback.is_by_table_index then { 
+      if callback.fun > |es.wasm_state.store.table| then Trap
+      let func = es.wasm_state.store.table[fun]
+      if typeof(func) ≠ func (i32) -> () then Trap
+      func<es>(env)
+    } else if callback.is_by_name {
+      invoke_name_callback(es, callback)
+    }
     Return {
       new_state = es.wasm_state;
       new_calls = es.calls;
@@ -3985,7 +4049,14 @@ callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ w
     let es = ref { empty_execution_state with
       wasm_state;
     }
-    invoke_callback(es, callbacks.on_cleanup)
+    if callback.is_by_table_index then {
+      if callbacks.on_cleanup.fun > |es.wasm_state.store.table| then Trap
+      let func = es.wasm_state.store.table[callbacks.on_cleanup.fun]
+      if typeof(func) ≠ func (i32) -> () then Trap
+      func<es>(callbacks.on_cleanup.env)
+    } else if callback.is_by_name {
+      invoke_name_callback(es, callbacks.on_cleanup)
+    }
     Return {
       new_state = es.wasm_state;
       new_calls = [];
@@ -4155,6 +4226,30 @@ ic0.canister_status<es>() : i32 =
     Stopped  -> return 3
 
 ic0.call_new<es>(
+    callee_src  : i32,
+    callee_size : i32,
+    name_src    : i32,
+    name_size   : i32,
+    reply_fun   : i32,
+    reply_env   : i32,
+    reject_fun  : i32,
+    reject_env  : i32,
+  ) =
+  discard_pending_call<es>()
+  
+  if es.balance < MAX_CYCLES_PER_RESPONSE then Trap
+  es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
+  
+  callee := copy_from_canister<es>(callee_src, callee_size);
+  method_name := copy_from_canister<es>(name_src, name_size);
+  
+  if reply_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap
+  
+  if reject_fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap
+
+ic0.call_new_name_callbacks<es>(
     callee_src      : i32,
     callee_size     : i32,
     name_src        : i32,
@@ -4185,8 +4280,8 @@ ic0.call_new<es>(
     arg = "";
     transferred_cycles = 0;
     callback = Callback {
-      on_reply = Closure { fun = reply_fun; env = reply_env }
-      on_reject = Closure { fun = reject_fun; env = reject_env }
+      on_reply = ClosureNameCallback { fun = reply_fun; env = reply_env }
+      on_reject = ClosureNameCallback { fun = reject_fun; env = reject_env }
       on_cleanup = NoClosure
     };
   }
@@ -4195,12 +4290,19 @@ ic0.call_data_append<es> (src : i32, size : i32) =
   if es.pending_call = NoPendingCall then Trap
   es.pending_call.arg := es.pending_call.arg · copy_from_canister<es>(src, size)
 
-ic0.call_on_cleanup<es> (fun_src : i32, fun_size : i32, env : i64) =
+ic0.call_on_cleanup<es> (fun : i32, env : i32) =
+  if fun > |es.wasm_state.store.table| then Trap
+  if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap
+  if es.pending_call = NoPendingCall then Trap
+  if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
+  es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
+
+ic0.call_on_cleanup_name<es> (fun_src : i32, fun_size : i32, env : i64) =
   if es.pending_call = NoPendingCall then Trap
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
   fun := copy_from_canister<es>(fun_src, fun_size);
   if not valid_utf8(fun) then Trap
-  es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env }
+  es.pending_call.callback.on_cleanup := ClosureNameCallback { fun = fun; env = env }
 
 ic0.call_cycles_add<es>(amount : i64) =
   if es.pending_call = NoPendingCall then Trap
