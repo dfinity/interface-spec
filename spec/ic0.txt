@@ -29,7 +29,6 @@ ic0.msg_method_name_size : () -> i32;                                       // F
 ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
 ic0.accept_message : () -> ();                                              // F
 
-
 ic0.call_new :                                                              // U Ry Rt T
   ( callee_src  : i32,
     callee_size : i32,

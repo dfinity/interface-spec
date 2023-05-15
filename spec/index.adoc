@@ -956,8 +956,8 @@ The canister provides entry points which are invoked by the IC under various cir
 * The canister may export a function with name `canister_global_timer` with type `+() -> ()+`.
 * The canister may export functions with name `canister_update <name>` and type `+() -> ()+`.
 * The canister may export functions with name `canister_query <name>` and type `+() -> ()+`.
-* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls made with the ic0.call_new function.
-* The canister may export functions named `canister_callback <name>` and type `+(env : i64) -> ()+` which are used as callbacks for inter-canister calls made with the ic0.call_new_name_callbacks function.
+* The canister table may contain functions of type `+(env : i32) -> ()+` which may be used as callbacks for inter-canister calls made with the `ic0.call_new` function.
+* The canister may export functions named `canister_callback <name>` and type `+(env : i64) -> ()+` which are used as callbacks for inter-canister calls made with the `ic0.call_new_name_callbacks` function.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
@@ -4657,17 +4657,30 @@ ic0.call_new<es>(
 
   discard_pending_call<es>()
   
-  if es.balance < MAX_CYCLES_PER_RESPONSE then Trap
+  if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
   es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
-  
+
   callee := copy_from_canister<es>(callee_src, callee_size);
   method_name := copy_from_canister<es>(name_src, name_size);
+  if not valid_utf8(method_name) then Trap {cycles_used = es.cycles_used;}
   
   if reply_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
   if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
-  
+
   if reject_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
   if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
+
+  es.pending_call = MethodCall {
+    callee = callee;
+    method_name = method_name;
+    arg = "";
+    transferred_cycles = 0;
+    callback = Callback {
+      on_reply = Closure { fun = reply_fun; env = reply_env }
+      on_reject = Closure { fun = reject_fun; env = reject_env }
+      on_cleanup = NoClosure
+    };
+  }
 
 ic0.call_new_name_callbacks<es>(
     callee_src      : i32,
@@ -4681,6 +4694,8 @@ ic0.call_new_name_callbacks<es>(
     reject_fun_size : i32,
     reject_env      : i64,
   ) =
+  if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
+  
   discard_pending_call<es>()
 
   if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
@@ -4688,15 +4703,15 @@ ic0.call_new_name_callbacks<es>(
 
   callee := copy_from_canister<es>(callee_src, callee_size);
   method_name := copy_from_canister<es>(name_src, name_size);
-  if not valid_utf8(method_name) then Trap
+  if not valid_utf8(method_name) then Trap {cycles_used = es.cycles_used;}
   reply_fun := copy_from_canister<es>(reply_fun_src, reply_fun_size);
-  if not valid_utf8(reply_fun) then Trap
+  if not valid_utf8(reply_fun) then Trap {cycles_used = es.cycles_used;}
   reject_fun := copy_from_canister<es>(reject_fun_src, reject_fun_size);
-  if not valid_utf8(reject_fun) then Trap
+  if not valid_utf8(reject_fun) then Trap {cycles_used = es.cycles_used;}
 
   es.pending_call = MethodCall {
     callee = callee;
-    method_name = callee;
+    method_name = method_name;
     arg = "";
     transferred_cycles = 0;
     callback = Callback {
@@ -4715,10 +4730,10 @@ ic0.call_on_cleanup<es> (fun : i32, env : i32) =
   es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
 
 ic0.call_on_cleanup_name<es> (fun_src : i32, fun_size : i32, env : i64) =
-  if es.pending_call = NoPendingCall then Trap
-  if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap
+  if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
+  if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
   fun := copy_from_canister<es>(fun_src, fun_size);
-  if not valid_utf8(fun) then Trap
+  if not valid_utf8(fun) then Trap {cycles_used = es.cycles_used;}
   es.pending_call.callback.on_cleanup := ClosureNameCallback { fun = fun; env = env }
 
 ic0.call_data_append<es> (src : i32, size : i32) =
