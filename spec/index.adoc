@@ -1102,9 +1102,11 @@ Eventually, the canister will want to respond to the original call, either by re
 +
 Appends data it to the (initially empty) data reply.
 +
-NOTE: This can be invoked multiple times to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
+NOTE: This can be invoked multiple times within the same message execution to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
 +
 This traps if the current call already has been or does not need to be responded to.
++
+Any data assembled, but not replied using `ic0.msg_reply`, gets discarded at the end of the current message execution. In particular, the reply buffer gets reset when the canister yields control without calling `ic0.msg_reply`.
 
 * `+ic0.msg_reply : () -> ()+`
 +
