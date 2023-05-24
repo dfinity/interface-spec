@@ -316,6 +316,7 @@ The response hash is calculated as follows:
      - All headers listed (except for the `IC-CertificateExpression` header) are excluded from the certification
      - All other headers (except for the IC-Certificate header) are included in the certification
    - Headers can be repeated and each repetition should be included.
+   - Include an additional `:ic-cert-status` header that contains the numerical HTTP status code of the response.
 2. Let `response_body_hash` be the sha256 of the response body.
 3. Concatenate `response_headers_hash` and `response_body_hash` and calculate the sha256 of that concatenation.
 
