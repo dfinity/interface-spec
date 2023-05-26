@@ -288,6 +288,7 @@ HEADER = 'IC-CertificateExpression: ', HEADER-VALUE
 The request hash is calculated as follows:
 
 1. Let `request_headers_hash` be the [representation-independent hash](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map) of the request headers:
+   - The header names are lower-cased.
    - Only include headers listed in the `certified_request_headers` field of [the certificate expression header](#the-certificate-expression-header).
      - If the field is empty or no value was supplied, no headers are included.
      - Headers can be repeated and each repetition should be included.
@@ -305,6 +306,7 @@ The request hash is calculated as follows:
 The response hash is calculated as follows:
 
 1. Let `response_headers_hash` be the [representation-independent hash](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map) of the response headers:
+   - The header names are lower-cased.
    - The `IC-Certificate` header is always excluded.
    - The `IC-CertificateExpression` header is always included.
    - If the `no_certification` field of [the certificate expression header](#the-certificate-expression-header) is present:
