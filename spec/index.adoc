@@ -3347,6 +3347,9 @@ Conditions::
     M.callee = ic_principal
     M.method_name = 'canister_info'
     M.arg = candid(A)
+    if A.num_requested_changes = null then From = |S.canister_history[A.canister_id].recent_changes|
+    else From = max(0, |S.canister_history[A.canister_id].recent_changes| - A.num_requested_changes)
+    End = |S.canister_history[A.canister_id].recent_changes| - 1
 ....
 State after::
 ....
@@ -3356,7 +3359,7 @@ S with
         origin = M.origin
         response = candid({
           total_num_changes = S.canister_history[A.canister_id].total_num_changes;
-          recent_changes = S.canister_history[A.canister_id].recent_changes;
+          recent_changes = S.canister_history[A.canister_id].recent_changes[From..End];
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
