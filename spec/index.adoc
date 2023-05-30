@@ -2539,7 +2539,7 @@ CodeDeploymentMode
   | Reinstall
   | Upgrade
 CanisterChangeDetails
-  = CanisterCreation {
+  = Creation {
       controllers : [PrincipalId];
     }
   | CodeUninstall
@@ -3223,7 +3223,7 @@ S with
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = CanisterCreation {
+        change_details = Creation {
           controllers = New_controllers
         }
       }
@@ -3854,7 +3854,7 @@ S with
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = CanisterCreation {
+        change_details = Creation {
           controllers = New_controllers
         }
       }

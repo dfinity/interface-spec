@@ -26,7 +26,7 @@ type canister_change_origin = variant {
 };
 
 type canister_change_details = variant {
-  canister_creation : record {
+  creation : record {
     controllers : vec principal;
   };
   canister_code_uninstall;
