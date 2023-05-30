@@ -415,6 +415,9 @@ tagged<t> = #6.55799(t) ; the CBOR tag
 +
 NOTE: Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the _end_, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
 
+* `/subnet/<subnet_id>/nodes/<node_id>/public_key` (blob)
++
+The public key of a node (a DER-encoded Ed25519 signing key, see https://tools.ietf.org/html/rfc8410[RFC 8410] for reference) with principal `<node_id>` belonging to the subnet with principal `<subnet_id>`.
 
 [#state-tree-request-status]
 === Request status
@@ -629,17 +632,59 @@ In order to make a query call to canister, the user makes a POST request to `/ap
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
+The HTTP response to a query call can contain a list of signatures for the returned response produced by the individual IC nodes that computed the same returned response.
+Every such signature (whose type is denoted as `node_signature_of_http_query_response`) is a CBOR (see <<cbor>>) map with the following fields:
+
+* `timestamp` (`nat`): the timestamp of the signature.
+* `signature` (`blob`): the actual signature.
+* `identity` (`principal`): the principal of the node producing the signature.
+
 If the call resulted in a reply, the response is a CBOR (see <<cbor>>) map with the following fields:
 
-* `status` (`text`): `replied`
-* `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
+* `status` (`text`): `"replied"`
+* `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data `<R>`.
+* `node_signatures` (`[* node_signature_of_http_query_response]`): a list of node signatures for the returned query response
+  computed for the following value
++
+....
+hash_of_map({
+  status: "replied",
+  reply: {arg: <R>},
+  timestamp: <t>,
+  request_id: hash_of_map({request_type: "query", sender: <sender>, canister_id: <canister_id>, method_name: <method_name>, arg: <arg>})
+})
+....
++
+where `hash_of_map` is the <<hash-of-map, representation-independent hash>> and `<t>` is the timestamp of the node when the signature was produced.
 
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
-* `status` (`text`): `rejected`
+* `status` (`text`): `"rejected"`
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
-* `error_code` (text): an optional implementation-specific textual error code (see <<error-codes>>).
+* `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
+* `node_signatures` (`[* node_signature_of_http_query_response]`): a list of node signatures for the returned query response
+  computed for the following value
++
+....
+hash_of_map({
+  status: "rejected",
+  reject_code: <reject_code>,
+  reject_message: <reject_message>,
+  error_code: <error_code>,
+  timestamp: <t>,
+  request_id: hash_of_map({request_type: "query", sender: <sender>, canister_id: <canister_id>, method_name: <method_name>, arg: <arg>})
+})
+....
++
+where `hash_of_map` is the <<hash-of-map, representation-independent hash>> and `<t>` is the timestamp of the node when the signature was produced.
+
++
+[NOTE]
+====
+Note that, unlike for (update) calls, the `<request_id>` of a query also depends on the query's sender.
+For calls, the relationship between a call and its sender is established by only allowing the sender of the original request referenced by `<request_id>` to query `/request_status/<request_id>` in a read state request.
+====
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
@@ -3910,17 +3955,17 @@ Read response::
 * If `F(Q.Arg, Q.sender, Env) = Trap trap` then
 +
 ....
-{status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>}
+{status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
 ....
 * Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reject (code, msg); …}` then
 +
 ....
-{status: rejected; reject_code: <code>: reject_message: <msg>, error_code: <implementation-specific>}
+{status: rejected; reject_code: <code>: reject_message: <msg>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
 ....
 * Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reply R; …}` then
 +
 ....
-{status: success; reply: { arg :  <R> } }
+{status: replied; reply: { arg :  <R> }, node_signatures: <implementation-specific>}
 ....
 
 ==== Certified state reads
@@ -3967,7 +4012,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 ....
 state_tree(S) = {
   "time": S.system_time;
-  "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+  "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "nodes": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ nodes } } | (subnet_id, subnet_pk, subnet_ranges, nodes) ∈ subnets };
   "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
   "canister":
     { canister_id :
