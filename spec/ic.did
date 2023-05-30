@@ -26,7 +26,9 @@ type canister_change_origin = variant {
 };
 
 type canister_change_details = variant {
-  canister_creation;
+  canister_creation : record {
+    controllers : vec principal;
+  };
   canister_code_uninstall;
   canister_code_deployment : record {
     mode : variant {install; reinstall; upgrade};
@@ -140,12 +142,14 @@ service ic : {
       cycles: nat;
       idle_cycles_burned_per_day: nat;
   });
-  canister_history : (record {
+  canister_info : (record {
       canister_id : canister_id;
       num_requested_changes : opt nat64;
   }) -> (record {
       total_num_changes : nat64;
       changes : vec canister_change;
+      module_hash : opt blob;
+      controllers : vec principal;
   });
   delete_canister : (record {canister_id : canister_id}) -> ();
   deposit_cycles : (record {canister_id : canister_id}) -> ();

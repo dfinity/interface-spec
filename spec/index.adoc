@@ -219,7 +219,7 @@ When the cycle balance of a canister falls to zero, the canister is _deallocated
 
 Afterwards the canister is empty. It can be reinstalled after topping up its balance.
 
-NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, canister _version_, and total number of canister changes are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+NOTE: Once the IC frees the resources of a canister, its id, _cycles_ balance, _controllers_, canister _version_, and the total number of canister changes are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 [#canister-status]
 ==== Canister status
@@ -1668,24 +1668,26 @@ Indicates various information about the canister. It contains:
 
 Only the controllers of the canister or the canister itself can request its status.
 
-[#ic-canister-history]
-=== IC method `canister_history`
+[#ic-canister-info]
+=== IC method `canister_info`
 
-Provides the history of the canister. Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller’s balance implicitly (e.g., as for inter-canister calls). Anyone can call this method.
+Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
-The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Controllers changes are described by the full new set of the canister controllers after the change.
+The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called _originator_ in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change.
 
 The system can drop the oldest canister changes from the list to keep its length bounded (at least `20` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
 
 The following parameters should be supplied for the call:
 
-* `canister_id`: the canister ID of the canister whose history is requested.
-* `num_requested_changes`: optional, specifies the number of requested canister changes. The call will be charged based on this parameter. If not provided, the maximum of `20` will be used.
+* `canister_id`: the canister ID of the canister to retrieve information about.
+* `num_requested_changes`: optional, specifies the number of requested canister changes. If not provided, the default value of `0` will be used.
 
 The returned response contains the following fields:
 
 * `total_num_changes`: the total number of canister changes that have been ever recorded in the history. This value does not change if the system drops the oldest canister changes from the list of changes.
-* `changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or, if more changes are requested than available in the history, then this list contains all changes available in the history. If `num_requested_changes` is not specified, then this list contains all changes in the history.
+* `changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or, if more changes are requested than available in the history, then this list contains all changes available in the history. If `num_requested_changes` is not specified, then this list is empty.
+* `module_hash`: the SHA-256 hash of the currently installed canister module (or `null` if the canister is empty).
+* `controllers`: the current set of canister controllers.
 
 [#ic-stop_canister]
 === IC method `stop_canister`
@@ -2537,7 +2539,9 @@ CodeDeploymentMode
   | Reinstall
   | Upgrade
 CanisterChangeDetails
-  = CanisterCreation
+  = CanisterCreation {
+      controllers : [PrincipalId];
+    }
   | CodeUninstall
   | CodeDeployment {
       mode : CodeDeploymentMode;
@@ -3089,7 +3093,7 @@ If message execution <<define-wasm-fn,_returns_ (in the sense of a Wasm function
 Note that returning does _not_ imply that the call associated with this message now  _succeeds_ in the sense defined in <<responding, section responding>>; that would require a (unique) call to `ic0.reply`.
 Note also that the state changes are persisted even when the IC is set to synthesize a <<CANISTER_ERROR,CANISTER_ERROR>> reject immediately afterward (which happens when this returns without calling `ic0.reply` or `ic0.reject`, the corresponding call has not been responded to and there are no outstanding callbacks, see <<rule-starvation>>).
 
-The function `validate_sender_canister_version` checks that the `sender_canister_version` matches the actual canister version of the sender in all calls to the methods of the management canister that take `sender_canister_version`:
+The function `validate_sender_canister_version` checks that `sender_canister_version` matches the actual canister version of the sender in all calls to the methods of the management canister that take `sender_canister_version`:
 ....
 validate_sender_canister_version(new_calls, canister_version_from_system) =
   ∀ call ∈ new_calls. (call.callee = ic_principal and (call.method = 'create_canister' or call.method = 'update_settings' or call.method = 'install_code' or call.method = 'uninstall_code' or call.method = 'provisional_create_canister_with_cycles') and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
@@ -3195,6 +3199,10 @@ Conditions::
     M.arg = candid(A)
     is_system_assigned CanisterId
     CanisterId ∉ dom(S.canisters)
+    if A.settings.controllers is not null:
+      New_controllers = A.settings.controllers
+    else:
+      New_controllers = [M.caller]
 ....
 State after::
 ....
@@ -3202,10 +3210,7 @@ S with
     canisters[CanisterId] = EmptyCanister
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
-    if A.settings.controllers is not null:
-      controllers[CanisterId] = A.settings.controllers
-    else:
-      controllers[CanisterId] = [M.caller]
+    controllers[CanisterId] = New_controllers
     if A.settings.freezing_threshold is not null:
       freezing_threshold[CanisterId] = A.settings.freezing_threshold
     else:
@@ -3218,7 +3223,9 @@ S with
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = CanisterCreation
+        change_details = CanisterCreation {
+          controllers = New_controllers
+        }
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3329,6 +3336,37 @@ S with
       }
 ....
 
+==== IC Management Canister: Canister information
+
+Every canister can retrieve the canister history, current module hash, and current controllers of every other canister (including itself).
+
+Conditions::
+....
+    S.messages = Older_messages · CallMessage M · Younger_messages
+    (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+    M.callee = ic_principal
+    M.method_name = 'canister_info'
+    M.arg = candid(A)
+....
+State after::
+....
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid({
+          total_num_changes = S.canister_history[A.canister_id].total_num_changes;
+          changes = S.canister_history[A.canister_id].changes;
+          module_hash =
+            if S.canisters[A.canister_id] = EmptyCanister
+            then null
+            else opt (SHA-256(S.canisters[A.canister_id].raw_module));
+          controllers = S.controllers[A.canister_id];
+        })
+        refunded_cycles = M.transferred_cycles
+      }
+....
+
 ==== IC Management Canister: Code installation
 
 Only the controllers of the given canister can install code. This transition installs new code over a canister. This involves invoking the `canister_init` method (see <<system-api-init>>), which must succeed.
@@ -3392,7 +3430,6 @@ S with
           };
         };
     }
-    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3475,7 +3512,6 @@ S with
           };
         };
     }
-    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3787,6 +3823,10 @@ Conditions::
     is_system_assigned CanisterId
     CanisterId ∉ dom(S.canisters)
     A.specified_id ∉ dom(S.canisters)
+    if A.settings.controllers is not null:
+      New_controllers = A.settings.controllers
+    else:
+      New_controllers = [M.caller]
 ....
 State after::
 ....
@@ -3798,10 +3838,7 @@ S with
     canisters[canister_id] = EmptyCanister
     time[canister_id] = CurrentTime
     global_timer[canister_id] = 0
-    if A.settings.controllers is not null:
-      controllers[canister_id] = A.settings.controllers
-    else:
-      controllers[canister_id] = [M.caller]
+    controllers[canister_id] = New_controllers
     if A.settings.freezing_threshold is not null:
       freezing_threshold[canister_id] = A.settings.freezing_threshold
     else:
@@ -3817,7 +3854,9 @@ S with
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = CanisterCreation
+        change_details = CanisterCreation {
+          controllers = New_controllers
+        }
       }
     }
     messages = Older_messages · Younger_messages ·
@@ -3951,7 +3990,7 @@ S with
 
 ==== Canister out of cycles
 
-Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstall>>), the canister history changes dropped (their total number is preserved), and the allocations are set to zero (NB: allocations are currently not modeled in the formal model):
+Once a canister runs out of cycles, its code is uninstalled (cf. <<rule-uninstall>>), the canister changes in the canister history are dropped (their total number is preserved), and the allocations are set to zero (NB: allocations are currently not modeled in the formal model):
 
 Conditions::
 ....
