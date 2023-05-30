@@ -2526,7 +2526,7 @@ CanStatus
   = Running
   | Stopping (List (CallOrigin, Nat))
   | Stopped
-CanisterChangeOrigin
+ChangeOrigin
   = FromUser {
       user_id : PrincipalId;
     }
@@ -2538,7 +2538,7 @@ CodeDeploymentMode
   = Install
   | Reinstall
   | Upgrade
-CanisterChangeDetails
+ChangeDetails
   = Creation {
       controllers : [PrincipalId];
     }
@@ -2550,15 +2550,15 @@ CanisterChangeDetails
   | ControllersChange {
       controllers : [PrincipalId];
     }
-CanisterChange = {
+Change = {
   timestamp_nanos : Timestamp;
   canister_version : CanisterVersion;
-  origin : CanisterChangeOrigin;
-  details : CanisterChangeDetails;
+  origin : ChangeOrigin;
+  details : ChangeDetails;
 }
 CanisterHistory = {
   total_num_changes : Nat;
-  recent_changes : [CanisterChange];
+  recent_changes : [Change];
 }
 S = {
   requests : Request ↦ (RequestStatus, Principal);
@@ -2586,16 +2586,16 @@ simple_status(Stopping _) = Stopping
 simple_status(Stopped) = Stopped
 ....
 
-To convert `CallOrigin` into `CanisterChangeOrigin`, we define the following conversion function:
+To convert `CallOrigin` into `ChangeOrigin`, we define the following conversion function:
 ....
-canister_change_origin(principal, _, FromUser { … }) = FromUser {
+change_origin(principal, _, FromUser { … }) = FromUser {
     user_id = principal
   }
-canister_change_origin(principal, sender_canister_version, FromCanister { … }) = FromCanister {
+change_origin(principal, sender_canister_version, FromCanister { … }) = FromCanister {
     canister_id = principal
     canister_version = sender_canister_version
   }
-canister_change_origin(principal, sender_canister_version, FromSystemTask) = FromCanister {
+change_origin(principal, sender_canister_version, FromSystemTask) = FromCanister {
     canister_id = principal
     canister_version = sender_canister_version
   }
@@ -3222,7 +3222,7 @@ S with
       recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
-        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
+        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
         details = Creation {
           controllers = New_controllers
         }
@@ -3280,7 +3280,7 @@ S with
         recent_changes = H · {
             timestamp_nanos = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
-            origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+            origin = change_origin(M.caller, A.sender_canister_version, M.origin);
             details = ControllersChange {
               controllers = A.settings.controllers;
             };
@@ -3423,7 +3423,7 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          origin = change_origin(M.caller, A.sender_canister_version, M.origin);
           details = CodeDeployment {
             mode = A.mode;
             module_hash = SHA-256(A.wasm_module);
@@ -3505,7 +3505,7 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          origin = change_origin(M.caller, A.sender_canister_version, M.origin);
           details = CodeDeployment {
             mode = Upgrade;
             module_hash = SHA-256(A.wasm_module);
@@ -3548,7 +3548,7 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          origin = change_origin(M.caller, A.sender_canister_version, M.origin);
           details = CodeUninstall;
         };
     }
@@ -3853,7 +3853,7 @@ S with
       recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
-        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
+        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
         details = Creation {
           controllers = New_controllers
         }

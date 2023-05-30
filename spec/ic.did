@@ -15,7 +15,7 @@ type definite_canister_settings = record {
   freezing_threshold : nat;
 };
 
-type canister_change_origin = variant {
+type change_origin = variant {
   from_user : record {
     user_id : principal;
   };
@@ -25,7 +25,7 @@ type canister_change_origin = variant {
   };
 };
 
-type canister_change_details = variant {
+type change_details = variant {
   creation : record {
     controllers : vec principal;
   };
@@ -39,11 +39,11 @@ type canister_change_details = variant {
   };
 };
 
-type canister_change = record {
+type change = record {
   timestamp_nanos : nat64;
   canister_version : nat64;
-  origin : canister_change_origin;
-  details : canister_change_details;
+  origin : change_origin;
+  details : change_details;
 };
 
 type http_header = record { name: text; value: text };
@@ -147,7 +147,7 @@ service ic : {
       num_requested_changes : opt nat64;
   }) -> (record {
       total_num_changes : nat64;
-      recent_changes : vec canister_change;
+      recent_changes : vec change;
       module_hash : opt blob;
       controllers : vec principal;
   });
