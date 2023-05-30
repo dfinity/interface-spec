@@ -29,12 +29,12 @@ type canister_change_details = variant {
   creation : record {
     controllers : vec principal;
   };
-  canister_code_uninstall;
-  canister_code_deployment : record {
+  code_uninstall;
+  code_deployment : record {
     mode : variant {install; reinstall; upgrade};
     module_hash : blob;
   };
-  canister_controllers_change : record {
+  controllers_change : record {
     controllers : vec principal;
   };
 };
