@@ -1685,7 +1685,7 @@ The following parameters should be supplied for the call:
 The returned response contains the following fields:
 
 * `total_num_changes`: the total number of canister changes that have been ever recorded in the history. This value does not change if the system drops the oldest canister changes from the list of changes.
-* `changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or, if more changes are requested than available in the history, then this list contains all changes available in the history. If `num_requested_changes` is not specified, then this list is empty.
+* `recent_changes`: the list containing the most recent canister changes. If `num_requested_changes` is provided, then this list contains that number of changes or, if more changes are requested than available in the history, then this list contains all changes available in the history. If `num_requested_changes` is not specified, then this list is empty.
 * `module_hash`: the SHA-256 hash of the currently installed canister module (or `null` if the canister is empty).
 * `controllers`: the current set of canister controllers.
 
@@ -2558,7 +2558,7 @@ CanisterChange = {
 }
 CanisterHistory = {
   total_num_changes : Nat;
-  changes : [CanisterChange];
+  recent_changes : [CanisterChange];
 }
 S = {
   requests : Request ↦ (RequestStatus, Principal);
@@ -3219,7 +3219,7 @@ S with
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = 1
-      changes = {
+      recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
@@ -3267,7 +3267,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history[A.canister_id] = {
       total_num_changes = N;
-      changes = H;
+      recent_changes = H;
     }
 ....
 State after::
@@ -3277,7 +3277,7 @@ S with
       controllers[A.canister_id] = A.settings.controllers
       canister_history[A.canister_id] = {
         total_num_changes = N + 1;
-        changes = H · {
+        recent_changes = H · {
             timestamp_nanos = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
             change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
@@ -3356,7 +3356,7 @@ S with
         origin = M.origin
         response = candid({
           total_num_changes = S.canister_history[A.canister_id].total_num_changes;
-          changes = S.canister_history[A.canister_id].changes;
+          recent_changes = S.canister_history[A.canister_id].recent_changes;
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
@@ -3398,7 +3398,7 @@ Conditions::
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history[A.canister_id] = {
       total_num_changes = N;
-      changes = H;
+      recent_changes = H;
     }
 ....
 State after::
@@ -3420,7 +3420,7 @@ S with
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
@@ -3477,7 +3477,7 @@ Conditions::
     dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
     S.canister_history[A.canister_id] = {
       total_num_changes = N;
-      changes = H;
+      recent_changes = H;
     }
 ....
 State after::
@@ -3502,7 +3502,7 @@ S with
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
@@ -3535,7 +3535,7 @@ Conditions::
     M.caller ∈ S.controllers[A.canister_id]
     S.canister_history[A.canister_id] = {
       total_num_changes = N;
-      changes = H;
+      recent_changes = H;
     }
 ....
 State after::
@@ -3545,7 +3545,7 @@ S with
     certified_data[A.canister_id] = ""
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
-      changes = H · {
+      recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
           change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
@@ -3850,7 +3850,7 @@ S with
     certified_data[canister_id] = ""
     canister_history[canister_id] = {
       total_num_changes = 1
-      changes = {
+      recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
         change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
@@ -3997,7 +3997,7 @@ Conditions::
     S.balances[CanisterId] = 0
     S.canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = H;
+      recent_changes = H;
     }
 ....
 State after::
@@ -4007,7 +4007,7 @@ S with
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = [];
+      recent_changes = [];
     }
     canister_version[CanisterId] = S.canister_version[CanisterId] + 1
     global_timer[CanisterId] = 0
@@ -4093,7 +4093,7 @@ Conditions::
 ....
   S.canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = Older_changes · Newer_changes;
+      recent_changes = Older_changes · Newer_changes;
     }
   |Newer_changes| ≥ 20
 ....
@@ -4102,7 +4102,7 @@ State after::
 S with
     canister_history[CanisterId] = {
       total_num_changes = N;
-      changes = Newer_changes;
+      recent_changes = Newer_changes;
     }
 ....
 

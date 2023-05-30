@@ -147,7 +147,7 @@ service ic : {
       num_requested_changes : opt nat64;
   }) -> (record {
       total_num_changes : nat64;
-      changes : vec canister_change;
+      recent_changes : vec canister_change;
       module_hash : opt blob;
       controllers : vec principal;
   });
