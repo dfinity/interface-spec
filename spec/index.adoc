@@ -2553,8 +2553,8 @@ CanisterChangeDetails
 CanisterChange = {
   timestamp_nanos : Timestamp;
   canister_version : CanisterVersion;
-  change_origin : CanisterChangeOrigin;
-  change_details : CanisterChangeDetails;
+  origin : CanisterChangeOrigin;
+  details : CanisterChangeDetails;
 }
 CanisterHistory = {
   total_num_changes : Nat;
@@ -3222,8 +3222,8 @@ S with
       recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
-        change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = Creation {
+        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
+        details = Creation {
           controllers = New_controllers
         }
       }
@@ -3280,8 +3280,8 @@ S with
         recent_changes = H · {
             timestamp_nanos = S.time[A.canister_id];
             canister_version = S.canister_version[A.canister_id] + 1;
-            change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
-            change_details = ControllersChange {
+            origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+            details = ControllersChange {
               controllers = A.settings.controllers;
             };
           };
@@ -3423,8 +3423,8 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
-          change_details = CodeDeployment {
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          details = CodeDeployment {
             mode = A.mode;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3505,8 +3505,8 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
-          change_details = CodeDeployment {
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          details = CodeDeployment {
             mode = Upgrade;
             module_hash = SHA-256(A.wasm_module);
           };
@@ -3548,8 +3548,8 @@ S with
       recent_changes = H · {
           timestamp_nanos = S.time[A.canister_id];
           canister_version = S.canister_version[A.canister_id] + 1
-          change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
-          change_details = CodeUninstall;
+          origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin);
+          details = CodeUninstall;
         };
     }
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
@@ -3853,8 +3853,8 @@ S with
       recent_changes = {
         timestamp_nanos = CurrentTime
         canister_version = 0
-        change_origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
-        change_details = Creation {
+        origin = canister_change_origin(M.caller, A.sender_canister_version, M.origin)
+        details = Creation {
           controllers = New_controllers
         }
       }

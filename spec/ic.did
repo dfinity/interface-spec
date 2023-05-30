@@ -42,8 +42,8 @@ type canister_change_details = variant {
 type canister_change = record {
   timestamp_nanos : nat64;
   canister_version : nat64;
-  change_origin : canister_change_origin;
-  change_details : canister_change_details;
+  origin : canister_change_origin;
+  details : canister_change_details;
 };
 
 type http_header = record { name: text; value: text };
