@@ -651,11 +651,11 @@ hash_of_map({
   status: "replied",
   reply: {arg: <R>},
   timestamp: <t>,
-  request_id: hash_of_map({request_type: "query", sender: <sender>, nonce: <nonce>, ingress_expiry: <ingress_expiry>, canister_id: <canister_id>, method_name: <method_name>, arg: <arg>})
+  request_id: hash_of_map(content)
 })
 ....
 +
-where `hash_of_map` is the <<hash-of-map, representation-independent hash>> and `<t>` is the timestamp of the node when the signature was produced.
+where `hash_of_map` is the <<hash-of-map, representation-independent hash>>, `content` is the CBOR map from the request, and `<t>` is the timestamp of the node when the signature was produced.
 
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
@@ -673,11 +673,11 @@ hash_of_map({
   reject_message: <reject_message>,
   error_code: <error_code>,
   timestamp: <t>,
-  request_id: hash_of_map({request_type: "query", sender: <sender>, nonce: <nonce>, ingress_expiry: <ingress_expiry>, canister_id: <canister_id>, method_name: <method_name>, arg: <arg>})
+  request_id: hash_of_map(content)
 })
 ....
 +
-where `hash_of_map` is the <<hash-of-map, representation-independent hash>> and `<t>` is the timestamp of the node when the signature was produced.
+where `hash_of_map` is the <<hash-of-map, representation-independent hash>>, `content` is the CBOR map from the request, and `<t>` is the timestamp of the node when the signature was produced.
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister’s response directly within the HTTP response.
 
