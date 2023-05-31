@@ -917,12 +917,12 @@ In section <<host-references>>, we outline some of the proposed uses of WebAssem
 
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
-* If it imports a memory, it must import it from `env.memory`. In the following, “the Wasm memory” refers to this memory.
-* If it imports a table, it must import it from `env.table`. In the following, “the Wasm table” refers to this table.
 * It may only import a function if it is listed in <<system-api-imports>>.
 * It may have a `(start)` function.
 * If it exports a function called `canister_init`, the function must have type `+() -> ()+`.
 * If it exports a function called `canister_inspect_message`, the function must have type `+() -> ()+`.
+* If it exports a function called `canister_pre_upgrade`, the function must have type `+() -> ()+`.
+* If it exports a function called `canister_post_upgrade`, the function must have type `+() -> ()+`.
 * If it exports a function called `canister_heartbeat`, the function must have type `+() -> ()+`.
 * If it exports a function called `canister_global_timer`, the function must have type `+() -> ()+`.
 * If it exports any functions called `canister_update <name>` or `canister_query <name>` for some `name`, the functions must have type `+() -> ()+`.
