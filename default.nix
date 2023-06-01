@@ -13,7 +13,7 @@ rec {
     src = subpath ./spec;
     phases = [ "unpackPhase" "buildPhase" "checkPhase" ];
     buildInputs = with nixpkgs;
-      [ asciidoctor plantuml jre graphviz python cpio html-proofer cddl ];
+      [ asciidoctor plantuml jre graphviz python cpio html-proofer cddl pandoc ];
     FONTCONFIG_FILE = nixpkgs.makeFontsConf { fontDirectories = []; };
     asciidoctor_args = [
       "-r asciidoctor-diagram"
