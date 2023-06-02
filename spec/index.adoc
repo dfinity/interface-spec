@@ -1170,7 +1170,7 @@ Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and
 [#system-api-canister-version]
 === Canister version
 
-For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is incremented upon every change of the canister's code or controllers and successful message execution, i.e., upon every successful management canister call of methods `update_settings` (if a new set of controllers is provided as argument), `install_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update calls, response callbacks, heartbeats, and global timers.
+For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is incremented upon every change of the canister's code or settings and successful message execution, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update calls, response callbacks, heartbeats, and global timers.
 
 * `ic0.canister_version : () -> i64`
 +
