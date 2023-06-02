@@ -1170,7 +1170,7 @@ Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and
 [#system-api-canister-version]
 === Canister version
 
-For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is *guaranteed* to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a _canister version_. Upon canister creation, it is set to 0, and it is incremented upon every change of the canister's code or controllers and successful message execution, i.e., upon every successful management canister call of methods `update_settings` (if a new set of controllers is provided as argument), `install_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update calls, response callbacks, heartbeats, and global timers.
 
 * `ic0.canister_version : () -> i64`
 +
@@ -3029,6 +3029,7 @@ if
 then
   S with
     canisters[M.receiver].wasm_state = res.new_state;
+    canister_version[M.receiver] = S.canister_version[M.receiver] + 1;
     messages =
       Older_messages ·
       Younger_messages ·
@@ -4034,7 +4035,7 @@ S with
 ....
 
 
-==== Time progressing, cycle consumption, and canister version increments
+==== Time progressing and cycle consumption increments
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -4073,19 +4074,6 @@ State after::
 ....
 S with
     system_time = T1
-....
-
-Finally, the canister version can be incremented arbitrarily:
-
-Conditions::
-....
-    N0 = S.canister_version[CanisterId]
-    N1 > N0
-....
-State after::
-....
-S with
-    canister_version[CanisterId] = N1
 ....
 
 ==== Trimming canister history
