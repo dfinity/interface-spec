@@ -2026,7 +2026,7 @@ qed
 definition ic_canister_stop_done_stopping_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_canister_stop_done_stopping_pre cid S =
     (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
-      (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_deleted ctxt \<or> call_ctxt_canister ctxt \<noteq> cid)
+      (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_canister ctxt \<noteq> cid)
     | _ \<Rightarrow> False)"
 
 definition ic_canister_stop_done_stopping_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
