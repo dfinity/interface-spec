@@ -2655,6 +2655,13 @@ The following is an incomplete list of invariants that should hold for the abstr
   if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
+* A stopped canister does not have any call contexts (in particular, a stopped canister does not have any call contexts marked as deleted):
++
+....
+∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+  S.canister_status[Ctxt.canister] ≠ Stopped
+....
+
 * Referenced call contexts exist:
 +
 ....
