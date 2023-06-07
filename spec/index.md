@@ -2145,6 +2145,8 @@ A HTTP request by an HTTP client is handled by these steps:
 ### Candid interface {\#http-gateway-interface}
 
 The following interface description, in [Candid syntax](https://github.com/dfinity/candid/blob/master/spec/Candid.md), describes the expected Canister interface. You can also [download the file]({attachmentsdir}/http-gateway.did).
+``` candid name= ic-interface file file=_attachments/http-gateway.did
+```
 
 Only canisters that use the "Upgrade to update calls" feature need to provide the `http_request_update` method.
 
@@ -2162,15 +2164,14 @@ The Gateway needs to know the canister id of the canister to talk to, and obtain
 
 2.  If the `<name>` is in the following table, use the given canister ids:
 
-    |              |                               |
-    |--------------|-------------------------------|
-    | Hostname     | Canister id                   |
-    | `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai` |
-    | `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai` |
-    | `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai` |
-    | `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai` |
-
-    Canister hostname resolution
+|Canister hostname resolution
+|--------------------------------------------
+| Hostname     | Canister id
+| `identity`   | `rdmx6-jaaaa-aaaaa-aaadq-cai`
+| `nns`        | `qoctq-giaaa-aaaaa-aaaea-cai`
+| `dscvr`      | `h5aet-waaaa-aaaab-qaamq-cai`
+| `personhood` | `g3wsl-eqaaa-aaaan-aaaaa-cai`
+|--------------------------------------------
 
 3.  Else, if `<name>` is a valid textual encoding of a principal, use that principal as the canister id.
 
