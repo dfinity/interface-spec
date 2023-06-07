@@ -1,7 +1,10 @@
 #!/bin/bash
 
-git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./index.adoc > index.adoc
-git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./ic0.txt > ic0.txt
+#git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./index.adoc > index.adoc
+#git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./ic0.txt > ic0.txt
+
+cp index.adoc index.adoc.tmp
+
 sed -i "/include::[^0]*$/d" index.adoc
 
 asciidoctor -a example="" -a partial="" -b docbook -a leveloffset=+1 -o index.xml index.adoc
@@ -30,3 +33,5 @@ sed -i "0,/warning/s//note/" index.md
 sed -i "s/{\\\\#/{#/" index.md
 
 echo -e "\n<Changelog/>" >> index.md
+
+mv index.adoc.tmp index.adoc
