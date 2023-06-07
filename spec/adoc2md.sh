@@ -1,7 +1,8 @@
 #!/bin/bash
 
-git show public:./index.adoc > index.adoc
-sed -i "/include::/d" index.adoc
+git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./index.adoc > index.adoc
+git show 6f626529fcc1ebbbff79f57e49ee623d6ce3d67b:./ic0.txt > ic0.txt
+sed -i "/include::[^0]*$/d" index.adoc
 
 asciidoctor -a example="" -a partial="" -b docbook -a leveloffset=+1 -o index.xml index.adoc
 python3 fix.py
@@ -19,3 +20,13 @@ python3 block.py
 sed -i "s/  *{.#[\_a-z-]*}\]/]/g" index.md
 
 python3 titles.py
+
+sed -i "s/<https:\/\/sdk.dfinity.org\/>/the [developer docs](..\/home.mdx)/" index.md
+
+sed -i "/DFINITY Foundation/d" index.md
+
+sed -i "0,/warning/s//note/" index.md
+
+sed -i "s/{\\\\#/{#/" index.md
+
+echo -e "\n<Changelog/>" >> index.md
