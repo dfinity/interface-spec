@@ -36,4 +36,4 @@ echo -e "\n<Changelog/>" >> index.md
 
 mv index.adoc.tmp index.adoc
 
-cp index.md md-spec
+cp index.md md-spec/ic-interface-spec.md
