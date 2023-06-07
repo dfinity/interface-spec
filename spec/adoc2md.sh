@@ -35,3 +35,5 @@ sed -i "s/{\\\\#/{#/" index.md
 echo -e "\n<Changelog/>" >> index.md
 
 mv index.adoc.tmp index.adoc
+
+cp index.md md-spec
