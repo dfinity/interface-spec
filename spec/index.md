@@ -3,12 +3,6 @@ import Changelog from './_attachments/interface-spec-changelog.md';
 # The Internet Computer Interface Specification
 
 
-:::note
-
-You are looking at the `master` version of the document! If you are looking for implementation specification or documentation, look at one of the versions at <https://docs.dfinity.systems/public/v/>.
-
-:::
-
 ## Introduction
 
 Welcome to *the Internet Computer*! We speak of "the" Internet Computer, because although under the hood a large number of physical computers are working together in a blockchain protocol, in the end we have the appearance of a single, shared, secure and world-wide accessible computer. Developers who want to build decentralized applications (or *dapps* for short) that run on the Internet Computer blockchain and end-users who want to use those dapps need to know very little, if anything, about the underlying protocol. However, knowing some details about the interfaces that the Internet Computer exposes can allow interested developers and architects to take fuller advantages of the unique features that the Internet Computer provides.
@@ -31,7 +25,7 @@ The target audience of this document are
 
 -   those who want to understand the intricacies of the Internet Computer's behavior in great detail (e.g. to do a security analysis)
 
-:::warning
+:::note
 
 This document is a rigorous, technically dense reference. It is not an introduction to the Internet Computer, and as such most useful to those who understand the high-level concepts. Please see more high-level documentation first.
 
@@ -130,9 +124,9 @@ There are several classes of ids:
 
 :::note
 
-    Typically, these end with the byte `0x01`, but users of the IC should not need to care about that.
+Typically, these end with the byte `0x01`, but users of the IC should not need to care about that.
 
-    :::
+:::
 
 2.  *Self-authenticating ids*.
 
@@ -148,9 +142,9 @@ There are several classes of ids:
 
 :::note
 
-    Derived IDs are currently not explicitly used in this document, but they may be used internally or in the future.
+Derived IDs are currently not explicitly used in this document, but they may be used internally or in the future.
 
-    :::
+:::
 
 4.  *Anonymous id*
 
@@ -308,21 +302,21 @@ The signature is checked by verifying that the `challenge` field contains the [b
 
 :::tip
 
-    A DER wrapping of a COSE key is shown below. It can be parsed via the command `sed "s/#.*//" | xxd -r -p | openssl asn1parse -inform der`.
+A DER wrapping of a COSE key is shown below. It can be parsed via the command `sed "s/#.*//" | xxd -r -p | openssl asn1parse -inform der`.
 
-        30 5E                                       # SEQUENCE of length 94 bytes
-          30 0C                                     # SEQUENCE of length 12 bytes
-            06 0A 2B 06 01 04 01 83 B8 43 01 01     # OID 1.3.6.1.4.1.56387.1.1
-          03 4E 00                                  # BIT STRING encoding of length 78,
-            A501 0203 2620 0121 5820 7FFD 8363 2072 #    length is at byte boundary
-            FD1B FEAF 3FBA A431 46E0 EF95 C3F5 5E39 #    contents is a valid COSE key
-            94A4 1BBF 2B51 74D7 71DA 2258 2032 497E #    with ECDSA on curve P-256
-            ED0A 7F6F 0009 2876 5B83 1816 2CFD 80A9
-            4E52 5A6A 368C 2363 063D 04E6 ED
+    30 5E                                       # SEQUENCE of length 94 bytes
+      30 0C                                     # SEQUENCE of length 12 bytes
+        06 0A 2B 06 01 04 01 83 B8 43 01 01     # OID 1.3.6.1.4.1.56387.1.1
+      03 4E 00                                  # BIT STRING encoding of length 78,
+        A501 0203 2620 0121 5820 7FFD 8363 2072 #    length is at byte boundary
+        FD1B FEAF 3FBA A431 46E0 EF95 C3F5 5E39 #    contents is a valid COSE key
+        94A4 1BBF 2B51 74D7 71DA 2258 2032 497E #    with ECDSA on curve P-256
+        ED0A 7F6F 0009 2876 5B83 1816 2CFD 80A9
+        4E52 5A6A 368C 2363 063D 04E6 ED
 
-    You can also view the wrapping in [an online ASN.1 JavaScript decoder](https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt).
+You can also view the wrapping in [an online ASN.1 JavaScript decoder](https://lapo.it/asn1js/#MF4wDAYKKwYBBAGDuEMBAQNOAKUBAgMmIAEhWCB__YNjIHL9G_6vP7qkMUbg75XD9V45lKQbvytRdNdx2iJYIDJJfu0Kf28ACSh2W4MYFiz9gKlOUlpqNowjYwY9BObt).
 
-    :::
+:::
 
 -   The signature is a CBOR (see [CBOR](#cbor)) value consisting of a data item with major type 6 ("Semantic tag") and tag value `55799`, followed by a map with three mandatory fields:
 
@@ -429,9 +423,9 @@ The state tree contains information about the topology of the Internet Computer.
 
 :::note
 
-    Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the *end*, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
+Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the *end*, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
 
-    :::
+:::
 
 ### Request status {#state-tree-request-status}
 
@@ -718,15 +712,15 @@ The `<effective_canister_id>` in the URL paths of requests is the *effective* de
 
 :::note
 
-    The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
+The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
 
-    The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
+The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
-    The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
+The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-    In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
+In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
 
-    :::
+:::
 
 ### Authentication {#authentication}
 
@@ -1254,24 +1248,21 @@ which copies, at the time of function invocation, the data referred to by `src`/
 
 The canister can access an argument. For `canister_init`, `canister_post_upgrade` and method entry points, the argument is the argument of the call; in a reply callback, it refers to the received reply. So the lifetime of the argument data is a single WebAssembly function execution, not the whole method call tree.
 
--   ic0.msg_arg_data_size : () -> i32
-        ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ()
+-   `ic0.msg_arg_data_size : () → i32` and `ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) → ()`
 
     The message argument data.
 
--   ic0.msg_caller_size : () -> i32
-        ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ()
+-   `ic0.msg_caller_size : () → i32` and `ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) → ()`
 
     The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of the user or canister requesting the installation or upgrade.
 
--   `ic0.msg_reject_code : () -> i32`
+-   `ic0.msg_reject_code : () → i32`
 
     Returns the reject code, if the current function is invoked as a reject callback.
 
     It returns the special "no error" code `0` if the callback is *not* invoked as a reject callback; this allows canisters to use a single entry point for both the reply and reject callback, if they choose to do so.
 
--   ic0.msg_reject_msg_size : () -> i32
-        ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ()
+-   `ic0.msg_reject_msg_size : () → i32` and `ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) → ()`
 
     The reject message. Traps if there is no reject message (i.e. if `reject_code` is `0`).
 
@@ -1279,21 +1270,21 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
--   `ic0.msg_reply_data_append : (src : i32, size : i32) -> ()`
+-   `ic0.msg_reply_data_append : (src : i32, size : i32) → ()`
 
     Appends data it to the (initially empty) data reply.
-
-:::note
-
-    This can be invoked multiple times within the same message execution to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
-
-    :::
 
     This traps if the current call already has been or does not need to be responded to.
 
     Any data assembled, but not replied using `ic0.msg_reply`, gets discarded at the end of the current message execution. In particular, the reply buffer gets reset when the canister yields control without calling `ic0.msg_reply`.
 
--   `ic0.msg_reply : () -> ()`
+:::note
+
+This can be invoked multiple times within the same message execution to build up the argument with data from various places on the Wasm heap. This way, the canister does not have to first copy all the pieces from various places into one location.
+
+:::
+
+-   `ic0.msg_reply : () → ()`
 
     Replies to the sender with the data assembled using `ic0.msg_reply_data_append`.
 
@@ -1301,7 +1292,7 @@ Eventually, the canister will want to respond to the original call, either by re
 
     See [Cycles](#system-api-cycles) for how this interacts with cycles available on this call.
 
--   `ic0.msg_reject : (src : i32, size : i32) -> ()`
+-   `ic0.msg_reject : (src : i32, size : i32) → ()`
 
     Rejects the call. The data referred to by `src`/`size` is used for the diagnostic message.
 
@@ -1329,8 +1320,7 @@ The `canister_inspect_message` is *not* invoked for query calls, inter-canister 
 
 A canister can learn about its own identity:
 
--   ic0.canister_self_size : () -> i32
-        ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) -> ()
+-   `ic0.canister_self_size : () → i32` and `ic0.canister_self_copy: (dst : i32, offset : i32, size : i32) → ()`
 
     These functions allow the canister to query its own canister id (as a blob).
 
@@ -1360,38 +1350,38 @@ During the canister upgrade process, `canister_pre_upgrade` sees the old counter
 
 When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
 
--   ic0.call_new :
-          ( callee_src : i32,
-            callee_size : i32,
-            name_src : i32,
-            name_size : i32,
-            reply_fun : i32,
-            reply_env : i32,
-            reject_fun : i32,
-            reject_env : i32,
-          ) -> ()
+-   `ic0.call_new :
+    ( callee_src : i32,
+      callee_size : i32,
+      name_src : i32,
+      name_size : i32,
+      reply_fun : i32,
+      reply_env : i32,
+      reject_fun : i32,
+      reject_env : i32,
+    ) → ()`
 
-    Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
+Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
 
-    The IC records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `(env : i32) -> ()`, and passed the corresponding `*_env` value.
+The IC records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `(env : i32) -> ()`, and passed the corresponding `*_env` value.
 
-    The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
+The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
 
-    The reject callback is executed if the method call fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
+The reject callback is executed if the method call fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-    This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
+This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
 
-    Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
+Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 
--   ic0.call_on_cleanup : (fun : i32, env : i32) -> ()
+-   `ic0.call_on_cleanup : (fun : i32, env : i32) → ()`
 
-    If a cleanup callback (of type `(env : i32) -> ()`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
+If a cleanup callback (of type `(env : i32) -> ()`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 
-    During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
+During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
 
-    If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
+If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
 
-    There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
+There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
@@ -1437,9 +1427,9 @@ This specification currently does not go into details about which actions cost h
 
 :::note
 
-    This call traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
+This call traps if the current balance does not fit into a 64-bit value. Canisters that need to deal with larger cycles balances should use `ic0.canister_cycles_balance128` instead.
 
-    :::
+:::
 
 -   `ic0.canister_cycle_balance128 : (dst : i32) → ()`
 
@@ -1455,9 +1445,9 @@ This specification currently does not go into details about which actions cost h
 
 :::note
 
-    This call traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
+This call traps if the amount of cycles available does not fit into a 64-bit value. Please use `ic0.msg_cycles_available128` instead.
 
-    :::
+:::
 
 -   `ic0.msg_cycles_available128 : (dst : i32) → ()`
 
@@ -1471,9 +1461,9 @@ This specification currently does not go into details about which actions cost h
 
     This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
 
-    -   It moves no more cycles than `max_amount`.
+    It moves no more cycles than `max_amount`.
 
-    -   It moves no more cycles than available according to `ic0.msg_cycles_available`, and
+    It moves no more cycles than available according to `ic0.msg_cycles_available`, and
 
     It can be called multiple times, each time possibly adding more cycles to the balance.
 
@@ -1483,17 +1473,17 @@ This specification currently does not go into details about which actions cost h
 
 :::tip
 
-    Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(ic0.msg_cycles_available())` in the method handler or a callback handler, *before* calling reply or reject.
+Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(ic0.msg_cycles_available())` in the method handler or a callback handler, *before* calling reply or reject.
 
-    :::
+:::
 
 -   `ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low : i64, dst : i32) → ()`
 
     This moves cycles from the call to the canister balance. It moves as many cycles as possible, up to these constraints:
 
-    -   It moves no more cycles than the amount obtained by combining `max_amount_high` and `max_amount_low`. Cycles are represented by 128-bit values.
+    It moves no more cycles than the amount obtained by combining `max_amount_high` and `max_amount_low`. Cycles are represented by 128-bit values.
 
-    -   It moves no more cycles than available according to `ic0.msg_cycles_available128`, and
+    It moves no more cycles than available according to `ic0.msg_cycles_available128`, and
 
     It can be called multiple times, each time possibly adding more cycles to the balance.
 
@@ -1673,8 +1663,7 @@ When executing a query method via a query call (i.e. in non-replicated state), t
 
     This will return `0` if the query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
 
--   ic0.data_certificate_size : () -> i32
-        ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ()
+-   `ic0.data_certificate_size : () → i32` and `ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) → ()`
 
     Copies the certificate for the current value of the certified data to the canister.
 
@@ -1736,7 +1725,7 @@ The [interface description](_attachments/ic.did) below, in [Candid syntax](https
 
 The binary encoding of arguments and results are as per Candid specification.
 
-### IC method `create_canister` {#ic-create\_canister}
+### IC method `create_canister` {#ic-create_canister}
 
 Before deploying a canister, the administrator of the canister first has to register it with the IC, to get a canister id (with an empty canister behind it), and then separately install the code.
 
@@ -1774,7 +1763,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
-### IC method `update_settings` {#ic-update\_settings}
+### IC method `update_settings` {#ic-update_settings}
 
 Only *controllers* of the canister can update settings. See [IC method](#ic-create_canister) for a description of settings.
 
@@ -1782,7 +1771,7 @@ Not including a setting in the `settings` record means not changing that field. 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-### IC method `install_code` {#ic-install\_code}
+### IC method `install_code` {#ic-install_code}
 
 This method installs code into a canister.
 
@@ -1812,7 +1801,7 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-### IC method `uninstall_code` {#ic-uninstall\_code}
+### IC method `uninstall_code` {#ic-uninstall_code}
 
 This method removes a canister's code and state, making the canister *empty* again.
 
@@ -1826,7 +1815,7 @@ A canister after *uninstalling* retains its *cycles* balance, *controllers*, sta
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-### IC method `canister_status` {#ic-canister\_status}
+### IC method `canister_status` {#ic-canister_status}
 
 Indicates various information about the canister. It contains:
 
@@ -1866,13 +1855,13 @@ The returned response contains the following fields:
 
 -   `controllers`: the current set of canister controllers.
 
-### IC method `stop_canister` {#ic-stop\_canister}
+### IC method `stop_canister` {#ic-stop_canister}
 
 The controllers of a canister may stop a canister (e.g., to prepare for a canister upgrade).
 
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped). The IC will reject all calls to a stopping canister, indicating that the canister is stopping. Responses to a stopping canister are processed as usual. When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
-### IC method `start_canister` {#ic-start\_canister}
+### IC method `start_canister` {#ic-start_canister}
 
 A canister may be started by its controllers.
 
@@ -1880,23 +1869,23 @@ If the canister status was `stopped` or `stopping` then the canister status is s
 
 If the canister was already `running` then the status stays unchanged.
 
-### IC method `delete_canister` {#ic-delete\_canister}
+### IC method `delete_canister` {#ic-delete_canister}
 
 This method deletes a canister from the IC.
 
 Only controllers of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
 
-### IC method `deposit_cycles` {#ic-deposit\_cycles}
+### IC method `deposit_cycles` {#ic-deposit_cycles}
 
 This method deposits the cycles included in this call into the specified canister.
 
 There is no restriction on who can invoke this method.
 
-### IC method `raw_rand` {#ic-raw\_rand}
+### IC method `raw_rand` {#ic-raw_rand}
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
-### IC method `ecdsa_public_key` {#ic-ecdsa\_public\_key}
+### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
 
 :::note
 
@@ -1912,7 +1901,7 @@ The return result is an extended public key consisting of an ECDSA `public_key`,
 
 This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id. Otherwise it will be rejected.
 
-### IC method `sign_with_ecdsa` {#ic-sign\_with\_ecdsa}
+### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
 :::note
 
@@ -1926,7 +1915,7 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
-### IC method `http_request` {#ic-http\_request}
+### IC method `http_request` {#ic-http_request}
 
 :::note
 
@@ -1978,7 +1967,13 @@ The `transform` function may, for example, transform the body in any way, add or
 
 When the transform function is invoked by the system due to a canister HTTP request, the caller's identity is the principal of the management canister. This information can be used by developers to implement access control mechanism for this function.
 
-The following additional limits apply to HTTP requests and HTTP responses from the remote sever: - the number of headers must not exceed `64`, - the number of bytes representing a header name or value must not exceed `8KiB`, and - the total number of bytes representing the header names and values must not exceed `48KiB`.
+The following additional limits apply to HTTP requests and HTTP responses from the remote sever:
+
+-   the number of headers must not exceed `64`,
+
+-   the number of bytes representing a header name or value must not exceed `8KiB`, and
+
+-   the total number of bytes representing the header names and values must not exceed `48KiB`.
 
 :::note
 
@@ -1992,7 +1987,7 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 :::
 
-### IC method `provisional_create_canister_with_cycles` {#ic-provisional\_create\_canister\_with\_cycles}
+### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
 
@@ -2002,7 +1997,7 @@ Cycles added to this call via `ic0.call_cycles_add128` are returned to the calle
 
 This method is only available in local development instances.
 
-### IC method `provisional_top_up_canister` {#ic-provisional\_top\_up\_canister}
+### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
@@ -2022,7 +2017,7 @@ The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware
 
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the \[Bitcoin documentation\](<https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works>) for further relevant information and the \[IC pricing page\](<https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs>) for information on pricing for the Bitcoin mainnet and testnet.
 
-### IC method `bitcoin_get_utxos` {#ic-bitcoin\_get\_utxos}
+### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component. The UTXOs are returned sorted by block height in descending order.
 
@@ -2054,7 +2049,7 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
-### IC method `bitcoin_get_balance` {#ic-bitcoin\_get\_balance}
+### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
 
@@ -2064,7 +2059,7 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
 
-### IC method `bitcoin_send_transaction` {#ic-bitcoin\_send\_transaction}
+### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
 Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
 
@@ -2078,7 +2073,7 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the specified Bitcoin network. Note that the function does not provide any guarantees that the transaction will make it into the mempool or that the transaction will ever appear in a block.
 
-### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin\_get\_current\_fee\_percentiles}
+### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin_get_current_fee_percentiles}
 
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
@@ -2986,99 +2981,129 @@ Before invoking a heartbeat, a global timer, or a message to a public entry poin
 
 This "bookkeeping transition" must be immediately followed by the corresponding ["Message execution" transition](#rule-message-execution).
 
--   Call context creation: Public entry points
+*Call context creation: Public entry points*
 
-    For a message to a public entry point, the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
+For a message to a public entry point, the method is looked up in the list of exports. This happens for both ingress and inter-canister messages.
 
-    The position of the message in the queue is unchanged.
+The position of the message in the queue is unchanged.
 
-    Conditions  
-            S.messages = Older_messages · CallMessage CM · Younger_messages
-            S.canisters[CM.callee] ≠ EmptyCanister
-            S.canister_status[CM.callee] = Running
-            S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
-            Ctxt_id ∉ dom(S.call_contexts)
+Conditions  
 
-    State after  
-        S with
-            messages =
-              Older_messages ·
-              FuncMessage {
-                call_context = Ctxt_id;
-                receiver = CM.callee;
-                entry_point = PublicMethod CM.method_name CM.caller CM.arg;
-                queue = CM.queue;
-              } ·
-              Younger_messages
-            call_contexts[Ctxt_id] = {
-              canister = CM.callee;
-              origin = CM.origin;
-              needs_to_respond = true;
-              deleted = false;
-              available_cycles = CM.transferred_cycles;
-            }
-            balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
+```html
 
--   Call context creation: Heartbeat
+S.messages = Older_messages · CallMessage CM · Younger_messages
+S.canisters[CM.callee] ≠ EmptyCanister
+S.canister_status[CM.callee] = Running
+S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
+Ctxt_id ∉ dom(S.call_contexts)
 
-    If canister `C` exports a method with name `canister_heartbeat`, the IC will create the corresponding call context.
+```
 
-    Conditions  
-            S.canisters[C] ≠ EmptyCanister
-            S.canister_status[C] = Running
-            S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
-            Ctxt_id ∉ dom(S.call_contexts)
+State after  
 
-    State after  
-        S with
-            messages =
-              FuncMessage {
-                call_context = Ctxt_id;
-                receiver = C;
-                entry_point = Heartbeat;
-                queue = Queue { from = System; to = C };
-              }
-              · S.messages
-            call_contexts[Ctxt_id] = {
-              canister = C;
-              origin = FromSystemTask;
-              needs_to_respond = false;
-              deleted = false;
-              available_cycles = 0;
-            }
-            balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+```html
 
--   Call context creation: Global timer
+S with
+    messages =
+      Older_messages ·
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = CM.callee;
+        entry_point = PublicMethod CM.method_name CM.caller CM.arg;
+        queue = CM.queue;
+      } ·
+      Younger_messages
+    call_contexts[Ctxt_id] = {
+      canister = CM.callee;
+      origin = CM.origin;
+      needs_to_respond = true;
+      deleted = false;
+      available_cycles = CM.transferred_cycles;
+    }
+    balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 
-    If canister `C` exports a method with name `canister_global_timer`, the global timer of canister `C` is set, and the current time for canister `C` has passed the value of the global timer, the IC will create the corresponding call context and deactivate the global timer.
+```
 
-    Conditions  
-            S.canisters[C] ≠ EmptyCanister
-            S.canister_status[C] = Running
-            S.global_timer[C] ≠ 0
-            S.time[C] ≥ S.global_timer[C]
-            S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
-            Ctxt_id ∉ dom(S.call_contexts)
+*Call context creation: Heartbeat*
 
-    State after  
-        S with
-            messages =
-              FuncMessage {
-                call_context = Ctxt_id;
-                receiver = C;
-                entry_point = GlobalTimer;
-                queue = Queue { from = System; to = C };
-              }
-              · S.messages
-            call_contexts[Ctxt_id] = {
-              canister = C;
-              origin = FromSystemTask;
-              needs_to_respond = false;
-              deleted = false;
-              available_cycles = 0;
-            }
-            global_timer[C] = 0
-            balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+If canister `C` exports a method with name `canister_heartbeat`, the IC will create the corresponding call context.
+
+Conditions  
+
+```html
+
+S.canisters[C] ≠ EmptyCanister
+S.canister_status[C] = Running
+S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+Ctxt_id ∉ dom(S.call_contexts)
+
+```
+
+State after  
+
+```html
+
+S with
+    messages =
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = C;
+        entry_point = Heartbeat;
+        queue = Queue { from = System; to = C };
+      }
+      · S.messages
+    call_contexts[Ctxt_id] = {
+      canister = C;
+      origin = FromSystemTask;
+      needs_to_respond = false;
+      deleted = false;
+      available_cycles = 0;
+    }
+    balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+
+```
+
+*Call context creation: Global timer*
+
+If canister `C` exports a method with name `canister_global_timer`, the global timer of canister `C` is set, and the current time for canister `C` has passed the value of the global timer, the IC will create the corresponding call context and deactivate the global timer.
+
+Conditions  
+
+```html
+
+S.canisters[C] ≠ EmptyCanister
+S.canister_status[C] = Running
+S.global_timer[C] ≠ 0
+S.time[C] ≥ S.global_timer[C]
+S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+Ctxt_id ∉ dom(S.call_contexts)
+
+```
+
+State after  
+
+```html
+
+S with
+    messages =
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = C;
+        entry_point = GlobalTimer;
+        queue = Queue { from = System; to = C };
+      }
+      · S.messages
+    call_contexts[Ctxt_id] = {
+      canister = C;
+      origin = FromSystemTask;
+      needs_to_respond = false;
+      deleted = false;
+      available_cycles = 0;
+    }
+    global_timer[C] = 0
+    balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+
+```
 
 The IC can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field. The actual message execution, if successful, may enqueue further messages and --- if the function returns a response --- record this response. The new call and response messages are enqueued at the end.
 

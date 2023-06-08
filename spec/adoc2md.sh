@@ -7,8 +7,9 @@ cp index.adoc index.adoc.tmp
 
 sed -i "/include::[^0]*$/d" index.adoc
 
-asciidoctor -a example="" -a partial="" -b docbook -a leveloffset=+1 -o index.xml index.adoc
 python3 fix.py
+
+asciidoctor -a example="" -a partial="" -b docbook -a leveloffset=+1 -o index.xml index.adoc
 pandoc -t gfm  --no-highlight --wrap=none -f docbook index.xml > index.md || true
 
 sed -i "s/^ *<div class=\"\([a-z]*\)\">/:::\1/g" index.md

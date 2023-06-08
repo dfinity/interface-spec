@@ -2,21 +2,19 @@ import re
 
 tag=None
 
-with open("index.xml", "r") as f:
+with open("index.adoc", "r") as f:
   ls=f.readlines()
-  with open("index.xml", "w") as g:
+  with open("index.adoc", "w") as g:
     for l in ls:
-      m=re.search("^<section xml:id=\"(.*)\">$", l)
+      m=re.search("^\[#(.*)]$", l)
       if m is not None:
         tag=m.group(1)
         g.write(l)
       elif tag is not None:
-        m=re.search("^<title>(.*)</title>$", l)
-        assert m is not None
         if tag[0]=="_":
           g.write(l)
         else:
-          g.write("<title>{} {}#{}{}</title>\n".format(m.group(1), "{", tag, "}"))
+          g.write("{} {}#{}{}\n".format(l[:-1], "{", tag, "}"))
         tag=None
       else:
         g.write(l)

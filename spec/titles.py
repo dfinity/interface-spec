@@ -2,6 +2,8 @@ import re
 
 tag=None
 out=[]
+indent=None
+block=False
 
 with open("index.md", "r") as f:
   ls=f.readlines()
@@ -35,6 +37,40 @@ with open("index.md", "r") as f:
       m=re.search("This yields the following interaction diagram", l)
       if m is not None:
         out.append("```plantuml")
+      m=re.search("^#", l)
+      if m is not None:
+        out[-1]=out[-1].replace('\_', '_')
+      if block and indent is None:
+        if out[-1][0]==" ":
+          indent=0
+          while out[-1][indent]==" ":
+            indent+=1
+        elif out[-1]!="\n":
+          indent=0
+      if out[-1] != "\n" and indent is not None:
+        for i in range(indent):
+          assert out[-1][i]==" "
+        out[-1]=out[-1][(indent-heading):]
+      m=re.search("^ *:::", l)
+      if m is not None:
+        if out[-1][-2]==":":
+          indent=None
+          block=False
+        else:
+          heading=0
+          while out[-1][heading]==" ":
+            heading+=1
+          indent=None
+          block=True
+      if len(out)>=3:
+        m=re.search("You are looking at the `master` version of the document", out[-3])
+        if m is not None:
+          assert(out[-1]==":::\n")
+          assert(out[-2]=="\n")
+          assert(out[-4]=="\n")
+          assert(out[-5]==":::warning\n")
+          assert(out[-6]=="\n")
+          out=out[:-6]
     for l in out:
       g.write(l)
     g.close()
