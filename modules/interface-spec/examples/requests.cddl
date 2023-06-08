@@ -77,13 +77,14 @@ call-reply = {
   arg : bytes
 }
 
-; subnet delegations
+; user delegations
 
 signed-delegation = {
   delegation: {
     pubkey: bytes
     expiration: timestamp
     ? targets: [* principal]
+    ? senders: [* principal]
   }
   signature: bytes
 }
