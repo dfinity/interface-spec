@@ -306,6 +306,9 @@ lift_definition call_ctxt_respond :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_
   "\<lambda>ctxt. ctxt\<lparr>needs_to_respond := False, available_cycles := 0\<rparr>"
   by auto
 
+lemma call_ctxt_respond_canister[simp]: "call_ctxt_canister (call_ctxt_respond ctxt) = call_ctxt_canister ctxt"
+  by transfer auto
+
 lemma call_ctxt_respond_origin[simp]: "call_ctxt_origin (call_ctxt_respond ctxt) = call_ctxt_origin ctxt"
   by transfer auto
 
@@ -319,6 +322,9 @@ lift_definition call_ctxt_deduct_cycles :: "nat \<Rightarrow> ('p, 'uid, 'canid,
   "\<lambda>n ctxt. ctxt\<lparr>available_cycles := available_cycles ctxt - n\<rparr>"
   by auto
 
+lemma call_ctxt_deduct_cycles_canister[simp]: "call_ctxt_canister (call_ctxt_deduct_cycles n ctxt) = call_ctxt_canister ctxt"
+  by transfer auto
+
 lemma call_ctxt_deduct_cycles_origin[simp]: "call_ctxt_origin (call_ctxt_deduct_cycles n ctxt) = call_ctxt_origin ctxt"
   by transfer auto
 
@@ -331,6 +337,9 @@ lemma call_ctxt_deduct_cycles_available_cycles[simp]: "call_ctxt_available_cycle
 lift_definition call_ctxt_delete :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
   "\<lambda>ctxt. ctxt\<lparr>deleted := True, needs_to_respond := False, available_cycles := 0\<rparr>"
   by auto
+
+lemma call_ctxt_delete_canister[simp]: "call_ctxt_canister (call_ctxt_delete ctxt) = call_ctxt_canister ctxt"
+  by transfer auto
 
 lemma call_ctxt_delete_needs_to_respond[simp]: "call_ctxt_needs_to_respond (call_ctxt_delete ctxt) = False"
   by transfer auto
@@ -470,6 +479,53 @@ lemma ic_can_status_inv_del: "ic_can_status_inv x z \<Longrightarrow>
   ic_can_status_inv x (z - {ctxt_id})"
   by (fastforce simp: ic_can_status_inv_def split: can_status.splits call_origin.splits)
 
+definition ic_inv_call_ctxt_stopped :: "('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt set \<Rightarrow>
+  ('canid, ('b, 'p, 'uid, 'canid, 's, 'c, 'cid) can_status) list_map \<Rightarrow> bool" where
+  "ic_inv_call_ctxt_stopped ctxts can_status = (\<forall>ctxt \<in> ctxts. list_map_get can_status (call_ctxt_canister ctxt) \<noteq> Some Stopped)"
+
+lemma ic_inv_call_ctxt_stopped_mono1:
+  assumes "ic_inv_call_ctxt_stopped (list_map_range ctxts) can_status"
+  shows "ic_inv_call_ctxt_stopped (list_map_range (list_map_del ctxts ctxt_id)) can_status"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def list_map_range_del)
+
+lemma ic_inv_call_ctxt_stopped_mono2:
+  assumes "ic_inv_call_ctxt_stopped ctxts can_status"
+  shows "ic_inv_call_ctxt_stopped ctxts (list_map_del can_status can_id)"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def list_map_get_del)
+
+lemma ic_inv_stopped_ctxt_stopped_set_running:
+  assumes "ic_inv_call_ctxt_stopped ctxts can_status"
+  shows "ic_inv_call_ctxt_stopped ctxts (list_map_set can_status cid Running)"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def list_map_get_set)
+
+lemma ic_inv_call_ctxt_stopped_set_stopping:
+  assumes "ic_inv_call_ctxt_stopped ctxts can_status"
+  shows "ic_inv_call_ctxt_stopped ctxts (list_map_set can_status can_id (Stopping os))"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def list_map_get_set)
+
+lemma ic_inv_call_ctxt_stopped_set_stopped:
+  assumes "ic_inv_call_ctxt_stopped ctxts can_status"
+    "\<And>ctxt. ctxt \<in> ctxts \<Longrightarrow> call_ctxt_canister ctxt \<noteq> cid"
+  shows "ic_inv_call_ctxt_stopped ctxts (list_map_set can_status cid Stopped)"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def list_map_get_set)
+
+lemma ic_inv_call_ctxt_stopped_set_respond:
+  assumes "ic_inv_call_ctxt_stopped (list_map_range ctxts) can_status" "ctxt \<in> list_map_range ctxts"
+  shows "ic_inv_call_ctxt_stopped (list_map_range (list_map_set ctxts ctxt_id (call_ctxt_respond ctxt))) can_status"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def dest!: list_map_range_setD)
+
+lemma ic_inv_call_ctxt_stopped_map_map:
+  assumes "ic_inv_call_ctxt_stopped (list_map_range ctxts) can_status"
+  shows "ic_inv_call_ctxt_stopped (list_map_range (list_map_map (\<lambda>ctxt. if call_ctxt_canister ctxt = cid then call_ctxt_delete ctxt else ctxt) ctxts)) can_status"
+  using assms
+  by (auto simp: ic_inv_call_ctxt_stopped_def)
+
 definition ic_inv :: "('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_inv S = ((\<forall>msg \<in> set (messages S). case msg of
     Call_message (From_canister ctxt_id _) _ _ _ _ _ _ \<Rightarrow> ctxt_id \<in> list_map_dom (call_contexts S)
@@ -478,10 +534,11 @@ definition ic_inv :: "('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Ri
   (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_needs_to_respond ctxt \<longrightarrow>
     (case call_ctxt_origin ctxt of From_canister ctxt_id _ \<Rightarrow> ctxt_id \<in> list_map_dom (call_contexts S)
     | _ \<Rightarrow> True)) \<and>
-  ic_can_status_inv (list_map_range (canister_status S)) (list_map_dom (call_contexts S)))"
+  ic_can_status_inv (list_map_range (canister_status S)) (list_map_dom (call_contexts S)) \<and>
+  ic_inv_call_ctxt_stopped (list_map_range (call_contexts S)) (canister_status S))"
 
 lemma ic_initial_inv: "ic_inv (initial_ic t pk)"
-  by (auto simp: ic_inv_def ic_can_status_inv_def initial_ic_def split: call_origin.splits)
+  by (auto simp: ic_inv_def ic_can_status_inv_def ic_inv_call_ctxt_stopped_def initial_ic_def split: call_origin.splits)
 
 (* Candid *)
 
@@ -847,6 +904,9 @@ lift_definition create_call_ctxt :: "'canid \<Rightarrow> ('b, 'p, 'uid, 'canid,
   "\<lambda>cee orig trans_cycles. \<lparr>canister = cee, origin = orig, needs_to_respond = True, deleted = False, available_cycles = trans_cycles\<rparr>"
   by auto
 
+lemma create_call_ctxt_canister[simp]: "call_ctxt_canister (create_call_ctxt cee orig trans_cycles) = cee"
+  by transfer auto
+
 lemma create_call_ctxt_origin[simp]: "call_ctxt_origin (create_call_ctxt cee orig trans_cycles) = orig"
   by transfer auto
 
@@ -883,7 +943,7 @@ lemma call_context_create_ic_inv:
   assumes "call_context_create_pre n ctxt_id S" "ic_inv S"
   shows "ic_inv (call_context_create_post n ctxt_id S)"
   using assms
-  by (auto simp: ic_inv_def call_context_create_pre_def call_context_create_post_def Let_def
+  by (auto simp: ic_inv_def ic_inv_call_ctxt_stopped_def call_context_create_pre_def call_context_create_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD
       intro: ic_can_status_inv_mono2)
@@ -895,6 +955,9 @@ lemma call_context_create_ic_inv:
 lift_definition create_call_ctxt_system_task :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 's, 'c, 'cid) call_ctxt" is
   "\<lambda>cee. \<lparr>canister = cee, origin = From_system, needs_to_respond = False, deleted = False, available_cycles = 0\<rparr>"
   by auto
+
+lemma create_call_ctxt_system_task_canister[simp]: "call_ctxt_canister (create_call_ctxt_system_task cee) = cee"
+  by transfer auto
 
 lemma create_call_ctxt_system_task_needs_to_respond[simp]: "call_ctxt_needs_to_respond (create_call_ctxt_system_task cee) = False"
   by transfer auto
@@ -927,7 +990,7 @@ lemma call_context_heartbeat_ic_inv:
   assumes "call_context_heartbeat_pre cee ctxt_id S" "ic_inv S"
   shows "ic_inv (call_context_heartbeat_post cee ctxt_id S)"
   using assms
-  by (auto simp: ic_inv_def call_context_heartbeat_pre_def call_context_heartbeat_post_def Let_def
+  by (auto simp: ic_inv_def ic_inv_call_ctxt_stopped_def call_context_heartbeat_pre_def call_context_heartbeat_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD
       intro: ic_can_status_inv_mono2)
@@ -963,7 +1026,7 @@ lemma call_context_global_timer_ic_inv:
   assumes "call_context_global_timer_pre cee ctxt_id S" "ic_inv S"
   shows "ic_inv (call_context_global_timer_post cee ctxt_id S)"
   using assms
-  by (auto simp: ic_inv_def call_context_global_timer_pre_def call_context_global_timer_post_def Let_def
+  by (auto simp: ic_inv_def ic_inv_call_ctxt_stopped_def call_context_global_timer_pre_def call_context_global_timer_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD
       intro: ic_can_status_inv_mono2)
@@ -1349,7 +1412,7 @@ proof (rule message_execution_cases[OF assms(1)])
     call_contexts := list_map_set (call_contexts S) ctxt_id new_ctxt, certified_data := cert_data, global_timer := glob_timer, balances := list_map_set (balances S) recv New_balance\<rparr>)"
     using assms(2) list_map_get_range[OF ctxt]
     by (cases R)
-       (force simp: ic_inv_def ic_can_status_inv_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD list_map_range_setD)+
+       (force simp: ic_inv_def ic_can_status_inv_def ic_inv_call_ctxt_stopped_def split: message.splits call_origin.splits can_status.splits dest!: in_set_takeD in_set_dropD list_map_range_setD)+
 next
   fix recv bal Is_response cyc_used idx
   show "ic_inv (S\<lparr>messages := take n (messages S) @ drop (Suc n) (messages S),
@@ -1399,7 +1462,7 @@ lemma call_context_starvation_ic_inv:
   by (auto simp: ic_inv_def call_context_starvation_pre_def call_context_starvation_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range
-      intro: ic_can_status_inv_mono2)
+      intro: ic_can_status_inv_mono2 ic_inv_call_ctxt_stopped_set_respond)
 
 
 
@@ -1445,7 +1508,7 @@ lemma call_context_removal_ic_inv:
   by (force simp: ic_inv_def call_context_removal_pre_def call_context_removal_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      intro!: ic_can_status_inv_del[where ?z="list_map_dom (call_contexts S)"])
+      intro!: ic_can_status_inv_del[where ?z="list_map_dom (call_contexts S)"] ic_inv_call_ctxt_stopped_mono1)
 
 
 
@@ -1511,7 +1574,7 @@ lemma ic_canister_creation_ic_inv:
   by (auto simp: ic_inv_def ic_canister_creation_pre_def ic_canister_creation_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      intro: ic_can_status_inv_mono1)
+      intro: ic_can_status_inv_mono1 ic_inv_stopped_ctxt_stopped_set_running)
 
 
 
@@ -1639,9 +1702,9 @@ definition ic_code_installation_pre :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b,
     (case parse_wasm_mod w of Some m \<Rightarrow>
       parse_public_custom_sections w \<noteq> None \<and>
       parse_private_custom_sections w \<noteq> None \<and>
-    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some ctrls, Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
+    (case (list_map_get (controllers S) cid, list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some ctrls, Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
       ((mode = encode_string ''install'' \<and> (case list_map_get (canisters S) cid of Some None \<Rightarrow> True | _ \<Rightarrow> False)) \<or> mode = encode_string ''reinstall'') \<and>
       cer \<in> ctrls \<and>
       (case canister_module_init m (cid, ar, cer, env) of Inl _ \<Rightarrow> False
@@ -1656,14 +1719,14 @@ definition ic_code_installation_post :: "nat \<Rightarrow> ('p, 'uid, 'canid, 'b
     (case (candid_parse_text a [encode_string ''mode''], candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some mode, Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr>;
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr>;
       (new_state, new_certified_data, new_global_timer, cyc_used) = (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow>
         (init_return.new_state ret, init_return.new_certified_data ret, init_return.new_global_timer ret, init_return.cycles_used ret)) in
     S\<lparr>canisters := list_map_set (canisters S) cid (Some \<lparr>wasm_state = new_state, module = m, raw_module = w,
         public_custom_sections = the (parse_public_custom_sections w), private_custom_sections = the (parse_private_custom_sections w)\<rparr>),
-      certified_data := (case new_certified_data of None \<Rightarrow> certified_data S | Some cd \<Rightarrow> list_map_set (certified_data S) cid cd),
+      certified_data := list_map_set (certified_data S) cid (case new_certified_data of None \<Rightarrow> empty_blob | Some cd \<Rightarrow> cd),
       global_timer := list_map_set (global_timer S) cid (case new_global_timer of None \<Rightarrow> 0 | Some new_timer \<Rightarrow> new_timer),
       canister_version := list_map_set (canister_version S) cid (Suc idx),
       balances := list_map_set (balances S) cid (bal - cyc_used),
@@ -1675,9 +1738,9 @@ definition ic_code_installation_burned_cycles :: "nat \<Rightarrow> ('p, 'uid, '
     (case (candid_parse_blob a [encode_string ''wasm_module''], candid_parse_blob a [encode_string ''arg'']) of
       (Some w, Some a) \<Rightarrow>
     (case parse_wasm_mod w of Some m \<Rightarrow>
-    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid, list_map_get (global_timer S) cid) of
-      (Some t, Some bal, Some can_status, Some idx, Some timer) \<Rightarrow>
-      let env = \<lparr>env.time = t, env.global_timer = timer, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
+    (case (list_map_get (time S) cid, list_map_get (balances S) cid, list_map_get (canister_status S) cid, list_map_get (canister_version S) cid) of
+      (Some t, Some bal, Some can_status, Some idx) \<Rightarrow>
+      let env = \<lparr>env.time = t, env.global_timer = 0, balance = bal, freezing_limit = ic_freezing_limit S cid, certificate = None, status = simple_status can_status, canister_version = Suc idx\<rparr> in
       (case canister_module_init m (cid, a, cer, env) of Inr ret \<Rightarrow> init_return.cycles_used ret))))))"
 
 lemma ic_code_installation_cycles_inv:
@@ -1703,7 +1766,7 @@ lemma ic_code_installation_ic_inv:
   assumes "ic_code_installation_pre n S" "ic_inv S"
   shows "ic_inv (ic_code_installation_post n S)"
 proof -
-  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx timer where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
+  obtain orig cer cee mn a trans_cycles q cid mode w ar m ctrls t bal can_status idx where msg: "messages S ! n = Call_message orig cer cee mn a trans_cycles q"
     and parse: "candid_parse_cid a = Some cid"
     "candid_parse_text a [encode_string ''mode''] = Some mode"
     "candid_parse_blob a [encode_string ''wasm_module''] = Some w"
@@ -1715,7 +1778,6 @@ proof -
     "list_map_get (balances S) cid = Some bal"
     "list_map_get (canister_status S) cid = Some can_status"
     "list_map_get (canister_version S) cid = Some idx"
-    "list_map_get (global_timer S) cid = Some timer"
     using assms
     by (auto simp: ic_code_installation_pre_def split: message.splits option.splits)
   show ?thesis
@@ -1899,9 +1961,10 @@ lemma ic_code_uninstallation_ic_inv:
   shows "ic_inv (ic_code_uninstallation_post n S)"
   using assms
   by (auto simp: ic_inv_def ic_code_uninstallation_pre_def ic_code_uninstallation_post_def Let_def
+      simp del: list_map_range_map_map
       split: sum.splits message.splits call_origin.splits option.splits if_splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      in_set_map_filter_vals)
+      in_set_map_filter_vals intro!: ic_inv_call_ctxt_stopped_map_map) auto
 
 
 
@@ -1955,10 +2018,10 @@ proof -
     by (auto simp: ic_canister_stop_running_pre_def split: message.splits option.splits)
   show ?thesis
     using assms
-    by (force simp: ic_inv_def ic_canister_stop_running_pre_def ic_canister_stop_running_post_def msg Let_def
+    by (auto simp: ic_inv_def ic_canister_stop_running_pre_def ic_canister_stop_running_post_def msg Let_def
         split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
         dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-        in_set_map_filter_vals intro!: ic_can_status_inv_stopping[where ?x="list_map_range (canister_status S)" and ?os=orig])
+        in_set_map_filter_vals intro!: ic_can_status_inv_stopping[where ?x="list_map_range (canister_status S)" and ?os=orig] ic_inv_call_ctxt_stopped_set_stopping)
 qed
 
 
@@ -2017,7 +2080,7 @@ proof -
     by (force simp: ic_inv_def ic_canister_stop_stopping_pre_def ic_canister_stop_stopping_post_def msg Let_def
         split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
         dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-        in_set_map_filter_vals intro!: ic_can_status_inv_stopping_app[where ?x="list_map_range (canister_status S)" and ?os=orig])
+        in_set_map_filter_vals intro!: ic_can_status_inv_stopping_app[where ?x="list_map_range (canister_status S)" and ?os=orig] ic_inv_call_ctxt_stopped_set_stopping)
 qed
 
 
@@ -2027,7 +2090,7 @@ qed
 definition ic_canister_stop_done_stopping_pre :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "ic_canister_stop_done_stopping_pre cid S =
     (case list_map_get (canister_status S) cid of Some (Stopping os) \<Rightarrow>
-      (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_deleted ctxt \<or> call_ctxt_canister ctxt \<noteq> cid)
+      (\<forall>ctxt \<in> list_map_range (call_contexts S). call_ctxt_canister ctxt \<noteq> cid)
     | _ \<Rightarrow> False)"
 
 definition ic_canister_stop_done_stopping_post :: "'canid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic" where
@@ -2058,7 +2121,7 @@ lemma ic_canister_stop_done_stopping_ic_inv:
   by (force simp: ic_inv_def ic_can_status_inv_def ic_canister_stop_done_stopping_pre_def ic_canister_stop_done_stopping_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      in_set_map_filter_vals)
+      in_set_map_filter_vals intro!: ic_inv_call_ctxt_stopped_set_stopped)
 
 
 
@@ -2160,7 +2223,7 @@ lemma ic_canister_start_not_stopping_ic_inv:
   by (auto simp: ic_inv_def ic_canister_start_not_stopping_pre_def ic_canister_start_not_stopping_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      in_set_map_filter_vals intro: ic_can_status_inv_mono1)
+      in_set_map_filter_vals intro: ic_can_status_inv_mono1 ic_inv_stopped_ctxt_stopped_set_running)
 
 
 
@@ -2219,7 +2282,7 @@ lemma ic_canister_start_stopping_ic_inv:
   apply (auto simp: ic_inv_def ic_canister_start_stopping_pre_def ic_canister_start_stopping_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
-      intro: ic_can_status_inv_mono1)
+      intro: ic_can_status_inv_mono1 ic_inv_stopped_ctxt_stopped_set_running)
    apply (fastforce simp: ic_can_status_inv_def)+
   done
 
@@ -2285,7 +2348,7 @@ lemma ic_canister_deletion_ic_inv:
   by (auto simp: ic_inv_def ic_canister_deletion_pre_def ic_canister_deletion_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
-      intro: ic_can_status_inv_mono1)
+      intro: ic_can_status_inv_mono1 ic_inv_call_ctxt_stopped_mono2)
 
 
 
@@ -2451,7 +2514,7 @@ lemma ic_provisional_canister_creation_ic_inv:
   by (auto simp: ic_inv_def ic_provisional_canister_creation_pre_def ic_provisional_canister_creation_post_def Let_def
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD nth_mem[of n "messages S"] in_set_updD list_map_range_setD list_map_get_range list_map_range_del in_set_map_filter_vals
-      intro: ic_can_status_inv_mono1)
+      intro: ic_can_status_inv_mono1 ic_inv_stopped_ctxt_stopped_set_running)
 
 
 
@@ -2750,9 +2813,10 @@ lemma canister_out_of_cycles_ic_inv:
   shows "ic_inv (canister_out_of_cycles_post cid S)"
   using assms
   by (auto simp: ic_inv_def canister_out_of_cycles_pre_def canister_out_of_cycles_post_def Let_def
+      simp del: list_map_range_map_map
       split: sum.splits message.splits call_origin.splits option.splits if_splits can_status.splits
       dest!: in_set_takeD in_set_dropD in_set_updD list_map_range_setD list_map_get_range list_map_range_del
-      in_set_map_filter_vals)
+      in_set_map_filter_vals intro!: ic_inv_call_ctxt_stopped_map_map) auto
 
 
 
