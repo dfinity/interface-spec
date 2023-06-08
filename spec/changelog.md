@@ -1,6 +1,6 @@
 ## Changelog {#changelog}
 
-### 0.19.1 (2023-06-08) {#0_18_10}
+### 0.19.0 (2023-06-08) {#0_18_10}
 - canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
 - IC records canister history (canister creation, canister code changes, and canister controllers changes)
 - added a new `canister_info` management canister call returning current module hash, current controllers, and canister history
