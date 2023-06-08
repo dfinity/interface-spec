@@ -1,8 +1,8 @@
 ## Changelog {#changelog}
 
 ### 0.18.10 (2023-06-08) {#0_18_10}
-- IC records canister version (a per-canister counter that always increases upon code changes and changes of canister settings and can also increase in further currently unspecified events)
-- IC records canister history (canister creation, code changes, and controllers changes)
+- canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
+- IC records canister history (canister creation, canister code changes, and canister controllers changes)
 - added a new `canister_info` management canister call returning current module hash, current controllers, and canister history
 - added a new system API call `ic0.is_controller` (checking if a principal is a controller of the canister)
 - stable memory System API calls can be invoked in the WebAssembly module `(start)` function
