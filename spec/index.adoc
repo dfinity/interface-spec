@@ -1673,7 +1673,7 @@ The controllers of a canister may stop a canister (e.g., to prepare for a canist
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped).
 The IC will reject all calls to a stopping canister, indicating that the canister is stopping.
 Responses to a stopping canister are processed as usual.
-When all outstanding responses to call contexts that are not marked as deleted have been processed (so there are no open call contexts that are not marked as deleted), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
+When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
 [#ic-start_canister]
 === IC method `start_canister`
@@ -2843,7 +2843,6 @@ For a message to a public entry point, the method is looked up in the list of ex
 The position of the message in the queue is unchanged.
 
 Conditions::
-+
 ....
     S.messages = Older_messages · CallMessage CM · Younger_messages
     S.canisters[CM.callee] ≠ EmptyCanister
@@ -2853,7 +2852,6 @@ Conditions::
 ....
 
 State after::
-+
 ....
 S with
     messages =
@@ -3608,7 +3606,7 @@ S with
 ....
 
 
-The status of a stopping canister which has no open call contexts that are not marked as deleted is set to `Stopped`, and all pending `stop_canister` calls are replied to.
+The status of a stopping canister which has no open call contexts is set to `Stopped`, and all pending `stop_canister` calls are replied to.
 
 Conditions::
 ....
