@@ -946,7 +946,7 @@ A typical request would be (written in [CBOR diagnostic notation](https://www.rf
 
 ### CDDL description of requests and responses {#api-cddl}
 
-This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also [download the file]({attachmentsdir}/requests.cddl) and see [CDDL](#cddl) for more information.
+This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also [download the file](_attachments/requests.cddl) and see [CDDL](#cddl) for more information.
 
 ### Ordering guarantees
 
@@ -2241,7 +2241,7 @@ Delegations are *scoped*, i.e., they indicate which set of canister principals t
 
 ### Encoding of certificates {#certification-encoding}
 
-The binary encoding of a certificate is a CBOR (see [CBOR](#cbor)) value according to the following CDDL (see [CDDL](#cddl)). You can also [download the file]({attachmentsdir}/certificates.cddl).
+The binary encoding of a certificate is a CBOR (see [CBOR](#cbor)) value according to the following CDDL (see [CDDL](#cddl)). You can also [download the file](_attachments/certificates.cddl).
 
 The values in the [The system state tree](#state-tree) are encoded to blobs as follows:
 
@@ -2313,7 +2313,7 @@ In the pruned tree, the `lookup_path` function behaves as follows:
 
 ## The HTTP Gateway protocol {#http-gateway}
 
-The HTTP Gateway Protocol has been moved into its own [specification](https://internetcomputer.org/docs/current/references/http-gateway-protocol-spec).
+The HTTP Gateway Protocol has been moved into its own [specification](./http-gateway-protocol-spec.md).
 
 ## Abstract behavior {#abstract-behavior}
 
