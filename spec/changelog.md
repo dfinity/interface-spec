@@ -1,21 +1,21 @@
 ## Changelog {#changelog}
 
-### 0.19.0 (2023-06-08) {#0_18_10}
-- canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
-- IC records canister history (canister creation, canister code changes, and canister controllers changes)
-- added a new `canister_info` management canister call returning current module hash, current controllers, and canister history
-- added a new system API call `ic0.is_controller` (checking if a principal is a controller of the canister)
-- stable memory System API calls can be invoked in the WebAssembly module `(start)` function
-- the system API call `ic0.global_timer_set` can be invoked in canister pre-upgrade
-- added modeling WASM start function in the concrete `CanisterModule` specification
-- WebAssembly module requirements have been revised (relaxed max number of declared functions and globals, added conditions on exported functions)
-- certified variables are cleared if a canister is reinstalled
-- a canister having an open call context marked as deleted cannot reach Stopped state
-- a desired canister ID of the canister created by `provisional_create_canister_with_cycles` (in testing environments) can be specified using `specified_id`
-- conditions on envelope delegations have been revised (relaxed max number of delegations, restricted max number of targets per delegation, forbidden cycles in the delegation chain)
-- added a new optional field `senders` in envelope delegations (restricting users to which a delegation applies)
-- all `/request_status/<request_id>` paths must refer to the same `request_id` in a `read_state` request
-- IC protocol execution error conditions (such as failing `inspect_message` method of a canister) are returned as 202 HTTP responses with a cbor body describing the error (instead of 4xx or 5xx HTTP responses)
+### 0.19.0 (2023-06-08) {#0_19_0}
+* canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
+* IC records canister history (canister creation, canister code changes, and canister controllers changes)
+* added a new `canister_info` management canister call returning current module hash, current controllers, and canister history
+* added a new system API call `ic0.is_controller` (checking if a principal is a controller of the canister)
+* stable memory System API calls can be invoked in the WebAssembly module `(start)` function
+* the system API call `ic0.global_timer_set` can be invoked in canister pre-upgrade
+* added modeling WASM start function in the concrete `CanisterModule` specification
+* WebAssembly module requirements have been revised (relaxed max number of declared functions and globals, added conditions on exported functions)
+* certified variables are cleared if a canister is reinstalled
+* a canister having an open call context marked as deleted cannot reach Stopped state
+* a desired canister ID of the canister created by `provisional_create_canister_with_cycles` (in testing environments) can be specified using `specified_id`
+* conditions on envelope delegations have been revised (relaxed max number of delegations, restricted max number of targets per delegation, forbidden cycles in the delegation chain)
+* added a new optional field `senders` in envelope delegations (restricting users to which a delegation applies)
+* all `/request_status/<request_id>` paths must refer to the same `request_id` in a `read_state` request
+* IC protocol execution error conditions (such as failing `inspect_message` method of a canister) are returned as 202 HTTP responses with a cbor body describing the error (instead of 4xx or 5xx HTTP responses)
 
 ### 0.18.9 (2022-11-06) {#0_18_9}
 * Global timers
