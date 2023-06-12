@@ -593,7 +593,11 @@ The HTTP response to this request consists of a CBOR (see <<cbor>>) map with the
 +
 If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation’s canister id range (see <<certification-delegation>>).
 
-The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
+The returned certificate reveals all values whose path is a suffix of a requested path except for
+
+ * paths with prefix `/subnet/<subnet_id>/nodes`. Only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to `/subnet/<subnet_id>/canister_ranges`.
+
+The returned certificate also always reveals `/time`, even if not explicitly requested.
 
 All requested paths must have one of the following paths as prefix:
 
