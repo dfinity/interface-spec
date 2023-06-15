@@ -4048,7 +4048,7 @@ S with
 ....
 
 
-==== Time progressing and cycle consumption increments
+==== Time progressing, cycle consumption, and canister version increments
 
 Time progresses. Abstractly, it does so independently for each canister, and in unspecified intervals.
 
@@ -4087,6 +4087,19 @@ State after::
 ....
 S with
     system_time = T1
+....
+
+Finally, the canister version can be incremented arbitrarily:
+
+Conditions::
+....
+    N0 = S.canister_version[CanisterId]
+    N1 > N0
+....
+State after::
+....
+S with
+    canister_version[CanisterId] = N1
 ....
 
 ==== Trimming canister history
