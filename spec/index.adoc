@@ -4199,18 +4199,52 @@ Read response::
 * If `F(Q.Arg, Q.sender, Env) = Trap trap` then
 +
 ....
-{status: rejected; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
+{status: "rejected"; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
 ....
 * Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reject (code, msg); …}` then
 +
 ....
-{status: rejected; reject_code: <code>: reject_message: <msg>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
+{status: "rejected"; reject_code: <code>: reject_message: <msg>, error_code: <implementation-specific>, node_signatures: <implementation-specific>}
 ....
 * Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reply R; …}` then
 +
 ....
-{status: replied; reply: { arg :  <R> }, node_signatures: <implementation-specific>}
+{status: "replied"; reply: {arg: <R>}, node_signatures: <implementation-specific>}
 ....
+
+Given a certificate obtained by requesting the path `/subnet` via a read state request
+to `/api/v2/canister/<ECID>/read_state`, the following predicate describes
+when the returned response is correctly signed by the nodes:
+....
+verify_response({status: "replied"; reply: {arg: <R>}, node_signatures: Sigs}, Cert)
+  = verify_cert(Cert) ∧
+    ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
+     (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
+    ECID ∈ Ranges ∧
+    ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ Sigs.
+      lookup(["subnet",SubnetId,"nodes",NodeId,"public_key"], Cert) = Found PK ∧
+      verify_sig PK Sig ("\x0Bic-response" · hash_of_map({
+        status: "replied",
+        reply: {arg: <R>},
+        timestamp: T,
+        request_id: hash_of_map(E.content)}))
+verify_response({status: "rejected"; reject_code: RejectCode, reject_message: RejectMessage, error_code: ErrorCode, node_signatures: Sigs}, Cert)
+  = verify_cert(Cert) ∧
+    ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
+     (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
+    ECID ∈ Ranges ∧
+    ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ Sigs.
+      lookup(["subnet",SubnetId,"nodes",NodeId,"public_key"], Cert) = Found PK ∧
+      verify_sig PK Sig ("\x0Bic-response" · hash_of_map({
+        status: "rejected",
+        reject_code: RejectCode,
+        reject_message: RejectMessage,
+        error_code: ErrorCode,
+        timestamp: T,
+        request_id: hash_of_map(E.content)}))
+....
+where `RootSubnetId` is the a priori known subnet ID of the root subnet. Moreover, all timestamps in node signatures,
+the certificate returned by the read state request, and its optional delegation must be "recent enough".
 
 ==== Certified state reads
 
