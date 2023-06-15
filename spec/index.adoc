@@ -228,7 +228,7 @@ The canister status can be used to control whether the canister is processing ca
 
 * In status `running`, calls to the canister are processed as normal.
 * In status `stopping`, calls to the canister are rejected by the IC with reject code `CANISTER_ERROR` (5), but responses to the canister are processed as normal.
-* In status `stopped`, calls to the canister are rejected by the IC with reject code `CANISTER_ERROR` (5), and there are no outstanding responses to call contexts that are not marked as deleted.
+* In status `stopped`, calls to the canister are rejected by the IC with reject code `CANISTER_ERROR` (5), and there are no outstanding responses.
 
 In all cases, calls to the <<ic-management-canister,management canister>> are processed, regardless of the state of the managed canister.
 
@@ -745,30 +745,36 @@ E.g., request id consisting of bytes `[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0
 
 [TIP]
 ====
-Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation):
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation) in which we assume that the optional nonce is not provided and thus omitted:
 
 [source,,options="nowrap"]
 ----
-hash_of_map({ request_type: "call", canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
+hash_of_map({ request_type: "call", sender: 0x04, ingress_expiry: 1685570400000000000, canister_id: 0x00000000000004D2, method_name: "hello", arg: "DIDL\x00\xFD*"})
  = H(concat (sort
    [ H("request_type") · H("call")
+   , H("sender") · H("0x04")
+   , H("ingress_expiry") · H(1685570400000000000)
    , H("canister_id") · H("\x00\x00\x00\x00\x00\x00\x04\xD2")
    , H("method_name") · H("hello")
    , H("arg") · H("DIDL\x00\xFD*")
    ]))
  = H(concat (sort
    [ 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
+   , 0a367b92cf0b037dfd89960ee832d56f7fc151681bb41e53690e776f5786998a · e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71
+   , 26cec6b6a9248a96ab24305b61b9d27e203af14a580a5b1ff2f67575cab4a868 · db8e57abc8cda1525d45fdd2637af091bc1f28b35819a40df71517d1501f2c76
    , 0a3eb2ba16702a387e6321066dd952db7a31f9b5cc92981e0a92dd56802d3df9 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
    , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
    , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
    ]))
  = H(concat
-   [ 0a3eb2ba16702a387e6321066dd952db7a31f9b5cc92981e0a92dd56802d3df9 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
+   [ 0a367b92cf0b037dfd89960ee832d56f7fc151681bb41e53690e776f5786998a · e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71
+   , 0a3eb2ba16702a387e6321066dd952db7a31f9b5cc92981e0a92dd56802d3df9 · 4d8c47c3c1c837964011441882d745f7e92d10a40cef0520447c63029eafe396
+   , 26cec6b6a9248a96ab24305b61b9d27e203af14a580a5b1ff2f67575cab4a868 · db8e57abc8cda1525d45fdd2637af091bc1f28b35819a40df71517d1501f2c76
    , 293536232cf9231c86002f4ee293176a0179c002daa9fc24be9bb51acdd642b6 · 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
    , 769e6f87bdda39c859642b74ce9763cdd37cb1cd672733e8c54efaa33ab78af9 · 7edb360f06acaef2cc80dba16cf563f199d347db4443da04da0c8173e3f9e4ed
    , b25f03dedd69be07f356a06fe35c1b0ddc0de77dcd9066c4be0c6bbde14b23ff · 6c0b2ae49718f6995c02ac5700c9c789d7b7862a0d53e6d40a73f1fcd2f70189
    ])
- = 8781291c347db32a9d8c10eb62b710fce5a93be676474c42babc74c51858f94b
+ = 1d1091364d6bb8a6c16b203ee75467d59ead468f523eb058880ae8ec80e2b101
 ----
 ====
 
@@ -1630,7 +1636,7 @@ Note that this is different from `uninstall_code` followed by `install_code`, as
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
-NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks that are not marked as deleted, or be uninstalled first, to prevent outstanding callbacks from being invoked (by marking the corresponding call contexts as deleted). It is expected that the canister admin (or their tooling) does that separately.
+NOTE: Some canisters may not be able to make sense of callbacks after upgrades; these should be stopped first, to wait for all outstanding callbacks, or be uninstalled first, to prevent outstanding callbacks from being invoked (by marking the corresponding call contexts as deleted). It is expected that the canister admin (or their tooling) does that separately.
 
 The `wasm_module` field specifies the canister module to be installed.
 The system supports multiple encodings of the `wasm_module` field, as described in <<canister-module-format>>:
@@ -1697,7 +1703,7 @@ The controllers of a canister may stop a canister (e.g., to prepare for a canist
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped).
 The IC will reject all calls to a stopping canister, indicating that the canister is stopping.
 Responses to a stopping canister are processed as usual.
-When all outstanding responses to call contexts that are not marked as deleted have been processed (so there are no open call contexts that are not marked as deleted), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
+When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
 [#ic-start_canister]
 === IC method `start_canister`
@@ -2649,6 +2655,13 @@ The following is an incomplete list of invariants that should hold for the abstr
   if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 ....
 
+* A stopped canister does not have any call contexts (in particular, a stopped canister does not have any call contexts marked as deleted):
++
+....
+∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+  S.canister_status[Ctxt.canister] ≠ Stopped
+....
+
 * Referenced call contexts exist:
 +
 ....
@@ -2847,7 +2860,7 @@ State after::
 ==== Call context creation
 
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes.
-For these invocations the canister must be running (so not stopped, or stopping).
+For these invocations the canister must be running (so not stopped or stopping).
 Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
 This “bookkeeping transition” must be immediately followed by the corresponding <<rule-message-execution,“Message execution” transition>>.
@@ -3584,12 +3597,12 @@ S with
 
 ==== IC Management Canister: Stopping a canister
 
-The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts that are not marked as deleted, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped, or stopping will accept (and respond) to further `stop_canister` requests.
+The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped or stopping will accept (and respond) to further `stop_canister` requests.
 
 We encode this behavior via three (types of) transitions:
 
 1. First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
-2. Next, when the canister has no open call contexts that are not marked as deleted (so, in particular, all outstanding responses to the canister have been processed or will be discared because the call context has been marked as deleted), the status of the canister is set to `Stopped`.
+2. Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 3. Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
 Conditions::
@@ -3629,12 +3642,12 @@ S with
 ....
 
 
-The status of a stopping canister which has no open call contexts that are not marked as deleted is set to `Stopped`, and all pending `stop_canister` calls are replied to.
+The status of a stopping canister which has no open call contexts is set to `Stopped`, and all pending `stop_canister` calls are replied to.
 
 Conditions::
 ....
     S.canister_status[CanisterId] = Stopping Origins
-    ∀ Ctxt_id. S.call_contexts[Ctxt_id].deleted or S.call_contexts[Ctxt_id].canister ≠ CanisterId
+    ∀ Ctxt_id. S.call_contexts[Ctxt_id].canister ≠ CanisterId
 ....
 State after::
 ....
