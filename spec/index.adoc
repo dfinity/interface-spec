@@ -636,7 +636,7 @@ In order to make a query call to canister, the user makes a POST request to `/ap
 * `method_name` (`text`): Name of the canister method to call
 * `arg` (`blob`): Argument to pass to the canister method
 
-The HTTP response to a query call can contain a list of signatures for the returned response produced by the individual IC nodes that computed the same returned response.
+The HTTP response to a query call contains a list of signatures for the returned response produced by the individual IC nodes that computed the same returned response.
 Every such signature (whose type is denoted as `node-signature-of-query-response`) is a CBOR (see <<cbor>>) map with the following fields:
 
 * `timestamp` (`nat`): the timestamp of the signature.
@@ -647,7 +647,7 @@ If the call resulted in a reply, the response is a CBOR (see <<cbor>>) map with 
 
 * `status` (`text`): `"replied"`
 * `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data `<R>`.
-* `node_signatures` (`[* node-signature-of-query-response]`): a list of node signatures for the returned query response
+* `node_signatures` (`[+ node-signature-of-query-response]`): a list of node signatures for the returned query response
   computed for the following value
 +
 ....
@@ -667,7 +667,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 * `reject_code` (`nat`): The reject code (see <<reject-codes>>).
 * `reject_message` (`text`): a textual diagnostic message.
 * `error_code` (`text`): an optional implementation-specific textual error code (see <<error-codes>>).
-* `node_signatures` (`[* node-signature-of-query-response]`): a list of node signatures for the returned query response
+* `node_signatures` (`[+ node-signature-of-query-response]`): a list of node signatures for the returned query response
   computed for the following value
 +
 ....

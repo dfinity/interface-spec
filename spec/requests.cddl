@@ -66,13 +66,13 @@ query-content = {
 query-response = tagged<{
   status: "replied"
   reply: call-reply
-  node_signatures: [* node-signature-of-query-response]
+  node_signatures: [+ node-signature-of-query-response]
   //
   status: "rejected"
   reject_code: unsigned
   reject_message: text
   ? error_code: text
-  node_signatures: [* node-signature-of-query-response]
+  node_signatures: [+ node-signature-of-query-response]
 }>
 
 node-signature-of-query-response = {
