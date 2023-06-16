@@ -3171,17 +3171,11 @@ S with
 
 ==== Call context removal
 
-If there is no call, downstream calling context, or response that references a call context, and the call context has been replied to or the call context corresponds to a heartbeat or global timer that had already been executed, then the call context can be removed.
+If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
 Conditions::
 ....
-    (
-      S.call_contexts[Ctxt_id].needs_to_respond = false
-    ) or
-    (
-      S.call_contexts[Ctxt_id].origin = FromSystemTask
-      ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
-    )
+    S.call_contexts[Ctxt_id].needs_to_respond = false
     ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
     ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
