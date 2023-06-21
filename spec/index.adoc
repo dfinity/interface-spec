@@ -670,7 +670,7 @@ The response is a CBOR (see <<cbor>>) with the same fields as for <<http-query>>
 * (optional) `signatures` (`[+ node-signature]`): a non-empty list of node signatures for the returned query response.
 * (optional) `certificate` (`blob`): a certificate, as specified in <<certification>>.
 
-Unless `return_signatures` is set to `"no"` in the request, the response to a signed query call contains a non-empty list of signatures
+Unless `return_signatures` is null or set to `"no"` in the request, the response to a signed query call contains a non-empty list of signatures
 for the returned response produced by the individual IC nodes that computed the same returned response.
 Every such signature (whose type is denoted as `node-signature`) is a CBOR (see <<cbor>>) map with the following fields:
 
@@ -678,7 +678,7 @@ Every such signature (whose type is denoted as `node-signature`) is a CBOR (see 
 * `signature` (`blob`): the actual signature.
 * `identity` (`principal`): the principal of the node producing the signature.
 
-Unless `return_certificate` is set to `"no"` in the request, the response to a signed query call contains a certificate containing
+Unless `return_certificate` is null or set to `"no"` in the request, the response to a signed query call contains a certificate containing
 all paths in the state tree with prefixes
 
 * `/time`. Always contained in the certificate.
@@ -4245,8 +4245,7 @@ Query response `R`:
 +
 where `Sigs` and `Cert'` satisfies the following:
 ....
-Q.return_signatures = null => Sigs = null
-Q.return_signatures = "no" => Sigs = []
+Q.return_signatures = null ∨ Q.return_signatures = "no" => Sigs = null
 Q.return_signatures = "one" => |Sigs| = 1
 Q.return_certificate = null ∨ Q.return_certificate = "no" => Cert' = null
 Q.return_certificate = "yes" => verify_response(R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or “recent enough”
