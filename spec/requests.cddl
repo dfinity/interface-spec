@@ -5,8 +5,10 @@ start =
   call-request /
   read-state-request /
   query-request /
+  signed-query-request /
   read-state-response /
-  query-response
+  query-response /
+  signed-query-response
 
 ; common wrappers
 
@@ -66,23 +68,46 @@ query-content = {
 query-response = tagged<{
   status: "replied"
   reply: call-reply
-  node_signatures: [+ node-signature-of-query-response]
   //
   status: "rejected"
   reject_code: unsigned
   reject_message: text
   ? error_code: text
-  node_signatures: [+ node-signature-of-query-response]
 }>
 
-node-signature-of-query-response = {
+; A request as submitted to /api/v2/.../signed_query
+signed-query-request = envelope<signed-query-content>
+signed-query-content = {
+  request_type: "query"
+  ? nonce : bytes
+  ingress_expiry : timestamp
+  sender : principal
+  canister_id : principal
+  method_name : text
+  arg : bytes
+  ? return_signatures : text
+  ? return_certificate : text
+}
+
+; The response, as returned from /api/v2/.../signed_query
+signed-query-response = tagged<{
+  status: "replied"
+  reply: call-reply
+  ? signatures: [+ node-signature]
+  ? certificate : bytes
+  //
+  status: "rejected"
+  reject_code: unsigned
+  reject_message: text
+  ? error_code: text
+  ? signatures: [+ node-signature]
+  ? certificate : bytes
+}>
+
+node-signature = {
   timestamp: timestamp
   signature: bytes
   identity: principal
-}
-
-call-reply = {
-  arg : bytes
 }
 
 ; user delegations
@@ -98,6 +123,10 @@ signed-delegation = {
 }
 
 ; some common data types
+
+call-reply = {
+  arg : bytes
+}
 
 principal = bytes .size (0..29)
 
