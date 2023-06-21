@@ -662,7 +662,7 @@ A *signed* query call is a query call amended with signatures produced by IC nod
 In order to make a signed query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/signed_query`.
 The request body has the same structure as the request body for <<http-query>> with the `content` map having the following *additional* fields:
 
-* (optional) `return_signatures` (`text`): Determines whether and how many signatures are returned in the response; possible values are `"no"`, `"one"`.
+* (optional) `return_signatures` (`text`): Determines whether and how many signatures are returned in the response; possible values are `"none"`, `"one"`.
 * (optional) `return_certificate` (`text`): Determines whether a certificate (as specified in <<certification>>) is returned in the response; possible values are `"no"`, `"yes"`.
 
 The response is a CBOR (see <<cbor>>) with the same fields as for <<http-query>> response and the following *additional* fields:
@@ -670,7 +670,7 @@ The response is a CBOR (see <<cbor>>) with the same fields as for <<http-query>>
 * (optional) `signatures` (`[+ node-signature]`): a non-empty list of node signatures for the returned query response.
 * (optional) `certificate` (`blob`): a certificate, as specified in <<certification>>.
 
-Unless `return_signatures` is null or set to `"no"` in the request, the response to a signed query call contains a non-empty list of signatures
+Unless `return_signatures` is null or set to `"none"` in the request, the response to a signed query call contains a non-empty list of signatures
 for the returned response produced by the individual IC nodes that computed the same returned response.
 Every such signature (whose type is denoted as `node-signature`) is a CBOR (see <<cbor>>) map with the following fields:
 
@@ -4245,7 +4245,7 @@ Query response `R`:
 +
 where `Sigs` and `Cert'` satisfies the following:
 ....
-Q.return_signatures = null ∨ Q.return_signatures = "no" => Sigs = null
+Q.return_signatures = null ∨ Q.return_signatures = "none" => Sigs = null
 Q.return_signatures = "one" => |Sigs| = 1
 Q.return_certificate = null ∨ Q.return_certificate = "no" => Cert' = null
 Q.return_certificate = "yes" => verify_response(R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or “recent enough”
