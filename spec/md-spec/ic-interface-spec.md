@@ -5059,7 +5059,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.msg_cycles_available<es>() : i64 =
       if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
-      if es.cycles_available >= 2^64^ then Trap {cycles_used = es.cycles_used;}
+      if es.cycles_available >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.cycles_available
 
     ic0.msg_cycles_available128<es>(dst : i32) =
@@ -5069,7 +5069,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.msg_cycles_refunded<es>() : i64 =
       if es.context ∉ {Rt, Ry} then Trap {cycles_used = es.cycles_used;}
-      if es.params.cycles_refunded >= 2^64^ then Trap {cycles_used = es.cycles_used;}
+      if es.params.cycles_refunded >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.params.cycles_refunded
 
     ic0.msg_cycles_refunded128<es>(dst : i32) =
@@ -5087,7 +5087,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
       if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
-      let max_amount = max_amount_high * 2^64^ + max_amount_low
+      let max_amount = max_amount_high * 2^64 + max_amount_low
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
       es.cycles_accepted := es.cycles_accepted + amount
@@ -5104,7 +5104,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.canister_cycle_balance<es>() : i64 =
       if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
-      if es.balance >= 2^64^ then Trap {cycles_used = es.cycles_used;}
+      if es.balance >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.balance
 
     ic0.canister_cycles_balance128<es>(dst : i32) =
@@ -5197,7 +5197,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
-      let amount = amount_high * 2^64^ + amount_low
+      let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
 
@@ -5226,12 +5226,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.pending_call := NoPendingCall
 
     ic0.stable_size<es>() : (page_count : i32) =
-      if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
+      if |es.wasm_state.store.mem| > 2^32 then Trap {cycles_used = es.cycles_used;}
       page_count := |es.wasm_state.stable_mem| / 64k
       return page_count
 
     ic0.stable_grow<es>(new_pages : i32) : (old_page_count : i32) =
-      if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
+      if |es.wasm_state.store.mem| > 2^32 then Trap {cycles_used = es.cycles_used;}
       if arbitrary() then return -1
       else
         old_size := |es.wasm_state.stable_mem| / 64k
@@ -5241,14 +5241,14 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         return old_size
 
     ic0.stable_write<es>(offset : i32, src : i32, size : i32)
-      if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
+      if |es.wasm_state.store.mem| > 2^32 then Trap {cycles_used = es.cycles_used;}
       if src+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
       if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
 
       es.wasm_state.stable_mem[offset..offset+size] := es.wasm_state.store.mem[src..src+size]
 
     ic0.stable_read<es>(dst : i32, offset : i32, size : i32)
-      if |es.wasm_state.store.mem| > 2^32^ then Trap {cycles_used = es.cycles_used;}
+      if |es.wasm_state.store.mem| > 2^32 then Trap {cycles_used = es.cycles_used;}
       if offset+size > |es.wasm_state.stable_mem| then Trap {cycles_used = es.cycles_used;}
       if dst+size > |es.wasm_state.store.mem| then Trap {cycles_used = es.cycles_used;}
 
