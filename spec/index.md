@@ -1823,7 +1823,7 @@ Indicates various information about the canister. It contains:
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
--   The controllers of the canister.
+-   The controllers of the canister. The order of returned controllers may vary depending on the implementation.
 
 -   The memory size taken by the canister.
 
@@ -1835,7 +1835,7 @@ Only the controllers of the canister or the canister itself can request its stat
 
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
-The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change.
+The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
 
 The system can drop the oldest canister changes from the list to keep its length bounded (at least `20` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
 
@@ -1853,7 +1853,7 @@ The returned response contains the following fields:
 
 -   `module_hash`: the SHA-256 hash of the currently installed canister module (or `null` if the canister is empty).
 
--   `controllers`: the current set of canister controllers.
+-   `controllers`: the current set of canister controllers. The order of returned controllers may vary depending on the implementation.
 
 ### IC method `stop_canister` {#ic-stop_canister}
 
@@ -3277,17 +3277,17 @@ Note that by construction, a query function will either trap or return with a re
 
 #### Call context starvation {#rule-starvation}
 
-If the call context is not for heartbeat or global timer and there is no call, downstream calling context or response that could possibly fulfill a calling context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
+If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
 Conditions  
 
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = true
-S.call_contexts[Ctxt_id].origin ≠ FromSystemTask
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
+∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 
 ```
 
@@ -3310,19 +3310,13 @@ S with
 
 #### Call context removal
 
-If there is no call, downstream calling context, or response that references a call context, and the call context has been replied to or the call context corresponds to a heartbeat or global timer that had already been executed, then the call context can be removed.
+If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
 Conditions  
 
 ```html
 
-(
-  S.call_contexts[Ctxt_id].needs_to_respond = false
-) or
-(
-  S.call_contexts[Ctxt_id].origin = FromSystemTask
-  ∀ FuncMessage M ∈ S.messages. M.call_context ≠ Ctxt_id
-)
+S.call_contexts[Ctxt_id].needs_to_respond = false
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
