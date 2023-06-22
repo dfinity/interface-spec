@@ -33,6 +33,8 @@ sed -i "0,/warning/s//note/" index.md
 
 sed -i "s/{\\\\#/{#/" index.md
 
+sed -i "s/{attachmentsdir}/_attachments/g" index.md
+
 echo -e "\n<Changelog/>" >> index.md
 
 mv index.adoc.tmp index.adoc
