@@ -2313,7 +2313,7 @@ In the pruned tree, the `lookup_path` function behaves as follows:
 
 ## The HTTP Gateway protocol {#http-gateway}
 
-The HTTP Gateway Protocol has been moved into its own [specification](https://internetcomputer.org/docs/current/references/http-gateway-protocol-spec).
+The HTTP Gateway Protocol has been moved into its own [specification](./http-gateway-protocol-spec.md).
 
 ## Abstract behavior {#abstract-behavior}
 

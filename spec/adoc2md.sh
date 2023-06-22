@@ -35,6 +35,8 @@ sed -i "s/{\\\\#/{#/" index.md
 
 sed -i "s/{attachmentsdir}/_attachments/g" index.md
 
+sed -i "s/https:\/\/internetcomputer.org\/docs\/current\/references\/http-gateway-protocol-spec/.\/http-gateway-protocol-spec.md/" index.md
+
 echo -e "\n<Changelog/>" >> index.md
 
 mv index.adoc.tmp index.adoc
