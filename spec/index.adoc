@@ -1505,15 +1505,16 @@ For each canister, the IC keeps track of “certified data”, a canister-define
 +
 The canister can update the certified data with this call. The passed data must be no larger than 32 bytes. This can be used any number of times.
 
-When executing a query or composite query method via a query call (i.e. in non-replicated state), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`.
+When executing a query or composite query method via a query call (i.e. in non-replicated mode), the canister can fetch a certificate that authenticates to third parties the value last set via `ic0.certified_data_set`. The certificate is not available in composite query method callbacks and in query and composite query methods evaluated on canisters other than the target canister of the query call.
 
 * `+ic0.data_certificate_present : () -> i32+`
 +
 returns `1` if a certificate is present, and `0` otherwise.
 +
-This will return `1` when called from a query or composite query method via a query call.
+This will return `1` when called from a query or composite query method on the target canister of a query call.
 +
-This will return `0` for update methods and if a query method is executed within replicated execution (e.g. when invoked via an update call or inter-canister call).
+This will return `0` for update methods, if a query or composite query method is executed in replicated mode (e.g. when invoked via an update call or inter-canister call),
+and in composite query method callbacks and in query and composite query methods evaluated on canisters other than the target canister of a query call.
 
 * {blank}
 +
@@ -4148,9 +4149,9 @@ S with
 
 ==== Query call
 
-Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against canisters which have a status of `Running` and are also not frozen.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
-During the execution of a query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
+In query and composite query methods evaluated on the target canister of the query call, a certificate is provided to the canister that is valid, contains a current state tree (or “recent enough”; the specification is currently vague about how old the certificate may be), and reveals the canister’s <<system-api-certified-data,Certified Data>>.
 
 [NOTE]
 ====
@@ -4164,12 +4165,15 @@ This limit applies in addition to the limit `MAX_CYCLES_PER_MESSAGE` for executi
 
 We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal. It can also be (trivially) invoked for query methods that do not make further calls.
 ....
-composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) =
+composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, Method_name, Arg) =
   let Mod = S.canisters[Canister_id].module
   let Cert <- { Cert | verify_cert(Cert) and
                        lookup(["canister", Canister_id, "certified_data"], Cert) = Found S.certified_data[Canister_id] and
                        lookup(["time"], Cert) = Found S.system_time // or “recent enough”
               }
+  if Canister_id ≠ Root_canister_id
+  then
+    Cert := NoCertificate // no certificate available in query and composite query methods evaluated on canisters other than the target canister of the query call
   let Env = { time = S.time[Canister_id];
               global_timer = S.global_timer[Canister_id];
               balance = S.balances[Canister_id];
@@ -4208,11 +4212,12 @@ composite_query_helper(S, Cycles, Depth, Caller, Canister_id, Method_name, Arg) 
               if S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
-              let (Response', Cycles') = composite_query_helper(S, Cycles, Depth + 1, Canister_id, Call.callee, Call.method_name, Call.arg)
+              let (Response', Cycles') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
               Cycles := Cycles'
               if Cycles < MAX_CYCLES_PER_RESPONSE
               then
                  Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
+              Env.Cert = NoCertificate // no certificate available in composite query callbacks
               let F' = Mod.composite_callbacks(Call.callback, Response', Env)
               let R'' = F'(W')
               if R'' = Trap trap''
@@ -4245,15 +4250,15 @@ Conditions::
   S.system_time <= Q.ingress_expiry
 ....
 Read response::
-* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (code, msg), _)` (note that `code = CANISTER_REJECT` in this case) then
+* if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
 +
 ....
-{status: rejected; reject_code: CANISTER_REJECT: reject_message: <msg>, error_code: <implementation-specific>}
+{status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>}
 ....
-* Else if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
+* Else if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
 +
 ....
-{status: success; reply: { arg : R } }
+{status: "replied"; reply: {arg: R}}
 ....
 
 ==== Certified state reads
@@ -4384,7 +4389,7 @@ ExecutionState = {
   new_certified_data : NoCertifiedData | Blob;
   new_global_timer : NoGlobalTimer | Nat;
   ingress_filter : Accept | Reject;
-  context : I | G | U | Q | Ry | Rt | CRy | CRt | C | CC | F | T | s;
+  context : I | G | U | Q | CQ | Ry | Rt | CRy | CRt | C | CC | F | T | s;
 }
 ....
 
@@ -4627,8 +4632,6 @@ composite_query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
     cycles_used = es.cycles_used;
   }
 ....
-+
-By construction, the (possibly modified) `es.wasm_state` is discarded.
 
 * The function `heartbeat` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_heartbeat`, and has value
 +
