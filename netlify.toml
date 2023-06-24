@@ -1,3 +1,0 @@
-[build]
-  command = "./.netlify.sh"
-  publish = "_netlify-deploy"
