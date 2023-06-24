@@ -2,7 +2,7 @@ name: "check cddl and candid files"
 on:
   push:
 jobs:
-  cddl:
+  cddl-candid:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
