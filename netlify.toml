@@ -1,2 +1,2 @@
 [build]
-  command = "cd docusaurus && yarn install && yarn start"
+  command = "cd docusaurus && yarn install && yarn build"
