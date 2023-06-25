@@ -13,7 +13,7 @@ This document describes this *external* view of the Internet Computer, i.e. the 
 
 :::note
 
-While this document describes the external interface and behavior of the Internet Computer, it is not intended as end-user or end-developer documentation. Most developers will interact with the Internet Computer through additional tooling like the SDK, Canister Development Kits and Motoko. Please see the [developer docs](../home.mdx) for suitable documentation.
+While this document describes the external interface and behavior of the Internet Computer, it is not intended as end-user or end-developer documentation. Most developers will interact with the Internet Computer through additional tooling like the SDK, Canister Development Kits and Motoko. Please see the [developer docs](https://internetcomputer.org/docs/current/home) for suitable documentation.
 
 :::
 
