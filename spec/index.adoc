@@ -1671,6 +1671,7 @@ Indicates various information about the canister. It contains:
 * The controllers of the canister. The order of returned controllers may vary depending on the implementation.
 * The memory size taken by the canister.
 * The cycle balance of the canister.
+* Statistics regarding the query execution of the canister
 
 Only the controllers of the canister or the canister itself can request its status.
 
@@ -3336,6 +3337,7 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balances[A.canister_id];
+          query_stats = S.query_stats[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(S, A.canister_id);
         })
