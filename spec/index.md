@@ -998,10 +998,6 @@ We want to leverage advanced WebAssembly features, such as WebAssembly host refe
 
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
--   If it imports a memory, it must import it from `env.memory`. In the following, "the Wasm memory" refers to this memory.
-
--   If it imports a table, it must import it from `env.table`. In the following, "the Wasm table" refers to this table.
-
 -   It may only import a function if it is listed in [Overview of imports](#system-api-imports).
 
 -   It may have a `(start)` function.
@@ -1009,6 +1005,10 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 -   If it exports a function called `canister_init`, the function must have type `() -> ()`.
 
 -   If it exports a function called `canister_inspect_message`, the function must have type `() -> ()`.
+
+-   If it exports a function called `canister_pre_upgrade`, the function must have type `() -> ()`.
+
+-   If it exports a function called `canister_post_upgrade`, the function must have type `() -> ()`.
 
 -   If it exports a function called `canister_heartbeat`, the function must have type `() -> ()`.
 
@@ -1036,7 +1036,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
 
-    -   the total size of the exported custom sections exceeds 1MiB.
+    -   the total size of the custom sections (the sum of `<name>` lengths in their names `icp:public <name>` and `icp:private <name>` plus the sum of their content lengths) exceeds 1MiB.
 
 ### Interpretation of numbers
 
