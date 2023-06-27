@@ -256,7 +256,13 @@ The controllers of the canister can initiate transitions between these states us
 
 :::note
 
-This status is orthogonal to whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected by the IC with an HTTP error, but because the canister is empty.
+This status is orthogonal to whether a canister is empty or not: an empty canister can be in status `running`. Calls to such a canister are still rejected by the IC, but because the canister is empty.
+
+:::
+
+:::note
+
+This status is orthogonal to whether a canister is frozen or not: a frozen canister can be in status `running`. Calls to such a canister are still rejected by the IC, but because the canister is frozen.
 
 :::
 
