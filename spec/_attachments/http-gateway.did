@@ -27,8 +27,8 @@ type HttpResponse = record {
 // type; the HTTP Gateway will treat it as an opaque value that is only fed to
 // the callback method
 
-// application-specific type
 type StreamingToken = record {
+  // application-specific type
 };
 
 type StreamingCallbackHttpResponse = record {
