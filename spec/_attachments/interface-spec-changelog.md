@@ -19,7 +19,7 @@
 * all `/request_status/<request_id>` paths must refer to the same `request_id` in a `read_state` request
 * IC protocol execution error conditions (such as failing `inspect_message` method of a canister) are returned as 200 HTTP responses with a cbor body describing the error (instead of 4xx or 5xx HTTP responses)
 
-### 0.18.9 (2022-11-06) {#0_18_9}
+### 0.18.9 (2022-12-06) {#0_18_9}
 * Global timers
 * Canister version
 * Clarifications for HTTP requests & Bitcoin integration costs
