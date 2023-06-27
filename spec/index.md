@@ -1835,6 +1835,16 @@ Indicates various information about the canister. It contains:
 
 -   The cycle balance of the canister.
 
+-   Statistics regarding the query execution of the canister: a tuple `(num_queries, num_instructions, num_request_payload_bytes, num_response_payload_bytes)` containing
+
+    * the total number of query calls evaluated on the canister,
+
+    * the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
+
+    * the total number of query call request payload (query argument) bytes, and
+
+    * the total number of query call response payload (reply data or reject message) bytes.
+
 Only the controllers of the canister or the canister itself can request its status.
 
 ### IC method `canister_info` {#ic-canister-info}
@@ -2680,6 +2690,12 @@ Finally, we can describe the state of the IC as a record having the following fi
       total_num_changes : Nat;
       recent_changes : [Change];
     }
+    QueryStats = {
+      timestamp : Timestamp;
+      num_instructions : Nat;
+      num_request_payload_bytes : Nat;
+      num_response_payload_bytes : Nat;
+    }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
@@ -2692,6 +2708,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       balances: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
+      query_stats: CanisterId ↦ [QueryStats];
       system_time : Timestamp
       call_contexts : CallId ↦ CallCtxt;
       messages : List Message; // ordered!
@@ -2733,6 +2750,7 @@ The initial state of the IC is
       global_timer = ();
       balances = ();
       certified_data = ();
+      query_stats = ();
       system_time = T;
       call_contexts = ();
       messages = [];
@@ -3391,6 +3409,7 @@ S with
         }
       }
     }
+    query_stats[CanisterId] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3511,11 +3530,17 @@ S with
           cycles = S.balances[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(S, A.canister_id);
+          query_stats = noise(SUM {(1, num_instructions, num_request_payload_bytes, num_response_payload_bytes) |
+                                   (t, num_instructions, num_request_payload_bytes, num_response_payload_bytes) <- S.query_stats[A.canister_id]
+                                   t <= S.time[A.canister_id] - T})
         })
         refunded_cycles = M.transferred_cycles
       }
 
 ```
+
+where `T` is an unspecified time delay of query statistics and `noise` is an unspecified probabilistic function
+modelling information loss due to aggregating query statistics in a distributed system.
 
 #### IC Management Canister: Canister information
 
@@ -4014,6 +4039,7 @@ S with
     global_timer[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
+    query_stats[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -4143,6 +4169,7 @@ S with
         }
       }
     }
+    query_stats[CanisterId] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -4521,6 +4548,26 @@ Read response
 -   Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reply R; …}` then
 
         {status: success; reply: { arg :  <R> } }
+
+State after
+
+```html
+
+S with
+    query_stats[Q.receiver] = S.query_stats[Q.receiver] · {
+        timestamp = S.time[Q.receiver]
+        num_instructions = NumInstructions
+        num_request_payload_bytes = |Q.Arg|
+        num_response_payload_bytes =
+          if F(Q.Arg, Q.sender, Env) = Trap trap then <implementation-specific>
+          else if F(Q.Arg, Q.sender, Env) = Return {response = Reject (code, msg); …} then |msg|
+          else if F(Q.Arg, Q.sender, Env) = Return {response = Reply R; …} then |R|
+    }
+
+```
+
+where `NumInstructions` is the unspecified number of WebAssembly instructions executed during the evaluation of the query call,
+i.e., the value of `ic0.performance_counter(0)` at the end of the query method execution.
 
 #### Certified state reads
 
