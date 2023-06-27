@@ -2,6 +2,8 @@
 // Note: type annotations allow type checking and IDEs autocompletion
 
 const customWebpack = require("./plugins/custom-webpack");
+const simplePlantUML = require("@akebifiky/remark-simple-plantuml");
+const math = require("remark-math");
 
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
@@ -15,6 +17,8 @@ const config = {
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
+
+  favicon: "/img/favicon-32x32.png",
 
   plugins: [customWebpack],
 
@@ -39,7 +43,9 @@ const config = {
       'classic',
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
-        docs: {},
+        docs: {
+          remarkPlugins: [math, simplePlantUML, require("remark-code-import")],
+        },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
         },
