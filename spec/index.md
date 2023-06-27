@@ -4613,7 +4613,7 @@ S.system_time <= Q.ingress_expiry
 
 ```
 
-Read response  
+Query response  
 -   if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
 
         {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>}
