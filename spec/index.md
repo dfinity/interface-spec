@@ -1018,6 +1018,8 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 -   It may not export both `canister_update <name>` and `canister_query <name>` with the same `name`.
 
+-   It may not export other methods the names of which start with the prefix `canister_` besides the methods allowed above.
+
 -   It may not have both `icp:public <name>` and `icp:private <name>` with the same `name` as the custom section name.
 
 -   It may not have other custom sections the names of which start with the prefix `icp:` besides the \`icp:public \` and \`icp:private \`.
