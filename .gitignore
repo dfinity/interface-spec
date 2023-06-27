@@ -3,7 +3,4 @@
 .idea/
 
 # Build and Test Output
-spec/index.html
-spec/*.png
-impl/.tasty-rerun-log
 theories/code
