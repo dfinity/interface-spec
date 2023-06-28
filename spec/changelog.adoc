@@ -4,6 +4,7 @@
 [#unreleased]
 === ∞ (unreleased)
 * Spec: User delegations include a principal scope
+* Spec: Add per-call context performance counter
 
 [#0_18_9]
 === 0.18.9 (2022-12-06)
