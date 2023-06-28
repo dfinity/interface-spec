@@ -2021,7 +2021,7 @@ The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware
 
 :::
 
-The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the \[Bitcoin documentation\](<https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works>) for further relevant information and the \[IC pricing page\](<https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs>) for information on pricing for the Bitcoin mainnet and testnet.
+The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs) for information on pricing for the Bitcoin mainnet and testnet.
 
 ### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
 
