@@ -722,9 +722,9 @@ A **signed** query call is a query call amended with signatures produced by IC n
 
 In order to make a signed query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/signed_query`. The request body has the same structure as the request body for [Request: Query call](#http-query) with the `content` map having the following **additional** fields:
 
--   (optional) `return_signatures` (`text`): Determines whether and how many signatures are returned in the response; possible values are `"none"`, `"one"`.
+-   (optional) `requested_signatures` (`text`): Determines whether and how many signatures are returned in the response; possible values are `"none"`, `"one"`.
 
--   (optional) `return_certificate` (`text`): Determines whether a certificate (as specified in [Certification](#certification)) is returned in the response; possible values are `"no"`, `"yes"`.
+-   (optional) `requested_certificate` (`text`): Determines whether a certificate (as specified in [Certification](#certification)) is returned in the response; possible values are `"no"`, `"yes"`.
 
 The response is a CBOR (see [CBOR](#cbor)) with the same fields as for [Request: Query call](#http-query) response and the following **additional** fields:
 
@@ -732,7 +732,7 @@ The response is a CBOR (see [CBOR](#cbor)) with the same fields as for [Request:
 
 -   (optional) `certificate` (`blob`): a certificate, as specified in [Certification](#certification).
 
-Unless `return_signatures` is null or set to `"none"` in the request, the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+Unless `requested_signatures` is null or set to `"none"` in the request, the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `timestamp` (`nat`): the timestamp of the signature.
 
@@ -740,7 +740,7 @@ Unless `return_signatures` is null or set to `"none"` in the request, the respon
 
 -   `identity` (`principal`): the principal of the node producing the signature.
 
-Unless `return_certificate` is null or set to `"no"` in the request, the response to a signed query call contains a certificate containing all paths in the state tree with prefixes
+Unless `requested_certificate` is null or set to `"no"` in the request, the response to a signed query call contains a certificate containing all paths in the state tree with prefixes
 
 -   `/time`. Always contained in the certificate.
 
@@ -2669,8 +2669,8 @@ These are the synchronous read messages:
         canister_id : CanisterId;
         method_name : Text;
         arg : Blob;
-        return_certificate : Text;
-        return_signatures : Text;
+        requested_certificate : Text;
+        requested_signatures : Text;
       }
 
 Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
@@ -4609,10 +4609,10 @@ Query response `R`: \* If `F(Q.Arg, Q.sender, Env) = Trap trap` then
 
 ```html
 
-Q.return_signatures = null ∨ Q.return_signatures = "none" => Sigs = null
-Q.return_signatures = "one" => |Sigs| = 1
-Q.return_certificate = null ∨ Q.return_certificate = "no" => Cert' = null
-Q.return_certificate = "yes" => verify_response(R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+Q.requested_signatures = null ∨ Q.requested_signatures = "none" => Sigs = null
+Q.requested_signatures = "one" => |Sigs| = 1
+Q.requested_certificate = null ∨ Q.requested_certificate = "no" => Cert' = null
+Q.requested_certificate = "yes" => verify_response(R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
 
 ```
 
