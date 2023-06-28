@@ -433,7 +433,7 @@ service : {
 }
 ```
 
-You can also [download the file](./http-gateway.did).
+You can also [download the file](./_attachments/http-gateway.did).
 
 Not all of this interface is required. The following sections detail what can be optionally omitted depending on the requirements of the canister in question.
 
