@@ -2733,6 +2733,7 @@ The initial state of the IC is
       global_timer = ();
       balances = ();
       certified_data = ();
+      canister_history = ();
       system_time = T;
       call_contexts = ();
       messages = [];
@@ -4014,6 +4015,7 @@ S with
     global_timer[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
+    canister_history[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
