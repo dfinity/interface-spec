@@ -1,0 +1,1 @@
+../../spec/http-gateway-protocol-spec.md
