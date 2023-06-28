@@ -1923,12 +1923,6 @@ This call requires that the ECDSA feature is enabled, the caller is a canister, 
 
 ### IC method `http_request` {#ic-http_request}
 
-:::note
-
-The IC http\_request API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
 The canister should aim to issue *idempotent* requests, meaning that it must not change the state at the remote server, or the remote server has the means to identify duplicated requests. Otherwise, the risk of failure increases.
@@ -2014,12 +2008,6 @@ Any user can top-up any canister this way.
 This method is only available in local development instances.
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
-
-:::note
-
-The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
 
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the \[Bitcoin documentation\](<https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works>) for further relevant information and the \[IC pricing page\](<https://internetcomputer.org/docs/current/developer-docs/deploy/computation-and-storage-costs>) for information on pricing for the Bitcoin mainnet and testnet.
 
