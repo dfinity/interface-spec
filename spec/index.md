@@ -4647,7 +4647,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
       cycles_accepted : Nat;
       cycles_available : Nat;
       cycles_used : Nat;
-      balance : Funds;
+      balance : Nat;
       reply_params : { arg : Blob };
       pending_call : MethodCall | NoPendingCall;
       calls : List MethodCall;
@@ -5197,6 +5197,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5206,6 +5207,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5216,7 +5218,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       // are we below the threezing threshold?
       // Or maybe the system has other reasons to not perform this
-      if es.balance < es.env.freezing_limit or system_cannot_do_this_call_now()
+      if es.balance < es.params.sysenv.freezing_limit or system_cannot_do_this_call_now()
       then
         discard_pending_call<es>()
         return 1
