@@ -1899,11 +1899,11 @@ The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that
 
 :::
 
-This method returns a [SEC1](http://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of strings in `derivation_path` can be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
+This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of strings in `derivation_path` can be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP-0032](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>.
 
-The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC2](http://www.secg.org/sec2-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC2](https://www.secg.org/sec2-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
 This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id. Otherwise it will be rejected.
 
@@ -1917,7 +1917,7 @@ The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that
 
 This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) signature of the given `message_hash` that can be separately verified against a derived ECDSA public key. This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
-The signatures are encoded as the concatenation of the [SEC2](http://www.secg.org/sec2-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
+The signatures are encoded as the concatenation of the [SEC2](https://www.secg.org/sec2-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
