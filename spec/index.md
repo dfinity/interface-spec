@@ -354,7 +354,7 @@ This section makes forward references to other concepts in this document, in par
 
     -   The `certificate` must be a valid certificate as described in [Certification](#certification), with
 
-            lookup(/canister/<signing_canister_id>/certified_data, certificate.tree) = Found (reconstruct(tree))
+            lookup_path(["canister", <signing_canister_id>, "certified_data"], certificate.tree) = Found (reconstruct(tree))
 
     where `signing_canister_id` is the id of the signing canister and `reconstruct` is a function that computes a root-hash for the tree.
 
@@ -362,7 +362,7 @@ This section makes forward references to other concepts in this document, in par
 
     -   The `tree` must be a `well_formed` tree with
 
-            lookup(/sig/<s>/<m>, tree) = Found ""
+            lookup_path(["sig", <s>, <m>], tree) = Found ""
 
     where `s` is the SHA-256 hash of the `seed` used in the public key and `m` is the SHA-256 hash of the payload.
 
@@ -2179,7 +2179,7 @@ The following algorithm looks up a `path` in a certificate, and returns either
 lookup(path, cert) = lookup_path(path, cert.tree)
 
 lookup_path([], Empty) = Absent
-lookup_path([], Leaf v) = v
+lookup_path([], Leaf v) = Found v
 lookup_path([], Pruned _) = Unknown
 lookup_path([], Labeled _ _) = Error
 lookup_path([], Fork _ _) = Error
