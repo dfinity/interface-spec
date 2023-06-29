@@ -732,7 +732,11 @@ The response is a CBOR (see [CBOR](#cbor)) with the same fields as for [Request:
 
 -   (optional) `certificate` (`blob`): a certificate, as specified in [Certification](#certification).
 
-Unless `requested_signatures` is null or set to `"none"` in the request, the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+If the IC nodes evaluating the query call do not compute the same query response (e.g., because they evaluated the query call on different states),
+then the query call is rejected with the reject code `SYS_TRANSIENT` (2). If the query call is rejected with the reject code `SYS_TRANSIENT` (2),
+then no signature and certificate is contained in the response.
+
+Unless `requested_signatures` is null or set to `"none"` in the request and unless the query call is rejected with the reject code `SYS_TRANSIENT` (2), the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `timestamp` (`nat`): the timestamp of the signature.
 
@@ -740,7 +744,7 @@ Unless `requested_signatures` is null or set to `"none"` in the request, the res
 
 -   `identity` (`principal`): the principal of the node producing the signature.
 
-Unless `requested_certificate` is null or set to `"no"` in the request, the response to a signed query call contains a certificate containing all paths in the state tree with prefixes
+Unless `requested_certificate` is null or set to `"no"` in the request and unless the query call is rejected with the reject code `SYS_TRANSIENT` (2), the response to a signed query call contains a certificate containing all paths in the state tree with prefixes
 
 -   `/time`. Always contained in the certificate.
 
@@ -758,8 +762,12 @@ Given a response `R` and a certificate `Cert` that is either
 
 the following predicate describes when the returned response `R` is correctly signed by the nodes:
 
-    verify_response(R, Cert)
-      = verify_cert(Cert) ∧
+    verify_response(Q, R, Cert)
+      = (Q.requested_signatures = null ∨ Q.requested_signatures = "none" ∨ R.reject_code = SYS_TRANSIENT => Sigs = null) ∧
+        (Q.requested_signatures = "one" ∧ R.reject_code ≠ SYS_TRANSIENT => |Sigs| = 1) ∧
+        (Q.requested_certificate = null ∨ Q.requested_certificate = "no" ∨ R.reject_code = SYS_TRANSIENT => Cert = null) ∧
+        (Q.requested_certificate = "yes" ∧ R.reject_code ≠ SYS_TRANSIENT => verify_response(R, Cert)) ∧
+        verify_cert(Cert) ∧
         ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
          (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
         ECID ∈ Ranges ∧
@@ -4591,11 +4599,11 @@ Env = {
 
 ```
 
-Query response `R`: \* If `F(Q.Arg, Q.sender, Env) = Trap trap` then
+Query response `R`:
 
-\+
+-   If `F(Q.Arg, Q.sender, Env) = Trap trap` then
 
-    {status: "rejected"; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>, signatures: Sigs, certificate: Cert'}
+        {status: "rejected"; reject_code: CANISTER_ERROR, reject_message: <implementation-specific>, error_code: <implementation-specific>, signatures: Sigs, certificate: Cert'}
 
 -   Else if `F(Q.Arg, Q.sender, Env) = Return {response = Reject (code, msg); …}` then
 
@@ -4609,10 +4617,7 @@ Query response `R`: \* If `F(Q.Arg, Q.sender, Env) = Trap trap` then
 
 ```html
 
-Q.requested_signatures = null ∨ Q.requested_signatures = "none" => Sigs = null
-Q.requested_signatures = "one" => |Sigs| = 1
-Q.requested_certificate = null ∨ Q.requested_certificate = "no" => Cert' = null
-Q.requested_certificate = "yes" => verify_response(R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+verify_responses(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
 
 ```
 
