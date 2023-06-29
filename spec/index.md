@@ -750,7 +750,7 @@ Unless `requested_certificate` is null or set to `"no"` in the request, the resp
 
 where `<subnet_id>` characterizes the subnet hosting the requested canister.
 
-Given a response `R` and a certificate `Cert` that is
+Given a response `R` and a certificate `Cert` that is either
 
 -   contained in the response, i.e., `Cert = R.certificate`, or
 
