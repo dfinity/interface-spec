@@ -85,8 +85,8 @@ signed-query-content = {
   canister_id : principal
   method_name : text
   arg : bytes
-  ? return_signatures : text
-  ? return_certificate : text
+  ? requested_signatures : text
+  ? requested_certificate : text
 }
 
 ; The response, as returned from /api/v2/.../signed_query
