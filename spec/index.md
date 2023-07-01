@@ -752,7 +752,7 @@ Unless `requested_certificate` is null or set to `"no"` in the request and unles
 
 -   `/subnet/<subnet_id>/nodes/<node_id>/public_key`. Contained in the certificate if `<node_id>` is the principal of a node in `signatures`.
 
-where `<subnet_id>` characterizes the subnet hosting the requested canister.
+where `<subnet_id>` characterizes the subnet to which the requested canister belongs.
 
 Given a response `R` and a certificate `Cert` that is either
 
@@ -766,7 +766,6 @@ the following predicate describes when the returned response `R` is correctly si
       = (Q.requested_signatures = null ∨ Q.requested_signatures = "none" ∨ R.reject_code = SYS_TRANSIENT => Sigs = null) ∧
         (Q.requested_signatures = "one" ∧ R.reject_code ≠ SYS_TRANSIENT => |Sigs| = 1) ∧
         (Q.requested_certificate = null ∨ Q.requested_certificate = "no" ∨ R.reject_code = SYS_TRANSIENT => Cert = null) ∧
-        (Q.requested_certificate = "yes" ∧ R.reject_code ≠ SYS_TRANSIENT => verify_response(R, Cert)) ∧
         verify_cert(Cert) ∧
         ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
          (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
@@ -4613,7 +4612,7 @@ Query response `R`:
 
         {status: "replied"; reply: {arg: <Res>}, signatures: Sigs, certificate: Cert'}
 
-    where `Sigs` and `Cert'` satisfies the following:
+where the query `Q` and the response `R` satisfy the following:
 
 ```html
 
