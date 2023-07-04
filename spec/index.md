@@ -754,22 +754,22 @@ Unless `requested_certificate` is null or set to `"no"` in the request and unles
 
 where `<subnet_id>` characterizes the subnet to which the requested canister belongs.
 
-Given a response `R` and a certificate `Cert` that is either
+Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is either
 
 -   contained in the response, i.e., `Cert = R.certificate`, or
 
--   obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<ECID>/read_state`,
+-   obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`,
 
 the following predicate describes when the returned response `R` is correctly signed by the nodes:
 
     verify_response(Q, R, Cert)
-      = (Q.requested_signatures = null ∨ Q.requested_signatures = "none" ∨ R.reject_code = SYS_TRANSIENT => Sigs = null) ∧
-        (Q.requested_signatures = "one" ∧ R.reject_code ≠ SYS_TRANSIENT => |Sigs| = 1) ∧
+      = (Q.requested_signatures = null ∨ Q.requested_signatures = "none" ∨ R.reject_code = SYS_TRANSIENT => R.signatures = null) ∧
+        (Q.requested_signatures = "one" ∧ R.reject_code ≠ SYS_TRANSIENT => |R.signatures| = 1) ∧
         (Q.requested_certificate = null ∨ Q.requested_certificate = "no" ∨ R.reject_code = SYS_TRANSIENT => Cert = null) ∧
         verify_cert(Cert) ∧
         ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
          (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
-        ECID ∈ Ranges ∧
+        effective_canister_id ∈ Ranges ∧
         ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
           lookup(["subnet",SubnetId,"nodes",NodeId,"public_key"], Cert) = Found PK ∧
           if R.status = "replied" then
@@ -777,7 +777,7 @@ the following predicate describes when the returned response `R` is correctly si
               status: "replied",
               reply: R.reply,
               timestamp: T,
-              request_id: hash_of_map(E.content)}))
+              request_id: hash_of_map(Q)}))
           else
             verify_sig PK Sig ("\x0Bic-response" · hash_of_map({
               status: "rejected",
@@ -785,7 +785,7 @@ the following predicate describes when the returned response `R` is correctly si
               reject_message: R.reject_message,
               error_code: R.error_code,
               timestamp: T,
-              request_id: hash_of_map(E.content)}))
+              request_id: hash_of_map(Q)}))
 
 where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
 
