@@ -738,9 +738,9 @@ then no signatures and certificate are contained in the response.
 
 :::note
 
-Note that currently only one IC nodes evaluates a query call and thus the query call cannot be rejected with the reject code `SYS_TRANSIENT` (2)
+Currently only one IC node evaluates a query call and thus the query call cannot be rejected with the reject code `SYS_TRANSIENT` (2)
 because the IC nodes evaluating the query call do not compute the same query response. However, query calls might be evaluated
-by multiple IC nodes in the futures and thus we specify the general behavior.
+by multiple IC nodes in the future and thus we specify the general behavior.
 
 :::
 
