@@ -734,7 +734,15 @@ The response is a CBOR (see [CBOR](#cbor)) with the same fields as for [Request:
 
 If the IC nodes evaluating the query call do not compute the same query response (e.g., because they evaluated the query call on different states),
 then the query call is rejected with the reject code `SYS_TRANSIENT` (2). If the query call is rejected with the reject code `SYS_TRANSIENT` (2),
-then no signature and certificate is contained in the response.
+then no signatures and certificate are contained in the response.
+
+:::note
+
+Note that currently only one IC nodes evaluates a query call and thus the query call cannot be rejected with the reject code `SYS_TRANSIENT` (2)
+because the IC nodes evaluating the query call do not compute the same query response. However, query calls might be evaluated
+by multiple IC nodes in the futures and thus we specify the general behavior.
+
+:::
 
 Unless `requested_signatures` is null or set to `"none"` in the request and unless the query call is rejected with the reject code `SYS_TRANSIENT` (2), the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
