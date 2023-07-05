@@ -1441,8 +1441,6 @@ This call traps if the current balance does not fit into a 64-bit value. Caniste
 
     Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.msg_cycles_available : () → i64`
 
     Returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
@@ -1460,8 +1458,6 @@ This call traps if the amount of cycles available does not fit into a 64-bit val
     Indicates the number of cycles transferred by the caller of the current call, still available in this message. The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
 
     Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will report 0 cycles.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 -   `ic0.msg_cycles_accept : (max_amount : i64) → (amount : i64)`
 
@@ -1497,8 +1493,6 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This does not trap.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.call_cycles_add : (amount : i64) → ()`
 
     This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1517,8 +1511,6 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This traps if trying to transfer more cycles than are in the current balance of the canister.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.msg_cycles_refunded : () → i64`
 
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
@@ -1532,8 +1524,6 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 -   `ic0.msg_cycles_refunded128 : (dst : i32) → ()`
 
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 ### Stable memory {#system-api-stable-memory}
 
