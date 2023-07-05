@@ -102,9 +102,17 @@ This specification may refer to certain constants and limits without specifying 
 
     Amount of cycles that the IC sets aside when a canister performs a call. This is used to pay for processing the response message, and unused cycles after the execution of the response are refunded. See [Message execution](#rule-message-execution).
 
+-   `MAX_CYCLES_PER_COMPOSITE_QUERY`
+
+    Maximum amount of cycles that can be used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call to a composite query method.
+
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
     Amount of cycles allocated to a new canister by default, if not explicitly specified. See [IC method](#ic-provisional_create_canister_with_cycles).
+
+-   `MAX_CALL_DEPTH_COMPOSITE_QUERY`
+
+    Maximum nesting of calls during evaluation of a query call to a composite query method.
 
 ### Principals {#principal}
 
