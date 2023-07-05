@@ -2733,6 +2733,7 @@ The initial state of the IC is
       global_timer = ();
       balances = ();
       certified_data = ();
+      canister_history = ();
       system_time = T;
       call_contexts = ();
       messages = [];
@@ -2747,30 +2748,30 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 -   No method name is the name of an update and query method in a CanisterModule at the same time:
 
-        ∀ _ ↦ CanState ∈ S.canisters:
+        ∀ (_ ↦ CanState) ∈ S.canisters:
           dom(CanState.module.update_methods) ∩ dom(CanState.module.query_methods) = ∅
 
 -   Deleted call contexts were not awaiting a response:
 
-        ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+        ∀ (_ ↦ Ctxt) ∈ S.call_contexts:
           if Ctxt.deleted then Ctxt.needs_to_respond = false
 
 -   Responded call contexts have no available\_cycles left:
 
-        ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+        ∀ (_ ↦ Ctxt) ∈ S.call_contexts:
           if Ctxt.needs_to_respond = false then Ctxt.available_cycles = 0
 
 -   A stopped canister does not have any call contexts (in particular, a stopped canister does not have any call contexts marked as deleted):
 
-        ∀ Ctxt_id ↦ Ctxt ∈ S.call_contexts:
+        ∀ (_ ↦ Ctxt) ∈ S.call_contexts:
           S.canister_status[Ctxt.canister] ≠ Stopped
 
 -   Referenced call contexts exist:
 
         ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
         ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
-        ∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ∈ dom(S.call_contexts)
-        ∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
+        ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ∈ dom(S.call_contexts)
+        ∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
 
 ### State transitions
 
@@ -3292,8 +3293,8 @@ Conditions
 S.call_contexts[Ctxt_id].needs_to_respond = true
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 
 ```
 
@@ -3325,8 +3326,8 @@ Conditions
 S.call_contexts[Ctxt_id].needs_to_respond = false
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ _ ↦ {needs_to_respond = true, origin = FromCanister O, …} ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ _ ↦ Stopping Origins ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 
 ```
 
@@ -4014,6 +4015,7 @@ S with
     global_timer[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
+    canister_history[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -4537,7 +4539,7 @@ E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
-∀ ["request_status", Rid] · _ ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
+∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
 ```
 
