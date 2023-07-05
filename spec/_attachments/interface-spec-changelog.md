@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* IC Bitcoin API, ECDSA API, and canister HTTPS outcalls API are considered stable.
 
 ### 0.19.0 (2023-06-08) {#0_19_0}
 * canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
