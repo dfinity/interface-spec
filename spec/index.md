@@ -1787,7 +1787,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
 
-    Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all calls awaiting a response.
+    Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
 -   If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
@@ -1813,11 +1813,11 @@ This method removes a canister's code and state, making the canister *empty* aga
 
 Only controllers of the canister can uninstall code.
 
-Uninstalling a canister's code will reject all calls that the canister has not yet responded to, and drop the canister's code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
+Uninstalling a canister's code will reject all calls that the canister has not yet responded to, and drop the canister's code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again. Cycles attached to such responses will still be refunded though.
 
 The canister is now [empty](#canister-lifecycle). In particular, any incoming or queued calls will be rejected.
 
-A canister after *uninstalling* retains its *cycles* balance, *controllers*, status, and allocations.
+A canister after *uninstalling* retains its *cycles* balance, *controllers*, history, status, and allocations.
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
