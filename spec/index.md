@@ -998,10 +998,6 @@ We want to leverage advanced WebAssembly features, such as WebAssembly host refe
 
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
--   If it imports a memory, it must import it from `env.memory`. In the following, "the Wasm memory" refers to this memory.
-
--   If it imports a table, it must import it from `env.table`. In the following, "the Wasm table" refers to this table.
-
 -   It may only import a function if it is listed in [Overview of imports](#system-api-imports).
 
 -   It may have a `(start)` function.
@@ -1009,6 +1005,10 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 -   If it exports a function called `canister_init`, the function must have type `() -> ()`.
 
 -   If it exports a function called `canister_inspect_message`, the function must have type `() -> ()`.
+
+-   If it exports a function called `canister_pre_upgrade`, the function must have type `() -> ()`.
+
+-   If it exports a function called `canister_post_upgrade`, the function must have type `() -> ()`.
 
 -   If it exports a function called `canister_heartbeat`, the function must have type `() -> ()`.
 
@@ -1036,7 +1036,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
 
-    -   the total size of the exported custom sections exceeds 1MiB.
+    -   the total size of the custom sections (the sum of `<name>` lengths in their names `icp:public <name>` and `icp:private <name>` plus the sum of their content lengths) exceeds 1MiB.
 
 ### Interpretation of numbers
 
@@ -1787,7 +1787,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
 
-    Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all calls awaiting a response.
+    Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
 -   If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
@@ -1813,11 +1813,11 @@ This method removes a canister's code and state, making the canister *empty* aga
 
 Only controllers of the canister can uninstall code.
 
-Uninstalling a canister's code will reject all calls that the canister has not yet responded to, and drop the canister's code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again.
+Uninstalling a canister's code will reject all calls that the canister has not yet responded to, and drop the canister's code and state. Outstanding responses to the canister will not be processed, even if they arrive after code has been installed again. Cycles attached to such responses will still be refunded though.
 
 The canister is now [empty](#canister-lifecycle). In particular, any incoming or queued calls will be rejected.
 
-A canister after *uninstalling* retains its *cycles* balance, *controllers*, status, and allocations.
+A canister after *uninstalling* retains its *cycles* balance, *controllers*, history, status, and allocations.
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
