@@ -1465,8 +1465,6 @@ This call traps if the current balance does not fit into a 64-bit value. Caniste
 
     Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add128`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.msg_cycles_available : () → i64`
 
     Returns the amount of cycles that were transferred by the caller of the current call, and is still available in this message.
@@ -1484,8 +1482,6 @@ This call traps if the amount of cycles available does not fit into a 64-bit val
     Indicates the number of cycles transferred by the caller of the current call, still available in this message. The amount of cycles is represented by a 128-bit value. This call copies this value starting at the location `dst` in the canister memory.
 
     Initially, in the update method entry point, this is the amount that the caller passed to the canister. When cycles are accepted (`ic0.msg_cycles_accept128`), this reports fewer cycles accordingly. When the call is responded to (reply or reject), all available cycles are refunded to the caller, and this will report 0 cycles.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 -   `ic0.msg_cycles_accept : (max_amount : i64) → (amount : i64)`
 
@@ -1521,8 +1517,6 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This does not trap.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.call_cycles_add : (amount : i64) → ()`
 
     This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1541,8 +1535,6 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This traps if trying to transfer more cycles than are in the current balance of the canister.
 
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
-
 -   `ic0.msg_cycles_refunded : () → i64`
 
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
@@ -1556,8 +1548,6 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 -   `ic0.msg_cycles_refunded128 : (dst : i32) → ()`
 
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
-
-    This system call is experimental. It may be changed or removed in the future. Canisters using it may stop working.
 
 ### Stable memory {#system-api-stable-memory}
 
@@ -1917,12 +1907,6 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 ### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
 
-:::note
-
-The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
 This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of strings in `derivation_path` can be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP-0032](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>.
@@ -1933,12 +1917,6 @@ This call requires that the ECDSA feature is enabled, and the `canister_id` meet
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
-:::note
-
-The ECDSA API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
 This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) signature of the given `message_hash` that can be separately verified against a derived ECDSA public key. This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
 The signatures are encoded as the concatenation of the [SEC1](https://www.secg.org/sec1-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
@@ -1946,12 +1924,6 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
 ### IC method `http_request` {#ic-http_request}
-
-:::note
-
-The IC http\_request API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
@@ -2038,12 +2010,6 @@ Any user can top-up any canister this way.
 This method is only available in local development instances.
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
-
-:::note
-
-The IC Bitcoin API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
 
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/gas-cost) for information on pricing for the Bitcoin mainnet and testnet.
 
