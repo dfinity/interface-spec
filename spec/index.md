@@ -3344,7 +3344,7 @@ S with
 
 #### IC Management Canister: Canister creation
 
-The IC chooses an appropriate canister id and instantiates a new (empty) canister identified by this id. The *controllers* are set such that the sender of this request is the only controller, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
+The IC chooses an appropriate canister id (referred to as `CanisterId`) and subnet id (referred to as `SubnetId`, `SubnetId ∈ Subnets`, where `Subnets` is the under-specified set of subnet ids on the IC) and instantiates a new (empty) canister identified by `CanisterId` on the subnet identified by `SubnetId`. The *controllers* are set such that the sender of this request is the only controller, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
 
@@ -3361,6 +3361,7 @@ M.method_name = 'create_canister'
 M.arg = candid(A)
 is_system_assigned CanisterId
 CanisterId ∉ dom(S.canisters)
+SubnetId ∈ Subnets
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
@@ -3402,7 +3403,7 @@ S with
       }
     canister_status[CanisterId] = Running
     canister_version[CanisterId] = 0
-    canister_subnet[CanisterId] = Subnet
+    canister_subnet[CanisterId] = SubnetId
 
 ```
 
@@ -4162,7 +4163,7 @@ S with
       }
     canister_status[canister_id] = Running
     canister_version[canister_id] = 0
-    canister_subnet[canister_id] = Subnet
+    canister_subnet[canister_id] = SubnetId
 
 ```
 
