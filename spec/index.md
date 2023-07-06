@@ -781,13 +781,13 @@ the following predicate describes when the returned response `R` is correctly si
         ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
           lookup(["subnet",SubnetId,"nodes",NodeId,"public_key"], Cert) = Found PK ∧
           if R.status = "replied" then
-            verify_sig PK Sig ("\x0Bic-response" · hash_of_map({
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
               status: "replied",
               reply: R.reply,
               timestamp: T,
               request_id: hash_of_map(Q)}))
           else
-            verify_sig PK Sig ("\x0Bic-response" · hash_of_map({
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
               status: "rejected",
               reject_code: R.reject_code,
               reject_message: R.reject_message,
