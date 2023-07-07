@@ -102,9 +102,9 @@ This specification may refer to certain constants and limits without specifying 
 
     Amount of cycles that the IC sets aside when a canister performs a call. This is used to pay for processing the response message, and unused cycles after the execution of the response are refunded. See [Message execution](#rule-message-execution).
 
--   `MAX_CYCLES_PER_COMPOSITE_QUERY`
+-   `MAX_CYCLES_PER_QUERY`
 
-    Maximum amount of cycles that can be used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call to a composite query method.
+    Maximum amount of cycles that can be used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call.
 
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
@@ -112,7 +112,11 @@ This specification may refer to certain constants and limits without specifying 
 
 -   `MAX_CALL_DEPTH_COMPOSITE_QUERY`
 
-    Maximum nesting of calls during evaluation of a query call to a composite query method.
+    Maximum nesting level of calls during evaluation of a query call to a composite query method.
+
+-   `MAX_WALL_CLOCK_TIME_COMPOSITE_QUERY`
+
+    Maximum wall clock time spent on evaluation of a query call.
 
 ### Principals {#principal}
 
@@ -679,6 +683,14 @@ See [The system state tree](#state-tree) for details on the state tree.
 ### Request: Query call {#http-query}
 
 A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as "query methods" and "composite query methods" by the canister can be called this way. In contrast to a query method, a composite query method can make further calls to query and composite query methods of canisters on the same subnet.
+
+The following limits apply to the evaluation of a query call:
+
+-   The amount of cycles that are used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call is at most `MAX_CYCLES_PER_QUERY`.
+
+-   The maximum nesting level of calls during evaluation of a query call is at most `MAX_CALL_DEPTH_COMPOSITE_QUERY`.
+
+-   The wall clock time spent on evaluation of a query call is at most `MAX_WALL_CLOCK_TIME_COMPOSITE_QUERY`.
 
 :::note
 
@@ -4497,7 +4509,7 @@ Composite query methods are EXPERIMENTAL and there might be breaking changes of 
 
 :::
 
-Composite query methods can call query methods and composite query methods up to a maximum depth `MAX_CALL_DEPTH_COMPOSITE_QUERY` of the call graph. The total amount of cycles consumed by executing a (composite) query method and all (transitive) calls it makes must be at most `MAX_CYCLES_PER_COMPOSITE_QUERY`. This limit applies in addition to the limit `MAX_CYCLES_PER_MESSAGE` for executing a single (composite) query method and `MAX_CYCLES_PER_RESPONSE` for executing a single callback of a (composite) query method.
+Composite query methods can call query methods and composite query methods up to a maximum depth `MAX_CALL_DEPTH_COMPOSITE_QUERY` of the call graph. The total amount of cycles consumed by executing a (composite) query method and all (transitive) calls it makes must be at most `MAX_CYCLES_PER_QUERY`. This limit applies in addition to the limit `MAX_CYCLES_PER_MESSAGE` for executing a single (composite) query method and `MAX_CYCLES_PER_RESPONSE` for executing a single callback of a (composite) query method.
 
 We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal. It can also be (trivially) invoked for query methods that do not make further calls.
 
@@ -4591,11 +4603,11 @@ S.system_time <= Q.ingress_expiry
 ```
 
 Query response  
--   if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
+-   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
 
         {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>}
 
--   Else if `composite_query_helper(S, MAX_CYCLES_PER_COMPOSITE_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
+-   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
 
         {status: "replied"; reply: {arg: R}}
 
