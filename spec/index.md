@@ -2677,7 +2677,7 @@ These are the synchronous read messages:
         sender : UserId;
         paths : List(Path);
       }
-      | CanisterQuery = {
+      | CanisterSignedQuery = {
         nonce : Blob;
         ingress_expiry : Nat;
         sender : UserId;
@@ -4582,7 +4582,7 @@ Conditions
 
 ```html
 
-E.content = CanisterQuery Q
+E.content = CanisterSignedQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
 is_effective_canister_id(E.content, ECID)
 S.system_time <= Q.ingress_expiry
