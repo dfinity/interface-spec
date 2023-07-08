@@ -2165,7 +2165,7 @@ find_label(l, _ · Labeled l1 t · _)                | l == l1     = Found t
 find_label(l, _ · Labeled l1 _ · Labeled l2 _ · _) | l1 < l < l2 = Absent
 find_label(l,                    Labeled l2 _ · _) |      l < l2 = Absent
 find_label(l, _ · Labeled l1 _ )                   | l1 < l      = Absent
-find_label(l, [Leaf _])                                          = Absent
+find_label(l, [Leaf _])                                          = Error
 find_label(l, [])                                                = Absent
 find_label(l, _)                                                 = Unknown
 
