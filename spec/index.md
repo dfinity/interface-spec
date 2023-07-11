@@ -1167,8 +1167,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.msg_arg_data_size : () -> i32;                                          // I U Q CQ Ry CRy F
     ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q CQ Ry CRy F
-    ic0.msg_caller_size : () -> i32;                                            // I G U Q CQ F
-    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q CQ F
+    ic0.msg_caller_size : () -> i32;                                            // I G U Q CQ Ry Rt CRy CRt C CC F
+    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q CQ Ry Rt CRy CRt C CC F
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
@@ -5197,11 +5197,11 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
     ic0.msg_caller_size() : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, G, U, Q, CQ, Ry, Rt, CRy, CRt, C, CC, F} then Trap {cycles_used = es.cycles_used;}
       return |es.params.caller|
 
     ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, G, U, Q, CQ, Ry, Rt, CRy, CRt, C, CC, F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.caller)
 
     ic0.msg_reject_code<es>() : i32 =
