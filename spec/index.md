@@ -517,15 +517,13 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
--   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
-
--   At `/api/v2/canister/<effective_canister_id>/signed_query` the user can perform (synchronous, non-state-changing) query calls amended with signatures.
+-   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls amended with signatures.
 
 -   At `/api/v2/status` the user can retrieve status information about the Internet Computer.
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/canister/<effective_canister_id>/query`, and `/api/v2/canister/<effective_canister_id>/signed_query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -719,11 +717,15 @@ In order to make a query call to a canister, the user makes a POST request to `/
 
 -   `arg` (`blob`): Argument to pass to the canister method.
 
+Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
+
 If the query call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `status` (`text`): `"replied"`
 
 -   `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
+
+-   (optional) `signatures` (`[+ node-signature]`): a non-empty list of node signatures for the returned query response.
 
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
@@ -735,43 +737,9 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
-Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
-
-### Request: Signed query call {#http-signed-query}
-
-:::note
-
-The signed query call API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
-A **signed** query call is a query call amended with signatures produced by IC nodes evaluating the query call to certify the query response.
-
-In order to make a signed query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/signed_query`. The request body has the same structure as the request body for [Request: Query call](#http-query) with the `content` map having the following **additional** fields:
-
--   (optional) `requested_signatures` (`text`): Determines whether and how many signatures are returned in the response; possible values are `"none"`, `"one"`.
-
--   (optional) `requested_certificate` (`text`): Determines whether a certificate (as specified in [Certification](#certification)) is returned in the response; possible values are `"no"`, `"yes"`.
-
-The response is a CBOR (see [CBOR](#cbor)) with the same fields as for [Request: Query call](#http-query) response and the following **additional** fields:
-
 -   (optional) `signatures` (`[+ node-signature]`): a non-empty list of node signatures for the returned query response.
 
--   (optional) `certificate` (`blob`): a certificate, as specified in [Certification](#certification).
-
-If the IC nodes evaluating the query call do not compute the same query response (e.g., because they evaluated the query call on different states),
-then the query call is rejected with the reject code `SYS_TRANSIENT` (2). If the query call is rejected with the reject code `SYS_TRANSIENT` (2),
-then no signatures and certificate are contained in the response.
-
-:::note
-
-Currently only one IC node evaluates a query call and thus the query call cannot be rejected with the reject code `SYS_TRANSIENT` (2)
-because the IC nodes evaluating the query call do not compute the same query response. However, query calls might be evaluated
-by multiple IC nodes in the future and thus we specify the general behavior.
-
-:::
-
-Unless `requested_signatures` is null or set to `"none"` in the request and unless the query call is rejected with the reject code `SYS_TRANSIENT` (2), the response to a signed query call contains a non-empty list of signatures for the returned response produced by the individual IC nodes that computed the same returned response. Every such signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+The response to a query call optionally contains a singleton list of signatures for the returned response produced by the IC node that evaluated the query call. The signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `timestamp` (`nat`): the timestamp of the signature.
 
@@ -779,29 +747,10 @@ Unless `requested_signatures` is null or set to `"none"` in the request and unle
 
 -   `identity` (`principal`): the principal of the node producing the signature.
 
-Unless `requested_certificate` is null or set to `"no"` in the request and unless the query call is rejected with the reject code `SYS_TRANSIENT` (2), the response to a signed query call contains a certificate containing all paths in the state tree with prefixes
-
--   `/time`. Always contained in the certificate.
-
--   `/subnet/<subnet_id>/canister_ranges`. Contained in the certificate if the certificate does not have a subnet delegation, as specified in [Delegation](#certification-delegation).
-
--   `/subnet/<subnet_id>/nodes/<node_id>/public_key`. Contained in the certificate if `<node_id>` is the principal of a node in `signatures`.
-
-where `<subnet_id>` characterizes the subnet to which the requested canister belongs.
-
-Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is either
-
--   contained in the response, i.e., `Cert = R.certificate`, or
-
--   obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`,
-
-the following predicate describes when the returned response `R` is correctly signed by the nodes:
+Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`, the following predicate describes when the returned response `R` is correctly signed:
 
     verify_response(Q, R, Cert)
-      = (Q.requested_signatures = null ∨ Q.requested_signatures = "none" ∨ R.reject_code = SYS_TRANSIENT => R.signatures = null) ∧
-        (Q.requested_signatures = "one" ∧ R.reject_code ≠ SYS_TRANSIENT => |R.signatures| = 1) ∧
-        (Q.requested_certificate = null ∨ Q.requested_certificate = "no" ∨ R.reject_code = SYS_TRANSIENT => Cert = null) ∧
-        verify_cert(Cert) ∧
+      = verify_cert(Cert) ∧
         ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
          (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
         effective_canister_id ∈ Ranges ∧
@@ -823,8 +772,6 @@ the following predicate describes when the returned response `R` is correctly si
               request_id: hash_of_map(Q)}))
 
 where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
-
-Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
 ### Effective canister id {#http-effective-canister-id}
 
@@ -2682,7 +2629,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state`, `/api/v2/…/query`, and `/api/v2/…/signed_query`, which are only ephemeral.
+We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state`, and `/api/v2/…/query`, which are only ephemeral.
 
 These are the synchronous read messages:
 
@@ -2899,7 +2846,7 @@ Based on this abstract notion of the state, we can describe the behavior of the 
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
--   Responses to reads (i.e. `/api/v2/…/read_state`, `/api/v2/…/query`, and `/api/v2/…/signed_query`). By definition, these do *not* change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
+-   Responses to reads (i.e. `/api/v2/…/read_state`, and `/api/v2/…/query`). By definition, these do *not* change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
@@ -4613,7 +4560,7 @@ S with
 
 #### Query call
 
-Canister query calls to `/api/v2/canister/<ECID>/query` and `/api/v2/canister/<ECID>/signed_query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
+Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
 In query and composite query methods evaluated on the target canister of the query call, a certificate is provided to the canister that is valid, contains a current state tree (or "recent enough"; the specification is currently vague about how old the certificate may be), and reveals the canister's [Certified Data](#system-api-certified-data).
 
