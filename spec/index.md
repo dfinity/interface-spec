@@ -517,7 +517,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
--   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls amended with signatures.
+-   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
 
 -   At `/api/v2/status` the user can retrieve status information about the Internet Computer.
 
@@ -2648,8 +2648,6 @@ These are the synchronous read messages:
         canister_id : CanisterId;
         method_name : Text;
         arg : Blob;
-        requested_certificate : Text;
-        requested_signatures : Text;
       }
 
 Signed delegations contain the (unsigned) delegation data in a nested record, next to the signature of that data.
