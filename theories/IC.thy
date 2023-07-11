@@ -1430,14 +1430,16 @@ definition call_context_starvation_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid,
   "call_context_starvation_pre ctxt_id S =
   (case list_map_get (call_contexts S) ctxt_id of Some call_context \<Rightarrow>
     call_ctxt_needs_to_respond call_context \<and>
-    call_ctxt_origin call_context \<noteq> From_system \<and>
     (\<forall>msg \<in> set (messages S). case msg of
         Call_message orig _ _ _ _ _ _ \<Rightarrow> calling_context orig \<noteq> Some ctxt_id
       | Response_message orig _ _ \<Rightarrow> calling_context orig \<noteq> Some ctxt_id
       | _ \<Rightarrow> True) \<and>
     (\<forall>other_call_context \<in> list_map_range (call_contexts S).
       call_ctxt_needs_to_respond other_call_context \<longrightarrow>
-      calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id)
+      calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id) \<and>
+    (\<forall>can_status \<in> list_map_range (canister_status S). case can_status of Stopping os \<Rightarrow>
+        \<forall>(orig, cyc) \<in> set os. calling_context orig \<noteq> Some ctxt_id
+      | _ \<Rightarrow> True)
   | None \<Rightarrow> False)"
 
 definition call_context_starvation_post :: "'cid \<Rightarrow>
@@ -1471,11 +1473,7 @@ lemma call_context_starvation_ic_inv:
 definition call_context_removal_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b, 'w, 'sm, 'c, 's, 'cid, 'pk) ic \<Rightarrow> bool" where
   "call_context_removal_pre ctxt_id S = (
     (case list_map_get (call_contexts S) ctxt_id of Some call_context \<Rightarrow>
-      (\<not>call_ctxt_needs_to_respond call_context \<or>
-        (call_ctxt_origin call_context = From_system \<and>
-          (\<forall>msg \<in> set (messages S). case msg of
-            Func_message other_ctxt_id _ _ _ \<Rightarrow> other_ctxt_id \<noteq> ctxt_id
-          | _ \<Rightarrow> True))) \<and>
+      \<not>call_ctxt_needs_to_respond call_context \<and>
       (\<forall>msg \<in> set (messages S). case msg of
           Call_message ctxt _ _ _ _ _ _ \<Rightarrow> calling_context ctxt \<noteq> Some ctxt_id
         | Response_message ctxt _ _ \<Rightarrow> calling_context ctxt \<noteq> Some ctxt_id
@@ -1484,7 +1482,7 @@ definition call_context_removal_pre :: "'cid \<Rightarrow> ('p, 'uid, 'canid, 'b
         call_ctxt_needs_to_respond other_call_context \<longrightarrow>
         calling_context (call_ctxt_origin other_call_context) \<noteq> Some ctxt_id) \<and>
       (\<forall>can_status \<in> list_map_range (canister_status S). case can_status of Stopping os \<Rightarrow>
-        \<forall>(orig, cyc) \<in> set os. (case orig of From_canister other_ctxt_id _ \<Rightarrow> ctxt_id \<noteq> other_ctxt_id | _ \<Rightarrow> True)
+        \<forall>(orig, cyc) \<in> set os. calling_context orig \<noteq> Some ctxt_id
       | _ \<Rightarrow> True)
     | None \<Rightarrow> False))"
 
