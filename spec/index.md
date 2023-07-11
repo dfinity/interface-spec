@@ -1500,6 +1500,8 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This system call traps if trying to transfer more cycles than are in the current balance of the canister.
 
+    This system call traps if the cycle balance of the canister after transferring cycles decreases below the canister's freezing limit.
+
 -   `ic0.call_cycles_add128 : (amount_high : i64, amount_low : i64) → ()`
 
     This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1509,6 +1511,8 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
     The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 
     This traps if trying to transfer more cycles than are in the current balance of the canister.
+
+    This system call traps if the cycle balance of the canister after transferring cycles decreases below the canister's freezing limit.
 
 -   `ic0.msg_cycles_refunded : () → i64`
 
@@ -4614,7 +4618,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
       cycles_accepted : Nat;
       cycles_available : Nat;
       cycles_used : Nat;
-      balance : Funds;
+      balance : Nat;
       reply_params : { arg : Blob };
       pending_call : MethodCall | NoPendingCall;
       calls : List MethodCall;
@@ -5164,6 +5168,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5173,6 +5178,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5183,7 +5189,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       // are we below the threezing threshold?
       // Or maybe the system has other reasons to not perform this
-      if es.balance < es.env.freezing_limit or system_cannot_do_this_call_now()
+      if es.balance < es.params.sysenv.freezing_limit or system_cannot_do_this_call_now()
       then
         discard_pending_call<es>()
         return 1
