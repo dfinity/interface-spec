@@ -1500,6 +1500,8 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This system call traps if trying to transfer more cycles than are in the current balance of the canister.
 
+    This system call traps if the cycle balance of the canister after transferring cycles decreases below the canister's freezing limit.
+
 -   `ic0.call_cycles_add128 : (amount_high : i64, amount_low : i64) → ()`
 
     This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1509,6 +1511,8 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
     The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, or if the canister invokes `ic0.call_new` or returns without calling `ic0.call_perform`).
 
     This traps if trying to transfer more cycles than are in the current balance of the canister.
+
+    This system call traps if the cycle balance of the canister after transferring cycles decreases below the canister's freezing limit.
 
 -   `ic0.msg_cycles_refunded : () → i64`
 
