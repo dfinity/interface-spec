@@ -1,8 +1,9 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
-* IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable
-* added composite queries
+* IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
+* Add conditions on requested paths in read state requests.
+* Add composite queries.
 
 ### 0.19.0 (2023-06-08) {#0_19_0}
 * canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
