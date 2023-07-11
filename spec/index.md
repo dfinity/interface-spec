@@ -1379,7 +1379,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
 ### Canister version {#system-api-canister-version}
 
-For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister and code uninstallation due to that canister running out of cycles. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
 -   `ic0.canister_version : () → i64`
 
@@ -3161,19 +3161,28 @@ Env = {
 
 Available = S.call_contexts[M.call_contexts].available_cycles
 ( M.entry_point = PublicMethod Name Caller Arg
-  (F = Mod.update_methods[Name](Arg, Caller, Env, Available)) or (F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env))
+  F = Mod.update_methods[Name](Arg, Caller, Env, Available)
+  New_canister_version = S.canister_version[M.receiver] + 1
+)
+or
+( M.entry_point = PublicMethod Name Caller Arg
+  F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
+  New_canister_version = S.canister_version[M.receiver]
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
   F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
+  New_canister_version = S.canister_version[M.receiver] + 1
 )
 or
 ( M.entry_point = Heartbeat
   F = system_task_as_update(Mod.heartbeat, Env)
+  New_canister_version = S.canister_version[M.receiver] + 1
 )
 or
 ( M.entry_point = GlobalTimer
   F = system_task_as_update(Mod.global_timer, Env)
+  New_canister_version = S.canister_version[M.receiver] + 1
 )
 
 R = F(S.canisters[M.receiver].wasm_state)
@@ -3199,6 +3208,7 @@ if
 then
   S with
     canisters[M.receiver].wasm_state = res.new_state;
+    canister_version[M.receiver] = New_canister_version;
     messages =
       Older_messages ·
       Younger_messages ·

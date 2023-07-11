@@ -4,6 +4,7 @@
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
 * Add conditions on requested paths in read state requests.
 * Add composite queries.
+* Specify that the canister version is incremented upon every successful message execution except for successful message execution of a query method.
 
 ### 0.19.0 (2023-06-08) {#0_19_0}
 * canister version can be specified in some management canister calls (canister creation, canister code changes, canister settings changes)
