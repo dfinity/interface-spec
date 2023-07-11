@@ -1,6 +1,7 @@
 # Internet Computer Reference
 
 This repository contains the source files of the Interface Spec, which describes the externally visible behaviour of the Internet Computer.
+The language-independent description of this IC interface is available in [ic.did](./spec/_attachments/ic.did).
 
 It used to contain a reference implementation and acceptance test suite; these can now be found at <https://github.com/dfinity/ic-hs>.
 
