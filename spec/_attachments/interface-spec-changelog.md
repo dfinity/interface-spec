@@ -1,6 +1,6 @@
 ## Changelog {#changelog}
 
-### ∞ (unreleased)
+### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
 * Add conditions on requested paths in read state requests.
 * Add composite queries.
