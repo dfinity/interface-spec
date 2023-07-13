@@ -738,7 +738,7 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
 
-    -   Otherwise, the call is rejected with a [reject code](#reject-codes) independently of the effective canister id.
+    -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
 -   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
