@@ -1088,13 +1088,13 @@ During these steps, no other entry point of the old or new canister is invoked. 
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
-#### Canister eviction {#system-api-canister-eviction}
+#### Canister upgrade skip pre_upgrade method {#system-api-canister-upgrade-skip-pre_upgrade}
 
-Eviction is a special type of canister upgrade that skips execution of the `canister_pre_upgrade` method on the old canister instance. The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
+Skip pre_upgrade is a special type of canister upgrade that skips execution of the `canister_pre_upgrade` method on the old canister instance. The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
 
 :::note
 
-Canister eviction can lead to data loss. Use it only as the last resort and only if the stable memory already contains the entire canister state.
+Canister skip pre_upgrade can lead to data loss. Use it only as the last resort and only if the stable memory already contains the entire canister state.
 
 :::
 
@@ -1813,9 +1813,9 @@ Only controllers of the canister can install code.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as that will forcibly reject all calls awaiting a response.
 
--   If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
+-   If `mode = upgrade` or `mode = upgrade {skip_pre_upgrade = false}`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
--   If `mode = evict`, the system handles request similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance. See [Canister eviction](#system-api-canister-eviction) for more detail.
+-   If `mode = upgrade {skip_pre_upgrade = true}`, the system handles request similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance. See [Canister skip pre_upgrade](#system-api-canister-upgrade-skip-pre_upgrade) for more detail.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -3664,7 +3664,7 @@ S with
 
 #### IC Management Canister: Code upgrade
 
-Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
+Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not true, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
 
 Conditions  
 
@@ -3742,71 +3742,6 @@ S with
           };
         };
     }
-    messages = Older_messages · Younger_messages ·
-      ResponseMessage {
-        origin = M.origin;
-        response = Reply (candid());
-        refunded_cycles = M.transferred_cycles;
-      }
-
-```
-
-### IC Management Canister: Code eviction
-
-Only the controllers of the given canister can install new code. This method changes the code of an *existing* canister, preserving its stable memory. This involves invoking the `canister_pre_upgrade` method on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
-
-Conditions  
-
-```html
-
-S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-M.callee = ic_principal
-M.method_name = 'install_code'
-M.arg = candid(A)
-Mod = parse_wasm_mod(A.wasm_module)
-Public_custom_sections = parse_public_custom_sections(A.wasm_module)
-Private_custom_sections = parse_private_custom_sections(A.wasm_module)
-A.mode = evict
-M.caller ∈ S.controllers[A.canister_id]
-S.canisters[A.canister_id] = { wasm_state = Old_state; …}
-Env = {
-  time = S.time[A.canister_id];
-  balance = S.balances[A.canister_id];
-  freezing_limit = freezing_limit(S, A.canister_id);
-  certificate = NoCertificate;
-  status = simple_status(S.canister_status[A.canister_id]);
-}
-Env1 = Env with {
-  global_timer = 0;
-  canister_version = S.canister_version[A.canister_id] + 1;
-}
-Mod.post_upgrade(A.canister_id, Old_state.stable_memory, A.arg, M.caller, Env1) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_used ≤ S.balances[A.canister_id]
-dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-
-```
-
-State after  
-
-```html
-
-S with
-    canisters[A.canister_id] = {
-      wasm_state = New_state;
-      module = Mod;
-      raw_module = A.wasm_module;
-      public_custom_sections = Public_custom_sections;
-      private_custom_sections = Private_custom_sections;
-    }
-    if New_certified_data ≠ NoCertifiedData:
-      certified_data[A.canister_id] = New_certified_data
-    if New_global_timer ≠ NoGlobalTimer:
-      global_timer[A.canister_id] = New_global_timer
-    else:
-      global_timer[A.canister_id] = 0
-    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
-    balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used;
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;

@@ -122,7 +122,13 @@ service ic : {
     sender_canister_version : opt nat64;
   }) -> ();
   install_code : (record {
-    mode : variant {install; reinstall; upgrade; evict};
+    mode : variant {
+      install;
+      reinstall;
+      upgrade : opt record {
+        skip_pre_upgrade: bool;
+      }
+    };
     canister_id : canister_id;
     wasm_module : wasm_module;
     arg : blob;
