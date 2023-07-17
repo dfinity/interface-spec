@@ -1353,6 +1353,15 @@ In `canister_inspect_message`, the canister can accept the message by invoking `
 
 :::note
 
+The `canister_inspect_message` is executed by a single node and thus its outcome depends on the state of this node.
+In particular, the `canister_inspect_message` might be executed on a state that does not reflect the changes
+made by a previously successfully completed update call if the `canister_inspect_message` is executed by a node
+that is not up-to-date in terms of its state.
+
+:::
+
+:::note
+
 The `canister_inspect_message` is *not* invoked for query calls, inter-canister calls or calls to the management canister.
 
 :::
