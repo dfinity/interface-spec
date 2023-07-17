@@ -4556,25 +4556,6 @@ A record with
 
 -   `{certificate: C}`
 
-Submitted request to `/api/v2/subnet/<subnet_id>/read_state`
-`E`
-
-Conditions  
-
-```html
-
-E.content = ReadState RS
-TS = verify_envelope(E, RS.sender, S.system_time)
-S.system_time <= RS.ingress_expiry
-∀ path ∈ RS.paths. may_read_path_for_subnet(S, R.sender, path)
-
-```
-
-Read response  
-A record with
-
--   `{certificate: C}`
-
 
 The predicate `may_read_path_for_canister` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
@@ -4595,11 +4576,32 @@ The predicate `may_read_path_for_canister` is defined as follows, implementing t
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
+
+Submitted request to `/api/v2/subnet/<subnet_id>/read_state`
+`E`
+
+Conditions  
+
+```html
+
+E.content = ReadState RS
+TS = verify_envelope(E, RS.sender, S.system_time)
+S.system_time <= RS.ingress_expiry
+∀ path ∈ RS.paths. may_read_path_for_subnet(S, R.sender, path)
+
+```
+
+Read response  
+A record with
+
+-   `{certificate: C}`
+  
+
 The predicate `may_read_path_for_subnet` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path_for_canister(S, _, ["time"] · _) = True
-    may_read_path_for_canister(S, _, ["subnet"] · _) = True
-    may_read_path_for_canister(S, _, _) = False
+    may_read_path_for_subnet(S, _, ["time"] · _) = True
+    may_read_path_for_subnet(S, _, ["subnet"] · _) = True
+    may_read_path_for_subnet(S, _, _) = False
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
