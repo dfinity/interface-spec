@@ -1088,17 +1088,16 @@ During these steps, no other entry point of the old or new canister is invoked. 
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
-#### Canister upgrade skip pre_upgrade method {#system-api-canister-upgrade-skip-pre_upgrade}
 
-Skip pre_upgrade is a special type of canister upgrade that skips execution of the `canister_pre_upgrade` method on the old canister instance. The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
+:::note 
+The `skip_pre_upgrade` flag can be enabled to skip the execution of the`canister_pre_upgrade` method on the old canister instance.
+The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
 
-:::note
-
-Canister skip pre_upgrade can lead to data loss. Use it only as the last resort and only if the stable memory already contains the entire canister state.
-
+Skipping the pre-upgrade can lead to data loss.
+Use it only as the last resort and only if the stable memory already contains the entire canister state.
 :::
 
-The IC executes canister eviction as follows:
+The IC executes canister upgrade with `skip_pre_upgrade` as follows:
 
 1.  Discard the old canister module and state except of its [stable memory](#system-api-stable-memory).
 
@@ -1815,7 +1814,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = upgrade` or `mode = upgrade {skip_pre_upgrade = false}`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
--   If `mode = upgrade {skip_pre_upgrade = true}`, the system handles request similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance. See [Canister skip pre_upgrade](#system-api-canister-upgrade-skip-pre_upgrade) for more detail.
+-   If `mode = upgrade {skip_pre_upgrade = true}`, the system handles request similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
