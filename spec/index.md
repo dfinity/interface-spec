@@ -2830,7 +2830,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
 
 #### Effective canister ids
 
-A `Request` has an effective canister id according to the rules in [effective canister id](#http-effective-canister-id):
+A `Request` has an effective canister id according to the rules in [Effective canister id](#http-effective-canister-id):
 
     is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
     is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
