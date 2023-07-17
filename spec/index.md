@@ -712,7 +712,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
-### effective canister id {#http-effective-canister-id}
+### Effective canister id {#http-effective-canister-id}
 
 The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
 
