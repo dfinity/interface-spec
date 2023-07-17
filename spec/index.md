@@ -1090,7 +1090,7 @@ These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` tra
 
 
 :::note 
-The `skip_pre_upgrade` flag can be enabled to skip the execution of the`canister_pre_upgrade` method on the old canister instance.
+The `skip_pre_upgrade` flag can be enabled to skip the execution of the `canister_pre_upgrade` method on the old canister instance.
 The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
 
 Skipping the pre-upgrade can lead to data loss.
