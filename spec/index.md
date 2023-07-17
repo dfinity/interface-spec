@@ -2828,7 +2828,7 @@ The following predicate describes when an envelope `E` correctly signs the enclo
         then { p : p is Principal }
         else D.senders
 
-#### effective canister ids
+#### Effective canister ids
 
 A `Request` has an effective canister id according to the rules in [effective canister id](#http-effective-canister-id):
 
