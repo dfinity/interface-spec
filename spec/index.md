@@ -429,7 +429,13 @@ The state tree contains information about the topology of the Internet Computer.
 
 -   `/subnet/<subnet_id>/metrics` (blob)
 
-     A list of subnet wide metrics related to this subnet's current usage and/or performance. It can be a CBOR encoded struct containing a set of metrics, like number of canisters on subnet, memory used by the subnet, cycles burned by the subnet etc.
+     A list of subnet wide metrics related to this subnet's current usage and/or performance. The metrics are a CBOR map with the following fields:
+     
+     - `num_canisters` (`nat`): The number of canisters on this subnet.
+     - `canister_state` (`nat`): The total state taken by canisters on this subnet in bytes.
+     - `consumed_cycles` (`nat`): The total number of cycles consumed by canisters on this subnet.
+     - `update_transactions` (`nat`): The total number of transactions processed on this subnet.
+       
 
 :::note
 
@@ -501,17 +507,17 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_principal_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
+-   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
 
--   At `/api/v2/canister/<effective_principal_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
+-   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
--   At `/api/v2/canister/<effective_principal_id>/query` the user can perform (synchronous, non-state-changing) query calls.
+-   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
 
 -   At `/api/v2/status` the user can retrieve status information about the Internet Computer.
 
-In these paths, the `<effective_principal_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
+In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_principal_id>/call`, `/api/v2/canister/<effective_principal_id>/read_state` and `/api/v2/canister/<effective_principal_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state` and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -582,7 +588,7 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 ### Request: Call {#http-call}
 
-In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_principal_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `call`
 
@@ -620,7 +626,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 ### Request: Read state {#http-read-state}
 
-In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_principal_id>/read_state`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `read_state`
 
@@ -632,7 +638,7 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the `effective_principal_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
+    If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
 
 The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
 
@@ -646,13 +652,13 @@ All requested paths must have one of the following paths as prefix:
 
     -   the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
 
-    -   the effective principal id of the original request referenced by `<request_id>` matches `<effective_principal_id>`.
+    -   the effective canister id of the original request referenced by `<request_id>` matches `<effective_canister_id>`.
 
--   `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_principal_id>`.
+-   `/canisters/<canister_id>/module_hash`. Can be requested if `<canister_id>` matches `<effective_canister_id>`.
 
--   `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_principal_id>`. The order of controllers in the value at this path may vary depending on the implementation.
+-   `/canisters/<canister_id>/controllers`. Can be requested if `<canister_id>` matches `<effective_canister_id>`. The order of controllers in the value at this path may vary depending on the implementation.
 
--   `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_principal_id>`, `<name>` is encoded in UTF-8, and
+-   `/canisters/<canister_id>/metadata/<name>`. Can be requested if `<canister_id>` matches `<effective_canister_id>`, `<name>` is encoded in UTF-8, and
 
     -   canister with canister id `<canister_id>` does not exist or
 
@@ -676,7 +682,7 @@ See [The system state tree](#state-tree) for details on the state tree.
 
 A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as "query methods" by the canister can be called this way.
 
-In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_principal_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `query`
 
@@ -706,29 +712,29 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 Canister methods that do not change the canister state can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
-### effective principal id {#http-effective-canister-id}
+### effective canister id {#http-effective-canister-id}
 
-The `<effective_principal_id>` in the URL paths of requests is the *effective* destination of the request.
+The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
 
 -   If the request is an update call to the Management Canister (`aaaaa-aa`), then:
 
-    -   If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective principal id for this call.
+    -   If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
 
-    -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective principal id must be that principal.
+    -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
 
-    -   Otherwise, the call is rejected by the system independently of the effective principal id.
+    -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
--   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective principal id must be the `canister_id` in the request.
+-   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
 :::note
 
-The expectation is that user-side agent code shields users and developers from the notion of effective principal id, in analogy to how the System API interface shields canister developers from worrying about routing.
+The expectation is that user-side agent code shields users and developers from the notion of effective canister id, in analogy to how the System API interface shields canister developers from worrying about routing.
 
-The Internet Computer blockchain mainnet rejects all requests whose effective principal id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective principal id are satisfied.
+The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
-The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective principal id.
+The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
-In development instances of the Internet Computer Protocol (e.g. testnets), the effective principal id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
+In development instances of the Internet Computer Protocol (e.g. testnets), the effective canister id of a request submitted to a node must be a canister id from the canister ranges of the subnet to which the node belongs.
 
 :::
 
@@ -2822,13 +2828,13 @@ The following predicate describes when an envelope `E` correctly signs the enclo
         then { p : p is Principal }
         else D.senders
 
-#### effective principal ids
+#### effective canister ids
 
-A `Request` has an effective principal id according to the rules in [effective principal id](#http-effective-canister-id):
+A `Request` has an effective canister id according to the rules in [effective canister id](#http-effective-canister-id):
 
-    is_effective_principal_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
-    is_effective_principal_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
-    is_effective_principal_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
+    is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
+    is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
+    is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 
 #### API Request submission
 
@@ -2854,7 +2860,7 @@ Conditions
 E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
 E.content ∉ dom(S.requests)
 S.system_time <= E.content.ingress_expiry
-is_effective_principal_id(E.content, ECID)
+is_effective_canister_id(E.content, ECID)
 ( E.content.canister_id = ic_principal
   E.content.arg = candid({canister_id = CanisterId, …})
   E.content.sender ∈ S.controllers[CanisterId]
@@ -4491,7 +4497,7 @@ Conditions
 
 E.content = CanisterQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
-is_effective_principal_id(E.content, ECID)
+is_effective_canister_id(E.content, ECID)
 S.system_time <= Q.ingress_expiry
 S.canisters[Q.canister_id] ≠ EmptyCanister
 S.canister_status[Q.canister_id] = Running ∧ S.balances[Q.canister_id] >= freezing_limit(S, Q.canister_id)
@@ -4528,9 +4534,9 @@ Read response
 
 #### Certified state reads
 
-The user can read elements of the *state tree*, using a `read_state` request to `/api/v2/canister/<ECID>/read_state`.
+The user can read elements of the *state tree*, using a `read_state` request to `/api/v2/canister/<ECID>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`.
 
-Submitted request  
+Submitted request to `/api/v2/canister/<ECID>/read_state`
 `E`
 
 Conditions  
@@ -4540,7 +4546,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
-∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
+∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ ["request_status", Rid] · _ ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
 ```
@@ -4550,22 +4556,50 @@ A record with
 
 -   `{certificate: C}`
 
-The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
+Submitted request to `/api/v2/subnet/<subnet_id>/read_state`
+`E`
 
-    may_read_path(S, _, ["time"] · _) = True
-    may_read_path(S, _, ["subnet"] · _) = True
-    may_read_path(S, _, ["request_status", Rid] · _) =
+Conditions  
+
+```html
+
+E.content = ReadState RS
+TS = verify_envelope(E, RS.sender, S.system_time)
+S.system_time <= RS.ingress_expiry
+∀ path ∈ RS.paths. may_read_path_for_subnet(S, R.sender, path)
+
+```
+
+Read response  
+A record with
+
+-   `{certificate: C}`
+
+
+The predicate `may_read_path_for_canister` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
+
+    may_read_path_for_canister(S, _, ["time"] · _) = False
+    may_read_path_for_canister(S, _, ["subnet"] · _) = False
+    may_read_path_for_canister(S, _, ["request_status", Rid] · _) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
-    may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+    may_read_path_for_canister(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
+    may_read_path_for_canister(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
+    may_read_path_for_canister(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
       (cid ∉ dom(S.canisters[cid]) ∨
        S.canisters[cid] = EmptyCanister ∨
        name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
        name ∈ dom(S.canisters[cid].public_custom_sections) ∨
        (name ∈ dom(S.canisters[cid].private_custom_sections) ∧ RS.sender ∈ S.controllers[cid])
       )
-    may_read_path(S, _, _) = False
+    may_read_path_for_canister(S, _, _) = False
+
+where `UTF8(name)` holds if `name` is encoded in UTF-8.
+
+The predicate `may_read_path_for_subnet` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
+
+    may_read_path_for_canister(S, _, ["time"] · _) = True
+    may_read_path_for_canister(S, _, ["subnet"] · _) = True
+    may_read_path_for_canister(S, _, _) = False
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
