@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
 
 ### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
