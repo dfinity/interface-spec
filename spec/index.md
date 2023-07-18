@@ -730,6 +730,7 @@ Canister methods that do not change the canister state (except for cycle balance
 ### Effective canister id {#http-effective-canister-id}
 
 The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
+It must be contained in the canister ranges of a subnet, otherwise the corresponding HTTP request is rejected.
 
 -   If the request is an update call to the Management Canister (`aaaaa-aa`), then:
 
@@ -744,8 +745,6 @@ The `<effective_canister_id>` in the URL paths of requests is the *effective* de
 :::note
 
 The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
-
-The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
