@@ -429,10 +429,10 @@ The state tree contains information about the topology of the Internet Computer.
 
 -   `/subnet/<subnet_id>/metrics` (blob)
 
-     A list of subnet wide metrics related to this subnet's current usage and/or performance. The metrics are a CBOR map with the following fields:
+     A collection of subnet-wide metrics related to this subnet's current resource usage and/or performance. The metrics are a CBOR map with the following fields:
      
      - `num_canisters` (`nat`): The number of canisters on this subnet.
-     - `canister_state` (`nat`): The total state taken by canisters on this subnet in bytes.
+     - `canister_state` (`nat`): The total size of the state taken by canisters on this subnet in bytes.
      - `consumed_cycles` (`nat`): The total number of cycles consumed by canisters on this subnet.
      - `update_transactions` (`nat`): The total number of transactions processed on this subnet.
        
@@ -4546,7 +4546,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
-∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
+∀ path ∈ RS.paths. may_read_path_for_canister(S, RS.sender, path)
 ∀ ["request_status", Rid] · _ ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
 ```
@@ -4587,7 +4587,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
-∀ path ∈ RS.paths. may_read_path_for_subnet(S, R.sender, path)
+∀ path ∈ RS.paths. may_read_path_for_subnet(S, RS.sender, path)
 
 ```
 
