@@ -288,6 +288,7 @@ HEADER = 'IC-CertificateExpression: ', HEADER-VALUE
 The request hash is calculated as follows:
 
 1. Let `request_headers_hash` be the [representation-independent hash](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map) of the request headers:
+   - The header names are lower-cased.
    - Only include headers listed in the `certified_request_headers` field of [the certificate expression header](#the-certificate-expression-header).
      - If the field is empty or no value was supplied, no headers are included.
      - Headers can be repeated and each repetition should be included.
@@ -305,6 +306,7 @@ The request hash is calculated as follows:
 The response hash is calculated as follows:
 
 1. Let `response_headers_hash` be the [representation-independent hash](https://internetcomputer.org/docs/current/references/ic-interface-spec#hash-of-map) of the response headers:
+   - The header names are lower-cased.
    - The `IC-Certificate` header is always excluded.
    - The `IC-CertificateExpression` header is always included.
    - If the `no_certification` field of [the certificate expression header](#the-certificate-expression-header) is present:
@@ -316,6 +318,7 @@ The response hash is calculated as follows:
      - All headers listed (except for the `IC-CertificateExpression` header) are excluded from the certification
      - All other headers (except for the IC-Certificate header) are included in the certification
    - Headers can be repeated and each repetition should be included.
+   - Include an additional `:ic-cert-status` header that contains the numerical HTTP status code of the response.
 2. Let `response_body_hash` be the sha256 of the response body.
 3. Concatenate `response_headers_hash` and `response_body_hash` and calculate the sha256 of that concatenation.
 
@@ -372,7 +375,7 @@ The steps for response verification are as follows:
 
 ## Response Verification Version Assertion
 
-Canisters can report the versions of response verification that they support using public metadata in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). This metadata is a comma-delimited string of versions under the key "supported_certificate_versions”, for example: "1,2". This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added, then the HTTP Gateway will allow for whatever version the canister has responded with.
+Canisters can report the versions of response verification that they support using public metadata in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). This metadata is a comma-delimited string of versions under the key "supported_certificate_versions”, for example: "1,2". This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added (i.e. the lookup of this metadata in the `read_state` response returns `Absent`), then the HTTP Gateway will allow for whatever version the canister has responded with.
 
 The request for the metadata will only be made by the HTTP Gateway if there is a downgrade. If the HTTP Gateway requests v2 and the canister responds with v2, then a request will not be made. If the HTTP Gateway requests v2 and the canister responds with v1, a request will be made. If a request is made, the HTTP Gateway will not accept any response from the canister that is below the max version supported by both the HTTP Gateway and the canister. This will guarantee that a canister supporting both v1 and v2 will always have v2 security when accessed by an HTTP Gateway that supports v2.
 

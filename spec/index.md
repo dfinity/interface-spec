@@ -730,6 +730,7 @@ Canister methods that do not change the canister state (except for cycle balance
 ### Effective canister id {#http-effective-canister-id}
 
 The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
+It must be contained in the canister ranges of a subnet, otherwise the corresponding HTTP request is rejected.
 
 -   If the request is an update call to the Management Canister (`aaaaa-aa`), then:
 
@@ -744,8 +745,6 @@ The `<effective_canister_id>` in the URL paths of requests is the *effective* de
 :::note
 
 The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
-
-The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
@@ -1844,6 +1843,8 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 -   If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
+This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -3626,7 +3627,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_used ≤ S.balances[A.canister_id]
+freezing_limit(S, A.canister_id) + Cycles_used ≤ S.balances[A.canister_id]
 dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
 dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
@@ -3715,7 +3716,7 @@ Env2 = Env with {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
-Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
+freezing_limit(S, A.canister_id) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
 dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
 dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
