@@ -4666,6 +4666,8 @@ A record with
 
 The predicate `may_read_path_for_canister` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
+    may_read_path_for_canister(S, _, ["time"] · _) = True
+    may_read_path_for_canister(S, _, ["subnet"] · _) = True
     may_read_path_for_canister(S, _, ["request_status", Rid] · _) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
     may_read_path_for_canister(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
