@@ -126,7 +126,7 @@ service ic : {
       install;
       reinstall;
       upgrade : opt record {
-        skip_pre_upgrade: bool;
+        skip_pre_upgrade: opt bool;
       }
     };
     canister_id : canister_id;
