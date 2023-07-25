@@ -1,6 +1,7 @@
 # Internet Computer Reference
 
-This repository contains the source files of the [Interface Spec], which describes the externally visible behaviour of the Internet Computer.
+This repository contains the source files of the Interface Spec, which describes the externally visible behaviour of the Internet Computer.
+The language-independent description of this IC interface is available in [ic.did](./spec/_attachments/ic.did).
 
 It used to contain a reference implementation and acceptance test suite; these can now be found at <https://github.com/dfinity/ic-hs>.
 
@@ -52,4 +53,4 @@ in the root directory of this repository. The exported Haskell code can then be 
 
 ## Contributing
 
-This repository accepts external contributions, conditioned on acceptance of the [https://github.com/dfinity/cla/](Contributor Lincense Agreement).
+This repository accepts external contributions, conditioned on acceptance of the [Contributor Lincense Agreement](https://github.com/dfinity/cla/).
