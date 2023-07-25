@@ -1102,7 +1102,7 @@ The IC assumes the canister to be fully instantiated if the `canister_init` meth
 
 When a canister is upgraded to a new WebAssembly module, the IC:
 
-1.  Invokes `canister_pre_upgrade` (if present) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
+1.  Invokes `canister_pre_upgrade` (if present and unless `skip_pre_upgrade` is set to true) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
 
 2.  Instantiates the new module, including the execution of `(start)`, with a fresh WebAssembly state.
 
@@ -1114,28 +1114,13 @@ During these steps, no other entry point of the old or new canister is invoked. 
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
 
-
-:::note 
+:::note
 The `skip_pre_upgrade` flag can be enabled to skip the execution of the `canister_pre_upgrade` method on the old canister instance.
 The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
 
 Skipping the pre-upgrade can lead to data loss.
 Use it only as the last resort and only if the stable memory already contains the entire canister state.
 :::
-
-The IC executes canister upgrade with `skip_pre_upgrade` as follows:
-
-1.  Discard the old canister module and state except of its [stable memory](#system-api-stable-memory).
-
-2.  Instantiate the new module, including the execution of `(start)`, with a fresh WebAssembly state.
-
-3.  Invoke `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call ([IC method](#ic-install_code)).
-
-The IC preserves stable memory throughout the process and discards any other WebAssembly state.
-
-During these steps, the IC does not invoke any other entry points of the old or new canister. In particular, the system does *not* invoke the `canister_init` function of the new canister.
-
-These steps are atomic: if the `canister_post_upgrade` method traps, the upgrade fails, and the IC reverts the canister to its state before the upgrade. If the upgrade succeeds, the system discards the old instance.
 
 #### Public methods {#system-api-requests}
 
@@ -1842,7 +1827,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = upgrade`, `mode = upgrade {skip_pre_upgrade = null}`, or `mode = upgrade {skip_pre_upgrade = opt false}`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
--   If `mode = upgrade {skip_pre_upgrade = opt true}`, the system handles request similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
+-   If `mode = upgrade {skip_pre_upgrade = opt true}`, the system handles this method similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
