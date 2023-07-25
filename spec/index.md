@@ -2500,9 +2500,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           global_timer : (Env) -> SystemTaskFunc
           callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
           composite_callbacks : (Callback, Response, Env) -> UpdateFunc
-          inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
+          inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return {
             status : Accept | Reject;
-            cycles_used : Nat;
           }
         }
 
@@ -2900,9 +2899,7 @@ is_effective_canister_id(E.content, ECID)
     canister_version = S.canister_version[E.content.canister_id];
   }
   S.canisters[E.content.canister_id].module.inspect_message
-    (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
-  Cycles_used ≤ S.balances[E.content.canister_id]
-
+    (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
 
 ```
 
@@ -2912,8 +2909,6 @@ State after
 
 S with
     requests[E.content] = (Received, ECID)
-    if E.content.canister_id ≠ ic_principal then
-      balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 
 ```
 
@@ -5152,7 +5147,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
     If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
 
         inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
-          Return {status = Accept; cycles_used = 0;}
+          Return {status = Accept;}
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_inspect_message`, it is
 
@@ -5169,8 +5164,8 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
               cycles_available = 0; // ingress requests have no funds
               context = F;
             }
-           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-           Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
+           try func<es>() with Trap then Trap
+           Return {status = es.ingress_filter;};
 
 #### Helper functions
 
