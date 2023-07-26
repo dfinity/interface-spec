@@ -1836,7 +1836,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = upgrade`, `mode = upgrade {skip_pre_upgrade = null}`, or `mode = upgrade {skip_pre_upgrade = opt false}`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
--   If `mode = upgrade {skip_pre_upgrade = opt true}`, the system handles this method similarly to the `mode = upgrade` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
+-   If `mode = variant { upgrade = opt record { skip_pre_upgrade = opt true} }`, the system handles this method similarly to the `mode = variant { upgrade }` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
