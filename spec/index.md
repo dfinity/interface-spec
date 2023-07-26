@@ -1102,7 +1102,7 @@ The IC assumes the canister to be fully instantiated if the `canister_init` meth
 
 When a canister is upgraded to a new WebAssembly module, the IC:
 
-1.  Invokes `canister_pre_upgrade` (if present and unless `skip_pre_upgrade` is set to true) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
+1.  Invokes `canister_pre_upgrade` (if exported by the current canister code and  `skip_pre_upgrade` is not `opt true` ) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
 
 2.  Instantiates the new module, including the execution of `(start)`, with a fresh WebAssembly state.
 
