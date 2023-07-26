@@ -1776,7 +1776,9 @@ The optional `settings` parameter can be used to set the following settings:
 
 -   `controllers` (`vec principal`)
 
-    A list of principals. Must be between 0 and 10 in size. This value is assigned to the *controllers* attribute of the canister.
+    A list of at most 10 principals. The principals in this list become the *controllers* of the canister.
+    Note that the caller of the `create_canister` call is not a controller of the canister
+    unless it is a member of the `controllers` list.
 
     Default value: A list containing only the caller of the `create_canister` call.
 
