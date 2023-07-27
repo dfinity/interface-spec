@@ -1834,7 +1834,7 @@ Only controllers of the canister can install code.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
--   If `mode = upgrade`, `mode = upgrade {skip_pre_upgrade = null}`, or `mode = upgrade {skip_pre_upgrade = opt false}`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
+-   If `mode =  variant { upgrade }`,  `mode = variant  { upgrade  = opt record { skip_pre_upgrade = null } }`, or `mode = variant { upgrade = opt record { skip_pre_upgrade = opt false} }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
 
 -   If `mode = variant { upgrade = opt record { skip_pre_upgrade = opt true} }`, the system handles this method similarly to the `mode = variant { upgrade }` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
 
