@@ -3686,7 +3686,7 @@ S with
 
 #### IC Management Canister: Code upgrade
 
-Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to true, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
+Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
 
 Conditions  
 
