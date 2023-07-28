@@ -1132,7 +1132,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined.
 
-`canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_heartbeat` can initiate new calls.
+`canister_heartbeat` is triggered by the IC, and therefore has no arguments and cannot reply or reject. Still, the function `canister_heartbeat` can initiate new calls.
 
 :::note
 
@@ -1146,7 +1146,7 @@ For time-based execution, the WebAssembly module can export a function with name
 
 Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
-`canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
+`canister_global_timer` is triggered by the IC, and therefore has no arguments and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
 
 :::note
 
@@ -1166,8 +1166,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.msg_arg_data_size : () -> i32;                                          // I U Q CQ Ry CRy F
     ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q CQ Ry CRy F
-    ic0.msg_caller_size : () -> i32;                                            // I G U Q CQ F
-    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q CQ F
+    ic0.msg_caller_size : () -> i32;                                            // *
+    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // *
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
@@ -1294,7 +1294,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
 -   `ic0.msg_caller_size : () → i32` and `ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) → ()`
 
-    The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of the user or canister requesting the installation or upgrade.
+    The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of the user or canister requesting the installation or upgrade. During a system task (heartbeat or global timer), this is the id of the management canister.
 
 -   `ic0.msg_reject_code : () → i32`
 
@@ -4740,7 +4740,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
 
     Params = {
       arg : NoArg | Blob;
-      caller : NoCaller | Principal;
+      caller : Principal;
       reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
       reject_message : Text;
       sysenv : Env;
@@ -4776,7 +4776,7 @@ It is nonsensical to pass to an execution function a WebAssembly store `S` that 
 
         empty_params = {
           arg = NoArg;
-          caller = NoCaller;
+          caller = ic_principal;
           reject_code = 0;
           reject_message = "";
           sysenv = (undefined);
@@ -4890,7 +4890,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         pre_upgrade = λ (old_state, caller, sysenv) →
           let es = ref {empty_execution_state with
               wasm_state = old_state
-              params = { empty_params with caller = caller; sysenv }
+              params = empty_params with { caller = caller; sysenv }
               balance = sysenv.balance
               context = G
             }
@@ -4913,7 +4913,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
           let es = ref {empty_execution_state with
               wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-              params = { empty_params with arg = arg; caller = caller; sysenv }
+              params = empty_params with { arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
               context = I
             }
@@ -4985,7 +4985,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         heartbeat = λ (sysenv) → λ wasm_state →
           let es = ref {empty_execution_state with
             wasm_state = wasm_state;
-            params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
+            params = empty_params with { arg = NoArg; caller = ic_principal; sysenv }
             balance = sysenv.balance
             context = T
           }
@@ -5011,7 +5011,7 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
         global_timer = λ (sysenv) → λ wasm_state →
           let es = ref {empty_execution_state with
             wasm_state = wasm_state;
-            params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
+            params = empty_params with { arg = NoArg; caller = ic_principal; sysenv }
             balance = sysenv.balance
             context = T
           }
@@ -5035,7 +5035,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 -   The function `callbacks` of the `CanisterModule` is defined as follows
 
         callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
-          let params0 = { empty_params with
+          let params0 = empty_params with {
             sysenv
             cycles_refunded = refund_cycles;
           }
@@ -5094,7 +5094,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 -   The function `composite_callbacks` of the `CanisterModule` is defined as follows
 
         composite_callbacks = λ(callbacks, response, sysenv) → λ wasm_state →
-          let params0 = { empty_params with
+          let params0 = empty_params with {
             sysenv
           }
           let (fun, env, params, context) = match response with
@@ -5202,11 +5202,11 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
     ic0.msg_caller_size() : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return |es.params.caller|
 
     ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.caller)
 
     ic0.msg_reject_code<es>() : i32 =
@@ -5276,32 +5276,32 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.canister_self_size<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return |es.wasm_state.self_id|
 
     ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
     ic0.canister_cycle_balance<es>() : i64 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.balance >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.balance
 
     ic0.canister_cycles_balance128<es>(dst : i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       let amount = es.balance
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.canister_status<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       match es.params.sysenv.canister_status with
         Running  -> return 1
         Stopping -> return 2
         Stopped  -> return 3
 
     ic0.canister_version<es>() : i64 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return es.params.sysenv.canister_version
 
     ic0.msg_method_name_size<es>() : i32 =
@@ -5466,23 +5466,23 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.new_certified_data := es.wasm_state[src..src+size]
 
     ic0.data_certificate_present<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate
       then return 0
       else return 1
 
     ic0.data_certificate_size<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       return |es.params.sysenv.certificate|
 
     ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
     ic0.time<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return es.params.sysenv.time
 
     ic0.global_timer_set<es>(timestamp: i64) : i64 =
