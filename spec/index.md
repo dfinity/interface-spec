@@ -477,7 +477,7 @@ Immediately after submitting a request, the request may not show up yet as the I
 
 :::note
 
-Request statuses will not actually be kept around indefinitely, and eventually the Internet Computer forgets about the request. This will happen no sooner than the request's expiry time, so that replay attacks are prevented.
+Request statuses will not actually be kept around indefinitely, and eventually the Internet Computer forgets about the request.
 
 :::
 
