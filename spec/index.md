@@ -643,6 +643,17 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
 
+:::note
+
+The returned certificate might also reveal the SHA-256 hashes of values whose paths have not been requested
+and whose paths might not even be allowed to be requested by the sender of the HTTP request.
+This means that unauthorized users might obtain the SHA-256 hashes of ingress message responses
+and private custom sections of the canister's module.
+Hence, users are advised to use cryptographically strong nonces in their HTTP requests and
+canister developers that aim at keeping data confidential are advised to add a secret cryptographic salt to their canister's responses and private custom sections.
+
+:::
+
 All requested paths must have one of the following paths as prefix:
 
 -   `/time`. Can always be requested.
