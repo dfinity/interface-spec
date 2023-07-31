@@ -382,7 +382,7 @@ The request for the metadata will only be made by the HTTP Gateway if there is a
 
 :::note
 
-The HTTP Gateway can only allow for arbitrary certification version if the custom section `supported_certificate_versions` is *provably* not present, i.e., if the `read_state` response contains a valid certificate whose lookup of the corresponding path yields `Absent`. If the `read_state` request is rejected, e.g., if the replica is overloaded or because the custom section with the name `supported_certificate_versions` is private, then the HTTP Gateway should also reject the canister's response.
+The HTTP Gateway can only allow for arbitrary certification version if the custom section `supported_certificate_versions` is *provably* not present, i.e., if the `read_state` response contains a valid certificate whose lookup of the corresponding path yields `Absent`. Otherwise, e.g., if the replica is overloaded or because the custom section with the name `supported_certificate_versions` is private, then the HTTP Gateway should also reject the canister's response.
 
 :::
 
