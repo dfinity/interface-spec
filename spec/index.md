@@ -3700,7 +3700,6 @@ M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
 Public_custom_sections = parse_public_custom_sections(A.wasm_module)
 Private_custom_sections = parse_private_custom_sections(A.wasm_module)
-A.mode = upgrade
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
 Env = {
@@ -3711,11 +3710,23 @@ Env = {
   certificate = NoCertificate;
   status = simple_status(S.canister_status[A.canister_id]);
 }
-Env1 = Env with {
-  global_timer = S.global_timer[A.canister_id];
-  canister_version = S.canister_version[A.canister_id];
-}
-Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+
+(
+  (A.mode = upgrade or A.mode = upgrade {skip_pre_upgrade = false})
+  Env1 = Env with {
+    global_timer = S.global_timer[A.canister_id];
+    canister_version = S.canister_version[A.canister_id];
+  }
+  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+)
+or
+(
+  A.mode = upgrade {skip_pre_upgrade = true}
+  Stable_memory = Old_State.stable_mem
+  New_certified_data = NoCertifiedData
+  Cycles_used = 0
+)
+
 Env2 = Env with {
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
