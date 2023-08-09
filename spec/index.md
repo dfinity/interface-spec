@@ -2113,6 +2113,16 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
+### IC method `metrics` {#ic-metrics}
+
+Given a subnet ID as input, this method returns a collection of metrics for the given subnet.
+
+A single metric entry is of an enumeration type with a single variant (in the future, more variants might be added):
+
+- `node_metrics`: provides metrics for a node characterized by its principal (field `node_id`), for a period of time characterized by start and end timestamps in nanoseconds since 1970-01-01 (fields `start_timestamp_nanos` and `end_timestamp_nanos`), and the actual metrics values:
+
+  - `num_proposed_blocks` (`nat`): the number of blocks proposed by this node.
+
 ## Certification {#certification}
 
 Some parts of the IC state are exposed to users in a tamperproof way via certification: the IC can reveal a *partial state tree* which includes just the data of interest, together with a signature on the root hash of the state tree. This means that a user can be sure that the response is correct, even if the user happens to be communicating with a malicious node, or has received the certificate via some other untrusted way.
@@ -4135,6 +4145,38 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Reply (candid(B))
+        refunded_cycles = M.transferred_cycles
+      }
+
+```
+
+#### IC Management Canister: Metrics
+
+The management canister can returns metrics for a given subnet. The definition of the metrics values
+is not captured in this formal semantics.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'metrics'
+M.arg = candid()
+R = <implementation-specific>
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid(R))
         refunded_cycles = M.transferred_cycles
       }
 

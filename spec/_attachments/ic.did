@@ -111,6 +111,15 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
+type metrics = variant {
+  node_metrics : record {
+    node_id : principal;
+    start_timestamp_nanos : nat64;
+    end_timestamp_nanos : nat64;
+    num_proposed_blocks : nat;
+  }
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings;
@@ -183,6 +192,13 @@ service ic : {
   bitcoin_get_utxos: (get_utxos_request) -> (get_utxos_response);
   bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
+
+  // metrics interface
+  metrics : (record {
+    subnet_id : principal;
+  }) -> (record {
+    metrics : vec metrics;
+  });
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
