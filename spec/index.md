@@ -445,7 +445,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 :::
 
--   `/subnet/<subnet_id>/nodes/<node_id>/public_key` (blob)
+-   `/subnet/<subnet_id>/node/<node_id>/public_key` (blob)
 
     The public key of a node (a DER-encoded Ed25519 signing key, see [RFC 8410](https://tools.ietf.org/html/rfc8410) for reference) with principal `<node_id>` belonging to the subnet with principal `<subnet_id>`.
 
@@ -647,7 +647,7 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
--   paths with prefix `/subnet/<subnet_id>/nodes`. Only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
+-   paths with prefix `/subnet/<subnet_id>/node`. Only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
 
 The returned certificate also always reveals `/time`, even if not explicitly requested.
 
@@ -762,7 +762,7 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
          (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
         effective_canister_id ∈ Ranges ∧
         ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
-          lookup(["subnet",SubnetId,"nodes",NodeId,"public_key"], Cert) = Found PK ∧
+          lookup(["subnet",SubnetId,"node",NodeId,"public_key"], Cert) = Found PK ∧
           if R.status = "replied" then
             verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
               status: "replied",
@@ -4748,7 +4748,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "nodes": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
