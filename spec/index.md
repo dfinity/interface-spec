@@ -2196,7 +2196,7 @@ The following algorithm looks up a `path` in a certificate, and returns either
 
 -   `Absent`: the requested path is not in the tree,
 
--   `Unknown`: it cannot be syntatically determined if the requested `path` was pruned or not; i.e., there exist two trees (one containing the requested path and one *not* containing the requested path) from which the given tree was obtained by pruning some subtrees,
+-   `Unknown`: it cannot be syntactically determined if the requested `path` was pruned or not; i.e., there exist at least two trees (one containing the requested path and one *not* containing the requested path) from which the given tree was obtained by pruning some subtrees,
 
 -   `Error`: the requested path does not have an associated value in the tree, but the requested path is in the tree:
 
