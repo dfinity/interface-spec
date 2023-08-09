@@ -4712,7 +4712,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Done) =
       { "status": "done" }
 
-and where `lookup_in_tree` is a function that returns the value `v` as `Found v`, `Absent`, `Unknown`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
+and where `lookup_in_tree` is a function that returns the value `v` as `Found v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
 ### Abstract Canisters to System API {#concrete-canisters}
 
