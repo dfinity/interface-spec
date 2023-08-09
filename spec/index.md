@@ -2196,7 +2196,7 @@ The following algorithm looks up a `path` in a certificate, and returns either
 
 -   `Absent`: the requested path is not in the tree,
 
--   `Unknown`: it cannot be syntactically determined if the requested `path` was pruned or not; i.e., there exist at least two trees (one containing the requested path and one *not* containing the requested path) from which the given tree was obtained by pruning some subtrees,
+-   `Unknown`: it cannot be syntactically determined if the requested `path` was pruned or not; i.e., there exist at least two trees (one containing the requested path and one *not* containing the requested path) from which the given tree can be obtained by pruning some subtrees,
 
 -   `Error`: the requested path does not have an associated value in the tree, but the requested path is in the tree:
 
@@ -4685,7 +4685,7 @@ where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
 
-    lookup(path, cert) = lookup_in_tree(path, state_tree(S))
+    lookup_in_tree(path, cert.tree) = lookup_in_tree(path, state_tree(S))
 
 where `state_tree` constructs a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per [The system state tree](#state-tree)
 
@@ -4712,7 +4712,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Done) =
       { "status": "done" }
 
-and where `lookup_in_tree` is a function that returns the value `v` as `Found v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
+and where `lookup_in_tree` is a function that returns `Found v` for a value `v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
 ### Abstract Canisters to System API {#concrete-canisters}
 
