@@ -4163,7 +4163,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'metrics'
-M.arg = candid()
+M.arg = candid(A)
 R = <implementation-specific>
 
 ```
