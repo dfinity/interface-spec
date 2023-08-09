@@ -1067,9 +1067,9 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
 
-    -   the number of all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 1,000, or
+    -   the number of all exported functions called `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` exceeds 1,000, or
 
-    -   the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
+    -   the sum of `<name>` lengths in all exported functions called `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` exceeds 20,000, or
 
     -   the total size of the custom sections (the sum of `<name>` lengths in their names `icp:public <name>` and `icp:private <name>` plus the sum of their content lengths) exceeds 1MiB.
 
@@ -2121,7 +2121,7 @@ To validate a value using a certificate, the user conceptually
 
 1.  checks the validity of the partial tree using `verify_cert`,
 
-2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree
+2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree.
 
 This mechanism is used in the `read_state` request type, and eventually also for other purposes.
 
@@ -2186,19 +2186,19 @@ implements DER decoding of the public key, following [RFC5480](https://datatrack
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
-### Lookup
+### Lookup {#lookup}
 
 Given a (verified) tree, the user can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimiters.
 
 The following algorithm looks up a `path` in a certificate, and returns either
 
--   the value
+-   `Found v`: the requested `path` has an associated value `v` in the tree,
 
--   `Absent`, if the value is guaranteed to be absent in the original state tree,
+-   `Absent`: the requested path is not in the tree,
 
--   `Unknown`, if this partial view does not include information about this path, or
+-   `Unknown`: it cannot be syntactically determined if the requested `path` was pruned or not; i.e., there exist at least two trees (one containing the requested path and one *not* containing the requested path) from which the given tree can be obtained by pruning some subtrees,
 
--   `Error`, if the path does not make sense for this certificate:
+-   `Error`: the requested path does not have an associated value in the tree, but the requested path is in the tree:
 
 ```html
 
@@ -4685,7 +4685,7 @@ where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
 
-    lookup(path, cert) = lookup_in_tree(path, state_tree(S))
+    lookup_in_tree(path, cert.tree) = lookup_in_tree(path, state_tree(S))
 
 where `state_tree` constructs a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per [The system state tree](#state-tree)
 
@@ -4712,7 +4712,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Done) =
       { "status": "done" }
 
-and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
+and where `lookup_in_tree` is a function that returns `Found v` for a value `v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
 ### Abstract Canisters to System API {#concrete-canisters}
 
