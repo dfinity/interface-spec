@@ -2186,7 +2186,7 @@ implements DER decoding of the public key, following [RFC5480](https://datatrack
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
-### Lookup
+### Lookup {#lookup}
 
 Given a (verified) tree, the user can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimiters.
 
@@ -4712,7 +4712,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Done) =
       { "status": "done" }
 
-and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
+and where `lookup_in_tree` is a function that returns the value `v` as `Found v`, `Absent`, `Unknown`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
 ### Abstract Canisters to System API {#concrete-canisters}
 
