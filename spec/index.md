@@ -2121,7 +2121,7 @@ To validate a value using a certificate, the user conceptually
 
 1.  checks the validity of the partial tree using `verify_cert`,
 
-2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree
+2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree.
 
 This mechanism is used in the `read_state` request type, and eventually also for other purposes.
 
@@ -2192,13 +2192,13 @@ Given a (verified) tree, the user can fetch the value at a given path, which is 
 
 The following algorithm looks up a `path` in a certificate, and returns either
 
--   the value
+-   `Found v`: the requested `path` has an associated value `v` in the tree,
 
--   `Absent`, if the value is guaranteed to be absent in the original state tree,
+-   `Absent`: the requested path is not in the tree,
 
--   `Unknown`, if this partial view does not include information about this path, or
+-   `Unknown`: it cannot be syntatically determined if the requested `path` was pruned or not; i.e., there exist two trees (one containing the requested path and one *not* containing the requested path) from which the given tree was obtained by pruning some subtrees,
 
--   `Error`, if the path does not make sense for this certificate:
+-   `Error`: the requested path does not have an associated value in the tree, but the requested path is in the tree:
 
 ```html
 
