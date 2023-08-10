@@ -2081,9 +2081,10 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
-### IC method `bitcoin_get_utxos_untrusted` {#ic-bitcoin_get_utxos_untrusted}
+### IC method `bitcoin_get_utxos_query` {#ic-bitcoin_get_utxos_query}
 
-This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos). The only difference is that it is exposed as an uncertified query call, and its results can therefore not be trusted.
+This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos), but exposed as a query.
+Note that the response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
 
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
@@ -2095,9 +2096,10 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
 
-### IC method `bitcoin_get_balance_untrusted` {#ic-bitcoin_get_balance_untrusted}
+### IC method `bitcoin_get_balance_query` {#ic-bitcoin_get_balance_query}
 
-This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance). The only difference is that it is exposed as an uncertified query call, and its results can therefore not be trusted.
+This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance), but exposed as a query.
+Note that the response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
