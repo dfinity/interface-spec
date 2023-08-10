@@ -1806,6 +1806,12 @@ Not including a setting in the `settings` record means not changing that field. 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
+
+### IC method `upload_chunk` {#ic-upload_chunk}
+Canisters have associated some storage space where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. 
+
+
+
 ### IC method `install_code` {#ic-install_code}
 
 This method installs code into a canister.

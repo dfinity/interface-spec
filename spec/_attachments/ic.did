@@ -46,6 +46,8 @@ type change = record {
   details : change_details;
 };
 
+type chunk_hash = blob;
+
 type http_header = record { name: text; value: text };
 
 type http_response = record {
@@ -121,6 +123,13 @@ service ic : {
     settings : canister_settings;
     sender_canister_version : opt nat64;
   }) -> ();
+  upload_chunk : (record {
+    canister_id : principal;
+    chunk : blob;
+  }) -> chunk_hash;
+  stored_chunks: (record {canister_id : canister_id}) -> vec chunk_hash;
+  delete_chunks: (record {hash_list : vec chunk_hash}) -> ();
+  clear_chunk_store: (record {canister_id: canister_id}) -> ();
   install_code : (record {
     mode : variant {install; reinstall; upgrade};
     canister_id : canister_id;
