@@ -4152,7 +4152,7 @@ S with
 
 #### IC Management Canister: Metrics
 
-The management canister can returns metrics for a given subnet. The definition of the metrics values
+The management canister returns metrics for a given subnet. The definition of the metrics values
 is not captured in this formal semantics.
 
 Conditions
