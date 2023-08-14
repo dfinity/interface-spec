@@ -655,13 +655,13 @@ canister developers that aim at keeping data confidential are advised to add a s
 
 :::
 
-All requested paths must have one of the following paths as prefix:
+All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
 
--   `/request_status/<request_id>`. Can be requested if no path with such a prefix exists in the state tree or
+-   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
     -   the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
 
@@ -4667,13 +4667,21 @@ A record with
 
 The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path(S, _, ["time"] · _) = True
-    may_read_path(S, _, ["subnet"] · _) = True
-    may_read_path(S, _, ["request_status", Rid] · _) =
+    may_read_path(S, _, ["time"]) = True
+    may_read_path(S, _, ["subnet"]) = True
+    may_read_path(S, _, ["subnet", sid]) = True
+    may_read_path(S, _, ["subnet", sid, "public_key"]) = True
+    may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["request_status", Rid]) =
+    may_read_path(S, _, ["request_status", Rid, "status"]) =
+    may_read_path(S, _, ["request_status", Rid, "reply"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_code"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_message"]) =
+    may_read_path(S, _, ["request_status", Rid, "error_code"]) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
-    may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+    may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "metadata", name]) = cid == ECID ∧ UTF8(name) ∧
       (cid ∉ dom(S.canisters[cid]) ∨
        S.canisters[cid] = EmptyCanister ∨
        name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
@@ -4707,7 +4715,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Processing) =
       { "status": "processing" }
     request_status_tree(Rejected (code, msg)) =
-      { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
+      { "status": "rejected"; "reject_code": code; "reject_message": msg; "error_code": <implementation-specific>}
     request_status_tree(Replied arg) =
       { "status": "replied"; "reply": arg }
     request_status_tree(Done) =
