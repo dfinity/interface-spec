@@ -1,0 +1,15 @@
+
+; The specification of a large Wasm; consists of a location (canister principal) and a list of hashes.
+
+
+
+chunked-wasm = tagged<{
+  ? location : principal
+  list_of_hashes : [2* hash]
+}>
+
+hash = bytes .size (0..32)
+
+principal = bytes .size (0..29)
+
+tagged<t> = #6.55799(t) ; the CBOR tag
