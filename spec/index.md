@@ -635,6 +635,7 @@ In order to read parts of the [The system state tree](#state-tree), the user mak
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
 
 -   `paths` (sequence of paths): A list of at most 1000 paths, where a path is itself a sequence of at most 127 blobs.
+
 The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
