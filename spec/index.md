@@ -1808,8 +1808,13 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 
 ### IC method `upload_chunk` {#ic-upload_chunk}
-Canisters have associated some storage space where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. 
+Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. The method returns the hash of the chunk that was stored. 
 
+### IC method `delete_chunks` {#ic-delete_chunks}
+Canister controllers can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the result is that the IC deletes the chunks corresponding to those hashes from the canister's chunk storage.  
+
+### IC method `clear_store` {#ic-clear_store}
+Canister controllers can clear the entire chunk storage of a canister. 
 
 
 ### IC method `install_code` {#ic-install_code}
