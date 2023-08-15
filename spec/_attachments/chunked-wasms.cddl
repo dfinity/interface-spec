@@ -5,7 +5,7 @@
 
 chunked-wasm = tagged<{
   ? location : principal
-  list_of_hashes : [2* hash]
+  list_of_hashes : [* hash]
 }>
 
 hash = bytes .size (0..32)
