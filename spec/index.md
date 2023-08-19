@@ -737,7 +737,7 @@ If the query call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)
 
 -   `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
 
--   (optional) `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
 
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
@@ -749,7 +749,7 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   (optional) `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
 
 :::note
 
