@@ -758,7 +758,7 @@ if we include more signatures in a future version of the protocol specification.
 
 :::
 
-The response to a query call optionally contains a list with one signature for the returned response produced by the IC node that evaluated the query call. The signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+The response to a query call contains a list with one signature for the returned response produced by the IC node that evaluated the query call. The signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `timestamp` (`nat`): the timestamp of the signature.
 
