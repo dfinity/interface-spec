@@ -3642,6 +3642,8 @@ M.arg = candid(A)
 chunk_store_size = |{x | chunk_store[A.canister_id][x] not null}|
 chunk_store_size < MAX_CHUNK_STORE_SIZE and (M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id})
 hash = SHA-256(A.chunk)
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
+
 
 ```
 
@@ -3670,6 +3672,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'clear_store'
 M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ```
 
 State after
@@ -3697,8 +3700,9 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'delete_chunks'
 M.arg = candid(A)
-chunk_store'(hash) = chunk_store[M.canister_id](hash) if hash ∉ A.hash_list
-chunk_store'(hash) = null if hash ∈ A.hash_list
+chunk_store'[hash] = chunk_store[A.canister_id][hash] if hash ∉ A.hash_list
+chunk_store'[hash] = null if hash ∈ A.hash_list
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 
 ```
 
@@ -3716,6 +3720,34 @@ S with
 
 ```
 
+#### IC Management Canister: List stored chunks
+
+The controller of a canister, or the canister itself can list the hashes of the chunks stored in the chunk store.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'stored_chunks'
+M.arg = candid(A)
+stored_chunks = {hash | chunk_store[A.canister_id][hash] ≠ null}
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
+
+```
+
+State after
+
+```html
+
+S with
+    chunk_store[A.canister_id] = chunk_store'
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid(stored_chunks)
+      }
+
+```
 
 
 
