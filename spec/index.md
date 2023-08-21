@@ -635,6 +635,7 @@ In order to read parts of the [The system state tree](#state-tree), the user mak
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
 
 -   `paths` (sequence of paths): A list of at most 1000 paths, where a path is itself a sequence of at most 127 blobs.
+
 The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
@@ -643,13 +644,24 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
 
-All requested paths must have one of the following paths as prefix:
+:::note
+
+The returned certificate might also reveal the SHA-256 hashes of values whose paths have not been requested
+and whose paths might not even be allowed to be requested by the sender of the HTTP request.
+This means that unauthorized users might obtain the SHA-256 hashes of ingress message responses
+and private custom sections of the canister's module.
+Hence, users are advised to use cryptographically strong nonces in their HTTP requests and
+canister developers that aim at keeping data confidential are advised to add a secret cryptographic salt to their canister's responses and private custom sections.
+
+:::
+
+All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
 
--   `/request_status/<request_id>`. Can be requested if no path with such a prefix exists in the state tree or
+-   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
     -   the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
 
@@ -730,6 +742,7 @@ Canister methods that do not change the canister state (except for cycle balance
 ### Effective canister id {#http-effective-canister-id}
 
 The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
+It must be contained in the canister ranges of a subnet, otherwise the corresponding HTTP request is rejected.
 
 -   If the request is an update call to the Management Canister (`aaaaa-aa`), then:
 
@@ -744,8 +757,6 @@ The `<effective_canister_id>` in the URL paths of requests is the *effective* de
 :::note
 
 The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
-
-The Internet Computer blockchain mainnet rejects all requests whose effective canister id is in no subnet's canister ranges, independently of whether the remaining conditions on the effective canister id are satisfied.
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
@@ -1057,9 +1068,9 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
 
-    -   the number of all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 1,000, or
+    -   the number of all exported functions called `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` exceeds 1,000, or
 
-    -   the sum of `<name>` lengths in all exported functions called `canister_update <name>` or `canister_query <name>` exceeds 20,000, or
+    -   the sum of `<name>` lengths in all exported functions called `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` exceeds 20,000, or
 
     -   the total size of the custom sections (the sum of `<name>` lengths in their names `icp:public <name>` and `icp:private <name>` plus the sum of their content lengths) exceeds 1MiB.
 
@@ -1133,7 +1144,7 @@ Eventually, a method will want to send a response, using `ic0.reply` or `ic0.rej
 
 For periodic or time-based execution, the WebAssembly module can export a function with name `canister_heartbeat`. The heartbeats scheduling algorithm is implementation-defined.
 
-`canister_heartbeat` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_heartbeat` can initiate new calls.
+`canister_heartbeat` is triggered by the IC, and therefore has no arguments and cannot reply or reject. Still, the function `canister_heartbeat` can initiate new calls.
 
 :::note
 
@@ -1147,7 +1158,7 @@ For time-based execution, the WebAssembly module can export a function with name
 
 Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
-`canister_global_timer` is triggered by the IC, and therefore has no arguments, no caller, and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
+`canister_global_timer` is triggered by the IC, and therefore has no arguments and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
 
 :::note
 
@@ -1167,8 +1178,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.msg_arg_data_size : () -> i32;                                          // I U Q CQ Ry CRy F
     ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q CQ Ry CRy F
-    ic0.msg_caller_size : () -> i32;                                            // I G U Q CQ F
-    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q CQ F
+    ic0.msg_caller_size : () -> i32;                                            // *
+    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // *
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
@@ -1295,7 +1306,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
 -   `ic0.msg_caller_size : () → i32` and `ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) → ()`
 
-    The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of the user or canister requesting the installation or upgrade.
+    The identity of the caller, which may be a canister id or a user id. During canister installation or upgrade, this is the id of the user or canister requesting the installation or upgrade. During a system task (heartbeat or global timer), this is the id of the management canister.
 
 -   `ic0.msg_reject_code : () → i32`
 
@@ -1350,6 +1361,15 @@ This can be invoked multiple times within the same message execution to build up
 A canister can inspect ingress messages before executing them. When the IC receives an update call from a user, the IC will use the canister method `canister_inspect_message` to determine whether the message shall be accepted. If the canister is empty (i.e. does not have a Wasm module), then the ingress message will be rejected. If the canister is not empty and does not implement `canister_inspect_message`, then the ingress message will be accepted.
 
 In `canister_inspect_message`, the canister can accept the message by invoking `ic0.accept_message : () → ()`. This function traps if invoked twice. If the canister traps in `canister_inspect_message` or does not call `ic0.accept_message`, then the access is denied.
+
+:::note
+
+The `canister_inspect_message` is executed by a single node and thus its outcome depends on the state of this node.
+In particular, the `canister_inspect_message` might be executed on a state that does not reflect the changes
+made by a previously successfully completed update call if the `canister_inspect_message` is executed by a node
+that is not up-to-date in terms of its state.
+
+:::
 
 :::note
 
@@ -1768,7 +1788,9 @@ The optional `settings` parameter can be used to set the following settings:
 
 -   `controllers` (`vec principal`)
 
-    A list of principals. Must be between 0 and 10 in size. This value is assigned to the *controllers* attribute of the canister.
+    A list of at most 10 principals. The principals in this list become the *controllers* of the canister.
+    Note that the caller of the `create_canister` call is not a controller of the canister
+    unless it is a member of the `controllers` list.
 
     Default value: A list containing only the caller of the `create_canister` call.
 
@@ -1848,6 +1870,8 @@ The `wasm_module` field specifies the canister module to be installed. The syste
  
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
+This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -1935,13 +1959,11 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 ### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
 
-This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of strings in `derivation_path` can be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
+This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
-For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP-0032](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>.
+For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
 
 The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
-
-This call requires that the ECDSA feature is enabled, and the `canister_id` meets the requirement of a canister id. Otherwise it will be rejected.
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
@@ -2113,7 +2135,7 @@ To validate a value using a certificate, the user conceptually
 
 1.  checks the validity of the partial tree using `verify_cert`,
 
-2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree
+2.  looks up the value in the certificate using `lookup` at a given path, which uses the subroutine `lookup_path` on the certificate's tree.
 
 This mechanism is used in the `read_state` request type, and eventually also for other purposes.
 
@@ -2178,19 +2200,19 @@ implements DER decoding of the public key, following [RFC5480](https://datatrack
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
-### Lookup
+### Lookup {#lookup}
 
 Given a (verified) tree, the user can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimiters.
 
 The following algorithm looks up a `path` in a certificate, and returns either
 
--   the value
+-   `Found v`: the requested `path` has an associated value `v` in the tree,
 
--   `Absent`, if the value is guaranteed to be absent in the original state tree,
+-   `Absent`: the requested path is not in the tree,
 
--   `Unknown`, if this partial view does not include information about this path, or
+-   `Unknown`: it cannot be syntactically determined if the requested `path` was pruned or not; i.e., there exist at least two trees (one containing the requested path and one *not* containing the requested path) from which the given tree can be obtained by pruning some subtrees,
 
--   `Error`, if the path does not make sense for this certificate:
+-   `Error`: the requested path does not have an associated value in the tree, but the requested path is in the tree:
 
 ```html
 
@@ -2503,9 +2525,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           global_timer : (Env) -> SystemTaskFunc
           callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
           composite_callbacks : (Callback, Response, Env) -> UpdateFunc
-          inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
+          inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return {
             status : Accept | Reject;
-            cycles_used : Nat;
           }
         }
 
@@ -2903,9 +2924,7 @@ is_effective_canister_id(E.content, ECID)
     canister_version = S.canister_version[E.content.canister_id];
   }
   S.canisters[E.content.canister_id].module.inspect_message
-    (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept; cycles_used = Cycles_used;}
-  Cycles_used ≤ S.balances[E.content.canister_id]
-
+    (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
 
 ```
 
@@ -2915,8 +2934,6 @@ State after
 
 S with
     requests[E.content] = (Received, ECID)
-    if E.content.canister_id ≠ ic_principal then
-      balances[E.content.canister_id] = S.balances[E.content.canister_id] - Cycles_used
 
 ```
 
@@ -3630,7 +3647,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_used ≤ S.balances[A.canister_id]
+freezing_limit(S, A.canister_id) + Cycles_used ≤ S.balances[A.canister_id]
 dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
 dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
@@ -3719,7 +3736,7 @@ Env2 = Env with {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
-Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
+freezing_limit(S, A.canister_id) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
 dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
 dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
 dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
@@ -4663,13 +4680,21 @@ A record with
 
 The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path(S, _, ["time"] · _) = True
-    may_read_path(S, _, ["subnet"] · _) = True
-    may_read_path(S, _, ["request_status", Rid] · _) =
+    may_read_path(S, _, ["time"]) = True
+    may_read_path(S, _, ["subnet"]) = True
+    may_read_path(S, _, ["subnet", sid]) = True
+    may_read_path(S, _, ["subnet", sid, "public_key"]) = True
+    may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["request_status", Rid]) =
+    may_read_path(S, _, ["request_status", Rid, "status"]) =
+    may_read_path(S, _, ["request_status", Rid, "reply"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_code"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_message"]) =
+    may_read_path(S, _, ["request_status", Rid, "error_code"]) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
-    may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+    may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "metadata", name]) = cid == ECID ∧ UTF8(name) ∧
       (cid ∉ dom(S.canisters[cid]) ∨
        S.canisters[cid] = EmptyCanister ∨
        name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
@@ -4682,7 +4707,7 @@ where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
 
-    lookup(path, cert) = lookup_in_tree(path, state_tree(S))
+    lookup_in_tree(path, cert.tree) = lookup_in_tree(path, state_tree(S))
 
 where `state_tree` constructs a labeled tree from the IC state `S` and the (so far underspecified) set of subnets `subnets`, as per [The system state tree](#state-tree)
 
@@ -4703,13 +4728,13 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Processing) =
       { "status": "processing" }
     request_status_tree(Rejected (code, msg)) =
-      { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
+      { "status": "rejected"; "reject_code": code; "reject_message": msg; "error_code": <implementation-specific>}
     request_status_tree(Replied arg) =
       { "status": "replied"; "reply": arg }
     request_status_tree(Done) =
       { "status": "done" }
 
-and where `lookup_in_tree` is a function that returns the value or `Absent` as appropriately.
+and where `lookup_in_tree` is a function that returns `Found v` for a value `v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
 ### Abstract Canisters to System API {#concrete-canisters}
 
@@ -4748,7 +4773,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
 
     Params = {
       arg : NoArg | Blob;
-      caller : NoCaller | Principal;
+      caller : Principal;
       reject_code : 0 | SYS_FATAL | SYS_TRANSIENT | …;
       reject_message : Text;
       sysenv : Env;
@@ -4784,7 +4809,7 @@ It is nonsensical to pass to an execution function a WebAssembly store `S` that 
 
         empty_params = {
           arg = NoArg;
-          caller = NoCaller;
+          caller = ic_principal;
           reject_code = 0;
           reject_message = "";
           sysenv = (undefined);
@@ -4898,7 +4923,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         pre_upgrade = λ (old_state, caller, sysenv) →
           let es = ref {empty_execution_state with
               wasm_state = old_state
-              params = { empty_params with caller = caller; sysenv }
+              params = empty_params with { caller = caller; sysenv }
               balance = sysenv.balance
               context = G
             }
@@ -4921,7 +4946,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
           let es = ref {empty_execution_state with
               wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-              params = { empty_params with arg = arg; caller = caller; sysenv }
+              params = empty_params with { arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
               context = I
             }
@@ -4993,7 +5018,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
         heartbeat = λ (sysenv) → λ wasm_state →
           let es = ref {empty_execution_state with
             wasm_state = wasm_state;
-            params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
+            params = empty_params with { arg = NoArg; caller = ic_principal; sysenv }
             balance = sysenv.balance
             context = T
           }
@@ -5019,7 +5044,7 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
         global_timer = λ (sysenv) → λ wasm_state →
           let es = ref {empty_execution_state with
             wasm_state = wasm_state;
-            params = empty_params with { arg = NoArg; caller = NoCaller; sysenv }
+            params = empty_params with { arg = NoArg; caller = ic_principal; sysenv }
             balance = sysenv.balance
             context = T
           }
@@ -5043,7 +5068,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 -   The function `callbacks` of the `CanisterModule` is defined as follows
 
         callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
-          let params0 = { empty_params with
+          let params0 = empty_params with {
             sysenv
             cycles_refunded = refund_cycles;
           }
@@ -5102,7 +5127,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 -   The function `composite_callbacks` of the `CanisterModule` is defined as follows
 
         composite_callbacks = λ(callbacks, response, sysenv) → λ wasm_state →
-          let params0 = { empty_params with
+          let params0 = empty_params with {
             sysenv
           }
           let (fun, env, params, context) = match response with
@@ -5155,7 +5180,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
     If the WebAssembly module does not export a function called under the name `canister_inspect_message`, then access is always granted:
 
         inspect_message = λ (method_name, wasm_state, arg, caller, sysenv) →
-          Return {status = Accept; cycles_used = 0;}
+          Return {status = Accept;}
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_inspect_message`, it is
 
@@ -5172,8 +5197,8 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
               cycles_available = 0; // ingress requests have no funds
               context = F;
             }
-           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-           Return {status = es.ingress_filter; cycles_used = es.cycles_used;};
+           try func<es>() with Trap then Trap
+           Return {status = es.ingress_filter;};
 
 #### Helper functions
 
@@ -5210,11 +5235,11 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
     ic0.msg_caller_size() : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return |es.params.caller|
 
     ic0.msg_caller_copy(dst:i32, offset:i32, size:i32) : i32 =
-      if es.context ∉ {I, G, U, Q, CQ, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.caller)
 
     ic0.msg_reject_code<es>() : i32 =
@@ -5284,32 +5309,32 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.canister_self_size<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return |es.wasm_state.self_id|
 
     ic0.canister_self_copy<es>(dst:i32, offset:i32, size:i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
     ic0.canister_cycle_balance<es>() : i64 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.balance >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.balance
 
     ic0.canister_cycles_balance128<es>(dst : i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       let amount = es.balance
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.canister_status<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       match es.params.sysenv.canister_status with
         Running  -> return 1
         Stopping -> return 2
         Stopped  -> return 3
 
     ic0.canister_version<es>() : i64 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return es.params.sysenv.canister_version
 
     ic0.msg_method_name_size<es>() : i32 =
@@ -5474,23 +5499,23 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.new_certified_data := es.wasm_state[src..src+size]
 
     ic0.data_certificate_present<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate
       then return 0
       else return 1
 
     ic0.data_certificate_size<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       return |es.params.sysenv.certificate|
 
     ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
     ic0.time<es>() : i32 =
-      if es.context ∉ {I, G, U, Q, Ry, Rt, C, F, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
       return es.params.sysenv.time
 
     ic0.global_timer_set<es>(timestamp: i64) : i64 =

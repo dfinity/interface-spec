@@ -1,5 +1,12 @@
 ## Changelog {#changelog}
 
+### ∞ (unreleased)
+* Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
+* System API calls `ic0.msg_caller_size` and `ic0.msg_caller_copy` can be called in all contexts except for (start) function.
+* Added note on confidentiality of values in the certified state tree.
+* Update algorithm computing the request and response hash in the HTTP Gateway including clarification of when the HTTP Gateway can allow for arbitrary certification version in the canister's response.
+* Update conditions on requested paths in HTTP read state requests.
+
 ### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
 * Add conditions on requested paths in read state requests.
