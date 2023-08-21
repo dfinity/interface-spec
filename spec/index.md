@@ -3639,7 +3639,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'upload_chunk'
 M.arg = candid(A)
-chunk_store_size = |{x | chunk_store[M.canister_id][x] not null}|
+chunk_store_size = |{x | chunk_store[A.canister_id][x] not null}|
 chunk_store_size < MAX_CHUNK_STORE_SIZE and (M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id})
 hash = SHA-256(A.chunk)
 
@@ -3650,8 +3650,8 @@ State after
 ```html
 
 S with
-    chunk_store[M.canister_id](hash') = chunk_store[M.canister_id] if hash'≠ hash
-    chunk_store[M.canister_id](hash) = A.chunk
+    chunk_store[A.canister_id](hash') = chunk_store[A.canister_id] if hash'≠ hash
+    chunk_store[A.canister_id](hash) = A.chunk
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3659,6 +3659,33 @@ S with
       }
 
 ```
+
+#### IC Management Canister: Clear Chunk Store
+
+The controller of a canister, or the canister itself can clear the chunk store of that canister. 
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'clear_store'
+M.arg = candid(A)
+```
+
+State after
+
+```html
+
+S with
+    chunk_store[A.canister_id] = ()
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid()
+      }
+
+```
+
 
 
 #### IC Management Canister: Code installation
