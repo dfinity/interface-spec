@@ -106,6 +106,10 @@ This specification may refer to certain constants and limits without specifying 
 
     Maximum amount of cycles that can be used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call.
 
+-   `MAX_CHUNK_STORE_SIZE`
+
+    Maximum number of chunks that can be stored within the chunk store of a canister. 
+
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
     Amount of cycles allocated to a new canister by default, if not explicitly specified. See [IC method](#ic-provisional_create_canister_with_cycles).
@@ -2443,6 +2447,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         WasmState = (abstract)
         StableMemory = (abstract)
         Callback = (abstract)
+        ChunkStore = Hash -> Blob
+
 
         Arg = Blob;
         CallerId = Principal;
@@ -2684,6 +2690,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     CanState
      = EmptyCanister | {
       wasm_state : WasmState;
+      chunk_store: ChunkStore;
       module : CanisterModule;
       raw_module : Blob;
       public_custom_sections: Text ↦ Blob;
@@ -3433,6 +3440,7 @@ S with
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
     controllers[CanisterId] = New_controllers
+    chunk_store[CanisterId] = ()
     if A.settings.freezing_threshold is not null:
       freezing_threshold[CanisterId] = A.settings.freezing_threshold
     else:
@@ -3617,6 +3625,41 @@ S with
       }
 
 ```
+
+
+#### IC Management Canister: Upload Chunk
+
+The controller of a canister, or the canister itself can upload chunks to the chunk store of that canister.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'upload_chunk'
+M.arg = candid(A)
+chunk_store_size = |chunk_store[M.canister_id]|
+chunk_store_size < MAX_CHUNK_STORE_SIZE and (M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id})
+hash = SHA-256(A.chunk)
+
+```
+
+State after
+
+```html
+
+S with
+    chunk_store[M.canister_id](hash') = chunk_store[M.canister_id] if hash'≠ hash
+    chunk_store[M.canister_id](hash) = A.chunk
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid(hash)
+      }
+
+```
+
 
 #### IC Management Canister: Code installation
 
