@@ -3827,6 +3827,17 @@ freezing_limit(
   S.memory_allocation[A.canister_id],
   S.freezing_threshold[A.canister_id],
   memory_usage(
+    S.canisters[A.canister_id].wasm_state,
+    S.canisters[A.canister_id].raw_module,
+    S.canister_history[A.canister_id],
+  ),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage(
     New_state,
     A.wasm_module,
     New_canister_history
@@ -3941,6 +3952,28 @@ Env2 = Env with {
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage(
+    S.canisters[A.canister_id].wasm_state,
+    S.canisters[A.canister_id].raw_module,
+    S.canister_history[A.canister_id],
+  ),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage(
+    New_state,
+    A.wasm_module,
+    New_canister_history
+  ),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
 freezing_limit(
   S.compute_allocation[A.canister_id],
   S.memory_allocation[A.canister_id],
