@@ -4380,7 +4380,7 @@ is_system_assigned CanisterId
 CanisterId ∉ dom(S.canisters)
 if A.specified_id is not null:
   A.specified_id ∉ dom(S.canisters)
-  canister_id = A.specified_id
+  Canister_id = A.specified_id
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
@@ -4441,25 +4441,25 @@ State after
 ```html
 
 S with
-    canisters[canister_id] = EmptyCanister
-    time[canister_id] = CurrentTime
-    global_timer[canister_id] = 0
-    controllers[canister_id] = New_controllers
-    compute_allocation[canister_id] = New_compute_allocation
-    memory_allocation[canister_id] = New_memory_allocation
-    freezing_threshold[canister_id] = New_freezing_threshold
-    balances[canister_id] = New_balance
-    certified_data[canister_id] = ""
-    canister_history[canister_id] = New_canister_history
+    canisters[Canister_id] = EmptyCanister
+    time[Canister_id] = CurrentTime
+    global_timer[Canister_id] = 0
+    controllers[Canister_id] = New_controllers
+    compute_allocation[Canister_id] = New_compute_allocation
+    memory_allocation[Canister_id] = New_memory_allocation
+    freezing_threshold[Canister_id] = New_freezing_threshold
+    balances[Canister_id] = New_balance
+    certified_data[Canister_id] = ""
+    canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid({canister_id = canister_id}))
+        response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = M.transferred_cycles
       }
-    canister_status[canister_id] = Running
-    canister_version[canister_id] = 0
-    canister_subnet[canister_id] = Subnet {
+    canister_status[Canister_id] = Running
+    canister_version[Canister_id] = 0
+    canister_subnet[Canister_id] = Subnet {
       subnet_id : SubnetId
       subnet_size : SubnetSize
     }
