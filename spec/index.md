@@ -3301,6 +3301,7 @@ if
     ),
     S.canister_subnet[M.receiver].subnet_size,
   );
+  (S.memory_allocation[M.receiver] = 0) or (memory_usage(res.new_state, S.canisters[M.receiver].raw_module, S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3353,7 +3354,7 @@ else
 
 Depending on whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
 
-The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
+The cycle consumption of executing this message is modeled via the unspecified `cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -3487,17 +3488,18 @@ if A.settings.controllers is not null:
 else:
   New_controllers = [M.caller]
 
-freezing_limit(
-  New_compute_allocation,
-  New_memory_allocation,
-  New_freezing_threshold,
-  memory_usage(
-    null,
-    null,
-    New_canister_history
-  ),
-  SubnetSize,
-) ≤ M.transferred_cycles
+if New_compute_allocation > 0 or New_memory_allocation > 0:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage(
+      null,
+      null,
+      New_canister_history
+    ),
+    SubnetSize,
+  ) ≤ M.transferred_cycles
 if A.settings.memory_allocation > 0:
   memory_usage(
     null,
@@ -3593,17 +3595,18 @@ M.method_name = 'update_settings'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
-freezing_limit(
-  New_compute_allocation,
-  New_memory_allocation,
-  New_freezing_threshold,
-  memory_usage(
-    S.canisters[A.canister_id].wasm_state,
-    S.canisters[A.canister_id].raw_module,
-    New_canister_history
-  ),
-  S.canister_subnet[A.canister_id].subnet_size,
-) ≤ S.balances[A.canister_id]
+if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id]:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage(
+      S.canisters[A.canister_id].wasm_state,
+      S.canisters[A.canister_id].raw_module,
+      New_canister_history
+    ),
+    S.canister_subnet[A.canister_id].subnet_size,
+  ) ≤ S.balances[A.canister_id]
 if A.settings.memory_allocation > 0:
   memory_usage(
     S.canisters[A.canister_id].wasm_state,
@@ -4383,17 +4386,18 @@ if A.settings.controllers is not null:
 else:
   New_controllers = [M.caller]
 
-freezing_limit(
-  New_compute_allocation,
-  New_memory_allocation,
-  New_freezing_threshold,
-  memory_usage(
-    null,
-    null,
-    New_canister_history
-  ),
-  SubnetSize
-) ≤ New_balance
+if New_compute_allocation > 0 or New_memory_allocation > 0:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage(
+      null,
+      null,
+      New_canister_history
+    ),
+    SubnetSize
+  ) ≤ New_balance
 if A.settings.memory_allocation > 0:
   memory_usage(
     null,
