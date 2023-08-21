@@ -2930,8 +2930,20 @@ is_effective_canister_id(E.content, ECID)
     status = simple_status(S.canister_status[E.content.canister_id]);
     canister_version = S.canister_version[E.content.canister_id];
   }
+  S.balances[E.content.canister_id] ≥ freezing_limit(
+    S.compute_allocation[E.content.canister_id],
+    S.memory_allocation[E.content.canister_id],
+    S.freezing_threshold[E.content.canister_id],
+    memory_usage(
+      S.canisters[E.content.canister_id].wasm_state,
+      S.canisters[E.content.canister_id].raw_module,
+      S.canister_history[E.content.canister_id]
+    ),
+    S.canister_subnet[E.content.canister_id].subnet_size,
+  )
   S.canisters[E.content.canister_id].module.inspect_message
     (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
+)
 
 ```
 
