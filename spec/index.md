@@ -3487,6 +3487,49 @@ if A.settings.controllers is not null:
 else:
   New_controllers = [M.caller]
 
+freezing_limit(
+  New_compute_allocation,
+  New_memory_allocation,
+  New_freezing_threshold,
+  memory_usage(
+    null,
+    null,
+    New_canister_history
+  ),
+  SubnetSize,
+) ≤ M.transferred_cycles
+if A.settings.memory_allocation > 0:
+  memory_usage(
+    null,
+    null,
+    New_canister_history
+  ) ≤ A.settings.memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = 0
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = 0
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = 2592000
+
+New_canister_history = {
+  total_num_changes = 1
+  recent_changes = {
+    timestamp_nanos = CurrentTime
+    canister_version = 0
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin)
+    details = Creation {
+      controllers = New_controllers
+    }
+  }
+}
+
 ```
 
 State after  
@@ -3498,31 +3541,12 @@ S with
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
     controllers[CanisterId] = New_controllers
-    if A.settings.compute_allocation is not null:
-      compute_allocation = A.settings.compute_allocation
-    else:
-      compute_allocation = 0
-    if A.settings.memory_allocation is not null:
-      memory_allocation = A.settings.memory_allocation
-    else:
-      memory_allocation = 0
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[CanisterId] = A.settings.freezing_threshold
-    else:
-      freezing_threshold[CanisterId] = 2592000
+    compute_allocation[CanisterId] = New_compute_allocation
+    memory_allocation[CanisterId] = New_memory_allocation
+    freezing_threshold[CanisterId] = New_freezing_threshold
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
-    canister_history[CanisterId] = {
-      total_num_changes = 1
-      recent_changes = {
-        timestamp_nanos = CurrentTime
-        canister_version = 0
-        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
-        details = Creation {
-          controllers = New_controllers
-        }
-      }
-    }
+    canister_history[CanisterId] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3568,10 +3592,56 @@ M.callee = ic_principal
 M.method_name = 'update_settings'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
+
+freezing_limit(
+  New_compute_allocation,
+  New_memory_allocation,
+  New_freezing_threshold,
+  memory_usage(
+    S.canisters[A.canister_id].wasm_state,
+    S.canisters[A.canister_id].raw_module,
+    New_canister_history
+  ),
+  S.canister_subnet[A.canister_id].subnet_size,
+) ≤ S.balances[A.canister_id]
+if A.settings.memory_allocation > 0:
+  memory_usage(
+    S.canisters[A.canister_id].wasm_state,
+    S.canisters[A.canister_id].raw_module,
+    New_canister_history
+  ) ≤ A.settings.memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = S.compute_allocation[A.canister_id]
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = S.memory_allocation[A.canister_id]
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = S.freezing_threshold[A.canister_id]
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
 }
+if A.settings.controllers is not null:
+  New_canister_history = {
+    total_num_changes = N + 1;
+    recent_changes = H · {
+        timestamp_nanos = S.time[A.canister_id];
+        canister_version = S.canister_version[A.canister_id] + 1;
+        origin = change_origin(M.caller, A.sender_canister_version, M.origin);
+        details = ControllersChange {
+          controllers = A.settings.controllers;
+        };
+      };
+  }
+else:
+  New_canister_history = S.canister_history[A.canister_id]
 
 ```
 
@@ -3582,23 +3652,10 @@ State after
 S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
-      canister_history[A.canister_id] = {
-        total_num_changes = N + 1;
-        recent_changes = H · {
-            timestamp_nanos = S.time[A.canister_id];
-            canister_version = S.canister_version[A.canister_id] + 1;
-            origin = change_origin(M.caller, A.sender_canister_version, M.origin);
-            details = ControllersChange {
-              controllers = A.settings.controllers;
-            };
-          };
-      }
-    if A.settings.compute_allocation is not null:
-      compute_allocation[A.canister_id] = A.settings.compute_allocation
-    if A.settings.memory_allocation is not null:
-      memory_allocation[A.canister_id] = A.settings.memory_allocation
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[A.canister_id] = A.settings.freezing_threshold
+      canister_history[A.canister_id] = New_canister_history
+    compute_allocation[A.canister_id] = New_compute_allocation
+    memory_allocation[A.canister_id] = New_memory_allocation
+    freezing_threshold[A.canister_id] = New_freezing_threshold
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3723,6 +3780,11 @@ Public_custom_sections = parse_public_custom_sections(A.wasm_module);
 Private_custom_sections = parse_private_custom_sections(A.wasm_module);
 (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
 M.caller ∈ S.controllers[A.canister_id]
+
+dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
+dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
 Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
@@ -3744,6 +3806,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
+
 freezing_limit(
   S.compute_allocation[A.canister_id],
   S.memory_allocation[A.canister_id],
@@ -3755,9 +3818,12 @@ freezing_limit(
   ),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + Cycles_used ≤ S.balances[A.canister_id]
-dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
-dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage(
+    New_state,
+    A.wasm_module,
+    New_canister_history
+  ) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -3826,6 +3892,11 @@ Private_custom_sections = parse_private_custom_sections(A.wasm_module)
 A.mode = upgrade
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
+
+dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
+dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
 Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
@@ -3854,6 +3925,7 @@ Env2 = Env with {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
+
 freezing_limit(
   S.compute_allocation[A.canister_id],
   S.memory_allocation[A.canister_id],
@@ -3865,9 +3937,13 @@ freezing_limit(
   ),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
-dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
-dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage(
+    New_state,
+    A.wasm_module,
+    New_canister_history
+  ) ≤ S.memory_allocation[A.canister_id]
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
@@ -4299,11 +4375,60 @@ M.method_name = 'provisional_create_canister_with_cycles'
 M.arg = candid(A)
 is_system_assigned CanisterId
 CanisterId ∉ dom(S.canisters)
-A.specified_id ∉ dom(S.canisters)
+if A.specified_id is not null:
+  A.specified_id ∉ dom(S.canisters)
+  canister_id = A.specified_id
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
   New_controllers = [M.caller]
+
+freezing_limit(
+  New_compute_allocation,
+  New_memory_allocation,
+  New_freezing_threshold,
+  memory_usage(
+    null,
+    null,
+    New_canister_history
+  ),
+  SubnetSize
+) ≤ New_balance
+if A.settings.memory_allocation > 0:
+  memory_usage(
+    null,
+    null,
+    New_canister_history
+  ) ≤ A.settings.memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = 0
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = 0
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = 2592000
+if A.amount is not null:
+  New_balance = A.amount
+else:
+  New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE
+
+New_canister_history {
+  total_num_changes = 1
+  recent_changes = {
+    timestamp_nanos = CurrentTime
+    canister_version = 0
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin)
+    details = Creation {
+      controllers = New_controllers
+    }
+  }
+}
 
 ```
 
@@ -4312,42 +4437,16 @@ State after
 ```html
 
 S with
-    if A.specified_id is not null:
-      canister_id = A.specified_id
-    else:
-      canister_id = CanisterId
     canisters[canister_id] = EmptyCanister
     time[canister_id] = CurrentTime
     global_timer[canister_id] = 0
     controllers[canister_id] = New_controllers
-    if A.settings.compute_allocation is not null:
-      compute_allocation[canister_id] = A.settings.compute_allocation
-    else:
-      compute_allocation[canister_id] = 0
-    if A.settings.memory_allocation is not null:
-      memory_allocation[canister_id] = A.settings.memory_allocation
-    else:
-      memory_allocation[canister_id] = 0
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[canister_id] = A.settings.freezing_threshold
-    else:
-      freezing_threshold[canister_id] = 2592000
-    if A.amount is not null:
-      balances[canister_id] = A.amount
-    else:
-      balances[canister_id] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
+    compute_allocation[canister_id] = New_compute_allocation
+    memory_allocation[canister_id] = New_memory_allocation
+    freezing_threshold[canister_id] = New_freezing_threshold
+    balances[canister_id] = New_balance
     certified_data[canister_id] = ""
-    canister_history[canister_id] = {
-      total_num_changes = 1
-      recent_changes = {
-        timestamp_nanos = CurrentTime
-        canister_version = 0
-        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
-        details = Creation {
-          controllers = New_controllers
-        }
-      }
-    }
+    canister_history[canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
