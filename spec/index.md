@@ -3500,12 +3500,12 @@ if New_compute_allocation > 0 or New_memory_allocation > 0:
     ),
     SubnetSize,
   ) ≤ M.transferred_cycles
-if A.settings.memory_allocation > 0:
+if New_memory_allocation > 0:
   memory_usage(
     null,
     null,
     New_canister_history
-  ) ≤ A.settings.memory_allocation
+  ) ≤ New_memory_allocation
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
@@ -3607,12 +3607,12 @@ if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_al
     ),
     S.canister_subnet[A.canister_id].subnet_size,
   ) ≤ S.balances[A.canister_id]
-if A.settings.memory_allocation > 0:
+if New_memory_allocation > 0:
   memory_usage(
     S.canisters[A.canister_id].wasm_state,
     S.canisters[A.canister_id].raw_module,
     New_canister_history
-  ) ≤ A.settings.memory_allocation
+  ) ≤ New_memory_allocation
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
@@ -4379,7 +4379,6 @@ M.arg = candid(A)
 is_system_assigned CanisterId
 CanisterId ∉ dom(S.canisters)
 if A.specified_id is not null:
-  A.specified_id ∉ dom(S.canisters)
   Canister_id = A.specified_id
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
@@ -4398,12 +4397,12 @@ if New_compute_allocation > 0 or New_memory_allocation > 0:
     ),
     SubnetSize
   ) ≤ New_balance
-if A.settings.memory_allocation > 0:
+if New_memory_allocation > 0:
   memory_usage(
     null,
     null,
     New_canister_history
-  ) ≤ A.settings.memory_allocation
+  ) ≤ New_memory_allocation
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
