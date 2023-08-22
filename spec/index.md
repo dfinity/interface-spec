@@ -667,7 +667,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -4740,6 +4740,9 @@ The predicate `may_read_path` is defined as follows, implementing the access con
     may_read_path(S, _, ["subnet", sid]) = True
     may_read_path(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["subnet", sid, "node"]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
     may_read_path(S, _, ["request_status", Rid]) =
     may_read_path(S, _, ["request_status", Rid, "status"]) =
     may_read_path(S, _, ["request_status", Rid, "reply"]) =
