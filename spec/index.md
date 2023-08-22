@@ -1834,7 +1834,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 
 ### IC method `upload_chunk` {#ic-upload_chunk}
-Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MB. The size of the chunk store is bounded: currently it can hold up to 40chunks. 
+Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MB. The size of the chunk store is bounded: currently it can hold up to 40 chunks. 
 
 ### IC method `delete_chunks` {#ic-delete_chunks}
 Canister controllers can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks that correspond to hashes in the provided list.   
@@ -1870,7 +1870,7 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 
 -   If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
--   If the `wasm_module` starts with the byte sequence `0xd9 0xd9 0xf7 `, the system parses `wasm_module` as a self describing CBOR encoding of a map that specifies: an optional canister identifier `storage_canister` and a list of hash values, `[h0,h1,...,hk]`. In this case, the system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes and checks that `h0` is the hash of the resulting blob. The caller must be the controller of the `storage_canister`.  If the lookup succeeds, then the system interprets the blob as a vanilla wasm module (or a gzipped one) per the rules above.
+-   If the `wasm_module` starts with the byte sequence `[0xd9, 0xd9, 0xf7]`, the system parses `wasm_module` as a self describing CBOR encoding of a map that specifies: an optional canister identifier `storage_canister` and a list of hash values, `[h0,h1,...,hk]`. In this case, the system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes and checks that `h0` is the hash of the resulting blob. The caller must be a controller of the `storage_canister`.  If the lookup succeeds, then the system interprets the blob as a vanilla wasm module (or a gzipped one) per the rules above.
 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
@@ -3629,7 +3629,7 @@ S with
 
 #### IC Management Canister: Upload Chunk
 
-The controller of a canister, or the canister itself can upload chunks to the chunk store of that canister.
+A controller of a canister, or the canister itself can upload chunks to the chunk store of that canister.
 
 Conditions
 
