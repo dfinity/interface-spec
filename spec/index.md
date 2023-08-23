@@ -3927,15 +3927,6 @@ freezing_limit(
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history),
   S.canister_subnet[A.canister_id].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
-freezing_limit(
-  S.compute_allocation[A.canister_id],
-  S.memory_allocation[A.canister_id],
-  S.freezing_threshold[A.canister_id],
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
-  S.canister_subnet[A.canister_id].subnet_size,
 ) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
@@ -5652,8 +5643,8 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.balance - amount < freezing_limit(
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -5668,8 +5659,8 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.balance - amount < freezing_limit(
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -5685,8 +5676,8 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.balance < freezing_limit(
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
         es.params.sysenv.subnet_size,
       ) or system_cannot_do_this_call_now()
       then
