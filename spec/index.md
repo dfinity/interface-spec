@@ -2921,8 +2921,8 @@ is_effective_canister_id(E.content, ECID)
     balance = S.balances[E.content.canister_id];
     compute_allocation = S.compute_allocation[E.content.canister_id];
     memory_allocation = S.memory_allocation[E.content.canister_id];
-    memory_usage = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[E.content.canister_id]);
+    memory_usage_raw_module = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module);
+    memory_usage_canister_history = memory_usage_canister_history(S.canister_history[E.content.canister_id]);
     freezing_threshold = S.freezing_threshold[E.content.canister_id];
     subnet_size = S.canister_subnet[E.content.canister_id].subnet_size;
     certificate = NoCertificate;
@@ -3234,8 +3234,8 @@ Env = {
   balance = S.balances[M.receiver]
   compute_allocation = S.compute_allocation[M.receiver];
   memory_allocation = S.memory_allocation[M.receiver];
-  memory_usage = memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-    memory_usage_canister_history(S.canister_history[M.receiver]);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[M.receiver].raw_module);
+  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[M.receiver]);
   freezing_threshold = S.freezing_threshold[M.receiver];
   subnet_size = S.canister_subnet[M.receiver].subnet_size;
   certificate = NoCertificate;
@@ -3779,8 +3779,8 @@ Env = {
   balance = S.balances[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
-  memory_usage = memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
+  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
@@ -3891,8 +3891,8 @@ Env = {
   balance = S.balances[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
-  memory_usage = memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
+  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
@@ -3904,7 +3904,8 @@ Env1 = Env with {
 }
 Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
 Env2 = Env with {
-  memory_usage = memory_usage_raw_module(A.wasm_module) + memory_usage_canister_history(New_canister_history)
+  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
+  memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
 }
@@ -4791,8 +4792,8 @@ We define an auxiliary method that handles calls from composite query methods by
                   balance = S.balances[Canister_id];
                   compute_allocation = S.compute_allocation[Canister_id];
                   memory_allocation = S.memory_allocation[Canister_id];
-                  memory_usage = memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-                    memory_usage_canister_history(S.canister_history[Canister_id]),
+                  memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
+                  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
                   freezing_threshold = S.freezing_threshold[Canister_id];
                   subnet_size = S.canister_subnet[Canister_id].subnet_size;
                   certificate = Cert;
@@ -5643,7 +5644,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -5659,7 +5660,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -5676,7 +5677,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
         es.params.sysenv.subnet_size,
       ) or system_cannot_do_this_call_now()
       then
