@@ -5016,7 +5016,6 @@ We can model the execution of WebAssembly functions as stateful functions that h
     }
     ExecutionState = {
       wasm_state : WasmState;
-      memory_usage : Nat;
       params : Params;
       response : NoResponse | Response;
       cycles_accepted : Nat;
