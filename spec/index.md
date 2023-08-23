@@ -2443,7 +2443,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           balance : Nat;
           compute_allocation : Nat;
           memory_allocation : Nat;
-          memory_usage : Nat;
+          memory_usage_raw_module : Nat;
+          memory_usage_canister_history : Nat;
           freezing_threshold : Nat;
           subnet_size : Nat;
           certificate : NoCertificate | Blob;
