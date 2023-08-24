@@ -1838,13 +1838,13 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 
 ### IC method `upload_chunk` {#ic-upload_chunk}
-Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MiB. The size of the chunk store is bounded: currently it can hold up to `CHUNK_STORE_SIZE` chunks. 
+Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MiB. The size of the chunk store is bounded: currently it can hold up to `CHUNK_STORE_SIZE` chunks. 
 
 ### IC method `delete_chunks` {#ic-delete_chunks}
-Canister controllers can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks whose hashes are contained in the provided list.   
+Canister controllers (and the canister itself) can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks whose hashes are contained in the provided list.   
 
 ### IC method `clear_store` {#ic-clear_store}
-Canister controllers can clear the entire chunk storage of a canister. 
+Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
 
 ### IC method `install_code` {#ic-install_code}
 
@@ -3643,9 +3643,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'upload_chunk'
 M.arg = candid(A)
-chunk_store_size = |dom(S.chunk_store[A.canister_id])|
-chunk_store_size < CHUNK_STORE_SIZE and (M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id})
-hash = SHA-256(A.chunk)
+|dom(S.chunk_store[A.canister_id]) ∪ {SHA-256(A.chunk}| <= CHUNK_STORE_SI
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 
 
@@ -3656,8 +3654,7 @@ State after
 ```html
 
 S with
-    chunk_store[A.canister_id](hash') = chunk_store[A.canister_id] if hash'≠ hash
-    chunk_store[A.canister_id](hash) = A.chunk
+    chunk_store[A.canister_id](SHA-256(A.chunk)) = A.chunk
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3704,8 +3701,6 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'delete_chunks'
 M.arg = candid(A)
-chunk_store'[hash] = chunk_store[A.canister_id][hash] if hash ∉ A.hash_list
-chunk_store'[hash] = null if hash ∈ A.hash_list
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 
 ```
@@ -3734,7 +3729,6 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'stored_chunks'
 M.arg = candid(A)
-stored_chunks = {hash | chunk_store[A.canister_id][hash] ≠ null}
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 
 ```
@@ -3744,11 +3738,10 @@ State after
 ```html
 
 S with
-    chunk_store[A.canister_id] = chunk_store'
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(stored_chunks)
+        response = candid(dom(S.chunk_store[A.canister_id]))
       }
 
 ```
