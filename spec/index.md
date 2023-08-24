@@ -3643,7 +3643,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.method_name = 'upload_chunk'
 M.arg = candid(A)
-chunk_store_size = |{x | chunk_store[A.canister_id][x] not null}|
+chunk_store_size = |dom(S.chunk_store[A.canister_id])|
 chunk_store_size < CHUNK_STORE_SIZE and (M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id})
 hash = SHA-256(A.chunk)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
