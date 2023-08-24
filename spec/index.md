@@ -2163,7 +2163,9 @@ A certificate is validated with regard to the root of trust by the following alg
 
     verify_cert(cert) =
       let root_hash = reconstruct(cert.tree)
-      let der_key = check_delegation(cert.delegation) // see section Delegations below
+      // see section Delegations below
+      if check_delegation(cert.delegation) = false then return false
+      let der_key = delegation_key(cert.delegation)
       bls_key = extract_der(der_key)
       verify_bls_signature(bls_key, cert.signature, domain_sep("ic-state-root") · root_hash)
 
@@ -2260,13 +2262,15 @@ The nested certificate *typically* does not itself again contain a delegation, a
        certificate : Certificate;
      }
 
-A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
+A chain of delegations is verified using the following algorithm:
 
-    check_delegation(NoDelegation) : public_bls_key =
-      return root_public_key
-    check_delegation(Delegation d) : public_bls_key =
-      verify_cert(d.certificate)
-      return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
+    check_delegation(NoDelegation) = true
+    check_delegation(Delegation d) = verify_cert(d.certificate)
+
+The delegation key (a DER-encoded BLS key) is computed by the following algorithm:
+
+    delegation_key(NoDelegation) : public_bls_key = root_public_key
+    delegation_key(Delegation d) : public_bls_key = lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
 
 where `root_public_key` is the a priori known root key.
 
