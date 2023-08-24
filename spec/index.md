@@ -1841,7 +1841,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MB. The size of the chunk store is bounded: currently it can hold up to `CHUNK_STORE_SIZE` chunks. 
 
 ### IC method `delete_chunks` {#ic-delete_chunks}
-Canister controllers can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks that correspond to hashes in the provided list.   
+Canister controllers can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks whose hashes are contained in the provided list.   
 
 ### IC method `clear_store` {#ic-clear_store}
 Canister controllers can clear the entire chunk storage of a canister. 
