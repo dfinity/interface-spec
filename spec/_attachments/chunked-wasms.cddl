@@ -4,7 +4,7 @@
 
 
 chunked-wasm = tagged<{
-  ? location : principal
+  ? storage_canister : principal
   list_of_hashes : [* hash]
 }>
 
