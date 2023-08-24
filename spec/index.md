@@ -3715,7 +3715,7 @@ State after
 ```html
 
 S with
-    chunk_store[A.canister_id] = chunk_store'
+    chunk_store[A.canister_id](hash) = (deleted) for all hash ∈ A.hash_list
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
