@@ -2262,7 +2262,7 @@ A chain of delegations is verified using the following algorithm:
     check_delegation(NoDelegation) = true
     check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _
 
-The delegation key (a DER-encoded BLS key) is computed by the following algorithm:
+The delegation key (a BLS key) is computed by the following algorithm:
 
     delegation_key(NoDelegation) : public_bls_key = root_public_key
     delegation_key(Delegation d) : public_bls_key =
