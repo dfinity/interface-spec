@@ -1,6 +1,3 @@
 # IDEs
 .vscode/
 .idea/
-
-# Build and Test Output
-theories/code
