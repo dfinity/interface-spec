@@ -648,7 +648,7 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
--   paths with prefix `/subnet/<subnet_id>/node`. Only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
+-   paths with prefix `/subnet/<subnet_id>/node` which are only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
 
 The returned certificate also always reveals `/time`, even if not explicitly requested.
 
