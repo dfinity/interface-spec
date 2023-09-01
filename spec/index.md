@@ -794,7 +794,7 @@ where `RootSubnetId` is the a priori known principal of the root subnet. Moreove
 
 :::note
 
-This specification leaves it up to the client to decide how recent timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation the client enforces. A reasonable expiry time for timestamps in `R.signatures` and the certificate `Cert` is 5 minutes (analogously to the maximum allowed ingress expiry enforced by the IC mainnet). Delegations require expiry times of at least a week since the IC mainnet refreshes the delegations only after replica upgrades which typically happen once a week.
+This specification leaves it up to the client to define expiry times for the timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation. A reasonable expiry time for timestamps in `R.signatures` and the certificate `Cert` is 5 minutes (analogously to the maximum allowed ingress expiry enforced by the IC mainnet). Delegations require expiry times of at least a week since the IC mainnet refreshes the delegations only after replica upgrades which typically happen once a week.
 
 :::
 
