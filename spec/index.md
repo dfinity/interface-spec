@@ -445,7 +445,7 @@ The state tree contains information about the topology of the Internet Computer.
      
      - `num_canisters` (`nat64`): The number of canisters on this subnet.
      - `total_canister_state` (`nat64`): The total size of the state in bytes taken by canisters on this subnet since this subnet was created.
-     - `total_consumed_cycles` (`map`): The total number of cycles consumed by canisters on this subnet since this subnet was created. It's a map of two values, a low and high part, both of type `nat64`.
+     - `total_consumed_cycles` (`map`): The total number of cycles consumed by canisters on this subnet since this subnet was created. It's a map of two values, a low part of type `nat64` and a high part of type `opt nat64`.
      - `num_update_transactions` (`nat64`): The total number of transactions processed on this subnet since this subnet was created.
        
 
