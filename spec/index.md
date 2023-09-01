@@ -729,7 +729,7 @@ In order to make a query call to a canister, the user makes a POST request to `/
 
 -   `arg` (`blob`): Argument to pass to the canister method.
 
-Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
+Canister methods that do not change the canister state (except for cycle balance changes due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
 If the query call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
