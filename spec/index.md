@@ -635,6 +635,7 @@ In order to read parts of the [The system state tree](#state-tree), the user mak
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
 
 -   `paths` (sequence of paths): A list of at most 1000 paths, where a path is itself a sequence of at most 127 blobs.
+
 The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map with the following fields:
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
@@ -654,13 +655,13 @@ canister developers that aim at keeping data confidential are advised to add a s
 
 :::
 
-All requested paths must have one of the following paths as prefix:
+All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
 
--   `/request_status/<request_id>`. Can be requested if no path with such a prefix exists in the state tree or
+-   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
     -   the sender of the original request referenced by `<request_id>` is the same as the sender of the read state request and
 
@@ -1835,7 +1836,7 @@ Only controllers of the canister can install code.
 
 -   If `mode = install`, the canister must be empty before. This will instantiate the canister module and invoke its `canister_init` method (if present), as explained in Section "[Canister initialization](#system-api-init)", passing the `arg` to the canister.
 
--   If `mode = reinstall`, if the canister was not empty, its existing code and state is removed before proceeding as for `mode = install`.
+-   If `mode = reinstall`, if the canister was not empty, its existing code and state (including stable memory) is removed before proceeding as for `mode = install`.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
@@ -2194,8 +2195,9 @@ A certificate is validated with regard to the root of trust by the following alg
 
     verify_cert(cert) =
       let root_hash = reconstruct(cert.tree)
-      let der_key = check_delegation(cert.delegation) // see section Delegations below
-      bls_key = extract_der(der_key)
+      // see section Delegations below
+      if check_delegation(cert.delegation) = false then return false
+      let bls_key = delegation_key(cert.delegation)
       verify_bls_signature(bls_key, cert.signature, domain_sep("ic-state-root") · root_hash)
 
     reconstruct(Empty)       = H(domain_sep("ic-hashtree-empty"))
@@ -2210,11 +2212,7 @@ where `H` is the SHA-256 hash function,
 
     verify_bls_signature : PublicKey -> Signature -> Blob -> Bool
 
-is the [BLS signature verification function](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#section-4), ciphersuite BLS\_SIG\_BLS12381G1\_XMD:SHA-256\_SSWU\_RO\_NUL\_. See that document also for details on the encoding of BLS public keys and signatures, and
-
-    extract_der : Blob -> Blob
-
-implements DER decoding of the public key, following [RFC5480](https://datatracker.ietf.org/doc/html/rfc5480) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+is the [BLS signature verification function](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#section-4), ciphersuite BLS\_SIG\_BLS12381G1\_XMD:SHA-256\_SSWU\_RO\_NUL\_. See that document also for details on the encoding of BLS public keys and signatures.
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
@@ -2291,15 +2289,23 @@ The nested certificate *typically* does not itself again contain a delegation, a
        certificate : Certificate;
      }
 
-A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
+A chain of delegations is verified using the following algorithm:
 
-    check_delegation(NoDelegation) : public_bls_key =
-      return root_public_key
-    check_delegation(Delegation d) : public_bls_key =
-      verify_cert(d.certificate)
-      return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
+    check_delegation(NoDelegation) = true
+    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _
 
-where `root_public_key` is the a priori known root key.
+The delegation key (a BLS key) is computed by the following algorithm:
+
+    delegation_key(NoDelegation) : public_bls_key = root_public_key
+    delegation_key(Delegation d) : public_bls_key =
+      match lookup(["subnet",d.subnet_id,"public_key"],d.certificate) with
+        Found der_key -> extract_der(der_key)
+
+where `root_public_key` is the a priori known root key and
+
+    extract_der : Blob -> Blob
+
+implements DER decoding of the public key, following [RFC5480](https://datatracker.ietf.org/doc/html/rfc5480) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
 
 Delegations are *scoped*, i.e., they indicate which set of canister principals the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in [Subnet information](#state-tree-subnet). The various applications of certificates describe if and how the subnet scope comes into play.
 
@@ -4698,13 +4704,21 @@ A record with
 
 The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path(S, _, ["time"] · _) = True
-    may_read_path(S, _, ["subnet"] · _) = True
-    may_read_path(S, _, ["request_status", Rid] · _) =
+    may_read_path(S, _, ["time"]) = True
+    may_read_path(S, _, ["subnet"]) = True
+    may_read_path(S, _, ["subnet", sid]) = True
+    may_read_path(S, _, ["subnet", sid, "public_key"]) = True
+    may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["request_status", Rid]) =
+    may_read_path(S, _, ["request_status", Rid, "status"]) =
+    may_read_path(S, _, ["request_status", Rid, "reply"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_code"]) =
+    may_read_path(S, _, ["request_status", Rid, "reject_message"]) =
+    may_read_path(S, _, ["request_status", Rid, "error_code"]) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
-    may_read_path(S, _, ["canister", cid, "module_hash"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"] · _) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name] · _) = cid == ECID ∧ UTF8(name) ∧
+    may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
+    may_read_path(S, _, ["canister", cid, "metadata", name]) = cid == ECID ∧ UTF8(name) ∧
       (cid ∉ dom(S.canisters[cid]) ∨
        S.canisters[cid] = EmptyCanister ∨
        name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
@@ -4738,7 +4752,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
     request_status_tree(Processing) =
       { "status": "processing" }
     request_status_tree(Rejected (code, msg)) =
-      { "status": "rejected"; "reject_code": code; "reject_message": msg, error_code: <implementation-specific>}
+      { "status": "rejected"; "reject_code": code; "reject_message": msg; "error_code": <implementation-specific>}
     request_status_tree(Replied arg) =
       { "status": "replied"; "reply": arg }
     request_status_tree(Done) =
