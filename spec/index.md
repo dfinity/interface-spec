@@ -2116,6 +2116,12 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `metrics` {#ic-metrics}
 
+:::note
+
+The metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
 Given a subnet ID as input, this method returns a collection of metrics for the given subnet.
 
 A single metric entry is of an enumeration type with a single variant (in the future, more variants might be added):
@@ -4152,6 +4158,12 @@ S with
 ```
 
 #### IC Management Canister: Metrics
+
+:::note
+
+The metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
 
 The management canister returns metrics for a given subnet. The definition of the metrics values
 is not captured in this formal semantics.
