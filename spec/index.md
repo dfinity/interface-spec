@@ -4741,7 +4741,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk; "canister_ranges" : subnet_ranges; "metrics" : <implementation-specific> } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
