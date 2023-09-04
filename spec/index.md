@@ -669,7 +669,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -4683,6 +4683,7 @@ The predicate `may_read_path_for_canister` is defined as follows, implementing t
     may_read_path_for_canister(S, _, ["subnet", sid]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "metrics"]) = True
     may_read_path_for_canister(S, _, ["request_status", Rid]) =
     may_read_path_for_canister(S, _, ["request_status", Rid, "status"]) =
     may_read_path_for_canister(S, _, ["request_status", Rid, "reply"]) =
@@ -4731,6 +4732,7 @@ The predicate `may_read_path_for_subnet` is defined as follows, implementing the
     may_read_path_for_subnet(S, _, ["subnet", sid]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = True
     may_read_path_for_subnet(S, _, _) = False
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
