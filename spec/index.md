@@ -2084,7 +2084,18 @@ The recommended workflow is to issue a request with the desired number of confir
 ### IC method `bitcoin_get_utxos_query` {#ic-bitcoin_get_utxos_query}
 
 This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos), but exposed as a query.
-Note that the response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
 
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
@@ -2099,7 +2110,18 @@ Given an address and the optional `min_confirmations` parameter, `bitcoin_get_ba
 ### IC method `bitcoin_get_balance_query` {#ic-bitcoin_get_balance_query}
 
 This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance), but exposed as a query.
-Note that the response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
