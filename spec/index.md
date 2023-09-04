@@ -2122,13 +2122,15 @@ The metrics management canister API is considered EXPERIMENTAL. Canister develop
 
 :::
 
-Given a subnet ID as input, this method returns a collection of metrics for the given subnet.
+Given a subnet ID as input, this method returns a collection of metrics for the given subnet (field `metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics are sampled.
 
 A single metric entry is of an enumeration type with a single variant (in the future, more variants might be added):
 
-- `node_metrics`: provides metrics for a node characterized by its principal (field `node_id`), for a period of time characterized by start and end timestamps in nanoseconds since 1970-01-01 (fields `start_timestamp_nanos` and `end_timestamp_nanos`), and the actual metrics values:
+- `node_metrics`: provides metrics for a node characterized by its principal (field `node_id`) and the actual metrics values:
 
-  - `num_proposed_blocks` (`nat`): the number of blocks proposed by this node.
+  - `num_blocks` (`nat64`): the number of blocks proposed by this node;
+
+  - `num_block_failures` (`nat64`): the number of failed block proposals by this node.
 
 ## Certification {#certification}
 

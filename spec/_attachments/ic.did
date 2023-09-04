@@ -114,9 +114,8 @@ type millisatoshi_per_byte = nat64;
 type metrics = variant {
   node_metrics : record {
     node_id : principal;
-    start_timestamp_nanos : nat64;
-    end_timestamp_nanos : nat64;
-    num_proposed_blocks : nat;
+    num_blocks : nat64;
+    num_block_failures : nat64;
   }
 };
 
@@ -197,6 +196,7 @@ service ic : {
   metrics : (record {
     subnet_id : principal;
   }) -> (record {
+    timestamp_nanos : nat64;
     metrics : vec metrics;
   });
 
