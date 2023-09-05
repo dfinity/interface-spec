@@ -114,8 +114,8 @@ type millisatoshi_per_byte = nat64;
 type metrics = variant {
   node_metrics : record {
     node_id : principal;
-    num_blocks : nat64;
-    num_block_failures : nat64;
+    num_blocks_total : nat64;
+    num_block_failures_total : nat64;
   }
 };
 

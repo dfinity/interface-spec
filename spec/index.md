@@ -2128,9 +2128,9 @@ A single metric entry is of an enumeration type with a single variant (in the fu
 
 - `node_metrics`: provides metrics for a node characterized by its principal (field `node_id`) and the actual metrics values:
 
-  - `num_blocks` (`nat64`): the number of blocks proposed by this node;
+  - `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
 
-  - `num_block_failures` (`nat64`): the number of failed block proposals by this node.
+  - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
 ## Certification {#certification}
 
