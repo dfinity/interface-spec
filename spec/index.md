@@ -2046,6 +2046,24 @@ Any user can top-up any canister this way.
 
 This method is only available in local development instances.
 
+### IC method `node_metrics` {#ic-node-metrics}
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
+
+A single metric entry is a record with the following fields:
+
+- `node_id` (`principal`): the principal characterizing a node;
+
+- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+
+- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
+
 ## The IC Bitcoin API {#ic-bitcoin-api}
 
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/gas-cost) for information on pricing for the Bitcoin mainnet and testnet.
@@ -2113,24 +2131,6 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
-
-### IC method `node_metrics` {#ic-node-metrics}
-
-:::note
-
-The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
-Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
-
-A single metric entry is a record with the following fields:
-
-- `node_id` (`principal`): the principal characterizing a node;
-
-- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
-
-- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
 ## Certification {#certification}
 
