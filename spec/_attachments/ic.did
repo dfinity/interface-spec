@@ -111,12 +111,10 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
-type node_metrics = variant {
-  node_metrics : record {
+type node_metrics = record {
     node_id : principal;
     num_blocks_total : nat64;
     num_block_failures_total : nat64;
-  }
 };
 
 service ic : {
