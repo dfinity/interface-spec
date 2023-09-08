@@ -193,7 +193,7 @@ service ic : {
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
 
   // metrics interface
-  metrics : (record {
+  node_metrics : (record {
     subnet_id : principal;
     requested_timestamp_nanos: nat64;
   }) -> (record {
