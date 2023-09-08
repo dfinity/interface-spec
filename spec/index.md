@@ -2026,6 +2026,24 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 :::
 
+### IC method `node_metrics` {#ic-node-metrics}
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
+
+A single metric entry is a record with the following fields:
+
+- `node_id` (`principal`): the principal characterizing a node;
+
+- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+
+- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
+
 ### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
@@ -2045,24 +2063,6 @@ Cycles added to this call via `ic0.call_cycles_add128` are returned to the calle
 Any user can top-up any canister this way.
 
 This method is only available in local development instances.
-
-### IC method `node_metrics` {#ic-node-metrics}
-
-:::note
-
-The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
-
-:::
-
-Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
-
-A single metric entry is a record with the following fields:
-
-- `node_id` (`principal`): the principal characterizing a node;
-
-- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
-
-- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
 
