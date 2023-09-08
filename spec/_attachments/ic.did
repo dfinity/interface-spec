@@ -198,7 +198,7 @@ service ic : {
     requested_timestamp_nanos: nat64;
   }) -> (record {
     timestamp_nanos : nat64;
-    metrics : vec metrics;
+    node_metrics : vec node_metrics;
   });
 
   // provisional interfaces for the pre-ledger world
