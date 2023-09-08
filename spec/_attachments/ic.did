@@ -111,7 +111,7 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
-type metrics = variant {
+type node_metrics = variant {
   node_metrics : record {
     node_id : principal;
     num_blocks_total : nat64;
