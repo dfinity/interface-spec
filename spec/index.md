@@ -2114,24 +2114,23 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-### IC method `metrics` {#ic-metrics}
+### IC method `node_metrics` {#ic-node-metrics}
 
 :::note
 
-The metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
 :::
 
-Given a subnet ID as input, this method returns a collection of metrics for the given subnet (field `metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics are sampled.
-This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which the metrics are available.
+Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
 
-A single metric entry is of an enumeration type with a single variant (in the future, more variants might be added):
+A single metric entry is a record with the following fields:
 
-- `node_metrics`: provides metrics for a node characterized by its principal (field `node_id`) and the actual metrics values:
+- `node_id` (`principal`): the principal characterizing a node;
 
-  - `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
 
-  - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
+- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
 ## Certification {#certification}
 
@@ -4165,15 +4164,15 @@ S with
 
 ```
 
-#### IC Management Canister: Metrics
+#### IC Management Canister: Node Metrics
 
 :::note
 
-The metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
 :::
 
-The management canister returns metrics for a given subnet. The definition of the metrics values
+The management canister returns metrics for all nodes on a given subnet. The definition of the metrics values
 is not captured in this formal semantics.
 
 Conditions
@@ -4183,7 +4182,7 @@ Conditions
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'metrics'
+M.method_name = 'node_metrics'
 M.arg = candid(A)
 R = <implementation-specific>
 
