@@ -2123,6 +2123,7 @@ The metrics management canister API is considered EXPERIMENTAL. Canister develop
 :::
 
 Given a subnet ID as input, this method returns a collection of metrics for the given subnet (field `metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics are sampled.
+This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which the metrics are available.
 
 A single metric entry is of an enumeration type with a single variant (in the future, more variants might be added):
 
