@@ -194,7 +194,7 @@ service ic : {
   node_metrics : (record {
     subnet_id : principal;
     requested_timestamp_nanos: nat64;
-  }) -> (record {
+  }) -> (vec record {
     timestamp_nanos : nat64;
     node_metrics : vec node_metrics;
   });

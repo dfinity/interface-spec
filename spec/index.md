@@ -2034,7 +2034,7 @@ The node metrics management canister API is considered EXPERIMENTAL. Canister de
 
 :::
 
-Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and a timestamp provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. This timestamp is the earliest timestamp after the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
+Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and timestamps provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. The returned timestamps are all timestamps after (and including) the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
 
 A single metric entry is a record with the following fields:
 
