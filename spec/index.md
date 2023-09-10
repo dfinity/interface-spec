@@ -638,7 +638,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 ### Request: Read state {#http-read-state}
 
-In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific, i.e., when requesting paths with the prefix `/time` or `/subnet`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific, i.e., when requesting paths with the prefix `/time` or `/subnet`, and the subnet form must be used when requesting paths of the form `/subnet/<subnet_id>/metrics`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `read_state`
 
@@ -4688,7 +4688,6 @@ The predicate `may_read_path_for_canister` is defined as follows, implementing t
     may_read_path_for_canister(S, _, ["subnet", sid]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "canister_ranges"]) = True
-    may_read_path_for_canister(S, _, ["subnet", sid, "metrics"]) = True
     may_read_path_for_canister(S, _, ["request_status", Rid]) =
     may_read_path_for_canister(S, _, ["request_status", Rid, "status"]) =
     may_read_path_for_canister(S, _, ["request_status", Rid, "reply"]) =
