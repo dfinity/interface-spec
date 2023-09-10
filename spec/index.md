@@ -2222,8 +2222,9 @@ A certificate is validated with regard to the root of trust by the following alg
 
     verify_cert(cert) =
       let root_hash = reconstruct(cert.tree)
-      let der_key = check_delegation(cert.delegation) // see section Delegations below
-      bls_key = extract_der(der_key)
+      // see section Delegations below
+      if check_delegation(cert.delegation) = false then return false
+      let bls_key = delegation_key(cert.delegation)
       verify_bls_signature(bls_key, cert.signature, domain_sep("ic-state-root") · root_hash)
 
     reconstruct(Empty)       = H(domain_sep("ic-hashtree-empty"))
@@ -2238,11 +2239,7 @@ where `H` is the SHA-256 hash function,
 
     verify_bls_signature : PublicKey -> Signature -> Blob -> Bool
 
-is the [BLS signature verification function](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#section-4), ciphersuite BLS\_SIG\_BLS12381G1\_XMD:SHA-256\_SSWU\_RO\_NUL\_. See that document also for details on the encoding of BLS public keys and signatures, and
-
-    extract_der : Blob -> Blob
-
-implements DER decoding of the public key, following [RFC5480](https://datatracker.ietf.org/doc/html/rfc5480) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
+is the [BLS signature verification function](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#section-4), ciphersuite BLS\_SIG\_BLS12381G1\_XMD:SHA-256\_SSWU\_RO\_NUL\_. See that document also for details on the encoding of BLS public keys and signatures.
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
@@ -2319,15 +2316,23 @@ The nested certificate *typically* does not itself again contain a delegation, a
        certificate : Certificate;
      }
 
-A chain of delegations is verified using the following algorithm, which also returns the delegated key (a DER-encoded BLS key):
+A chain of delegations is verified using the following algorithm:
 
-    check_delegation(NoDelegation) : public_bls_key =
-      return root_public_key
-    check_delegation(Delegation d) : public_bls_key =
-      verify_cert(d.certificate)
-      return lookup(["subnet",d.subnet_id,"public_key"],d.certificate)
+    check_delegation(NoDelegation) = true
+    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _
 
-where `root_public_key` is the a priori known root key.
+The delegation key (a BLS key) is computed by the following algorithm:
+
+    delegation_key(NoDelegation) : public_bls_key = root_public_key
+    delegation_key(Delegation d) : public_bls_key =
+      match lookup(["subnet",d.subnet_id,"public_key"],d.certificate) with
+        Found der_key -> extract_der(der_key)
+
+where `root_public_key` is the a priori known root key and
+
+    extract_der : Blob -> Blob
+
+implements DER decoding of the public key, following [RFC5480](https://datatracker.ietf.org/doc/html/rfc5480) using OID 1.3.6.1.4.1.44668.5.3.1.2.1 for the algorithm and 1.3.6.1.4.1.44668.5.3.2.1 for the curve.
 
 Delegations are *scoped*, i.e., they indicate which set of canister principals the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in [Subnet information](#state-tree-subnet). The various applications of certificates describe if and how the subnet scope comes into play.
 
