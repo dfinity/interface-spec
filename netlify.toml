@@ -1,3 +1,0 @@
-[build]
-  command = "cd docusaurus && yarn install && yarn build"
-  publish = "docusaurus/build"

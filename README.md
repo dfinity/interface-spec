@@ -1,6 +1,9 @@
 # Internet Computer Reference
 
-This repository contains the source files of the [Interface Spec], which describes the externally visible behaviour of the Internet Computer.
+**A preview of the latest `master` branch can be found [here](https://khsfq-wqaaa-aaaak-qckvq-cai.icp0.io/docs).**
+
+This repository contains the source files of the Interface Spec, which describes the externally visible behaviour of the Internet Computer.
+The language-independent description of this IC interface is available in [ic.did](./spec/_attachments/ic.did).
 
 It used to contain a reference implementation and acceptance test suite; these can now be found at <https://github.com/dfinity/ic-hs>.
 
@@ -30,26 +33,6 @@ The `master` branch contains finished designs, but is not directly scheduled
 for implementation. It lists version version number `∞`. The reference
 implementation on this branch typically does _not_ fully implement the spec. This branch should always be “ahead” of all the release branches.
 
-## Formal Model
-
-We are developing a formal model of Interface Spec in the interactive theorem prover [Isabelle/HOL](https://isabelle.in.tum.de/).
-The formal development is included in the directory `theories/`.
-
-To setup the environment, follow the standard [instructions](https://isabelle.in.tum.de/installation.html) for Isabelle/HOL.
-Additionally, you may want to setup `isabelle` as an alias for the path `bin/isabelle` in your local Isabelle directory.
-
-To browse the formal model, open Isabelle/jEdit:
-```
-isabelle jedit theories/IC.thy
-```
-from the root directory of this repository.
-
-To build the formal model and export Haskell code from the formal model, run
-```
-isabelle build -e -v -D theories/
-```
-in the root directory of this repository. The exported Haskell code can then be found under `theories/code/`.
-
 ## Contributing
 
-This repository accepts external contributions, conditioned on acceptance of the [https://github.com/dfinity/cla/](Contributor Lincense Agreement).
+This repository accepts external contributions, conditioned on acceptance of the [Contributor Lincense Agreement](https://github.com/dfinity/cla/).
