@@ -2100,6 +2100,22 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
+### IC method `bitcoin_get_utxos_query` {#ic-bitcoin_get_utxos_query}
+
+This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos), but exposed as a query.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
+
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
@@ -2109,6 +2125,22 @@ If the address is malformed, the call is rejected.
 The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs for the calculation of the balance to those with at least the provided number of confirmations in the same manner as for the [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) call.
 
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
+
+### IC method `bitcoin_get_balance_query` {#ic-bitcoin_get_balance_query}
+
+This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance), but exposed as a query.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
