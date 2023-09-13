@@ -1173,7 +1173,7 @@ The IC assumes the canister to be fully instantiated if the `canister_init` meth
 
 When a canister is upgraded to a new WebAssembly module, the IC:
 
-1.  Invokes `canister_pre_upgrade` (if present) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
+1.  Invokes `canister_pre_upgrade` (if exported by the current canister code and  `skip_pre_upgrade` is not `opt true` ) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
 
 2.  Instantiates the new module, including the execution of `(start)`, with a fresh WebAssembly state.
 
@@ -1184,6 +1184,14 @@ The stable memory is preserved throughout the process; any other WebAssembly sta
 During these steps, no other entry point of the old or new canister is invoked. The `canister_init` function of the new canister is *not* invoked.
 
 These steps are atomic: If `canister_pre_upgrade` or `canister_post_upgrade` trap, the upgrade has failed, and the canister is reverted to the previous state. Otherwise, the upgrade has succeeded, and the old instance is discarded.
+
+:::note
+The `skip_pre_upgrade` flag can be enabled to skip the execution of the `canister_pre_upgrade` method on the old canister instance.
+The main purpose of this mode is recovery from cases when the `canister_pre_upgrade` hook traps unconditionally preventing the normal upgrade path.
+
+Skipping the pre-upgrade can lead to data loss.
+Use it only as the last resort and only if the stable memory already contains the entire canister state.
+:::
 
 #### Public methods {#system-api-requests}
 
@@ -1893,13 +1901,15 @@ This method installs code into a canister.
 
 Only controllers of the canister can install code.
 
--   If `mode = install`, the canister must be empty before. This will instantiate the canister module and invoke its `canister_init` method (if present), as explained in Section "[Canister initialization](#system-api-init)", passing the `arg` to the canister.
+-   If `mode = variant { install }`, the canister must be empty before. This will instantiate the canister module and invoke its `canister_init` method (if present), as explained in Section "[Canister initialization](#system-api-init)", passing the `arg` to the canister.
 
--   If `mode = reinstall`, if the canister was not empty, its existing code and state (including stable memory) is removed before proceeding as for `mode = install`.
+-   If `mode = variant { reinstall }`, if the canister was not empty, its existing code and state (including stable memory) is removed before proceeding as for `mode = install`.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
--   If `mode = upgrade`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
+-   If `mode =  variant { upgrade }`,  `mode = variant  { upgrade  = opt record { skip_pre_upgrade = null } }`, or `mode = variant { upgrade = opt record { skip_pre_upgrade = opt false} }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
+
+-   If `mode = variant { upgrade = opt record { skip_pre_upgrade = opt true} }`, the system handles this method similarly to the `mode = variant { upgrade }` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -3960,7 +3970,7 @@ S with
 
 #### IC Management Canister: Code upgrade
 
-Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
+Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
 
 Conditions  
 
@@ -3974,7 +3984,6 @@ M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
 Public_custom_sections = parse_public_custom_sections(A.wasm_module)
 Private_custom_sections = parse_private_custom_sections(A.wasm_module)
-A.mode = upgrade
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
 
@@ -3995,11 +4004,23 @@ Env = {
   certificate = NoCertificate;
   status = simple_status(S.canister_status[A.canister_id]);
 }
-Env1 = Env with {
-  global_timer = S.global_timer[A.canister_id];
-  canister_version = S.canister_version[A.canister_id];
-}
-Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+
+(
+  (A.mode = upgrade or A.mode = upgrade {skip_pre_upgrade = false})
+  Env1 = Env with {
+    global_timer = S.global_timer[A.canister_id];
+    canister_version = S.canister_version[A.canister_id];
+  }
+  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+)
+or
+(
+  A.mode = upgrade {skip_pre_upgrade = true}
+  Stable_memory = Old_State.stable_mem
+  New_certified_data = NoCertifiedData
+  Cycles_used = 0
+)
+
 Env2 = Env with {
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
