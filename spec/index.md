@@ -445,6 +445,10 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 :::
 
+-   `/subnet/<subnet_id>/node/<node_id>/public_key` (blob)
+
+    The public key of a node (a DER-encoded Ed25519 signing key, see [RFC 8410](https://tools.ietf.org/html/rfc8410) for reference) with principal `<node_id>` belonging to the subnet with principal `<subnet_id>`.
+
 ### Request status {#state-tree-request-status}
 
 For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
@@ -642,7 +646,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
     If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
 
-The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
+The returned certificate reveals all values whose path has a requested path as a prefix except for
+
+-   paths with prefix `/subnet/<subnet_id>/node` which are only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
+
+The returned certificate also always reveals `/time`, even if not explicitly requested.
 
 :::note
 
@@ -659,7 +667,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -709,9 +717,9 @@ Composite query methods are EXPERIMENTAL and there might be breaking changes of 
 
 :::
 
-In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to make a query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
--   `request_type` (`text`): Always `query`.
+-   `request_type` (`text`): Always `"query"`.
 
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication).
 
@@ -721,15 +729,19 @@ In order to make a query call to canister, the user makes a POST request to `/ap
 
 -   `arg` (`blob`): Argument to pass to the canister method.
 
-If the call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+Canister methods that do not change the canister state (except for cycle balance changes due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
--   `status` (`text`): `replied`
+If the query call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+
+-   `status` (`text`): `"replied"`
 
 -   `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
 
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
--   `status` (`text`): `rejected`
+-   `status` (`text`): `"rejected"`
 
 -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
@@ -737,7 +749,54 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
-Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+
+:::note
+
+Although `signatures` only contains one node signature, we still declare its type to be a list to prevent future breaking changes
+if we include more signatures in a future version of the protocol specification.
+
+:::
+
+The response to a query call contains a list with one signature for the returned response produced by the IC node that evaluated the query call. The signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+
+-   `timestamp` (`nat`): the timestamp of the signature.
+
+-   `signature` (`blob`): the actual signature.
+
+-   `identity` (`principal`): the principal of the node producing the signature.
+
+Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`, the following predicate describes when the returned response `R` is correctly signed:
+
+    verify_response(Q, R, Cert)
+      = verify_cert(Cert) ∧
+        ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
+         (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
+        effective_canister_id ∈ Ranges ∧
+        ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
+          lookup(["subnet",SubnetId,"node",NodeId,"public_key"], Cert) = Found PK ∧
+          if R.status = "replied" then
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
+              status: "replied",
+              reply: R.reply,
+              timestamp: T,
+              request_id: hash_of_map(Q)}))
+          else
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
+              status: "rejected",
+              reject_code: R.reject_code,
+              reject_message: R.reject_message,
+              error_code: R.error_code,
+              timestamp: T,
+              request_id: hash_of_map(Q)}))
+
+where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
+
+:::note
+
+This specification leaves it up to the client to define expiry times for the timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation. A reasonable expiry time for timestamps in `R.signatures` and the certificate `Cert` is 5 minutes (analogously to the maximum allowed ingress expiry enforced by the IC mainnet). Delegations require expiry times of at least a week since the IC mainnet refreshes the delegations only after replica upgrades which typically happen once a week.
+
+:::
 
 ### Effective canister id {#http-effective-canister-id}
 
@@ -4918,14 +4977,23 @@ S.system_time <= Q.ingress_expiry
 
 ```
 
-Query response  
+Query response `R`:
+
 -   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
 
-        {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>}
+        {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
 
--   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
+-   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _)` then
 
-        {status: "replied"; reply: {arg: R}}
+        {status: "replied"; reply: {arg: Res}, signatures: Sigs}
+
+where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
+
+```html
+
+verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+
+```
 
 #### Certified state reads
 
@@ -4958,6 +5026,9 @@ The predicate `may_read_path` is defined as follows, implementing the access con
     may_read_path(S, _, ["subnet", sid]) = True
     may_read_path(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["subnet", sid, "node"]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
     may_read_path(S, _, ["request_status", Rid]) =
     may_read_path(S, _, ["request_status", Rid, "status"]) =
     may_read_path(S, _, ["request_status", Rid, "reply"]) =
@@ -4978,7 +5049,7 @@ The predicate `may_read_path` is defined as follows, implementing the access con
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
-The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
+The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that has a path in `RS.paths` or `["time"]` as a prefix, we have
 
     lookup_in_tree(path, cert.tree) = lookup_in_tree(path, state_tree(S))
 
@@ -4986,7 +5057,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
