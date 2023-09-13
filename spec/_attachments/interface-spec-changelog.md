@@ -6,6 +6,7 @@
 * Added note on confidentiality of values in the certified state tree.
 * Update algorithm computing the request and response hash in the HTTP Gateway including clarification of when the HTTP Gateway can allow for arbitrary certification version in the canister's response.
 * Update conditions on requested paths in HTTP read state requests.
+* Added new query methods in the Bitcoin API.
 
 ### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
