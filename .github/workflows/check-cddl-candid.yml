@@ -13,7 +13,7 @@ jobs:
         docker run --rm -v $PWD/spec/_attachments:/workdir ghcr.io/anweiss/cddl-cli:0.9.1 compile-cddl --cddl /workdir/requests.cddl
     - name: Check candid files
       run: |
-        curl -L https://github.com/dfinity/candid/releases/download/2023-05-26/didc-linux64 -o didc
+        curl -L https://github.com/dfinity/candid/releases/download/2023-07-25/didc-linux64 -o didc
         chmod +x didc
         ./didc check spec/_attachments/http-gateway.did
         ./didc check spec/_attachments/ic.did

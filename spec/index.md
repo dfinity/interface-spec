@@ -445,6 +445,10 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 :::
 
+-   `/subnet/<subnet_id>/node/<node_id>/public_key` (blob)
+
+    The public key of a node (a DER-encoded Ed25519 signing key, see [RFC 8410](https://tools.ietf.org/html/rfc8410) for reference) with principal `<node_id>` belonging to the subnet with principal `<subnet_id>`.
+
 ### Request status {#state-tree-request-status}
 
 For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
@@ -642,7 +646,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
     If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
 
-The returned certificate reveals all values whose path is a suffix of a requested path. It also always reveals `/time`, even if not explicitly requested.
+The returned certificate reveals all values whose path has a requested path as a prefix except for
+
+-   paths with prefix `/subnet/<subnet_id>/node` which are only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
+
+The returned certificate also always reveals `/time`, even if not explicitly requested.
 
 :::note
 
@@ -659,7 +667,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -709,9 +717,9 @@ Composite query methods are EXPERIMENTAL and there might be breaking changes of 
 
 :::
 
-In order to make a query call to canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to make a query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
--   `request_type` (`text`): Always `query`.
+-   `request_type` (`text`): Always `"query"`.
 
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication).
 
@@ -721,15 +729,19 @@ In order to make a query call to canister, the user makes a POST request to `/ap
 
 -   `arg` (`blob`): Argument to pass to the canister method.
 
-If the call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+Canister methods that do not change the canister state (except for cycle balance changes due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
 
--   `status` (`text`): `replied`
+If the query call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+
+-   `status` (`text`): `"replied"`
 
 -   `reply`: a CBOR map with the field `arg` (`blob`) which contains the reply data.
 
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+
 If the call resulted in a reject, the response is a CBOR map with the following fields:
 
--   `status` (`text`): `rejected`
+-   `status` (`text`): `"rejected"`
 
 -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
@@ -737,7 +749,54 @@ If the call resulted in a reject, the response is a CBOR map with the following 
 
 -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
-Canister methods that do not change the canister state (except for cycle balance change due to message execution) can be executed more efficiently. This method provides that ability, and returns the canister's response directly within the HTTP response.
+-   `signatures` (`[+ node-signature]`): a list containing one node signature for the returned query response.
+
+:::note
+
+Although `signatures` only contains one node signature, we still declare its type to be a list to prevent future breaking changes
+if we include more signatures in a future version of the protocol specification.
+
+:::
+
+The response to a query call contains a list with one signature for the returned response produced by the IC node that evaluated the query call. The signature (whose type is denoted as `node-signature`) is a CBOR (see [CBOR](#cbor)) map with the following fields:
+
+-   `timestamp` (`nat`): the timestamp of the signature.
+
+-   `signature` (`blob`): the actual signature.
+
+-   `identity` (`principal`): the principal of the node producing the signature.
+
+Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`, the following predicate describes when the returned response `R` is correctly signed:
+
+    verify_response(Q, R, Cert)
+      = verify_cert(Cert) ∧
+        ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
+         (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
+        effective_canister_id ∈ Ranges ∧
+        ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
+          lookup(["subnet",SubnetId,"node",NodeId,"public_key"], Cert) = Found PK ∧
+          if R.status = "replied" then
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
+              status: "replied",
+              reply: R.reply,
+              timestamp: T,
+              request_id: hash_of_map(Q)}))
+          else
+            verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
+              status: "rejected",
+              reject_code: R.reject_code,
+              reject_message: R.reject_message,
+              error_code: R.error_code,
+              timestamp: T,
+              request_id: hash_of_map(Q)}))
+
+where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
+
+:::note
+
+This specification leaves it up to the client to define expiry times for the timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation. A reasonable expiry time for timestamps in `R.signatures` and the certificate `Cert` is 5 minutes (analogously to the maximum allowed ingress expiry enforced by the IC mainnet). Delegations require expiry times of at least a week since the IC mainnet refreshes the delegations only after replica upgrades which typically happen once a week.
+
+:::
 
 ### Effective canister id {#http-effective-canister-id}
 
@@ -2092,6 +2151,22 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
+### IC method `bitcoin_get_utxos_query` {#ic-bitcoin_get_utxos_query}
+
+This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos), but exposed as a query.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
+
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
@@ -2101,6 +2176,22 @@ If the address is malformed, the call is rejected.
 The optional `min_confirmations` parameter can be used to limit the set of considered UTXOs for the calculation of the balance to those with at least the provided number of confirmations in the same manner as for the [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) call.
 
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
+
+### IC method `bitcoin_get_balance_query` {#ic-bitcoin_get_balance_query}
+
+This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance), but exposed as a query.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
@@ -2456,7 +2547,12 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           controllers : List Principal;
           global_timer : Nat;
           balance : Nat;
-          freezing_limit : Nat;
+          compute_allocation : Nat;
+          memory_allocation : Nat;
+          memory_usage_raw_module : Nat;
+          memory_usage_canister_history : Nat;
+          freezing_threshold : Nat;
+          subnet_size : Nat;
           certificate : NoCertificate | Blob;
           status : Running | Stopping | Stopped;
           canister_version : CanisterVersion;
@@ -2729,14 +2825,20 @@ Finally, we can describe the state of the IC as a record having the following fi
       total_num_changes : Nat;
       recent_changes : [Change];
     }
+    Subnet = {
+      subnet_id : Principal;
+      subnet_size : Nat;
+    }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
       controllers : CanisterId ↦ Set Principal;
+      compute_allocation : CanisterId ↦ Nat;
+      memory_allocation : CanisterId ↦ Nat;
       freezing_threshold : CanisterId ↦ Nat;
       canister_status: CanisterId ↦ CanStatus;
       canister_version: CanisterId ↦ CanisterVersion;
-      canister_subnet : CanisterId ↦ Principal;
+      canister_subnet : CanisterId ↦ Subnet;
       time : CanisterId ↦ Timestamp;
       global_timer : CanisterId ↦ Timestamp;
       balances: CanisterId ↦ Nat;
@@ -2776,6 +2878,8 @@ The initial state of the IC is
       requests = ();
       canisters = ();
       controllers = ();
+      compute_allocation = ();
+      memory_allocation = ();
       freezing_threshold = ();
       canister_status = ();
       canister_version = ();
@@ -2890,9 +2994,11 @@ Requests that have expired are dropped here.
 
 Ingress message inspection is applied, and messages that are not accepted by the canister are dropped.
 
-The (unspecified) function `idle_cycles_burned_rate(S, cid)` determines the idle resource consumption rate in cycles per day of the canister with id `cid`, given its current memory footprint, compute and storage cost, and memory and compute allocation. The function `freezing_limit(S, cid)` determines the freezing threshold in cycles of the canister with id `cid`, given its current memory footprint, compute and storage cost, memory and compute allocation, and current `freezing_threshold` setting. The value `freezing_limit(S, cid)` is derived from `idle_cycles_burned_rate(S, cid)` and `freezing_threshold` as follows:
+The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage, and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
 
-        freezing_limit(S, cid) = idle_cycles_burned_rate(S, cid) * S.freezing_threshold[cid] / (24 * 60 * 60)
+        freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
+
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
 
 Submitted request  
 `E : Envelope`
@@ -2919,14 +3025,29 @@ is_effective_canister_id(E.content, ECID)
     time = S.time[E.content.canister_id];
     controllers = S.controllers[E.content.canister_id];
     global_timer = S.global_timer[E.content.canister_id];
-    balance = S.balances[E.content.canister_id]
-    freezing_limit = freezing_limit(S, E.content.canister_id);
+    balance = S.balances[E.content.canister_id];
+    compute_allocation = S.compute_allocation[E.content.canister_id];
+    memory_allocation = S.memory_allocation[E.content.canister_id];
+    memory_usage_raw_module = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module);
+    memory_usage_canister_history = memory_usage_canister_history(S.canister_history[E.content.canister_id]);
+    freezing_threshold = S.freezing_threshold[E.content.canister_id];
+    subnet_size = S.canister_subnet[E.content.canister_id].subnet_size;
     certificate = NoCertificate;
     status = simple_status(S.canister_status[E.content.canister_id]);
     canister_version = S.canister_version[E.content.canister_id];
   }
+  S.balances[E.content.canister_id] ≥ freezing_limit(
+    S.compute_allocation[E.content.canister_id],
+    S.memory_allocation[E.content.canister_id],
+    S.freezing_threshold[E.content.canister_id],
+    memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
+      memory_usage_canister_history(S.canister_history[E.content.canister_id]),
+    S.canister_subnet[E.content.canister_id].subnet_size,
+  )
   S.canisters[E.content.canister_id].module.inspect_message
     (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
+)
 
 ```
 
@@ -3014,7 +3135,16 @@ Conditions
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or balances[CM.callee] < freezing_limit(S, CM.callee)
+S.canisters[CM.callee] ≠ EmptyCanister
+S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or balances[CM.callee] < freezing_limit(
+  S.compute_allocation[CM.callee],
+  S.memory_allocation[CM.callee],
+  S.freezing_threshold[CM.callee],
+  memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
+    memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
+    memory_usage_canister_history(S.canister_history[CM.callee]),
+  S.canister_subnet[CM.callee].subnet_size,
+)
 
 ```
 
@@ -3050,7 +3180,15 @@ Conditions
 S.messages = Older_messages · CallMessage CM · Younger_messages
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Running
-S.balances[CM.callee] ≥ freezing_limit(S, CM.callee) + MAX_CYCLES_PER_MESSAGE
+S.balances[CM.callee] ≥ freezing_limit(
+  S.compute_allocation[CM.callee],
+  S.memory_allocation[CM.callee],
+  S.freezing_threshold[CM.callee],
+  memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
+    memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
+    memory_usage_canister_history(S.canister_history[CM.callee]),
+  S.canister_subnet[CM.callee].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3090,7 +3228,15 @@ Conditions
 
 S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
-S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+S.balances[C] ≥ freezing_limit(
+  S.compute_allocation[C],
+  S.memory_allocation[C],
+  S.freezing_threshold[C],
+  memory_usage_wasm_state(S.canisters[C].wasm_state) +
+    memory_usage_raw_module(S.canisters[C].raw_module) +
+    memory_usage_canister_history(S.canister_history[C]),
+  S.canister_subnet[C].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3131,7 +3277,15 @@ S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
 S.global_timer[C] ≠ 0
 S.time[C] ≥ S.global_timer[C]
-S.balances[C] ≥ freezing_limit(S, C) + MAX_CYCLES_PER_MESSAGE
+S.balances[C] ≥ freezing_limit(
+  S.compute_allocation[C],
+  S.memory_allocation[C],
+  S.freezing_threshold[C],
+  memory_usage_wasm_state(S.canisters[C].wasm_state) +
+    memory_usage_raw_module(S.canisters[C].raw_module) +
+    memory_usage_canister_history(S.canister_history[C]),
+  S.canister_subnet[C].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3185,7 +3339,12 @@ Env = {
   controllers = S.controllers[M.receiver];
   global_timer = S.global_timer[M.receiver];
   balance = S.balances[M.receiver]
-  freezing_limit = freezing_limit(S, M.receiver);
+  compute_allocation = S.compute_allocation[M.receiver];
+  memory_allocation = S.memory_allocation[M.receiver];
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[M.receiver].raw_module);
+  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[M.receiver]);
+  freezing_threshold = S.freezing_threshold[M.receiver];
+  subnet_size = S.canister_subnet[M.receiver].subnet_size;
   certificate = NoCertificate;
   status = simple_status(S.canister_status[M.receiver]);
   canister_version = S.canister_version[M.receiver];
@@ -3235,7 +3394,18 @@ if
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
-  New_balance ≥ if Is_response then 0 else freezing_limit(S, M.receiver);
+  New_balance ≥ if Is_response then 0 else freezing_limit(
+    S.compute_allocation[M.receiver],
+    S.memory_allocation[M.receiver],
+    S.freezing_threshold[M.receiver],
+    memory_usage_wasm_state(res.new_state) +
+      memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
+      memory_usage_canister_history(S.canister_history[M.receiver]),
+    S.canister_subnet[M.receiver].subnet_size,
+  );
+  (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
+    memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
+    memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3288,7 +3458,7 @@ else
 
 Depending on whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
 
-The cycle consumption of executing this message is modeled via the unspecified `Cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
+The cycle consumption of executing this message is modeled via the unspecified `cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -3401,11 +3571,9 @@ S with
 
 #### IC Management Canister: Canister creation
 
-The IC chooses an appropriate canister id (referred to as `CanisterId`) and subnet id (referred to as `SubnetId`, `SubnetId ∈ Subnets`, where `Subnets` is the under-specified set of subnet ids on the IC) and instantiates a new (empty) canister identified by `CanisterId` on the subnet identified by `SubnetId`. The *controllers* are set such that the sender of this request is the only controller, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
+The IC chooses an appropriate canister id (referred to as `CanisterId`) and subnet id (referred to as `SubnetId`, `SubnetId ∈ Subnets`, where `Subnets` is the under-specified set of subnet ids on the IC) and instantiates a new (empty) canister identified by `CanisterId` on the subnet identified by `SubnetId` with subnet size denoted by `SubnetSize`. The *controllers* are set such that the sender of this request is the only controller, unless the `settings` say otherwise. All cycles on this call are now the canister's initial cycles.
 
 This is also when the System Time of the new canister starts ticking.
-
-The `compute_allocation` and `memory_allocation` settings are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
 
 Conditions  
 
@@ -3424,6 +3592,42 @@ if A.settings.controllers is not null:
 else:
   New_controllers = [M.caller]
 
+if New_compute_allocation > 0 or New_memory_allocation > 0:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage_canister_history(New_canister_history),
+    SubnetSize,
+  ) ≤ M.transferred_cycles
+if New_memory_allocation > 0:
+  memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = 0
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = 0
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = 2592000
+
+New_canister_history = {
+  total_num_changes = 1
+  recent_changes = {
+    timestamp_nanos = CurrentTime
+    canister_version = 0
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin)
+    details = Creation {
+      controllers = New_controllers
+    }
+  }
+}
+
 ```
 
 State after  
@@ -3435,23 +3639,12 @@ S with
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
     controllers[CanisterId] = New_controllers
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[CanisterId] = A.settings.freezing_threshold
-    else:
-      freezing_threshold[CanisterId] = 2592000
+    compute_allocation[CanisterId] = New_compute_allocation
+    memory_allocation[CanisterId] = New_memory_allocation
+    freezing_threshold[CanisterId] = New_freezing_threshold
     balances[CanisterId] = M.transferred_cycles
     certified_data[CanisterId] = ""
-    canister_history[CanisterId] = {
-      total_num_changes = 1
-      recent_changes = {
-        timestamp_nanos = CurrentTime
-        canister_version = 0
-        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
-        details = Creation {
-          controllers = New_controllers
-        }
-      }
-    }
+    canister_history[CanisterId] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3460,7 +3653,10 @@ S with
       }
     canister_status[CanisterId] = Running
     canister_version[CanisterId] = 0
-    canister_subnet[CanisterId] = SubnetId
+    canister_subnet[CanisterId] = Subnet {
+      subnet_id : SubnetId
+      subnet_size : SubnetSize
+    }
 
 ```
 
@@ -3484,8 +3680,6 @@ To avoid clashes with potential user ids or is derived from users or canisters, 
 
 Only the controllers of the given canister can update the canister settings.
 
-The `compute_allocation` and `memory_allocation` settings are ignored in this abstract model of the Internet Computer, as it does not address questions of performance or scheduling.
-
 Conditions  
 
 ```html
@@ -3496,10 +3690,53 @@ M.callee = ic_principal
 M.method_name = 'update_settings'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
+
+if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id]:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_canister_history(New_canister_history),
+    S.canister_subnet[A.canister_id].subnet_size,
+  ) ≤ S.balances[A.canister_id]
+if New_memory_allocation > 0:
+  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = S.compute_allocation[A.canister_id]
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = S.memory_allocation[A.canister_id]
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = S.freezing_threshold[A.canister_id]
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
 }
+if A.settings.controllers is not null:
+  New_canister_history = {
+    total_num_changes = N + 1;
+    recent_changes = H · {
+        timestamp_nanos = S.time[A.canister_id];
+        canister_version = S.canister_version[A.canister_id] + 1;
+        origin = change_origin(M.caller, A.sender_canister_version, M.origin);
+        details = ControllersChange {
+          controllers = A.settings.controllers;
+        };
+      };
+  }
+else:
+  New_canister_history = S.canister_history[A.canister_id]
 
 ```
 
@@ -3510,19 +3747,10 @@ State after
 S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
-      canister_history[A.canister_id] = {
-        total_num_changes = N + 1;
-        recent_changes = H · {
-            timestamp_nanos = S.time[A.canister_id];
-            canister_version = S.canister_version[A.canister_id] + 1;
-            origin = change_origin(M.caller, A.sender_canister_version, M.origin);
-            details = ControllersChange {
-              controllers = A.settings.controllers;
-            };
-          };
-      }
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[A.canister_id] = A.settings.freezing_threshold
+      canister_history[A.canister_id] = New_canister_history
+    compute_allocation[A.canister_id] = New_compute_allocation
+    memory_allocation[A.canister_id] = New_memory_allocation
+    freezing_threshold[A.canister_id] = New_freezing_threshold
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3572,7 +3800,15 @@ S with
           memory_size = Memory_size;
           cycles = S.balances[A.canister_id];
           freezing_threshold = S.freezing_threshold[A.canister_id];
-          idle_cycles_burned_per_day = idle_cycles_burned_rate(S, A.canister_id);
+          idle_cycles_burned_per_day = idle_cycles_burned_rate(
+            S.compute_allocation[A.canister_id],
+            S.memory_allocation[A.canister_id],
+            memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+              memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+              memory_usage_canister_history(S.canister_history[A.canister_id]),
+            S.freezing_threshold[A.canister_id],
+            S.canister_subnet[A.canister_id].subnet_size,
+          );
         })
         refunded_cycles = M.transferred_cycles
       }
@@ -3638,25 +3874,67 @@ Public_custom_sections = parse_public_custom_sections(A.wasm_module);
 Private_custom_sections = parse_private_custom_sections(A.wasm_module);
 (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
 M.caller ∈ S.controllers[A.canister_id]
+
+dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
+dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
 Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
   global_timer = 0;
   balance = S.balances[A.canister_id];
-  freezing_limit = freezing_limit(S, A.canister_id);
+  compute_allocation = S.compute_allocation[A.canister_id];
+  memory_allocation = S.memory_allocation[A.canister_id];
+  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
+  memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
+  freezing_threshold = S.freezing_threshold[A.canister_id];
+  subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
   status = simple_status(S.canister_status[A.canister_id]);
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-freezing_limit(S, A.canister_id) + Cycles_used ≤ S.balances[A.canister_id]
-dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
-dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_canister_history(S.canister_history[A.canister_id]),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage_wasm_state(New_state) +
+    memory_usage_raw_module(A.wasm_module) +
+    memory_usage_canister_history(New_canister_history),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + Cycles_used ≤ S.balances[A.canister_id]
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage_wasm_state(New_state) +
+    memory_usage_raw_module(A.wasm_module) +
+    memory_usage_canister_history(New_canister_history),
+  ) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
+}
+New_canister_history = {
+  total_num_changes = N + 1;
+  recent_changes = H · {
+    timestamp_nanos = S.time[A.canister_id];
+    canister_version = S.canister_version[A.canister_id] + 1
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin);
+    details = CodeDeployment {
+      mode = A.mode;
+      module_hash = SHA-256(A.wasm_module);
+    };
+  };
 }
 
 ```
@@ -3680,18 +3958,7 @@ S with
       global_timer[A.canister_id] = 0
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
-    canister_history[A.canister_id] = {
-      total_num_changes = N + 1;
-      recent_changes = H · {
-          timestamp_nanos = S.time[A.canister_id];
-          canister_version = S.canister_version[A.canister_id] + 1
-          origin = change_origin(M.caller, A.sender_canister_version, M.origin);
-          details = CodeDeployment {
-            mode = A.mode;
-            module_hash = SHA-256(A.wasm_module);
-          };
-        };
-    }
+    canister_history[A.canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -3719,11 +3986,21 @@ Public_custom_sections = parse_public_custom_sections(A.wasm_module)
 Private_custom_sections = parse_private_custom_sections(A.wasm_module)
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
+
+dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
+dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
+dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
 Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
   balance = S.balances[A.canister_id];
-  freezing_limit = freezing_limit(S, A.canister_id);
+  compute_allocation = S.compute_allocation[A.canister_id];
+  memory_allocation = S.memory_allocation[A.canister_id];
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
+  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[A.canister_id]);
+  freezing_threshold = S.freezing_threshold[A.canister_id];
+  subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
   status = simple_status(S.canister_status[A.canister_id]);
 }
@@ -3745,19 +4022,52 @@ or
 )
 
 Env2 = Env with {
+  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
+  memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
-freezing_limit(S, A.canister_id) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
-dom(Mod.update_methods) ∩ dom(Mod.query_methods) = ∅
-dom(Mod.update_methods) ∩ dom(Mod.composite_query_methods) = ∅
-dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
+
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_canister_history(S.canister_history[A.canister_id]),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
+freezing_limit(
+  S.compute_allocation[A.canister_id],
+  S.memory_allocation[A.canister_id],
+  S.freezing_threshold[A.canister_id],
+  memory_usage_wasm_state(New_state) +
+    memory_usage_raw_module(A.wasm_module) +
+    memory_usage_canister_history(New_canister_history),
+  S.canister_subnet[A.canister_id].subnet_size,
+) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage_wasm_state(New_state) +
+    memory_usage_raw_module(A.wasm_module) +
+    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
 }
-
+New_canister_history = {
+  total_num_changes = N + 1;
+  recent_changes = H · {
+    timestamp_nanos = S.time[A.canister_id];
+    canister_version = S.canister_version[A.canister_id] + 1
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin);
+    details = CodeDeployment {
+      mode = Upgrade;
+      module_hash = SHA-256(A.wasm_module);
+    };
+  };
+}
 ```
 
 State after  
@@ -3782,18 +4092,7 @@ S with
       global_timer[A.canister_id] = 0
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
-    canister_history[A.canister_id] = {
-      total_num_changes = N + 1;
-      recent_changes = H · {
-          timestamp_nanos = S.time[A.canister_id];
-          canister_version = S.canister_version[A.canister_id] + 1
-          origin = change_origin(M.caller, A.sender_canister_version, M.origin);
-          details = CodeDeployment {
-            mode = Upgrade;
-            module_hash = SHA-256(A.wasm_module);
-          };
-        };
-    }
+    canister_history[A.canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4085,6 +4384,8 @@ State after
 S with
     canisters[A.canister_id] = (deleted)
     controllers[A.canister_id] = (deleted)
+    compute_allocation[A.canister_id] = (deleted)
+    memory_allocation[A.canister_id] = (deleted)
     freezing_threshold[A.canister_id] = (deleted)
     canister_status[A.canister_id] = (deleted)
     canister_version[A.canister_id] = (deleted)
@@ -4182,11 +4483,52 @@ M.method_name = 'provisional_create_canister_with_cycles'
 M.arg = candid(A)
 is_system_assigned CanisterId
 CanisterId ∉ dom(S.canisters)
-A.specified_id ∉ dom(S.canisters)
+if A.specified_id is not null:
+  Canister_id = A.specified_id
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
   New_controllers = [M.caller]
+
+if New_compute_allocation > 0 or New_memory_allocation > 0:
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage_canister_history(New_canister_history),
+    SubnetSize
+  ) ≤ New_balance
+if New_memory_allocation > 0:
+  memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
+
+if A.settings.compute_allocation is not null:
+  New_compute_allocation = A.settings.compute_allocation
+else:
+  New_compute_allocation = 0
+if A.settings.memory_allocation is not null:
+  New_memory_allocation = A.settings.memory_allocation
+else:
+  New_memory_allocation = 0
+if A.settings.freezing_threshold is not null:
+  New_freezing_threshold = A.settings.freezing_threshold
+else:
+  New_freezing_threshold = 2592000
+if A.amount is not null:
+  New_balance = A.amount
+else:
+  New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE
+
+New_canister_history {
+  total_num_changes = 1
+  recent_changes = {
+    timestamp_nanos = CurrentTime
+    canister_version = 0
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin)
+    details = Creation {
+      controllers = New_controllers
+    }
+  }
+}
 
 ```
 
@@ -4195,43 +4537,28 @@ State after
 ```html
 
 S with
-    if A.specified_id is not null:
-      canister_id = A.specified_id
-    else:
-      canister_id = CanisterId
-    canisters[canister_id] = EmptyCanister
-    time[canister_id] = CurrentTime
-    global_timer[canister_id] = 0
-    controllers[canister_id] = New_controllers
-    if A.settings.freezing_threshold is not null:
-      freezing_threshold[canister_id] = A.settings.freezing_threshold
-    else:
-      freezing_threshold[canister_id] = 2592000
-    if A.amount is not null:
-      balances[canister_id] = A.amount
-    else:
-      balances[canister_id] = DEFAULT_PROVISIONAL_CYCLES_BALANCE
-    certified_data[canister_id] = ""
-    canister_history[canister_id] = {
-      total_num_changes = 1
-      recent_changes = {
-        timestamp_nanos = CurrentTime
-        canister_version = 0
-        origin = change_origin(M.caller, A.sender_canister_version, M.origin)
-        details = Creation {
-          controllers = New_controllers
-        }
-      }
-    }
+    canisters[Canister_id] = EmptyCanister
+    time[Canister_id] = CurrentTime
+    global_timer[Canister_id] = 0
+    controllers[Canister_id] = New_controllers
+    compute_allocation[Canister_id] = New_compute_allocation
+    memory_allocation[Canister_id] = New_memory_allocation
+    freezing_threshold[Canister_id] = New_freezing_threshold
+    balances[Canister_id] = New_balance
+    certified_data[Canister_id] = ""
+    canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid({canister_id = canister_id}))
+        response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = M.transferred_cycles
       }
-    canister_status[canister_id] = Running
-    canister_version[canister_id] = 0
-    canister_subnet[canister_id] = SubnetId
+    canister_status[Canister_id] = Running
+    canister_version[Canister_id] = 0
+    canister_subnet[Canister_id] = Subnet {
+      subnet_id : SubnetId
+      subnet_size : SubnetSize
+    }
 
 ```
 
@@ -4581,14 +4908,27 @@ We define an auxiliary method that handles calls from composite query methods by
       let Env = { time = S.time[Canister_id];
                   global_timer = S.global_timer[Canister_id];
                   balance = S.balances[Canister_id];
-                  freezing_limit = freezing_limit(S, Canister_id);
+                  compute_allocation = S.compute_allocation[Canister_id];
+                  memory_allocation = S.memory_allocation[Canister_id];
+                  memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
+                  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
+                  freezing_threshold = S.freezing_threshold[Canister_id];
+                  subnet_size = S.canister_subnet[Canister_id].subnet_size;
                   certificate = Cert;
                   status = simple_status(S.canister_status[Canister_id]);
                   canister_version = S.canister_version[Canister_id];
                 }
       if S.canisters[Canister_id] ≠ EmptyCanister and
          S.canister_status[Canister_id] = Running and
-         S.balances[Canister_id] >= freezing_limit(S, Canister_id) and
+         S.balances[Canister_id] >= freezing_limit(
+           S.compute_allocation[Canister_id],
+           S.memory_allocation[Canister_id],
+           S.freezing_threshold[Canister_id],
+           memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
+             memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
+             memory_usage_canister_history(S.canister_history[Canister_id]),
+           S.canister_subnet[Canister_id].subnet_size,
+         ) and
          (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
          Cycles >= MAX_CYCLES_PER_MESSAGE
       then
@@ -4613,7 +4953,7 @@ We define an auxiliary method that handles calls from composite query methods by
                      Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // max call graph depth exceeded
                   let Calls' · Call · Calls''  = Calls
                   Calls := Calls' · Calls''
-                  if S.canister_subnet[Canister_id] ≠ S.canister_subnet[Call.callee]
+                  if S.canister_subnet[Canister_id].subnet_id ≠ S.canister_subnet[Call.callee].subnet_id
                   then
                      Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
                   let (Response', Cycles') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
@@ -4658,14 +4998,23 @@ S.system_time <= Q.ingress_expiry
 
 ```
 
-Query response  
+Query response `R`:
+
 -   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
 
-        {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>}
+        {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
 
--   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply R, _)` then
+-   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _)` then
 
-        {status: "replied"; reply: {arg: R}}
+        {status: "replied"; reply: {arg: Res}, signatures: Sigs}
+
+where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
+
+```html
+
+verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+
+```
 
 #### Certified state reads
 
@@ -4698,6 +5047,9 @@ The predicate `may_read_path` is defined as follows, implementing the access con
     may_read_path(S, _, ["subnet", sid]) = True
     may_read_path(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path(S, _, ["subnet", sid, "node"]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid]) = True
+    may_read_path(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
     may_read_path(S, _, ["request_status", Rid]) =
     may_read_path(S, _, ["request_status", Rid, "status"]) =
     may_read_path(S, _, ["request_status", Rid, "reply"]) =
@@ -4718,7 +5070,7 @@ The predicate `may_read_path` is defined as follows, implementing the access con
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
-The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that is a suffix of a path in `RS.paths` or of `["time"]`, we have
+The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that has a path in `RS.paths` or `["time"]` as a prefix, we have
 
     lookup_in_tree(path, cert.tree) = lookup_in_tree(path, state_tree(S))
 
@@ -4726,7 +5078,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges } | (subnet_id, subnet_pk, subnet_ranges) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
@@ -5418,7 +5770,13 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
-      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < freezing_limit(
+        es.params.sysenv.compute_allocation,
+        es.params.sysenv.memory_allocation,
+        es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        es.params.sysenv.subnet_size,
+      ) then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5428,7 +5786,13 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.balance < amount then Trap {cycles_used = es.cycles_used;}
-      if es.balance - amount < es.params.sysenv.freezing_limit then Trap {cycles_used = es.cycles_used;}
+      if es.balance - amount < freezing_limit(
+        es.params.sysenv.compute_allocation,
+        es.params.sysenv.memory_allocation,
+        es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        es.params.sysenv.subnet_size,
+      ) then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -5439,7 +5803,13 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       // are we below the threezing threshold?
       // Or maybe the system has other reasons to not perform this
-      if es.balance < es.params.sysenv.freezing_limit or system_cannot_do_this_call_now()
+      if es.balance < freezing_limit(
+        es.params.sysenv.compute_allocation,
+        es.params.sysenv.memory_allocation,
+        es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        es.params.sysenv.subnet_size,
+      ) or system_cannot_do_this_call_now()
       then
         discard_pending_call<es>()
         return 1
