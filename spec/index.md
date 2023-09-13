@@ -1838,10 +1838,8 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 
 ### IC method `upload_chunk` {#ic-upload_chunk}
-Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MiB. The size of the chunk store is bounded: currently it can hold up to `CHUNK_STORE_SIZE` chunks. 
-
-### IC method `delete_chunks` {#ic-delete_chunks}
-Canister controllers (and the canister itself) can delete chunks stored in the canister's chunk storage. The caller provides as input a list of hashes; the effect of the call is that the IC deletes from the canister's chunk storage the chunks whose hashes are contained in the provided list.   
+Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk should be up to 1MiB. The size of the chunk store is bounded: currently it can hold up to `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
+ 
 
 ### IC method `clear_store` {#ic-clear_store}
 Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
@@ -1874,7 +1872,7 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 
 -   If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
--   If the `wasm_module` starts with the byte sequence `[0xd9, 0xd9, 0xf7]`, the system parses `wasm_module` as a self describing CBOR encoding of a map that specifies: an optional canister identifier `storage_canister` and a list of hash values, `[h0,h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. In this case, the system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes and checks that `h0` is the hash of the resulting blob. The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`.  If the lookup succeeds, then the system interprets the blob as a vanilla wasm module (or a gzipped one) per the rules above.
+-   If the `wasm_module` starts with the byte sequence `[0xd9, 0xd9, 0xf7]`, the system parses `wasm_module` as a self describing CBOR encoding of a map that specifies: an optional canister identifier `storage_canister` and a list of hash values, `[h0,h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. In this case, the system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes and checks that `h0` is the hash of the resulting blob. The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and `storage_canister` must be on the same subnet as the target canister.  If the lookup succeeds, then the system interprets the blob as a vanilla wasm module (or a gzipped one) per the rules above.
 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
@@ -3696,33 +3694,6 @@ S with
 ```
 
 
-#### IC Management Canister: Delete chunks
-
-The controller of a canister, or the canister itself can delete chunks from the canister chunk store. 
-
-```html
-
-S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-M.method_name = 'delete_chunks'
-M.arg = candid(A)
-M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
-
-```
-
-State after
-
-```html
-
-S with
-    chunk_store[A.canister_id](hash) = (deleted) for all hash ∈ A.hash_list
-    messages = Older_messages · Younger_messages ·
-      ResponseMessage {
-        origin = M.origin
-        response = candid()
-      }
-
-```
 
 #### IC Management Canister: List stored chunks
 
