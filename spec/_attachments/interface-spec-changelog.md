@@ -8,6 +8,7 @@
 * Update conditions on requested paths in HTTP read state requests.
 * Added new query methods in the Bitcoin API.
 * Added node public keys to certified state and node signatures to query call responses.
+* Added a new mode for canister upgrades skipping pre-upgrade method's execution.
 
 ### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.
