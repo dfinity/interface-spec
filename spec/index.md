@@ -2095,7 +2095,7 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 :::
 
-### IC method `node_metrics` {#ic-node-metrics}
+### IC method `node_metrics_history` {#ic-node-metrics-history}
 
 :::note
 
@@ -2103,7 +2103,7 @@ The node metrics management canister API is considered EXPERIMENTAL. Canister de
 
 :::
 
-Given a subnet ID as input, this method returns a collection of metrics for all nodes on the given subnet (field `node_metrics`) and timestamps provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. The returned timestamps are all timestamps after (and including) the requested timestamp (field `requested_timestamp_nanos`) for which node metrics are available.
+Given a subnet ID as input, this method returns collections of metrics for all nodes on the given subnet (field `node_metrics`) at timestamps provided in nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. The returned timestamps are all timestamps after (and including) the provided timestamp (field `start_at_timestamp_nanos`) for which node metrics are available.
 
 A single metric entry is a record with the following fields:
 
@@ -4504,7 +4504,7 @@ Conditions
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'node_metrics'
+M.method_name = 'node_metrics_history'
 M.arg = candid(A)
 R = <implementation-specific>
 
