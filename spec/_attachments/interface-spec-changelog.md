@@ -1,6 +1,8 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+
+### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
 * System API calls `ic0.msg_caller_size` and `ic0.msg_caller_copy` can be called in all contexts except for (start) function.
 * Added note on confidentiality of values in the certified state tree.
