@@ -131,7 +131,13 @@ service ic : {
   delete_chunks: (record {canister_id : canister_id; hash_list : vec chunk_hash}) -> ();
   clear_chunk_store: (record {canister_id: canister_id}) -> ();
   install_code : (record {
-    mode : variant {install; reinstall; upgrade};
+    mode : variant {
+      install;
+      reinstall;
+      upgrade : opt record {
+        skip_pre_upgrade: opt bool;
+      }
+    };
     canister_id : canister_id;
     wasm_module : wasm_module;
     arg : blob;
@@ -189,7 +195,9 @@ service ic : {
 
   // bitcoin interface
   bitcoin_get_balance: (get_balance_request) -> (satoshi);
+  bitcoin_get_balance_query: (get_balance_request) -> (satoshi) query;
   bitcoin_get_utxos: (get_utxos_request) -> (get_utxos_response);
+  bitcoin_get_utxos_query: (get_utxos_request) -> (get_utxos_response) query;
   bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
 
