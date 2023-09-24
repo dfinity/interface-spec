@@ -780,7 +780,14 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
               status: "replied",
               reply: R.reply,
               timestamp: T,
-              request_id: hash_of_map(Q)}))
+              request_id: hash_of_map({
+                request_type: "query",
+                sender: Q.sender,
+                nonce: Q.nonce,
+                canister_id: Q.canister_id,
+                method_name: Q.method_name,
+                arg: Q.arg
+              })}))
           else
             verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
               status: "rejected",
@@ -788,9 +795,16 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
               reject_message: R.reject_message,
               error_code: R.error_code,
               timestamp: T,
-              request_id: hash_of_map(Q)}))
+              request_id: hash_of_map({
+                request_type: "query",
+                sender: Q.sender,
+                nonce: Q.nonce,
+                canister_id: Q.canister_id,
+                method_name: Q.method_name,
+                arg: Q.arg
+              })}))
 
-where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
+where `RootSubnetId` is the a priori known principal of the root subnet. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough". The optional nonce is ignored in the `hash_of_map` computation if no nonce is provided in the query call request.
 
 :::note
 
