@@ -662,7 +662,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
+    If this `certificate` includes (possibly nested) subnet delegations (see [Delegation](#certification-delegation)), then
+
+    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in each delegation's canister id range,
+
+    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match each delegation's subnet id.
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
