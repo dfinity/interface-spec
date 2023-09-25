@@ -792,7 +792,7 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
               request_id: hash_of_map(Q \ {ingress_expiry: Q.ingress_expiry})
             }))
 
-where `RootSubnetId` is the a priori known principal of the root subnet and `hash_of_map(Q - {ingress_expiry: Q.ingress_expiry})` denotes the [representation-independent hash](#hash-of-map) of the query's content with its `ingress_expiry` field ignored. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
+where `RootSubnetId` is the a priori known principal of the root subnet and `hash_of_map(Q \ {ingress_expiry: Q.ingress_expiry})` denotes the [representation-independent hash](#hash-of-map) of the query's content with its `ingress_expiry` field ignored. Moreover, all timestamps in `R.signatures`, the certificate `Cert`, and its optional delegation must be "recent enough".
 
 :::note
 
