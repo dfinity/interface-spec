@@ -1941,12 +1941,20 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 
 -   If the `wasm_module` starts with byte sequence `[0x1f, 0x8b, 0x08]`, the system parses `wasm_module` as a gzip-compressed WebAssembly binary.
 
--   If the `wasm_module` starts with the byte sequence `[0xd9, 0xd9, 0xf7]`, the system parses `wasm_module` as a self describing CBOR encoding of a map that specifies: an optional canister identifier `storage_canister` and a list of hash values, `[h0,h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. In this case, the system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes and checks that `h0` is the hash of the resulting blob. The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and `storage_canister` must be on the same subnet as the target canister.  If the lookup succeeds, then the system interprets the blob as a vanilla wasm module (or a gzipped one) per the rules above.
-
-
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
+
+### IC method `install_chunked_code` {#ic-install_chunked_code}
+This method installs code that had been previously uploaded in chunks. 
+
+The `mode, arg, sender_canister_version` parameters are as above. 
+ The `target_canister` specifies the canister where the code should be uploaded to.  
+The optional `storage_canister` parameters specifies the canister where the chunks are stored.
+The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and `storage_canister` must be on the same subnet as the target canister.  
+
+The `chunk_hashse_list` specifies a list of hash values `[h0,h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`.  The system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes `wasm_module` and checks that `h0` is the hash of the resulting blob.  
+It then calls `install_code` with parameters (`mode,target_canister,wasm_module,arg,sender_canister_version`). 
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 

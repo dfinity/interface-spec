@@ -142,6 +142,21 @@ service ic : {
     arg : blob;
     sender_canister_version : opt nat64;
   }) -> ();
+  install_chunked_code: (record {
+    mode : variant {
+      install;
+      reinstall;
+      upgrade : opt record {
+      skip_pre_upgrade: opt bool;
+      };
+    };
+    target_canister: canister_id;
+    storage_canister: opt canister_id;
+    wasm_module_hash: blob;
+    chunk_hashes_list: vec chunk_hash;
+    arg : blob;
+    sender_canister_version : opt nat64;
+  })
   uninstall_code : (record {
     canister_id : canister_id;
     sender_canister_version : opt nat64;
