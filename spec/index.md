@@ -1619,7 +1619,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
 -   `ic0.burn_cycles : (amount_to_burn : i64) → (amount : i64)`
 
-    This burns cycles from the camoster. It burns as many cycles as possible, up to these constraints:
+    This burns cycles from the canister. It burns as many cycles as possible, up to these constraints:
 
     It burns no more cycles than `amount_to_burn`.
 
