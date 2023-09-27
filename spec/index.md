@@ -1262,6 +1262,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                            -> ();                                               // U Rt Ry
+
     ic0.burn_cycles : (amount_to_burn : i64) -> (amount : i64);               // U T Rt Ry
 
     ic0.canister_self_size : () -> i32;                                         // *
