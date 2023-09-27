@@ -1623,7 +1623,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     It burns no more cycles than `amount_to_burn`.
 
-    It moves no more cycles than available according to `balance` - `freezing_threshold`, and
+    It burns no more cycles than available according to `balance` - `freezing_threshold`.
 
     It can be called multiple times, each time possibly burning more cycles from the balance.
 
