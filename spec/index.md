@@ -1953,8 +1953,7 @@ The `mode, arg, sender_canister_version` parameters are as above.
 The optional `storage_canister` parameters specifies the canister where the chunks are stored.
 The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and `storage_canister` must be on the same subnet as the target canister.  
 
-The `chunk_hashse_list` specifies a list of hash values `[h0,h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`.  The system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes `wasm_module` and checks that `h0` is the hash of the resulting blob.  
-It then calls `install_code` with parameters (`mode,target_canister,wasm_module,arg,sender_canister_version`). 
+The `chunk_hashse_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`.  The system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes `wasm_module`. It then checks that the SHA256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter of the call, and calls `install_code` with parameters (`mode,target_canister,wasm_module,arg,sender_canister_version`). 
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -3045,7 +3044,7 @@ is_effective_canister_id(E.content, ECID)
   E.content.arg = candid({canister_id = CanisterId, …})
   E.content.sender ∈ S.controllers[CanisterId]
   E.content.method_name ∈
-    { "install_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
+    { "install_code", "install_chunked_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
       "canister_status", "delete_canister",
       "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
 ) ∨ (
@@ -3509,7 +3508,7 @@ Note that returning does *not* imply that the call associated with this message 
 The function `validate_sender_canister_version` checks that `sender_canister_version` matches the actual canister version of the sender in all calls to the methods of the management canister that take `sender_canister_version`:
 
     validate_sender_canister_version(new_calls, canister_version_from_system) =
-      ∀ call ∈ new_calls. (call.callee = ic_principal and (call.method = 'create_canister' or call.method = 'update_settings' or call.method = 'install_code' or call.method = 'uninstall_code' or call.method = 'provisional_create_canister_with_cycles') and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
+      ∀ call ∈ new_calls. (call.callee = ic_principal and (call.method = 'create_canister' or call.method = 'update_settings' or call.method = 'install_code' or call.method = `install_chunked_code` or call.method = 'uninstall_code' or call.method = 'provisional_create_canister_with_cycles') and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
 
 The functions `query_as_update` and `system_task_as_update` turns a query function (note that composite query methods cannot be called when executing a message during this transition) resp the heartbeat or global timer into an update function; this is merely a notational trick to simplify the rule:
 
@@ -4091,6 +4090,7 @@ S with
 
 ```
 
+
 #### IC Management Canister: Code upgrade
 
 Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
@@ -4224,6 +4224,46 @@ S with
       }
 
 ```
+
+
+#### IC Management Canister: Install chunked code
+
+
+
+
+Conditions
+
+```html
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'install_chunked_code'
+if A.storage_canister = None then 
+    let storage_canister = A.target_canister
+    else let storage_canister  A. storage_canister
+M.caller ∈ S.controllers[storage_canister] ∩ S.controllers[target_canister]
+∀ h ∈ A.chunk_hashes_list = [h1,h2,...,hk]: h ∈ dom(S.chunk_store[storage_canister])
+module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
+A.wasm_module_hash = SHA256(module)
+
+
+```
+
+State after
+```html
+S.messages = Older_messages · 
+                CallMessage {
+                    caller = M.caller
+                    mode = A.mode
+                    canister_id = A.target_canister
+                    wasm_module = module
+                    args = A.args
+                    sender_canister_version = M.sender_canister_version
+            } · Younger_messages
+
+```
+
+
 
 #### IC Management Canister: Code uninstallation {#rule-uninstall}
 
