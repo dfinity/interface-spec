@@ -1262,6 +1262,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                            -> ();                                               // U Rt Ry
+    ic0.burn_cycles : (amount_to_burn : i64) -> (amount : i64);               // U T Rt Ry
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -1614,6 +1615,20 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
     This call also copies the amount of cycles that were actually moved starting at the location `dst` in the canister memory.
 
     This does not trap.
+
+-   `ic0.burn_cycles : (amount_to_burn : i64) → (amount : i64)`
+
+    This burns cycles from the camoster. It burns as many cycles as possible, up to these constraints:
+
+    It burns no more cycles than `amount_to_burn`.
+
+    It moves no more cycles than available according to `balance` - `freezing_threshold`, and
+
+    It can be called multiple times, each time possibly burning more cycles from the balance.
+
+    The return value indicates how many cycles were actually burned.
+
+    This system call does not trap.
 
 -   `ic0.call_cycles_add : (amount : i64) → ()`
 
@@ -5672,6 +5687,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.cycles_accepted := es.cycles_accepted + amount
       es.balance := es.balance + amount
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
+
+    ic0.burn_cycles<es>(amount_to_burn : i64) : i64 =
+      if es.context ∉ {U, T, Rt, Ry} then Trap {amount = 0;}
+      let amount = min(amount_to_burn, es.balance - es.params.sysenv.freezing_threshold)
+      es.balance := es.balance - amount
+      return amount
 
     ic0.canister_self_size<es>() : i32 =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
