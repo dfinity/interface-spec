@@ -5689,17 +5689,18 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.balance := es.balance + amount
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
-    ic0.burn_cycles<es>(amount_to_burn : i64) : i64 =
+    ic0.burn_cycles<es>(amount_high : i64, amount_low : i64, dst : i32) =
       if es.context ∉ {U, T, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
-      let amount = min(amount_to_burn, es.balance - freezing_limit(
+      let amount = amount_high * 2^64 + amount_low
+      let burned_amount = min(amount, es.balance - freezing_limit(
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
         memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
         es.params.sysenv.subnet_size,
       ))
-      es.balance := es.balance - amount
-      return amount
+      es.balance := es.balance - burned_amount
+      copy_cycles_to_canister<es>(dst, burned_amount.to_little_endian_bytes())
 
     ic0.canister_self_size<es>() : i32 =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
