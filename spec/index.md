@@ -5690,7 +5690,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.burn_cycles<es>(amount_to_burn : i64) : i64 =
-      if es.context ∉ {U, T, Rt, Ry} then Trap {amount = 0;}
+      if es.context ∉ {U, T, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = min(amount_to_burn, es.balance - freezing_limit(
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
