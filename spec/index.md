@@ -5691,7 +5691,13 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.burn_cycles<es>(amount_to_burn : i64) : i64 =
       if es.context ∉ {U, T, Rt, Ry} then Trap {amount = 0;}
-      let amount = min(amount_to_burn, es.balance - es.params.sysenv.freezing_threshold)
+      let amount = min(amount_to_burn, es.balance - freezing_limit(
+        es.params.sysenv.compute_allocation,
+        es.params.sysenv.memory_allocation,
+        es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        es.params.sysenv.subnet_size,
+      ))
       es.balance := es.balance - amount
       return amount
 
