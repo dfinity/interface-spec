@@ -5689,7 +5689,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.balance := es.balance + amount
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
-    ic0.burn_cycles<es>(amount_high : i64, amount_low : i64, dst : i32) =
+    ic0.cycles_burn<es>(amount_high : i64, amount_low : i64, dst : i32) =
       if es.context ∉ {U, T, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       let burned_amount = min(amount, es.balance - freezing_limit(
