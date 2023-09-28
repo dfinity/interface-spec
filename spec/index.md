@@ -1263,7 +1263,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                            -> ();                                               // U Rt Ry
 
-    ic0.burn_cycles : (amount_to_burn : i64) -> (amount : i64);               // U T Rt Ry
+    ic0.cycles_burn : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // U T Rt Ry
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -1617,17 +1617,17 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This does not trap.
 
--   `ic0.burn_cycles : (amount_to_burn : i64) → (amount : i64)`
+-   `ic0.cycles_burn : (amount_high : i64, amount_low : i64, dst : i32) -> ()`
 
     This burns cycles from the canister. It burns as many cycles as possible, up to these constraints:
 
-    It burns no more cycles than `amount_to_burn`.
+    It burns no more cycles than the amount obtained by combining `amount_high` and `amount_low`. Cycles are represented by 128-bit values.
 
     It burns no more cycles than available according to `balance` - `freezing_threshold`.
 
     It can be called multiple times, each time possibly burning more cycles from the balance.
 
-    The return value indicates how many cycles were actually burned.
+    This call also copies the amount of cycles that were actually burned starting at the location `dst` in the canister memory.
 
     This system call does not trap.
 
