@@ -1089,7 +1089,7 @@ Applications can work around these problems. For the first problem, the query re
 
 ## Canister module format {#canister-module-format}
 
-A canister module is a [WebAssembly module](https://webassembly.github.io/spec/core/index.html) that is either in binary format (typically `.wasm`), gzip-compressed (typically `.wasm.gz`), or specified through a list of hashes. If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to [RFC-1952](https://datatracker.ietf.org/doc/html/rfc1952.html) and then parses the output as a WebAssembly binary. If the module starts with the byte sequence `[0xd9, 0xd9, 0xf7]` (self-describe CBOR tag), then the system interprets the content as a CBOR (see [CBOR](#cbor)) value according to the following [CDDL](_attachments/chunked-wasms.cddl) (see [CDDL](#cddl)). In this case, the actual Wasm module is obtained by concatenating the individual chunks (from the chunk store of the installed canister or from the chunk store of a specified storage canister) that correspond to these hashes (skipping the first hash which is the hash of the overall concatenated Wasm module). 
+A canister module is a [WebAssembly module](https://webassembly.github.io/spec/core/index.html) that is either in binary format (typically `.wasm`) or gzip-compressed (typically `.wasm.gz`). If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to [RFC-1952](https://datatracker.ietf.org/doc/html/rfc1952.html) and then parses the output as a WebAssembly binary.
 
 ## Canister interface (System API) {#system-api}
 
