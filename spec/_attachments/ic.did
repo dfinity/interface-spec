@@ -127,8 +127,8 @@ service ic : {
     canister_id : principal;
     chunk : blob;
   }) -> (chunk_hash);
+  clear_chunk_store: (record {canister_id : canister_id}) -> ();
   stored_chunks: (record {canister_id : canister_id}) -> (vec chunk_hash);
-  clear_chunk_store: (record {canister_id: canister_id}) -> ();
   install_code : (record {
     mode : variant {
       install;

@@ -1903,13 +1903,17 @@ Not including a setting in the `settings` record means not changing that field. 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-
 ### IC method `upload_chunk` {#ic-upload_chunk}
+
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
  
-
 ### IC method `clear_store` {#ic-clear_store}
+
 Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
+
+### IC method `stored_chunks` {#ic-stored_chunks}
+
+Canister controllers (and the canister itself) can list the hashes of chunks in the chunk storage of a canister.
 
 ### IC method `install_code` {#ic-install_code}
 
@@ -1946,15 +1950,16 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
 
 ### IC method `install_chunked_code` {#ic-install_chunked_code}
-This method installs code that had been previously uploaded in chunks. 
 
-The `mode, arg, sender_canister_version` parameters are as above. 
- The `target_canister` specifies the canister where the code should be uploaded to.  
-The optional `storage_canister` parameters specifies the canister where the chunks are stored.
+This method installs code that had previously been uploaded in chunks.
+
+The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
+The `target_canister` specifies the canister to which the code should be installed.
+The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (defaults to `target_canister` if not specified).
 The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`.
 The `storage_canister` must be on the same subnet as the target canister.
 
-The `chunk_hashse_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`.  The system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes `wasm_module`. It then checks that the SHA256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter of the call, and calls `install_code` with parameters (`mode,target_canister,wasm_module,arg,sender_canister_version`). 
+The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `storage_canister` (or that of the target canister if `storage_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -2564,7 +2569,6 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         StableMemory = (abstract)
         Callback = (abstract)
         ChunkStore = Hash -> Blob
-
 
         Arg = Blob;
         CallerId = Principal;
@@ -3887,7 +3891,6 @@ S with
 
 ```
 
-
 #### IC Management Canister: Upload Chunk
 
 A controller of a canister, or the canister itself can upload chunks to the chunk store of that canister.
@@ -3946,8 +3949,6 @@ S with
       }
 
 ```
-
-
 
 #### IC Management Canister: List stored chunks
 
@@ -4091,7 +4092,6 @@ S with
 
 ```
 
-
 #### IC Management Canister: Code upgrade
 
 Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
@@ -4226,45 +4226,40 @@ S with
 
 ```
 
-
 #### IC Management Canister: Install chunked code
-
-
-
 
 Conditions
 
 ```html
+
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
-if A.storage_canister = None then 
-    let storage_canister = A.target_canister
-    else let storage_canister  A. storage_canister
-M.caller ∈ S.controllers[storage_canister] ∩ S.controllers[target_canister]
-∀ h ∈ A.chunk_hashes_list = [h1,h2,...,hk]: h ∈ dom(S.chunk_store[storage_canister])
-module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
-A.wasm_module_hash = SHA256(module)
-
+if A.storage_canister = null then
+  storage_canister = A.target_canister
+else
+  storage_canister = A.storage_canister
+M.caller ∈ S.controllers[A.target_canister]
+M.caller ∈ S.controllers[storage_canister] ∪ {storage_canister}
+∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[storage_canister])
+A.chunk_hashes_list = [h1,h2,...,hk]
+wasm_module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
+A.wasm_module_hash = SHA-256(wasm_module)
+M' = M with
+    method_name = 'install_code'
+    arg = candid(record {A.mode; A.target_canister; wasm_module; A.arg; A.sender_canister_version})
 
 ```
 
 State after
+
 ```html
-S.messages = Older_messages · 
-                CallMessage {
-                    caller = M.caller
-                    mode = A.mode
-                    canister_id = A.target_canister
-                    wasm_module = module
-                    args = A.args
-                    sender_canister_version = M.sender_canister_version
-            } · Younger_messages
+
+S with
+    messages = Older_messages · CallMessage M' · Younger_messages
 
 ```
-
-
 
 #### IC Management Canister: Code uninstallation {#rule-uninstall}
 
