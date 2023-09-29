@@ -1951,7 +1951,8 @@ This method installs code that had been previously uploaded in chunks.
 The `mode, arg, sender_canister_version` parameters are as above. 
  The `target_canister` specifies the canister where the code should be uploaded to.  
 The optional `storage_canister` parameters specifies the canister where the chunks are stored.
-The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and `storage_canister` must be on the same subnet as the target canister.  
+The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`.
+The `storage_canister` must be on the same subnet as the target canister.
 
 The `chunk_hashse_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`.  The system looks up in the chunk store of `storage_canister` (or that of the target canister if this parameter is not provided) blobs corresponding to `h1,...,hk`, concatenates them to obtain a blob of bytes `wasm_module`. It then checks that the SHA256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter of the call, and calls `install_code` with parameters (`mode,target_canister,wasm_module,arg,sender_canister_version`). 
 
