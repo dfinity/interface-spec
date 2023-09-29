@@ -1623,7 +1623,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     It burns no more cycles than the amount obtained by combining `amount_high` and `amount_low`. Cycles are represented by 128-bit values.
 
-    It burns no more cycles than available according to `balance` - `freezing_threshold`.
+    It burns no more cycles than `balance` - `freezing_limit`, where `freezing_limit` is the amount of idle cycles burned by the canister during its `freezing_threshold`.
 
     It can be called multiple times, each time possibly burning more cycles from the balance.
 
