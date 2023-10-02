@@ -4290,6 +4290,7 @@ State after
 S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
+    chunk_store = ()
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
       recent_changes = H · {
