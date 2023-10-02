@@ -1954,10 +1954,10 @@ This method traps if the canister's cycle balance decreases below the canister's
 This method installs code that had previously been uploaded in chunks.
 
 The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
-The `target_canister` specifies the canister to which the code should be installed.
-The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (defaults to `target_canister` if not specified).
-The caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`.
-The `storage_canister` must be on the same subnet as the target canister.
+The `target_canister` specifies the canister where the code should be installed.
+The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
+For the call to succeed, the caller must be a controller of the `storage_canister` or the caller must be the `storage_canister` and
+the `storage_canister` must be on the same subnet as the target canister.
 
 The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `storage_canister` (or that of the target canister if `storage_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
@@ -4242,6 +4242,7 @@ else
   storage_canister = A.storage_canister
 M.caller ∈ S.controllers[A.target_canister]
 M.caller ∈ S.controllers[storage_canister] ∪ {storage_canister}
+S.canister_subnet[A.target_canister] = S.canister_subnet[strorage_canister]
 ∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[storage_canister])
 A.chunk_hashes_list = [h1,h2,...,hk]
 wasm_module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
