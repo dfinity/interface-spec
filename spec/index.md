@@ -1263,7 +1263,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                            -> ();                                               // U Rt Ry
 
-    ic0.cycles_burn : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // U T Rt Ry
+    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // U T Rt Ry
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -1617,7 +1617,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This does not trap.
 
--   `ic0.cycles_burn : (amount_high : i64, amount_low : i64, dst : i32) -> ()`
+-   `ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ()`
 
     This burns cycles from the canister. It burns as many cycles as possible, up to these constraints:
 
@@ -5689,7 +5689,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.balance := es.balance + amount
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
-    ic0.cycles_burn<es>(amount_high : i64, amount_low : i64, dst : i32) =
+    ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
       if es.context ∉ {U, T, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       let burned_amount = min(amount, es.balance - freezing_limit(
