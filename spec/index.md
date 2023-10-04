@@ -2789,7 +2789,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     }
     CanStatus
       = Running
-      | Stopping (List (CallOrigin, Nat, Nat))
+      | Stopping (List (CallOrigin, Nat))
       | Stopped
     ChangeOrigin
       = FromUser {
@@ -2928,7 +2928,7 @@ The following is an incomplete list of invariants that should hold for the abstr
         ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
         ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ∈ dom(S.call_contexts)
         ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ∈ dom(S.call_contexts)
-        ∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
+        ∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ∈ dom(S.call_contexts)
 
 ### State transitions
 
@@ -3523,7 +3523,7 @@ S.call_contexts[Ctxt_id].needs_to_respond = true
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 
 ```
 
@@ -3556,7 +3556,7 @@ S.call_contexts[Ctxt_id].needs_to_respond = false
 ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
 ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
 
 ```
 
@@ -4172,13 +4172,13 @@ The controllers of a canister can stop a canister. Stopping a canister goes thro
 
 We encode this behavior via three (types of) transitions:
 
-1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Every such `stop_canister` call has a timeout of 5 minutes and the corresponding `stop_canister` call is rejected if it is not responded to within the timeout (the canister stays stopping in this case).
+1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Note that every such `stop_canister` call can be rejected by the system at any time (the canister stays stopping in this case), e.g., if the `stop_canister` call could not be responded for a long time.
 
 2.  Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 
 3.  Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
-Conditions  
+Conditions
 
 ```html
 
@@ -4198,7 +4198,7 @@ State after
 
 S with
     messages = Older_messages · Younger_messages
-    canister_status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles, S.time[A.canister_id])]
+    canister_status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles)]
 
 ```
 
@@ -4222,7 +4222,7 @@ State after
 
 S with
     messages = Older_messages · Younger_messages
-    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles, S.time[A.canister_id])])
+    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles)])
 
 ```
 
@@ -4249,7 +4249,7 @@ S with
             response = Reply (candid())
             refunded_cycles = C
           }
-        | (O, C, T) ∈ Origins
+        | (O, C) ∈ Origins
         ]
 
 ```
@@ -4284,31 +4284,28 @@ S with
 
 ```
 
-Pending `stop_canister` calls are rejected if they are not responded within the timeout of 5 minutes (the canister stays stopping in this case):
+Pending `stop_canister` calls may be rejected by the system at any time (the canister stays stopping in this case):
 
-Conditions  
+Conditions
 
 ```html
 
-S.canister_status[CanisterId] = Stopping Origins
+S.canister_status[CanisterId] = Stopping (Older_origins · O · Younger_origins)
 
 ```
 
-State after  
+State after
 
 ```html
 
 S with
-    canister_status[CanisterId] = Stopping [ (O, C, T) | (O, C, T) ∈ Origins, S.time[CanisterId] <= T + 300s ]
+    canister_status[CanisterId] = Stopping (Older_origins · Younger_origins)
     messages = S.Messages ·
-        [ ResponseMessage {
-            origin = O
-            response = Reject (CANISTER_ERROR, 'Canister could not be stopped yet')
-            refunded_cycles = C
-          }
-        | (O, C, T) ∈ Origins
-        , T + 300s < S.time[CanisterId]
-        ]
+      ResponseMessage {
+        origin = O
+        response = Reject (CANISTER_ERROR, 'Canister could not be stopped yet')
+        refunded_cycles = C
+      }
 
 ```
 
@@ -4378,7 +4375,7 @@ S with
             response = Reject (CANISTER_ERROR, 'Canister has been restarted')
             refunded_cycles = C
           }
-        | (O, C, T) ∈ Origins
+        | (O, C) ∈ Origins
         ]
 
 ```
