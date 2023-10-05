@@ -3038,11 +3038,15 @@ is_effective_canister_id(E.content, ECID)
   E.content.sender ∈ S.controllers[CanisterId]
   E.content.method_name ∈
     { "install_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
-      "canister_status", "delete_canister",
-      "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
+      "canister_status", "delete_canister" }
+) ∨ (
+  E.content.canister_id = ic_principal
+  E.content.method_name ∈
+    { "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
 ) ∨ (
   E.content.canister_id ≠ ic_principal
   S.canisters[E.content.canister_id] ≠ EmptyCanister
+  S.canister_status[E.content.canister_id] = Running
   Env = {
     time = S.time[E.content.canister_id];
     controllers = S.controllers[E.content.canister_id];
