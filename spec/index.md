@@ -1006,15 +1006,11 @@ Additionally, the Internet Computer provides an API endpoint to obtain various s
 
 For this endpoint, the user performs a GET request, and receives a CBOR (see [CBOR](#cbor)) value with the following fields. The IC may include additional implementation-specific fields.
 
--   `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the Internet Computer aims to support, e.g. `0.8.1`. The implementation may also return `unversioned` to indicate that it does *not* comply to a particular version, e.g. in between releases.
-
 -   `impl_source` (string, optional): Identifies the implementation of the Internet Computer Protocol, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/ic`).
 
--   `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer Protocol implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
+-   `impl_version` (string, optional): The precise git revision of the Internet Computer Protocol implementation
 
--   `impl_revision` (string, optional): The precise git revision of the Internet Computer Protocol implementation
-
--   `root_key` (blob, only in development instances): The public key (a DER-encoded BLS key) of the root key of this development instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
+-   `root_key` (blob): The public key (a DER-encoded BLS key) of the root key of this instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and should not fetch it from this insecure location.
 
 See [CBOR encoding of requests and responses](#api-cbor) for details on the precise CBOR encoding of this object.
 
