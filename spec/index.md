@@ -439,6 +439,10 @@ The state tree contains information about the topology of the Internet Computer.
         principal = bytes .size (0..29)
         tagged<t> = #6.55799(t) ; the CBOR tag
 
+-   `/subnet/<subnet_id>/ic_api_version` (string)
+
+    The interface version supported, i.e. the version of the present document that the Internet Computer aims to support, e.g. `0.21.0`. The implementation may also return `unversioned` to indicate that it does *not* comply to a particular version, e.g., in between releases.
+
 -   `/subnet/<subnet_id>/metrics` (blob)
 
      A collection of subnet-wide metrics related to this subnet's current resource usage and/or performance. The metrics are a CBOR map with the following fields:
@@ -670,7 +674,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
--   paths with prefix `/subnet/<subnet_id>/node` which are only contained in the returned certificate if `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree.
+-   paths with prefix `/subnet/<subnet_id>/ic_api_version` and `/subnet/<subnet_id>/node` which are only contained in the returned certificate if
+
+    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` belongs to the canister ranges of the subnet `<subnet_id>`, i.e., if `<effective_canister_id>` belongs to the value at the path `/subnet/<subnet_id>/canister_ranges` in the state tree;
+
+    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` from the URL matches the `<subnet_id>` in the corresponding path.
 
 The returned certificate also always reveals `/time`, even if not explicitly requested.
 
@@ -689,7 +697,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/ic_api_version`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -5077,6 +5085,7 @@ The predicate `may_read_path_for_canister` is defined as follows, implementing t
     may_read_path_for_canister(S, _, ["subnet", sid]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "ic_api_version"]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "node"]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "node", nid]) = True
     may_read_path_for_canister(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
@@ -5127,6 +5136,7 @@ The predicate `may_read_path_for_subnet` is defined as follows, implementing the
     may_read_path_for_subnet(S, _, ["subnet", sid]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "ic_api_version"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "node"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid]) = True
@@ -5141,7 +5151,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk; "canister_ranges" : subnet_ranges; "metrics" : <implementation-specific>; "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk; "canister_ranges" : subnet_ranges; "ic_api_version" : <implementation-specific>; "metrics" : <implementation-specific>; "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
