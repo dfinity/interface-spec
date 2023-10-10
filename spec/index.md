@@ -76,7 +76,8 @@ The public entry points of canisters are called *methods*. Methods can be declar
 
 Methods can be *called*, from *caller* to *callee*, and will eventually incur a *response* which is either a *reply* or a *reject*. A method may have *parameters*, which are provided with concrete *arguments* in a method call.
 
-External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister".
+External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off. 
+Update calls are executed in *replicated* mode, i.e. execution takes place in parallel on multiple replicas who need to arrive at a consensus on what the result of the call is. Query calls are fast but offer less guarantees since they are executed in *non-replicated* mode, by a single replica.
 
 Internally, a call or a response is transmitted as a *message* from a *sender* to a *receiver*. Messages do not have a response.
 
@@ -1338,6 +1339,7 @@ The following sections describe various System API functions, also referred to a
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
+    ic0.in_replicated_execution: () -> (result: i32);                           // * 
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1788,6 +1790,14 @@ In the future, we might expose more performance counters.
 The system resets the counter at the beginning of each [Entry points](#entry-points) invocation.
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
+
+### Replicated execution check {#system-api-replicated-execution-check}
+
+The canister can check whether it is currently running in replicated or non replicated execution. 
+
+`ic0.in_replicated_execution : () -> (result: i32)`
+
+Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
 
 ### Controller check {#system-api-controller-check}
 
@@ -6145,6 +6155,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         else return 1
       else
         Trap {cycles_used = es.cycles_used;}
+
+    ic0.in_replicated_execution<es>() : i32 =
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.params.sysenv.certificate = NoCertificate
+      then return 1
+      else return 0
 
     ic0.debug_print<es>(src : i32, size : i32) =
       return
