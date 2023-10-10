@@ -1368,6 +1368,8 @@ The comment after each function lists from where these functions may be invoked:
 
 If the canister invokes a system call from somewhere else, it will trap.
 
+Since Wasm doesn't have a 128-bit number type, calls requiring 128-bit arguments (e.g., the 128-bit versions of cycle operations) encode such arguments as a pair of 64-bit numbers containing the high and low bits.
+
 ### Blob-typed arguments and results
 
 WebAssembly functions parameter and result types can only be primitive number types. To model functions that accept or return blobs or text values, the following idiom is used:
