@@ -76,7 +76,8 @@ The public entry points of canisters are called *methods*. Methods can be declar
 
 Methods can be *called*, from *caller* to *callee*, and will eventually incur a *response* which is either a *reply* or a *reject*. A method may have *parameters*, which are provided with concrete *arguments* in a method call.
 
-External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister".
+External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off. 
+Update calls are executed in *replicated* mode, i.e. execution takes place in parallel on multiple replicas who need to arrive at a consensus on what the result of the call is. Query calls are fast but offer less guarantees since they are executed in *non-replicated* mode, by a single replica.
 
 Internally, a call or a response is transmitted as a *message* from a *sender* to a *receiver*. Messages do not have a response.
 
@@ -105,6 +106,14 @@ This specification may refer to certain constants and limits without specifying 
 -   `MAX_CYCLES_PER_QUERY`
 
     Maximum amount of cycles that can be used in total (across all calls to query and composite query methods and their callbacks) during evaluation of a query call.
+
+-   `CHUNK_STORE_SIZE`
+
+    Maximum number of chunks that can be stored within the chunk store of a canister. 
+
+-   `MAX_CHUNKS_IN_LARGE_WASM`
+
+    Maximum number of chunks that can comprise a large Wasm module. 
 
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
@@ -1245,7 +1254,7 @@ While an implementation will likely try to keep the interval between `canister_h
 
 For time-based execution, the WebAssembly module can export a function with name `canister_global_timer`. This function is called if the canister has set its global timer (using the System API function `ic0.global_timer_set`) and the current time (as returned by the System API function `ic0.time`) has passed the value of the global timer.
 
-Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
+Once the function `canister_global_timer` is scheduled, the canister's global timer is deactivated. The global timer is also deactivated upon changes to the canister's Wasm module (calling `install_code`, `install_chunked_code`, `uninstall_code` methods of the management canister or if the canister runs out of cycles). In particular, the function `canister_global_timer` won't be scheduled again unless the canister sets the global timer again (using the System API function `ic0.global_timer_set`). The global timer scheduling algorithm is implementation-defined.
 
 `canister_global_timer` is triggered by the IC, and therefore has no arguments and cannot reply or reject. Still, the function `canister_global_timer` can initiate new calls.
 
@@ -1332,6 +1341,7 @@ The following sections describe various System API functions, also referred to a
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
+    ic0.in_replicated_execution: () -> (result: i32);                           // * 
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1492,7 +1502,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
 ### Canister version {#system-api-canister-version}
 
-For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
 -   `ic0.canister_version : () → i64`
 
@@ -1797,6 +1807,14 @@ The system resets the counter at the beginning of each [Entry points](#entry-poi
 
 The main purpose of this counter is to facilitate in-canister performance profiling.
 
+### Replicated execution check {#system-api-replicated-execution-check}
+
+The canister can check whether it is currently running in replicated or non replicated execution. 
+
+`ic0.in_replicated_execution : () -> (result: i32)`
+
+Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
+
 ### Controller check {#system-api-controller-check}
 
 The canister can check whether a given principal is one of its controllers.
@@ -1935,6 +1953,18 @@ Not including a setting in the `settings` record means not changing that field. 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
+### IC method `upload_chunk` {#ic-upload_chunk}
+
+Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
+ 
+### IC method `clear_store` {#ic-clear_store}
+
+Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
+
+### IC method `stored_chunks` {#ic-stored_chunks}
+
+Canister controllers (and the canister itself) can list the hashes of chunks in the chunk storage of a canister.
+
 ### IC method `install_code` {#ic-install_code}
 
 This method installs code into a canister.
@@ -1968,6 +1998,17 @@ The `wasm_module` field specifies the canister module to be installed. The syste
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
+
+### IC method `install_chunked_code` {#ic-install_chunked_code}
+
+This method installs code that had previously been uploaded in chunks.
+
+The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
+The `target_canister` specifies the canister where the code should be installed.
+The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
+For the call to succeed, the caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`. The `storage_canister` must be on the same subnet as the target canister.
+
+The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `storage_canister` (or that of the target canister if `storage_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -2576,6 +2617,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         WasmState = (abstract)
         StableMemory = (abstract)
         Callback = (abstract)
+        ChunkStore = Hash -> Blob
 
         Arg = Blob;
         CallerId = Principal;
@@ -2822,6 +2864,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     CanState
      = EmptyCanister | {
       wasm_state : WasmState;
+      chunk_store: ChunkStore;
       module : CanisterModule;
       raw_module : Blob;
       public_custom_sections: Text ↦ Blob;
@@ -3034,7 +3077,7 @@ Requests that have expired are dropped here.
 
 Ingress message inspection is applied, and messages that are not accepted by the canister are dropped.
 
-The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage, and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
+The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage & and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
 
         freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 
@@ -3055,7 +3098,7 @@ is_effective_canister_id(E.content, ECID)
   E.content.arg = candid({canister_id = CanisterId, …})
   E.content.sender ∈ S.controllers[CanisterId]
   E.content.method_name ∈
-    { "install_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
+    { "install_code", "install_chunked_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
       "canister_status", "delete_canister",
       "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
 ) ∨ (
@@ -3519,7 +3562,7 @@ Note that returning does *not* imply that the call associated with this message 
 The function `validate_sender_canister_version` checks that `sender_canister_version` matches the actual canister version of the sender in all calls to the methods of the management canister that take `sender_canister_version`:
 
     validate_sender_canister_version(new_calls, canister_version_from_system) =
-      ∀ call ∈ new_calls. (call.callee = ic_principal and (call.method = 'create_canister' or call.method = 'update_settings' or call.method = 'install_code' or call.method = 'uninstall_code' or call.method = 'provisional_create_canister_with_cycles') and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
+      ∀ call ∈ new_calls. (call.callee = ic_principal and (call.method = 'create_canister' or call.method = 'update_settings' or call.method = 'install_code' or call.method = `install_chunked_code` or call.method = 'uninstall_code' or call.method = 'provisional_create_canister_with_cycles') and call.arg = candid(A) and A.sender_canister_version = n) => n = canister_version_from_system
 
 The functions `query_as_update` and `system_task_as_update` turns a query function (note that composite query methods cannot be called when executing a message during this transition) resp the heartbeat or global timer into an update function; this is merely a notational trick to simplify the rule:
 
@@ -3679,6 +3722,7 @@ S with
     time[CanisterId] = CurrentTime
     global_timer[CanisterId] = 0
     controllers[CanisterId] = New_controllers
+    chunk_store[CanisterId] = ()
     compute_allocation[CanisterId] = New_compute_allocation
     memory_allocation[CanisterId] = New_memory_allocation
     freezing_threshold[CanisterId] = New_freezing_threshold
@@ -3895,6 +3939,95 @@ S with
       }
 
 ```
+
+#### IC Management Canister: Upload Chunk
+
+A controller of a canister, or the canister itself can upload chunks to the chunk store of that canister.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'upload_chunk'
+M.arg = candid(A)
+|dom(S.chunk_store[A.canister_id]) ∪ {SHA-256(A.chunk)}| <= CHUNK_STORE_SIZE
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
+
+
+```
+
+State after
+
+```html
+
+S with
+    chunk_store[A.canister_id](SHA-256(A.chunk)) = A.chunk
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid(hash)
+      }
+
+```
+
+#### IC Management Canister: Clear chunk store
+
+The controller of a canister, or the canister itself can clear the chunk store of that canister. 
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'clear_store'
+M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
+```
+
+State after
+
+```html
+
+S with
+    chunk_store[A.canister_id] = ()
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid()
+      }
+
+```
+
+#### IC Management Canister: List stored chunks
+
+The controller of a canister, or the canister itself can list the hashes of the chunks stored in the chunk store.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'stored_chunks'
+M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid(dom(S.chunk_store[A.canister_id]))
+      }
+
+```
+
+
+
 
 #### IC Management Canister: Code installation
 
@@ -4142,6 +4275,42 @@ S with
 
 ```
 
+#### IC Management Canister: Install chunked code
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'install_chunked_code'
+if A.storage_canister = null then
+  storage_canister = A.target_canister
+else
+  storage_canister = A.storage_canister
+M.caller ∈ S.controllers[A.target_canister]
+M.caller ∈ S.controllers[storage_canister] ∪ {storage_canister}
+S.canister_subnet[A.target_canister] = S.canister_subnet[strorage_canister]
+∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[storage_canister])
+A.chunk_hashes_list = [h1,h2,...,hk]
+wasm_module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
+A.wasm_module_hash = SHA-256(wasm_module)
+M' = M with
+    method_name = 'install_code'
+    arg = candid(record {A.mode; A.target_canister; wasm_module; A.arg; A.sender_canister_version})
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · CallMessage M' · Younger_messages
+
+```
+
 #### IC Management Canister: Code uninstallation {#rule-uninstall}
 
 Upon uninstallation, the canister is reverted to an empty canister, and all outstanding call contexts are rejected and marked as deleted.
@@ -4170,6 +4339,7 @@ State after
 S with
     canisters[A.canister_id] = EmptyCanister
     certified_data[A.canister_id] = ""
+    chunk_store = ()
     canister_history[A.canister_id] = {
       total_num_changes = N + 1;
       recent_changes = H · {
@@ -6014,6 +6184,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         else return 1
       else
         Trap {cycles_used = es.cycles_used;}
+
+    ic0.in_replicated_execution<es>() : i32 =
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.params.sysenv.certificate = NoCertificate
+      then return 1
+      else return 0
 
     ic0.debug_print<es>(src : i32, size : i32) =
       return
