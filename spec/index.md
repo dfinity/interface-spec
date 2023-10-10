@@ -439,6 +439,16 @@ The state tree contains information about the topology of the Internet Computer.
         principal = bytes .size (0..29)
         tagged<t> = #6.55799(t) ; the CBOR tag
 
+-   `/subnet/<subnet_id>/metrics` (blob)
+
+     A collection of subnet-wide metrics related to this subnet's current resource usage and/or performance. The metrics are a CBOR map with the following fields:
+     
+     - `num_canisters` (`nat`): The number of canisters on this subnet.
+     - `canister_state_bytes` (`nat`): The total size of the state in bytes taken by canisters on this subnet since this subnet was created.
+     - `consumed_cycles_total` (`map`): The total number of cycles consumed by all current and deleted canisters on this subnet. It's a map of two values, a low part of type `nat` and a high part of type `opt nat`.
+     - `update_transactions_total` (`nat`): The total number of transactions processed on this subnet since this subnet was created.
+       
+
 :::note
 
 Because this uses the lexicographic ordering of princpials, and the byte distinguishing the various classes of ids is at the *end*, this range by construction conceptually includes principals of various classes. This specification needs to take care that the fact that principals that are not canisters may appear in these ranges does not cause confusion.
@@ -515,7 +525,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
 
--   At `/api/v2/canister/<effective_canister_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
+-   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
 -   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
 
@@ -523,7 +533,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -632,7 +642,15 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 ### Request: Read state {#http-read-state}
 
-In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state`. The request body consists of an authentication envelope with a `content` map with the following fields:
+:::note
+
+Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` will be deprecated in a future release of the Interface specification. Hence, users are advised to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+
+On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
+
+:::
+
+In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific, i.e., when requesting paths with the prefix `/time` or `/subnet`, and the subnet form must be used when requesting paths of the form `/subnet/<subnet_id>/metrics`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `read_state`
 
@@ -644,7 +662,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the `effective_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
+    If this `certificate` includes (possibly nested) subnet delegations (see [Delegation](#certification-delegation)), then
+
+    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in each delegation's canister id range,
+
+    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match each delegation's subnet id.
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
@@ -667,7 +689,7 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -815,7 +837,7 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
 :::note
 
-The expectation is that user-side agent code shields users and developers from the notion of effective canister ID, in analogy to how the System API interface shields canister developers from worrying about routing.
+The expectation is that user-side agent code shields users and developers from the notion of effective canister id, in analogy to how the System API interface shields canister developers from worrying about routing.
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
@@ -5020,9 +5042,17 @@ verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time /
 
 #### Certified state reads
 
-The user can read elements of the *state tree*, using a `read_state` request to `/api/v2/canister/<ECID>/read_state`.
+:::note
 
-Submitted request  
+Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` will be deprecated in a future release of the Interface specification. Hence, users are advised to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+
+On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
+
+:::
+
+The user can read elements of the *state tree*, using a `read_state` request to `/api/v2/canister/<ECID>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`.
+
+Submitted request to `/api/v2/canister/<ECID>/read_state`
 `E`
 
 Conditions  
@@ -5032,7 +5062,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 S.system_time <= RS.ingress_expiry
-∀ path ∈ RS.paths. may_read_path(S, R.sender, path)
+∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
 ```
@@ -5042,35 +5072,68 @@ A record with
 
 -   `{certificate: C}`
 
-The predicate `may_read_path` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
+The predicate `may_read_path_for_canister` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
-    may_read_path(S, _, ["time"]) = True
-    may_read_path(S, _, ["subnet"]) = True
-    may_read_path(S, _, ["subnet", sid]) = True
-    may_read_path(S, _, ["subnet", sid, "public_key"]) = True
-    may_read_path(S, _, ["subnet", sid, "canister_ranges"]) = True
-    may_read_path(S, _, ["subnet", sid, "node"]) = True
-    may_read_path(S, _, ["subnet", sid, "node", nid]) = True
-    may_read_path(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
-    may_read_path(S, _, ["request_status", Rid]) =
-    may_read_path(S, _, ["request_status", Rid, "status"]) =
-    may_read_path(S, _, ["request_status", Rid, "reply"]) =
-    may_read_path(S, _, ["request_status", Rid, "reject_code"]) =
-    may_read_path(S, _, ["request_status", Rid, "reject_message"]) =
-    may_read_path(S, _, ["request_status", Rid, "error_code"]) =
+    may_read_path_for_canister(S, _, ["time"]) = True
+    may_read_path_for_canister(S, _, ["subnet"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "public_key"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "node"]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "node", nid]) = True
+    may_read_path_for_canister(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
+    may_read_path_for_canister(S, _, ["request_status", Rid]) =
+    may_read_path_for_canister(S, _, ["request_status", Rid, "status"]) =
+    may_read_path_for_canister(S, _, ["request_status", Rid, "reply"]) =
+    may_read_path_for_canister(S, _, ["request_status", Rid, "reject_code"]) =
+    may_read_path_for_canister(S, _, ["request_status", Rid, "reject_message"]) =
+    may_read_path_for_canister(S, _, ["request_status", Rid, "error_code"]) =
       ∀ (R ↦ (_, ECID')) ∈ dom(S.requests). hash_of_map(R) = Rid => RS.sender == R.sender ∧ ECID == ECID'
-    may_read_path(S, _, ["canister", cid, "module_hash"]) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "controllers"]) = cid == ECID
-    may_read_path(S, _, ["canister", cid, "metadata", name]) = cid == ECID ∧ UTF8(name) ∧
+    may_read_path_for_canister(S, _, ["canister", cid, "module_hash"]) = cid == ECID
+    may_read_path_for_canister(S, _, ["canister", cid, "controllers"]) = cid == ECID
+    may_read_path_for_canister(S, _, ["canister", cid, "metadata", name]) = cid == ECID ∧ UTF8(name) ∧
       (cid ∉ dom(S.canisters[cid]) ∨
        S.canisters[cid] = EmptyCanister ∨
        name ∉ (dom(S.canisters[cid].public_custom_sections) ∪ dom(S.canisters[cid].private_custom_sections)) ∨
        name ∈ dom(S.canisters[cid].public_custom_sections) ∨
        (name ∈ dom(S.canisters[cid].private_custom_sections) ∧ RS.sender ∈ S.controllers[cid])
       )
-    may_read_path(S, _, _) = False
+    may_read_path_for_canister(S, _, _) = False
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
+
+Submitted request to `/api/v2/subnet/<subnet_id>/read_state`
+`E`
+
+Conditions  
+
+```html
+
+E.content = ReadState RS
+TS = verify_envelope(E, RS.sender, S.system_time)
+S.system_time <= RS.ingress_expiry
+∀ path ∈ RS.paths. may_read_path_for_subnet(S, RS.sender, path)
+
+```
+
+Read response  
+A record with
+
+-   `{certificate: C}`
+  
+
+The predicate `may_read_path_for_subnet` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
+
+    may_read_path_for_subnet(S, _, ["time"]) = True
+    may_read_path_for_subnet(S, _, ["subnet"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
+    may_read_path_for_subnet(S, _, _) = False
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that has a path in `RS.paths` or `["time"]` as a prefix, we have
 
@@ -5080,7 +5143,7 @@ where `state_tree` constructs a labeled tree from the IC state `S` and the (so f
 
     state_tree(S) = {
       "time": S.system_time;
-      "subnet": { subnet_id : { "public_key" : subnet_pk, "canister_ranges" : subnet_ranges, "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
+      "subnet": { subnet_id : { "public_key" : subnet_pk; "canister_ranges" : subnet_ranges; "metrics" : <implementation-specific>; "node": { node_id : { "public_key" : node_pk } | (node_id, node_pk) ∈ subnet_nodes } } | (subnet_id, subnet_pk, subnet_ranges, subnet_nodes) ∈ subnets };
       "request_status": { request_id(R): request_status_tree(T) | (R ↦ (T, _)) ∈ S.requests };
       "canister":
         { canister_id :
