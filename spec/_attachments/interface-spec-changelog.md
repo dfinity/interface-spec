@@ -2,6 +2,9 @@
 
 ### ∞ (unreleased)
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
+* Add management canister methods to support installing large WebAssembly modules split into chunks.
+* Add a system API method to determine if the canister is running in replicated or non-replicated mode.
+* Add a system API method to burn cycles of the canister that calls this method.
 * Add a check that a canister receiving an ingress message is Running before the ingress message is marked as Received.
 
 ### 0.21.0 (2023-09-18) {#0_21_0}
