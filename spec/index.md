@@ -2038,13 +2038,13 @@ Indicates various information about the canister. It contains:
 
 -   The cycle balance of the canister.
 
--   Statistics regarding the query execution of the canister, i.e., a record containing the following fields:
+-   Statistics regarding the query call execution of the canister, i.e., a record containing the following fields:
 
     * `num_queries`: the total number of query calls evaluated on the canister,
 
     * `num_instructions`: the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
 
-    * `num_request_payload_bytes`: the total number of query call request payload (query argument) bytes, and
+    * `num_request_payload_bytes`: the total number of query call request payload (query call argument) bytes, and
 
     * `num_response_payload_bytes`: the total number of query call response payload (reply data or reject message) bytes.
 
@@ -3913,7 +3913,7 @@ S with
             S.canister_subnet[A.canister_id].subnet_size,
           );
           query_stats = noise(SUM {(1, num_instructions, num_request_payload_bytes, num_response_payload_bytes) |
-                                   (t, num_instructions, num_request_payload_bytes, num_response_payload_bytes) <- S.query_stats[A.canister_id]
+                                   (t, num_instructions, num_request_payload_bytes, num_response_payload_bytes) <- S.query_stats[A.canister_id];
                                    t <= S.time[A.canister_id] - T})
         })
         refunded_cycles = M.transferred_cycles
