@@ -5263,9 +5263,8 @@ S with
         num_instructions = NumInstructions
         num_request_payload_bytes = |Q.Arg|
         num_response_payload_bytes =
-          if F(Q.Arg, Q.sender, Env) = Trap trap then <implementation-specific>
-          else if F(Q.Arg, Q.sender, Env) = Return {response = Reject (code, msg); …} then |msg|
-          else if F(Q.Arg, Q.sender, Env) = Return {response = Reply R; …} then |R|
+          if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _) then |RejectMsg|
+          else if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _) then |Res|
     }
 
 ```
