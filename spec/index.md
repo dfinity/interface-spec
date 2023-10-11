@@ -2038,15 +2038,15 @@ Indicates various information about the canister. It contains:
 
 -   The cycle balance of the canister.
 
--   Statistics regarding the query execution of the canister: a tuple `(num_queries, num_instructions, num_request_payload_bytes, num_response_payload_bytes)` containing
+-   Statistics regarding the query execution of the canister, i.e., a record containing the following fields:
 
-    * the total number of query calls evaluated on the canister,
+    * `num_queries`: the total number of query calls evaluated on the canister,
 
-    * the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
+    * `num_instructions`: the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
 
-    * the total number of query call request payload (query argument) bytes, and
+    * `num_request_payload_bytes`: the total number of query call request payload (query argument) bytes, and
 
-    * the total number of query call response payload (reply data or reject message) bytes.
+    * `num_response_payload_bytes`: the total number of query call response payload (reply data or reject message) bytes.
 
 Only the controllers of the canister or the canister itself can request its status.
 
