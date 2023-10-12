@@ -1154,7 +1154,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   declare more than 50,000 functions, or
 
-    -   declare more than 300 globals, or
+    -   declare more than 1,000 globals, or
 
     -   declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
 
