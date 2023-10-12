@@ -1805,7 +1805,7 @@ The argument `type` decides which performance counter to return:
 
     - For replicated message execution, it is the number of WebAssembly instructions the canister has executed within the call context of the current [Message execution](#rule-message-execution) since [Call context creation](#call-context-creation). The counter monotonically increases across all [message executions](#rule-message-execution) in the call context until the corresponding [call context is removed](#call-context-removal).
 
-    - For non-replicated message execution, it is the number of WebAssembly instructions the canister has executed within the corresponding `composite_query_helper` in [Query call](#query-call). The counter monotonically increases across the executions of the composite query method and the composite query callbacks until the corresponding `composite_query_helper` returns (ignoring any downstream calls to `composite_query_helper`).
+    - For non-replicated message execution, it is the number of WebAssembly instructions the canister has executed within the corresponding `composite_query_helper` in [Query call](#query-call). The counter monotonically increases across the executions of the composite query method and the composite query callbacks until the corresponding `composite_query_helper` returns (ignoring WebAssembly instructions executed within any further downstream calls of `composite_query_helper`).
 
 In the future, the IC might expose more performance counters.
 
