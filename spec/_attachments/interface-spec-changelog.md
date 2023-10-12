@@ -6,6 +6,7 @@
 * Add a system API method to determine if the canister is running in replicated or non-replicated mode.
 * Add a system API method to burn cycles of the canister that calls this method.
 * Add a check that a canister receiving an ingress message is Running before the ingress message is marked as Received.
+* Increase the maximum number of globals in a canister's WASM.
 
 ### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
