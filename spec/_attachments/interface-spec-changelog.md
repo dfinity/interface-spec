@@ -1,12 +1,22 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
+* Add management canister methods to support installing large WebAssembly modules split into chunks.
+* Add a system API method to determine if the canister is running in replicated or non-replicated mode.
+* Add a system API method to burn cycles of the canister that calls this method.
+* Add a check that a canister receiving an ingress message is Running before the ingress message is marked as Received.
+* Add per-call context performance counter
+
+### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
 * System API calls `ic0.msg_caller_size` and `ic0.msg_caller_copy` can be called in all contexts except for (start) function.
 * Added note on confidentiality of values in the certified state tree.
 * Update algorithm computing the request and response hash in the HTTP Gateway including clarification of when the HTTP Gateway can allow for arbitrary certification version in the canister's response.
 * Update conditions on requested paths in HTTP read state requests.
-* Add per-call context performance counter
+* Added new query methods in the Bitcoin API.
+* Added node public keys to certified state and node signatures to query call responses.
+* Added a new mode for canister upgrades skipping pre-upgrade method's execution.
 
 ### 0.20.0 (2023-07-11) {#0_20_0}
 * IC Bitcoin API, ECDSA API, canister HTTPS outcalls API, and 128-bit cycles System API are considered stable.

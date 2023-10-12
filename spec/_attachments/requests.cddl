@@ -66,15 +66,19 @@ query-content = {
 query-response = tagged<{
   status: "replied"
   reply: call-reply
+  signatures: [+ node-signature]
   //
   status: "rejected"
   reject_code: unsigned
   reject_message: text
   ? error_code: text
+  signatures: [+ node-signature]
 }>
 
-call-reply = {
-  arg : bytes
+node-signature = {
+  timestamp: timestamp
+  signature: bytes
+  identity: principal
 }
 
 ; user delegations
@@ -90,6 +94,10 @@ signed-delegation = {
 }
 
 ; some common data types
+
+call-reply = {
+  arg : bytes
+}
 
 principal = bytes .size (0..29)
 
