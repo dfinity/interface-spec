@@ -4386,7 +4386,7 @@ The controllers of a canister can stop a canister. Stopping a canister goes thro
 
 We encode this behavior via three (types of) transitions:
 
-1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Note that every such `stop_canister` call can be rejected by the system at any time (the canister stays stopping in this case), e.g., if the `stop_canister` call could not be responded for a long time.
+1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Note that every such `stop_canister` call can be rejected by the system at any time (the canister stays stopping in this case), e.g., if the `stop_canister` call could not be responded to for a long time.
 
 2.  Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 
