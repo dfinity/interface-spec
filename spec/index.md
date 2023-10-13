@@ -379,7 +379,7 @@ This section makes forward references to other concepts in this document, in par
 
     where `signing_canister_id` is the id of the signing canister and `reconstruct` is a function that computes a root-hash for the tree.
 
-    -   If the `certificate` includes subnet delegations (possibly nested), then the `signing_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
+    -   If the `certificate` includes a subnet delegation, then the `signing_canister_id` must be included in the delegation's canister id range (see [Delegation](#certification-delegation)).
 
     -   The `tree` must be a `well_formed` tree with
 
@@ -671,11 +671,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes (possibly nested) subnet delegations (see [Delegation](#certification-delegation)), then
+    If this `certificate` includes a subnet delegation (see [Delegation](#certification-delegation)), then
 
-    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in each delegation's canister id range,
+    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in the delegation's canister id range,
 
-    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match each delegation's subnet id.
+    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match the delegation's subnet id.
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
@@ -1851,7 +1851,7 @@ When executing a query or composite query method via a query call (i.e. in non-r
 
     The certificate is a blob as described in [Certification](#certification) that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of [The system state tree](#state-tree).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the id of the current canister will be included in each delegation's canister id range.
+    If this `certificate` includes a subnet delegation, then the id of the current canister will be included in the delegation's canister id range.
 
     This traps if `ic0.data_certificate_present()` returns `0`.
 
@@ -2431,7 +2431,7 @@ A certificate by the root subnet does not have a delegation field. A certificate
 
 :::note
 
-The nested certificate *typically* does not itself again contain a delegation, although there is no reason why agents should enforce that property.
+The certificate included in the delegation (if present) must not itself again contain a delegation.
 
 :::
 
@@ -2441,10 +2441,10 @@ The nested certificate *typically* does not itself again contain a delegation, a
        certificate : Certificate;
      }
 
-A chain of delegations is verified using the following algorithm:
+A delegation is verified using the following algorithm:
 
     check_delegation(NoDelegation) = true
-    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _
+    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _ and d.certificate.delegation = NoDelegation
 
 The delegation key (a BLS key) is computed by the following algorithm:
 
