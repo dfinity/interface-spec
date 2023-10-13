@@ -1010,7 +1010,7 @@ For this endpoint, the user performs a GET request, and receives a CBOR (see [CB
 
 -   `impl_version` (string, optional): The precise git revision of the Internet Computer Protocol implementation
 
--   `root_key` (blob): The public key (a DER-encoded BLS key) of the root key of this instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and should not fetch it from this insecure location.
+-   `root_key` (blob, only in development instances): The public key (a DER-encoded BLS key) of the root key of this development instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See [CBOR encoding of requests and responses](#api-cbor) for details on the precise CBOR encoding of this object.
 
