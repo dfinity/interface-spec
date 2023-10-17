@@ -280,11 +280,11 @@ VALIDATION-ARGS = 'ValidationArgs{', ('no_certification:Empty{}' | 'certificatio
 
 HEADER-VALUE = 'default_certification(', VALIDATION-ARGS, ')'
 
-HEADER = 'IC-CertificateExpression: ', HEADER-VALUE
+HEADER = 'IC-CertificateExpression:', HEADER-VALUE
 ```
 
 :::note
-Implementors should note that the EBNF specification does not allow for any whitespace within the header value. This is intentional and should be supported by all implementations. Optionally, support could also be added for whitespace agonosticism.
+Implementors should note that the EBNF specification does not allow for any whitespace within the header value. This is intentional and should be supported by all implementations. Optionally, support could also be added for whitespace agnosticism.
 :::
 
 ### Request Hash Calculation
