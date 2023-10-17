@@ -2040,13 +2040,13 @@ Indicates various information about the canister. It contains:
 
 -   Statistics regarding the query call execution of the canister, i.e., a record containing the following fields:
 
-    * `num_queries`: the total number of query calls evaluated on the canister,
+    * `num_calls_total`: the total number of query calls evaluated on the canister,
 
-    * `num_instructions`: the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
+    * `num_instructions_total`: the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
 
-    * `num_request_payload_bytes`: the total number of query call request payload (query call argument) bytes, and
+    * `request_payload_bytes_total`: the total number of query call request payload (query call argument) bytes, and
 
-    * `num_response_payload_bytes`: the total number of query call response payload (reply data or reject message) bytes.
+    * `response_payload_bytes_total`: the total number of query call response payload (reply data or reject message) bytes.
 
 Only the controllers of the canister or the canister itself can request its status.
 
@@ -2920,9 +2920,9 @@ Finally, we can describe the state of the IC as a record having the following fi
     }
     QueryStats = {
       timestamp : Timestamp;
-      num_instructions : Nat;
-      num_request_payload_bytes : Nat;
-      num_response_payload_bytes : Nat;
+      num_instructions_total : Nat;
+      request_payload_bytes_total : Nat;
+      response_payload_bytes_total : Nat;
     }
     Subnet = {
       subnet_id : Principal;
@@ -3912,8 +3912,11 @@ S with
             S.freezing_threshold[A.canister_id],
             S.canister_subnet[A.canister_id].subnet_size,
           );
-          query_stats = noise(SUM {(1, num_instructions, num_request_payload_bytes, num_response_payload_bytes) |
-                                   (t, num_instructions, num_request_payload_bytes, num_response_payload_bytes) <- S.query_stats[A.canister_id];
+          query_stats = noise(SUM {{num_calls_total: 1,
+                                    num_instructions_total: num_instructions_total,
+                                    request_payload_bytes_total: request_payload_bytes_total,
+                                    response_payload_bytes_total: response_payload_bytes_total} |
+                                   (t, num_instructions_total, request_payload_bytes_total, response_payload_bytes_total) <- S.query_stats[A.canister_id];
                                    t <= S.time[A.canister_id] - T})
         })
         refunded_cycles = M.transferred_cycles
@@ -5260,9 +5263,9 @@ State after
 S with
     query_stats[Q.receiver] = S.query_stats[Q.receiver] · {
         timestamp = S.time[Q.receiver]
-        num_instructions = NumInstructions
-        num_request_payload_bytes = |Q.Arg|
-        num_response_payload_bytes =
+        num_instructions_total = NumInstructions
+        request_payload_bytes_total = |Q.Arg|
+        response_payload_bytes_total =
           if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _) then |RejectMsg|
           else if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _) then |Res|
     }

@@ -170,11 +170,11 @@ service ic : {
       memory_size: nat;
       cycles: nat;
       idle_cycles_burned_per_day: nat;
-      query_stats: vec record {
-          num_calls: nat;
-          num_instructions: nat;
-          num_request_payload_bytes: nat;
-          num_response_payload_bytes: nat;
+      query_stats: record {
+        num_calls_total: nat;
+        num_instructions_total: nat;
+        request_payload_bytes_total: nat;
+        response_payload_bytes_total: nat;
       };
   });
   canister_info : (record {
