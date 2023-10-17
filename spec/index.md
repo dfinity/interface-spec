@@ -809,7 +809,7 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
           if R.status = "replied" then
             verify_signature PK Sig ("\x0Bic-response" · hash_of_map({
               status: "replied",
-              reply: R.reply,
+              reply: hash_of_map(R.reply),
               timestamp: T,
               request_id: hash_of_map(Q)}))
           else
