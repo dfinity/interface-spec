@@ -932,6 +932,17 @@ The following encodings of field values as blobs are used
 
 -   Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
 
+:::tip
+
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation) of a representation independent hash
+for a map with a nested map in a field value:
+
+    hash_of_map({ "reply": { "arg": "DIDL\x00\x00" } })
+      = H(concat (sort [ H("reply") · H(hash_of_map({ "arg": "DIDL\x00\x00" })) ]))
+      = H(concat (sort [ H("reply") · H(H(concat (sort [ H("arg") · H("DIDL\x00\x00") ]))) ]))
+
+:::
+
 ### Request ids {#request-id}
 
 When signing requests or querying the status of a request (see [Request status](#state-tree-request-status)) in the state tree, the user identifies the request using a *request id*, which is the [representation-independent hash](#hash-of-map) of the `content` map of the original request. A request id must have length of 32 bytes.
