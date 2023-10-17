@@ -2042,13 +2042,13 @@ Indicates various information about the canister. It contains:
 
 -   Statistics regarding the query call execution of the canister, i.e., a record containing the following fields:
 
-    * `num_calls_total`: the total number of query calls evaluated on the canister,
+    * `num_calls_total`: the total number of query and composite query methods evaluated on the canister,
 
-    * `num_instructions_total`: the total number of WebAssembly instructions executed during the evaluation of query calls on the canister,
+    * `num_instructions_total`: the total number of WebAssembly instructions executed during the evaluation of query and composite query methods and composite callbacks on the canister,
 
-    * `request_payload_bytes_total`: the total number of query call request payload (query call argument) bytes, and
+    * `request_payload_bytes_total`: the total number of query and composite query method payload bytes, and
 
-    * `response_payload_bytes_total`: the total number of query call response payload (reply data or reject message) bytes.
+    * `response_payload_bytes_total`: the total number of query and composite query response payload (reply data or reject message) bytes.
 
 Only the controllers of the canister or the canister itself can request its status.
 
@@ -5182,13 +5182,13 @@ We define an auxiliary method that handles calls from composite query methods by
          let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
          let R = F(Arg, Caller, Env)(W)
          if R = Trap trap
-         then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used)
+         then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used, S)
          else if R = Return {new_state = W'; new_calls = Calls; response = Response; cycles_used = Cycles_used}
          then
             W := W'
             if Cycles_used > MAX_CYCLES_PER_MESSAGE
             then
-               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_MESSAGE) // single message execution out of cycles
+               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_MESSAGE, S) // single message execution out of cycles
             Cycles := Cycles - Cycles_used
             if Response = NoResponse
             then
@@ -5196,39 +5196,48 @@ We define an auxiliary method that handles calls from composite query methods by
                do
                   if Depth = MAX_CALL_DEPTH_COMPOSITE_QUERY
                   then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // max call graph depth exceeded
+                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // max call graph depth exceeded
                   let Calls' · Call · Calls''  = Calls
                   Calls := Calls' · Calls''
                   if S.canister_subnet[Canister_id].subnet_id ≠ S.canister_subnet[Call.callee].subnet_id
                   then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // calling to another subnet
-                  let (Response', Cycles') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
+                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // calling to another subnet
+                  let (Response', Cycles', S') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
                   Cycles := Cycles'
+                  S := S' with
+                        query_stats[Call.callee] = S'.query_stats[Call.callee] · {
+                          timestamp = S'.time[Call.callee]
+                          num_instructions_total = <implementation-specific>
+                          request_payload_bytes_total = |Call.arg|
+                          response_payload_bytes_total =
+                            if Response' = Reject (RejectCode, RejectMsg) then |RejectMsg|
+                            else if Response' = Reply Res then |Res|
+                        }
                   if Cycles < MAX_CYCLES_PER_RESPONSE
                   then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // composite query out of cycles
+                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // composite query out of cycles
                   Env.Cert = NoCertificate // no certificate available in composite query callbacks
                   let F' = Mod.composite_callbacks(Call.callback, Response', Env)
                   let R'' = F'(W')
                   if R'' = Trap trap''
-                  then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap''.cycles_used)
+                  then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap''.cycles_used, S)
                   else if R'' = Return {new_state = W''; new_calls = Calls''; response = Response''; cycles_used = Cycles_used''}
                   then
                      W := W''
                      if Cycles_used'' > MAX_CYCLES_PER_RESPONSE
                      then
-                        Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_RESPONSE) // single message execution out of cycles
+                        Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_RESPONSE, S) // single message execution out of cycles
                      Cycles := Cycles - Cycles_used''
                      if Response'' = NoResponse
                      then
                         Calls := Calls'' · Calls
                      else
-                        Return (Response'', Cycles)
-               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles) // canister did not respond
+                        Return (Response'', Cycles, S)
+               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // canister did not respond
             else
-               Return (Response, Cycles)
+               Return (Response, Cycles, S)
       else
-         Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles)
+         Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S)
 
 Submitted request  
 `E`
@@ -5246,11 +5255,11 @@ S.system_time <= Q.ingress_expiry
 
 Query response `R`:
 
--   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
+-   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _, S')` then
 
         {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
 
--   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _)` then
+-   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _, S')` then
 
         {status: "replied"; reply: {arg: Res}, signatures: Sigs}
 
@@ -5266,20 +5275,17 @@ State after
 
 ```html
 
-S with
-    query_stats[Q.receiver] = S.query_stats[Q.receiver] · {
-        timestamp = S.time[Q.receiver]
-        num_instructions_total = NumInstructions
+S' with
+    query_stats[Q.receiver] = S'.query_stats[Q.receiver] · {
+        timestamp = S'.time[Q.receiver]
+        num_instructions_total = <implementation-specific>
         request_payload_bytes_total = |Q.Arg|
         response_payload_bytes_total =
-          if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _) then |RejectMsg|
-          else if composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _) then |Res|
+          if R.status = "rejected" then |R.reject_message|
+          else |R.reply.arg|
     }
 
 ```
-
-where `NumInstructions` is the unspecified number of WebAssembly instructions executed during the evaluation of the query call,
-i.e., the value of `ic0.performance_counter(0)` at the end of the query method execution.
 
 #### Certified state reads
 
