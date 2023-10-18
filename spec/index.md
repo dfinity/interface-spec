@@ -802,7 +802,7 @@ Given a query (the `content` map from the request body) `Q`, a response `R`, and
     verify_response(Q, R, Cert)
       = verify_cert(Cert) ∧
         ((Cert.delegation = NoDelegation ∧ SubnetId = RootSubnetId ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert) = Found Ranges) ∨
-         (SubnetId = Cert.delegation.subnet_id ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
+         (SubnetId = Cert.delegation.subnet_id ∧ Cert.delegation.certificate.delegation = NoDelegation ∧ lookup(["subnet",SubnetId,"canister_ranges"], Cert.delegation.certificate) = Found Ranges)) ∧
         effective_canister_id ∈ Ranges ∧
         ∀ {timestamp: T, signature: Sig, identity: NodeId} ∈ R.signatures.
           lookup(["subnet",SubnetId,"node",NodeId,"public_key"], Cert) = Found PK ∧
