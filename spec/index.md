@@ -1427,7 +1427,7 @@ Eventually, the canister will want to respond to the original call, either by re
 
 -   `ic0.msg_reply_data_append : (src : i32, size : i32) → ()`
 
-    Appends data it to the (initially empty) data reply.
+    Appends data it to the (initially empty) data reply. Traps if the total appended data exceeds the [maximum response size](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This traps if the current call already has been or does not need to be responded to.
 
@@ -1549,7 +1549,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
-    Appends the specified bytes to the argument of the call. Initially, the argument is empty.
+    Appends the specified bytes to the argument of the call. Initially, the argument is empty. Traps if the total appended data exceeds the [maximum inter-canister call payload](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
