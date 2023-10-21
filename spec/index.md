@@ -2922,9 +2922,9 @@ Finally, we can describe the state of the IC as a record having the following fi
     }
     QueryStats = {
       timestamp : Timestamp;
-      num_instructions_total : Nat;
-      request_payload_bytes_total : Nat;
-      response_payload_bytes_total : Nat;
+      num_instructions : Nat;
+      request_payload_bytes : Nat;
+      response_payload_bytes : Nat;
     }
     Subnet = {
       subnet_id : Principal;
@@ -3919,11 +3919,11 @@ S with
             S.canister_subnet[A.canister_id].subnet_size,
           );
           query_stats = noise(SUM {{num_calls_total: 1,
-                                    num_instructions_total: num_instructions_total,
-                                    request_payload_bytes_total: request_payload_bytes_total,
-                                    response_payload_bytes_total: response_payload_bytes_total} |
-                                   (t, num_instructions_total, request_payload_bytes_total, response_payload_bytes_total) <- S.query_stats[A.canister_id];
-                                   t <= S.time[A.canister_id] - T})
+                                    num_instructions_total: single_query_stats.num_instructions,
+                                    request_payload_bytes_total: single_query_stats.request_payload_bytes,
+                                    response_payload_bytes_total: single_query_stats.response_payload_bytes} |
+                                   single_query_stats <- S.query_stats[A.canister_id];
+                                   single_query_stats.timestamp <= S.time[A.canister_id] - T})
         })
         refunded_cycles = M.transferred_cycles
       }
@@ -5207,9 +5207,9 @@ We define an auxiliary method that handles calls from composite query methods by
                   S := S' with
                         query_stats[Call.callee] = S'.query_stats[Call.callee] · {
                           timestamp = S'.time[Call.callee]
-                          num_instructions_total = <implementation-specific>
-                          request_payload_bytes_total = |Call.arg|
-                          response_payload_bytes_total =
+                          num_instructions = <implementation-specific>
+                          request_payload_bytes = |Call.arg|
+                          response_payload_bytes =
                             if Response' = Reject (RejectCode, RejectMsg) then |RejectMsg|
                             else if Response' = Reply Res then |Res|
                         }
@@ -5278,9 +5278,9 @@ State after
 S' with
     query_stats[Q.receiver] = S'.query_stats[Q.receiver] · {
         timestamp = S'.time[Q.receiver]
-        num_instructions_total = <implementation-specific>
-        request_payload_bytes_total = |Q.Arg|
-        response_payload_bytes_total =
+        num_instructions = <implementation-specific>
+        request_payload_bytes = |Q.Arg|
+        response_payload_bytes =
           if R.status = "rejected" then |R.reject_message|
           else |R.reply.arg|
     }
