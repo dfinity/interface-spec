@@ -4530,7 +4530,7 @@ S with
     messages = S.Messages ·
       ResponseMessage {
         origin = O
-        response = Reject (CANISTER_ERROR, 'Canister could not be stopped yet')
+        response = Reject (SYS_TRANSIENT, 'Canister could not be stopped yet')
         refunded_cycles = C
       }
 
