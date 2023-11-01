@@ -910,27 +910,38 @@ Structured data, such as (recursive) maps, are authenticated by signing a repres
 
 1.  For each field that is present in the map (i.e. omitted optional fields are indeed omitted):
 
-    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (with the encoding specified below).
+    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (as specified below).
 
-2.  Sort these concatenations from low to high
+2.  Sort these concatenations from low to high.
 
 3.  Concatenate the sorted elements, and hash the result.
 
-The resulting hash of 256 bits (32 bytes) is the representation-independent hash.
+The resulting hash of length 256 bits (32 bytes) is the representation-independent hash.
 
-The following encodings of field values as blobs are used
+Field values are hashed as follows:
 
--   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
+-   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as-is.
 
--   Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+-   Strings (`request_type`, `method_name`) are hashed by hashing their binary encoding in UTF-8, without a terminal `\x00`.
 
--   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+-   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are hashed by hashing their binary encoding using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
--   Integers are encoded using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
+-   Integers are hashed by hashing their encoding using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
 
--   Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+-   Arrays (`paths`) are hashed by hashing the concatenation of the hashes of the array elements.
 
--   Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
+-   Maps (`sender_delegation`) are hashed by recursively computing their representation-independent hash.
+
+:::tip
+
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation) of a representation independent hash
+for a map with a nested map in a field value:
+
+    hash_of_map({ "reply": { "arg": "DIDL\x00\x00" } })
+      = H(concat (sort [ H("reply") · hash_of_map({ "arg": "DIDL\x00\x00" }) ]))
+      = H(concat (sort [ H("reply") · H(concat (sort [ H("arg") · H("DIDL\x00\x00") ])) ]))
+
+:::
 
 ### Request ids {#request-id}
 
@@ -1154,7 +1165,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   declare more than 50,000 functions, or
 
-    -   declare more than 300 globals, or
+    -   declare more than 1,000 globals, or
 
     -   declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
 
@@ -1427,7 +1438,7 @@ Eventually, the canister will want to respond to the original call, either by re
 
 -   `ic0.msg_reply_data_append : (src : i32, size : i32) → ()`
 
-    Appends data it to the (initially empty) data reply.
+    Appends data it to the (initially empty) data reply. Traps if the total appended data exceeds the [maximum response size](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This traps if the current call already has been or does not need to be responded to.
 
@@ -1549,7 +1560,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
-    Appends the specified bytes to the argument of the call. Initially, the argument is empty.
+    Appends the specified bytes to the argument of the call. Initially, the argument is empty. Traps if the total appended data exceeds the [maximum inter-canister call payload](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
@@ -1793,19 +1804,21 @@ Passing zero as an argument to the function deactivates the timer and thus preve
 
 ### Performance counter {#system-api-performance-counter}
 
-The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done since the beginning of the current execution.
+The canister can query one of the "performance counters", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done. Developers might use this data to profile and optimize the canister performance.
 
 `ic0.performance_counter : (counter_type : i32) -> i64`
 
 The argument `type` decides which performance counter to return:
 
--   0 : instruction counter. The number of WebAssembly instructions the system has determined that the canister has executed.
+-   0 : current execution instruction counter. The number of WebAssembly instructions the canister has executed since the beginning of the current [Message execution](#rule-message-execution).
 
-In the future, we might expose more performance counters.
+-   1 : call context instruction counter.
 
-The system resets the counter at the beginning of each [Entry points](#entry-points) invocation.
+    - For replicated message execution, it is the number of WebAssembly instructions the canister has executed within the call context of the current [Message execution](#rule-message-execution) since [Call context creation](#call-context-creation). The counter monotonically increases across all [message executions](#rule-message-execution) in the call context until the corresponding [call context is removed](#call-context-removal).
 
-The main purpose of this counter is to facilitate in-canister performance profiling.
+    - For non-replicated message execution, it is the number of WebAssembly instructions the canister has executed within the corresponding `composite_query_helper` in [Query call](#query-call). The counter monotonically increases across the executions of the composite query method and the composite query callbacks until the corresponding `composite_query_helper` returns (ignoring WebAssembly instructions executed within any further downstream calls of `composite_query_helper`).
+
+In the future, the IC might expose more performance counters.
 
 ### Replicated execution check {#system-api-replicated-execution-check}
 
@@ -3248,7 +3261,7 @@ messages = Older_messages · Younger_messages  ·
 
 ```
 
-#### Call context creation
+#### Call context creation {#call-context-creation}
 
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped or stopping). Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
@@ -3631,7 +3644,7 @@ S with
 
 ```
 
-#### Call context removal
+#### Call context removal {#call-context-removal}
 
 If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
@@ -5113,7 +5126,7 @@ S with
 
 ```
 
-#### Query call
+#### Query call {#query-call}
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
