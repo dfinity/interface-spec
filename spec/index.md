@@ -910,27 +910,38 @@ Structured data, such as (recursive) maps, are authenticated by signing a repres
 
 1.  For each field that is present in the map (i.e. omitted optional fields are indeed omitted):
 
-    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (with the encoding specified below).
+    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (as specified below).
 
-2.  Sort these concatenations from low to high
+2.  Sort these concatenations from low to high.
 
 3.  Concatenate the sorted elements, and hash the result.
 
-The resulting hash of 256 bits (32 bytes) is the representation-independent hash.
+The resulting hash of length 256 bits (32 bytes) is the representation-independent hash.
 
-The following encodings of field values as blobs are used
+Field values are hashed as follows:
 
--   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
+-   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as-is.
 
--   Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+-   Strings (`request_type`, `method_name`) are hashed by hashing their binary encoding in UTF-8, without a terminal `\x00`.
 
--   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+-   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are hashed by hashing their binary encoding using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
--   Integers are encoded using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
+-   Integers are hashed by hashing their encoding using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
 
--   Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+-   Arrays (`paths`) are hashed by hashing the concatenation of the hashes of the array elements.
 
--   Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
+-   Maps (`sender_delegation`) are hashed by recursively computing their representation-independent hash.
+
+:::tip
+
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation) of a representation independent hash
+for a map with a nested map in a field value:
+
+    hash_of_map({ "reply": { "arg": "DIDL\x00\x00" } })
+      = H(concat (sort [ H("reply") · hash_of_map({ "arg": "DIDL\x00\x00" }) ]))
+      = H(concat (sort [ H("reply") · H(concat (sort [ H("arg") · H("DIDL\x00\x00") ])) ]))
+
+:::
 
 ### Request ids {#request-id}
 
