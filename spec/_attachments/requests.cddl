@@ -88,7 +88,6 @@ signed-delegation = {
     pubkey: bytes
     expiration: timestamp
     ? targets: [* principal]
-    ? senders: [* principal]
   }
   signature: bytes
 }
