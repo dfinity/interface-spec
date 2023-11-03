@@ -894,8 +894,6 @@ Signing transactions can be delegated from one key to another one. If delegation
 
     -   `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list. The list must contain no more than 1000 elements; otherwise, the request will not be accepted by the IC.
 
-    -   `senders` (`array` of `Principal`, optional): If this field is set, the delegation only applies for requests originating from the principals in the list.
-
 -   `signature` (`blob`): Signature on the 32-byte [representation-independent hash](#hash-of-map) of the map contained in the `delegation` field as described in [Signatures](#signatures), using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 
     For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
@@ -2839,7 +2837,6 @@ Signed delegations contain the (unsigned) delegation data in a nested record, ne
       delegation : {
         pubkey : PublicKey;
         targets : [CanisterId] | Unrestricted;
-        senders : [Principal] | Unrestricted;
         expiration : Timestamp
       };
       signature : Signature
@@ -3052,25 +3049,19 @@ The following predicate describes when an envelope `E` correctly signs the enclo
       = { p : p is CanisterID } if U = anonymous_id
     verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
       = TS if U = mk_self_authenticating_id E.sender_pubkey
-      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId }, U)
+      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId })
       ∧ verify_signature PK' Sig ("\x0Aic-request" · hash_of_map(C))
 
-    verify_delegations([], PK, T, TS, U) = (PK, TS)
-    verify_delegations([D] · DS, PK, T, TS, U)
-      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D), U)
+    verify_delegations([], PK, T, TS) = (PK, TS)
+    verify_delegations([D] · DS, PK, T, TS)
+      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D))
       if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
        ∧ D.delegation.expiration ≥ T
-       ∧ U ∈ delegated_senders(D)
 
     delegation_targets(D)
       = if D.targets = Unrestricted
         then { p : p is CanisterId }
         else D.targets
-
-    delegated_senders(D)
-      = if D.senders = Unrestricted
-        then { p : p is Principal }
-        else D.senders
 
 #### Effective canister ids
 
