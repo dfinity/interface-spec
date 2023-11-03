@@ -9,6 +9,7 @@
 * Increase the maximum number of globals in a canister's WASM.
 * Add per-call context performance counter.
 * Update the computation of the representation-independent hash for the case of maps with nested maps.
+* Remove `senders` field from user delegations.
 
 ### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
