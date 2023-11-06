@@ -1714,7 +1714,7 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this *stable memory* is to provide space to store data beyond upgrades. The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
-The stable memory is initially empty and can be grown up to 32 GiB (provided the subnet has capacity).
+The stable memory is initially empty and can be grown up to the [Wasm stable memory limit](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits) (provided the subnet has capacity).
 
 -   `ic0.stable_size : () → (page_count : i32)`
 
