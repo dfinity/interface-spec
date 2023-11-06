@@ -431,6 +431,11 @@ This section specifies the publicly relevant paths in the tree.
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
+### Api boundary bodes information {#state-tree-subnet}
+The state tree contains information about all API Boundary Nodes, which can communicate with the Internet Computer (replica nodes). The source of truth for these Api boundary node records is stored in the registry canister and can be added/modified/removed via proposals.
+- `api_boundary_nodes/<node_id>/domain` (text)
+
+    The domain name associated with a node, e.g., `api-bn1.dfinity.org`.
 ### Subnet information {#state-tree-subnet}
 
 The state tree contains information about the topology of the Internet Computer.
@@ -697,7 +702,7 @@ canister developers that aim at keeping data confidential are advised to add a s
 All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
-
+- `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`. Can always be requested.
 -   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
