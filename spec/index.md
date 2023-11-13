@@ -434,6 +434,9 @@ This section specifies the publicly relevant paths in the tree.
 ### Api boundary bodes information {#state-tree-subnet}
 The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (replica nodes). The source of truth for these API boundary node records is stored in the registry canister and can be added/modified/removed via proposals.
 - `/api_boundary_nodes/<node_id>/domain` (text)
+- `/api_boundary_nodes/<node_id>/public_key` (text)
+- `/api_boundary_nodes/<node_id>/ipv4_address` (text)
+- `/api_boundary_nodes/<node_id>/ipv6_address` (text)
 
     The domain name associated with a node, e.g., `api-bn1.example.com`.
 ### Subnet information {#state-tree-subnet}
@@ -702,7 +705,7 @@ canister developers that aim at keeping data confidential are advised to add a s
 All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
-- `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`. Can always be requested.
+- `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`, `/api_boundary_nodes/<node_id>/pub_key`, `/api_boundary_nodes/<node_id>/ip4_address`, `/api_boundary_nodes/<node_id>/ipv6_address`. Can always be requested.
 
 -   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
