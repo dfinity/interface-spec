@@ -5212,6 +5212,7 @@ Conditions
 
 E.content = CanisterQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
+|Q.nonce| <= 32
 is_effective_canister_id(E.content, ECID)
 S.system_time <= Q.ingress_expiry
 
@@ -5256,6 +5257,7 @@ Conditions
 
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
+|E.content.nonce| <= 32
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
@@ -5306,6 +5308,7 @@ Conditions
 
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
+|E.content.nonce| <= 32
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path_for_subnet(S, RS.sender, path)
 
