@@ -858,7 +858,7 @@ In development instances of the Internet Computer Protocol (e.g. testnets), the 
 
 All requests coming in via the HTTPS interface need to be either *anonymous* or *authenticated* using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
 
--   `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
+-   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
 -   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
 
@@ -3095,6 +3095,7 @@ Conditions
 ```html
 
 E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
+|E.content.nonce| <= 32
 E.content ∉ dom(S.requests)
 S.system_time <= E.content.ingress_expiry
 is_effective_canister_id(E.content, ECID)
