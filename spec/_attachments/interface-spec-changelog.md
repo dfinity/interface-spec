@@ -1,6 +1,6 @@
 ## Changelog {#changelog}
 
-### ∞ (unreleased)
+### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
 * Add management canister methods to support installing large WebAssembly modules split into chunks.
 * Add a system API method to determine if the canister is running in replicated or non-replicated mode.
