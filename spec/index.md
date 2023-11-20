@@ -2014,6 +2014,8 @@ This method traps if the canister's cycle balance decreases below the canister's
 
 This method installs code that had previously been uploaded in chunks.
 
+Only controllers of the target canister can call this method.
+
 The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
 The `target_canister` specifies the canister where the code should be installed.
 The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
