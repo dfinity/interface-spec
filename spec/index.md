@@ -76,7 +76,8 @@ The public entry points of canisters are called *methods*. Methods can be declar
 
 Methods can be *called*, from *caller* to *callee*, and will eventually incur a *response* which is either a *reply* or a *reject*. A method may have *parameters*, which are provided with concrete *arguments* in a method call.
 
-External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister".
+External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off. 
+Update calls are executed in *replicated* mode, i.e. execution takes place in parallel on multiple replicas who need to arrive at a consensus on what the result of the call is. Query calls are fast but offer less guarantees since they are executed in *non-replicated* mode, by a single replica.
 
 Internally, a call or a response is transmitted as a *message* from a *sender* to a *receiver*. Messages do not have a response.
 
@@ -893,8 +894,6 @@ Signing transactions can be delegated from one key to another one. If delegation
 
     -   `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list. The list must contain no more than 1000 elements; otherwise, the request will not be accepted by the IC.
 
-    -   `senders` (`array` of `Principal`, optional): If this field is set, the delegation only applies for requests originating from the principals in the list.
-
 -   `signature` (`blob`): Signature on the 32-byte [representation-independent hash](#hash-of-map) of the map contained in the `delegation` field as described in [Signatures](#signatures), using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 
     For the first delegation in the array, this signature is created with the key corresponding to the public key from the `sender_pubkey` field, all subsequent delegations are signed with the key corresponding to the public key contained in the preceding delegation.
@@ -909,27 +908,38 @@ Structured data, such as (recursive) maps, are authenticated by signing a repres
 
 1.  For each field that is present in the map (i.e. omitted optional fields are indeed omitted):
 
-    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (with the encoding specified below).
+    -   concatenate the hash of the field's name (in ascii-encoding, without terminal `\x00`) and the hash of the value (as specified below).
 
-2.  Sort these concatenations from low to high
+2.  Sort these concatenations from low to high.
 
 3.  Concatenate the sorted elements, and hash the result.
 
-The resulting hash of 256 bits (32 bytes) is the representation-independent hash.
+The resulting hash of length 256 bits (32 bytes) is the representation-independent hash.
 
-The following encodings of field values as blobs are used
+Field values are hashed as follows:
 
--   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are used as-is.
+-   Binary blobs (`canister_id`, `arg`, `nonce`, `module`) are hashed as-is.
 
--   Strings (`request_type`, `method_name`) are encoded in UTF-8, without a terminal `\x00`.
+-   Strings (`request_type`, `method_name`) are hashed by hashing their binary encoding in UTF-8, without a terminal `\x00`.
 
--   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are encoded using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
+-   Natural numbers (`compute_allocation`, `memory_allocation`, `ingress_expiry`) are hashed by hashing their binary encoding using the shortest form [Unsigned LEB128](https://en.wikipedia.org/wiki/LEB128#Unsigned_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `624485` should be encoded as byte sequence `[0xE5, 0x8E, 0x26]`.
 
--   Integers are encoded using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
+-   Integers are hashed by hashing their encoding using the shortest form [Signed LEB128](https://en.wikipedia.org/wiki/LEB128#Signed_LEB128) encoding. For example, `0` should be encoded as a single zero byte `[0x00]` and `-123456` should be encoded as byte sequence `[0xC0, 0xBB, 0x78]`.
 
--   Arrays (`paths`) are encoded as the concatenation of the hashes of the encodings of the array elements.
+-   Arrays (`paths`) are hashed by hashing the concatenation of the hashes of the array elements.
 
--   Maps (`sender_delegation`) are encoded by recursively computing the representation-independent hash.
+-   Maps (`sender_delegation`) are hashed by recursively computing their representation-independent hash.
+
+:::tip
+
+Example calculation (where `H` denotes SHA-256 and `·` denotes blob concatenation) of a representation independent hash
+for a map with a nested map in a field value:
+
+    hash_of_map({ "reply": { "arg": "DIDL\x00\x00" } })
+      = H(concat (sort [ H("reply") · hash_of_map({ "arg": "DIDL\x00\x00" }) ]))
+      = H(concat (sort [ H("reply") · H(concat (sort [ H("arg") · H("DIDL\x00\x00") ])) ]))
+
+:::
 
 ### Request ids {#request-id}
 
@@ -1153,7 +1163,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
     -   declare more than 50,000 functions, or
 
-    -   declare more than 300 globals, or
+    -   declare more than 1,000 globals, or
 
     -   declare more than 16 exported custom sections (the custom section names with prefix `icp:`), or
 
@@ -1293,6 +1303,8 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
                            -> ();                                               // U Rt Ry
 
+    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U Ry Rt C T
+
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
     ic0.canister_cycle_balance : () -> i64;                                     // *
@@ -1338,6 +1350,7 @@ The following sections describe various System API functions, also referred to a
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
+    ic0.in_replicated_execution: () -> (result: i32);                           // * 
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1423,7 +1436,7 @@ Eventually, the canister will want to respond to the original call, either by re
 
 -   `ic0.msg_reply_data_append : (src : i32, size : i32) → ()`
 
-    Appends data it to the (initially empty) data reply.
+    Appends data it to the (initially empty) data reply. Traps if the total appended data exceeds the [maximum response size](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This traps if the current call already has been or does not need to be responded to.
 
@@ -1545,7 +1558,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
-    Appends the specified bytes to the argument of the call. Initially, the argument is empty.
+    Appends the specified bytes to the argument of the call. Initially, the argument is empty. Traps if the total appended data exceeds the [maximum inter-canister call payload](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits).
 
     This may be called multiple times between `ic0.call_new` and `ic0.call_perform`.
 
@@ -1647,6 +1660,20 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     This does not trap.
 
+-   `ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ()`
+
+    This burns cycles from the canister. It burns as many cycles as possible, up to these constraints:
+
+    It burns no more cycles than the amount obtained by combining `amount_high` and `amount_low`. Cycles are represented by 128-bit values.
+
+    It burns no more cycles than `balance` - `freezing_limit`, where `freezing_limit` is the amount of idle cycles burned by the canister during its `freezing_threshold`.
+
+    It can be called multiple times, each time possibly burning more cycles from the balance.
+
+    This call also copies the amount of cycles that were actually burned starting at the location `dst` in the canister memory.
+
+    This system call does not trap.
+
 -   `ic0.call_cycles_add : (amount : i64) → ()`
 
     This function moves cycles from the canister balance onto the call under construction, to be transferred with that call.
@@ -1687,7 +1714,7 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this *stable memory* is to provide space to store data beyond upgrades. The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
-The stable memory is initially empty and can be grown up to 32 GiB (provided the subnet has capacity).
+The stable memory is initially empty and can be grown up to the [Wasm stable memory limit](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits) (provided the subnet has capacity).
 
 -   `ic0.stable_size : () → (page_count : i32)`
 
@@ -1775,19 +1802,29 @@ Passing zero as an argument to the function deactivates the timer and thus preve
 
 ### Performance counter {#system-api-performance-counter}
 
-The canister can query the "performance counter", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done since the beginning of the current execution.
+The canister can query one of the "performance counters", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done. Developers might use this data to profile and optimize the canister performance.
 
 `ic0.performance_counter : (counter_type : i32) -> i64`
 
 The argument `type` decides which performance counter to return:
 
--   0 : instruction counter. The number of WebAssembly instructions the system has determined that the canister has executed.
+-   0 : current execution instruction counter. The number of WebAssembly instructions the canister has executed since the beginning of the current [Message execution](#rule-message-execution).
 
-In the future, we might expose more performance counters.
+-   1 : call context instruction counter.
 
-The system resets the counter at the beginning of each [Entry points](#entry-points) invocation.
+    - For replicated message execution, it is the number of WebAssembly instructions the canister has executed within the call context of the current [Message execution](#rule-message-execution) since [Call context creation](#call-context-creation). The counter monotonically increases across all [message executions](#rule-message-execution) in the call context until the corresponding [call context is removed](#call-context-removal).
 
-The main purpose of this counter is to facilitate in-canister performance profiling.
+    - For non-replicated message execution, it is the number of WebAssembly instructions the canister has executed within the corresponding `composite_query_helper` in [Query call](#query-call). The counter monotonically increases across the executions of the composite query method and the composite query callbacks until the corresponding `composite_query_helper` returns (ignoring WebAssembly instructions executed within any further downstream calls of `composite_query_helper`).
+
+In the future, the IC might expose more performance counters.
+
+### Replicated execution check {#system-api-replicated-execution-check}
+
+The canister can check whether it is currently running in replicated or non replicated execution. 
+
+`ic0.in_replicated_execution : () -> (result: i32)`
+
+Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
 
 ### Controller check {#system-api-controller-check}
 
@@ -2802,7 +2839,6 @@ Signed delegations contain the (unsigned) delegation data in a nested record, ne
       delegation : {
         pubkey : PublicKey;
         targets : [CanisterId] | Unrestricted;
-        senders : [Principal] | Unrestricted;
         expiration : Timestamp
       };
       signature : Signature
@@ -3015,25 +3051,19 @@ The following predicate describes when an envelope `E` correctly signs the enclo
       = { p : p is CanisterID } if U = anonymous_id
     verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
       = TS if U = mk_self_authenticating_id E.sender_pubkey
-      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId }, U)
+      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId })
       ∧ verify_signature PK' Sig ("\x0Aic-request" · hash_of_map(C))
 
-    verify_delegations([], PK, T, TS, U) = (PK, TS)
-    verify_delegations([D] · DS, PK, T, TS, U)
-      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D), U)
+    verify_delegations([], PK, T, TS) = (PK, TS)
+    verify_delegations([D] · DS, PK, T, TS)
+      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D))
       if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
        ∧ D.delegation.expiration ≥ T
-       ∧ U ∈ delegated_senders(D)
 
     delegation_targets(D)
       = if D.targets = Unrestricted
         then { p : p is CanisterId }
         else D.targets
-
-    delegated_senders(D)
-      = if D.senders = Unrestricted
-        then { p : p is Principal }
-        else D.senders
 
 #### Effective canister ids
 
@@ -3075,11 +3105,15 @@ is_effective_canister_id(E.content, ECID)
   E.content.sender ∈ S.controllers[CanisterId]
   E.content.method_name ∈
     { "install_code", "install_chunked_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
-      "canister_status", "delete_canister",
-      "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
+      "canister_status", "delete_canister" }
+) ∨ (
+  E.content.canister_id = ic_principal
+  E.content.method_name ∈
+    { "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
 ) ∨ (
   E.content.canister_id ≠ ic_principal
   S.canisters[E.content.canister_id] ≠ EmptyCanister
+  S.canister_status[E.content.canister_id] = Running
   Env = {
     time = S.time[E.content.canister_id];
     controllers = S.controllers[E.content.canister_id];
@@ -3220,7 +3254,7 @@ messages = Older_messages · Younger_messages  ·
 
 ```
 
-#### Call context creation
+#### Call context creation {#call-context-creation}
 
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped or stopping). Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
@@ -3603,7 +3637,7 @@ S with
 
 ```
 
-#### Call context removal
+#### Call context removal {#call-context-removal}
 
 If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
@@ -5066,7 +5100,7 @@ S with
 
 ```
 
-#### Query call
+#### Query call {#query-call}
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
@@ -5900,6 +5934,19 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.balance := es.balance + amount
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
+    ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
+      if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+      let amount = amount_high * 2^64 + amount_low
+      let burned_amount = min(amount, es.balance - freezing_limit(
+        es.params.sysenv.compute_allocation,
+        es.params.sysenv.memory_allocation,
+        es.params.sysenv.freezing_threshold,
+        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        es.params.sysenv.subnet_size,
+      ))
+      es.balance := es.balance - burned_amount
+      copy_cycles_to_canister<es>(dst, burned_amount.to_little_endian_bytes())
+
     ic0.canister_self_size<es>() : i32 =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
       return |es.wasm_state.self_id|
@@ -6147,6 +6194,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         else return 1
       else
         Trap {cycles_used = es.cycles_used;}
+
+    ic0.in_replicated_execution<es>() : i32 =
+      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.params.sysenv.certificate = NoCertificate
+      then return 1
+      else return 0
 
     ic0.debug_print<es>(src : i32, size : i32) =
       return
