@@ -140,7 +140,7 @@ Response verification fills the security gap left by query calls. It is a versio
    - Otherwise, verification fails.
 5. Parse the `expr_path` field from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
 6. The parsed `expr_path` is valid as per [Expression Path](#expression-path) otherwise, verification fails.
-7. Case-insensitive search for the `IC-CertificationExpression` header.
+7. Case-insensitive search for the `IC-CertificateExpression` header.
    - If no such header is found, verification fails.
    - If the header value is not structured as per [the certificate expression header](#the-certificate-expression-header), verification fails.
 8. Let `expr_hash` be the label of the node in the tree at path `expr_path`.
