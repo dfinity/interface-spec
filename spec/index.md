@@ -2135,7 +2135,11 @@ For this reason, the calling canister can supply a transformation function, whic
 
 Currently, the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests.
 
-It is important to note the following for the usage of the `POST` method: - The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request. - There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
+It is important to note the following for the usage of the `POST` method:
+
+- The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
+
+- There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
@@ -2176,6 +2180,10 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 -   the number of bytes representing a header name or value must not exceed `8KiB`, and
 
 -   the total number of bytes representing the header names and values must not exceed `48KiB`.
+
+If the request headers provided by the canister do not contain a `user-agent` header (case-insensitive),
+then the IC sends a `user-agent` header (case-insensitive) with the value `ic/1.0`
+in addition to the headers provided by the canister.
 
 :::note
 
