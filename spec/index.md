@@ -2183,7 +2183,8 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 
 If the request headers provided by the canister do not contain a `user-agent` header (case-insensitive),
 then the IC sends a `user-agent` header (case-insensitive) with the value `ic/1.0`
-in addition to the headers provided by the canister.
+in addition to the headers provided by the canister. Such an additional header does not contribute
+to the above limits on HTTP request headers.
 
 :::note
 
