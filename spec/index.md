@@ -4387,13 +4387,13 @@ The controllers of a canister can stop a canister. Stopping a canister goes thro
 
 We encode this behavior via three (types of) transitions:
 
-1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
+1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Note that every such `stop_canister` call can be rejected by the system at any time (the canister stays stopping in this case), e.g., if the `stop_canister` call could not be responded to for a long time.
 
 2.  Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 
 3.  Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
-    Conditions  
+Conditions
 
 ```html
 
@@ -4416,8 +4416,6 @@ S with
     canister_status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles)]
 
 ```
-
-The next two transitions record any additional 'stop\_canister' requests that arrive at a stopping (or stopped) canister in its status.
 
 Conditions  
 
@@ -4471,11 +4469,7 @@ S with
 
 ```
 
-:::note
-
 Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success), but is otherwise a no-op:
-
-:::
 
 Conditions  
 
@@ -4501,6 +4495,31 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
+      }
+
+```
+
+Pending `stop_canister` calls may be rejected by the system at any time (the canister stays stopping in this case):
+
+Conditions
+
+```html
+
+S.canister_status[CanisterId] = Stopping (Older_origins · (O, C) · Younger_origins)
+
+```
+
+State after
+
+```html
+
+S with
+    canister_status[CanisterId] = Stopping (Older_origins · Younger_origins)
+    messages = S.Messages ·
+      ResponseMessage {
+        origin = O
+        response = Reject (SYS_TRANSIENT, 'Stop canister request timed out')
+        refunded_cycles = C
       }
 
 ```
@@ -4568,7 +4587,7 @@ S with
         } ·
         [ ResponseMessage {
             origin = O
-            response = Reject (CANISTER_REJECT, 'Canister has been restarted')
+            response = Reject (CANISTER_ERROR, 'Canister has been restarted')
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
