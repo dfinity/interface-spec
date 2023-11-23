@@ -653,7 +653,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 :::note
 
-Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` will be deprecated in a future release of the Interface specification. Hence, users are advised to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
 
 On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
 
@@ -858,7 +858,7 @@ In development instances of the Internet Computer Protocol (e.g. testnets), the 
 
 All requests coming in via the HTTPS interface need to be either *anonymous* or *authenticated* using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
 
--   `nonce` (`blob`, optional): Arbitrary user-provided data, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
+-   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
 -   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
 
@@ -893,8 +893,6 @@ Signing transactions can be delegated from one key to another one. If delegation
     -   `expiration` (`nat`): Expiration of the delegation, in nanoseconds since 1970-01-01, analogously to the `ingress_expiry` field above.
 
     -   `targets` (`array` of `CanisterId`, optional): If this field is set, the delegation only applies for requests sent to the canisters in the list. The list must contain no more than 1000 elements; otherwise, the request will not be accepted by the IC.
-
-    -   `senders` (`array` of `Principal`, optional): If this field is set, the delegation only applies for requests originating from the principals in the list.
 
 -   `signature` (`blob`): Signature on the 32-byte [representation-independent hash](#hash-of-map) of the map contained in the `delegation` field as described in [Signatures](#signatures), using the 27 bytes `\x1Aic-request-auth-delegation` as the domain separator.
 
@@ -1710,7 +1708,7 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this *stable memory* is to provide space to store data beyond upgrades. The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
-The stable memory is initially empty and can be grown up to 32 GiB (provided the subnet has capacity).
+The stable memory is initially empty and can be grown up to the [Wasm stable memory limit](https://internetcomputer.org/docs/current/developer-docs/backend/resource-limits#resource-constraints-and-limits) (provided the subnet has capacity).
 
 -   `ic0.stable_size : () → (page_count : i32)`
 
@@ -2009,6 +2007,8 @@ This method traps if the canister's cycle balance decreases below the canister's
 ### IC method `install_chunked_code` {#ic-install_chunked_code}
 
 This method installs code that had previously been uploaded in chunks.
+
+Only controllers of the target canister can call this method.
 
 The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
 The `target_canister` specifies the canister where the code should be installed.
@@ -2833,7 +2833,6 @@ Signed delegations contain the (unsigned) delegation data in a nested record, ne
       delegation : {
         pubkey : PublicKey;
         targets : [CanisterId] | Unrestricted;
-        senders : [Principal] | Unrestricted;
         expiration : Timestamp
       };
       signature : Signature
@@ -3046,25 +3045,19 @@ The following predicate describes when an envelope `E` correctly signs the enclo
       = { p : p is CanisterID } if U = anonymous_id
     verify_envelope({ content = C, sender_pubkey = PK, sender_sig = Sig, sender_delegation = DS}, U, T)
       = TS if U = mk_self_authenticating_id E.sender_pubkey
-      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId }, U)
+      ∧ (PK', TS) = verify_delegations(DS, PK, T, { p : p is CanisterId })
       ∧ verify_signature PK' Sig ("\x0Aic-request" · hash_of_map(C))
 
-    verify_delegations([], PK, T, TS, U) = (PK, TS)
-    verify_delegations([D] · DS, PK, T, TS, U)
-      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D), U)
+    verify_delegations([], PK, T, TS) = (PK, TS)
+    verify_delegations([D] · DS, PK, T, TS)
+      = verify_delegations(DS, D.pubkey, T, TS ∩ delegation_targets(D))
       if verify_signature PK D.signature ("\x1Aic-request-auth-delegation" · hash_of_map(D.delegation))
        ∧ D.delegation.expiration ≥ T
-       ∧ U ∈ delegated_senders(D)
 
     delegation_targets(D)
       = if D.targets = Unrestricted
         then { p : p is CanisterId }
         else D.targets
-
-    delegated_senders(D)
-      = if D.senders = Unrestricted
-        then { p : p is Principal }
-        else D.senders
 
 #### Effective canister ids
 
@@ -3098,6 +3091,7 @@ Conditions
 ```html
 
 E.content.canister_id ∈ verify_envelope(E, E.content.sender, S.system_time)
+|E.content.nonce| <= 32
 E.content ∉ dom(S.requests)
 S.system_time <= E.content.ingress_expiry
 is_effective_canister_id(E.content, ECID)
@@ -5214,6 +5208,7 @@ Conditions
 
 E.content = CanisterQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
+|Q.nonce| <= 32
 is_effective_canister_id(E.content, ECID)
 S.system_time <= Q.ingress_expiry
 
@@ -5241,7 +5236,7 @@ verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time /
 
 :::note
 
-Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` will be deprecated in a future release of the Interface specification. Hence, users are advised to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
 
 On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
 
@@ -5258,6 +5253,7 @@ Conditions
 
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
+|E.content.nonce| <= 32
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
@@ -5308,6 +5304,7 @@ Conditions
 
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
+|E.content.nonce| <= 32
 S.system_time <= RS.ingress_expiry
 ∀ path ∈ RS.paths. may_read_path_for_subnet(S, RS.sender, path)
 
