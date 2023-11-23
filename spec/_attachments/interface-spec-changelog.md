@@ -11,6 +11,7 @@
 * Update the computation of the representation-independent hash for the case of maps with nested maps.
 * Remove `senders` field from user delegations.
 * The maximum length of a nonce in an ingress message is 32 bytes.
+* Update specification of responses from the endpoint `/api/v2/status`.
 
 ### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.
