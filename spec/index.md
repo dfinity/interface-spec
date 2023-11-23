@@ -4505,7 +4505,7 @@ Conditions
 
 ```html
 
-S.canister_status[CanisterId] = Stopping (Older_origins · O · Younger_origins)
+S.canister_status[CanisterId] = Stopping (Older_origins · (O, C) · Younger_origins)
 
 ```
 
