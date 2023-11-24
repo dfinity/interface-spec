@@ -1024,15 +1024,9 @@ Additionally, the Internet Computer provides an API endpoint to obtain various s
 
 For this endpoint, the user performs a GET request, and receives a CBOR (see [CBOR](#cbor)) value with the following fields. The IC may include additional implementation-specific fields.
 
--   `ic_api_version` (string, mandatory): Identifies the interface version supported, i.e. the version of the present document that the Internet Computer aims to support, e.g. `0.8.1`. The implementation may also return `unversioned` to indicate that it does *not* comply to a particular version, e.g. in between releases.
+-   `impl_version` (string, optional): The precise git revision of the Internet Computer Protocol implementation
 
--   `impl_source` (string, optional): Identifies the implementation of the Internet Computer Protocol, by convention with the canonical location of the source code (e.g. `https://github.com/dfinity/ic`).
-
--   `impl_version` (string, optional): If the user is talking to a released version of an Internet Computer Protocol implementation, this is the version number. For non-released versions, output of `git describe` like `0.1.13-13-g2414721` would also be very suitable.
-
--   `impl_revision` (string, optional): The precise git revision of the Internet Computer Protocol implementation
-
--   `root_key` (blob, only in development instances): The public key (a DER-encoded BLS key) of the root key of this development instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
+-   `root_key` (blob, optional): The public key (a DER-encoded BLS key) of the root key of this instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See [CBOR encoding of requests and responses](#api-cbor) for details on the precise CBOR encoding of this object.
 
@@ -4402,13 +4396,13 @@ The controllers of a canister can stop a canister. Stopping a canister goes thro
 
 We encode this behavior via three (types of) transitions:
 
-1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the status the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped).
+1.  First, any `stop_canister` call sets the state of the canister to `Stopping`; we record in the IC state the origin (and cycles) of all `stop_canister` calls which arrive at the canister while it is stopping (or stopped). Note that every such `stop_canister` call can be rejected by the system at any time (the canister stays stopping in this case), e.g., if the `stop_canister` call could not be responded to for a long time.
 
 2.  Next, when the canister has no open call contexts (so, in particular, all outstanding responses to the canister have been processed), the status of the canister is set to `Stopped`.
 
 3.  Finally, each pending `stop_canister` call (which are encoded in the status) is responded to, to indicate that the canister is stopped.
 
-    Conditions  
+Conditions
 
 ```html
 
@@ -4431,8 +4425,6 @@ S with
     canister_status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles)]
 
 ```
-
-The next two transitions record any additional 'stop\_canister' requests that arrive at a stopping (or stopped) canister in its status.
 
 Conditions  
 
@@ -4486,11 +4478,7 @@ S with
 
 ```
 
-:::note
-
 Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success), but is otherwise a no-op:
-
-:::
 
 Conditions  
 
@@ -4516,6 +4504,31 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
+      }
+
+```
+
+Pending `stop_canister` calls may be rejected by the system at any time (the canister stays stopping in this case):
+
+Conditions
+
+```html
+
+S.canister_status[CanisterId] = Stopping (Older_origins · (O, C) · Younger_origins)
+
+```
+
+State after
+
+```html
+
+S with
+    canister_status[CanisterId] = Stopping (Older_origins · Younger_origins)
+    messages = S.Messages ·
+      ResponseMessage {
+        origin = O
+        response = Reject (SYS_TRANSIENT, 'Stop canister request timed out')
+        refunded_cycles = C
       }
 
 ```
@@ -4583,7 +4596,7 @@ S with
         } ·
         [ ResponseMessage {
             origin = O
-            response = Reject (CANISTER_REJECT, 'Canister has been restarted')
+            response = Reject (CANISTER_ERROR, 'Canister has been restarted')
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
