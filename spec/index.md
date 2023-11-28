@@ -4496,7 +4496,7 @@ The node metrics management canister API is considered EXPERIMENTAL. Canister de
 
 :::
 
-The management canister returns metrics for all nodes on a given subnet. The definition of the metrics values
+The management canister returns metrics for nodes on a given subnet. The definition of the metrics values
 is not captured in this formal semantics.
 
 Conditions
