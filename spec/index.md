@@ -227,6 +227,8 @@ Dapps on the Internet Computer are called *canisters*. Conceptually, they consis
 
 -   A cycle balance
 
+-   A reserved cycle balance, which are cycles set aside from the main cycle balance for resource payments.
+
 -   The *canister status*, which is one of `running`, `stopping` or `stopped`.
 
 -   Resource reservations
@@ -245,19 +247,19 @@ If an empty canister receives a response, that response is dropped, as if the ca
 
 #### Canister cycles {#canister-cycles}
 
-The IC relies on *cycles*, a utility token, to manage its resources. A canister pays for the resources it uses from its *cycle balance*. The *cycle\_balance* is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if *cycles* are added to a canister that would bring its total balance beyond 2<sup>128</sup>-1, then the balance will be capped at 2<sup>128</sup>-1 and any additional cycles will be lost.
+The IC relies on *cycles*, a utility token, to manage its resources. A canister pays for the resources it uses from its *cycle balances*. A *cycle\_balance* is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if *cycles* are added to a canister that would bring its main cycle balance beyond 2<sup>128</sup>-1, then the balance will be capped at 2<sup>128</sup>-1 and any additional cycles will be lost.
 
-When the cycle balance of a canister falls to zero, the canister is *deallocated*. This has the same effect as
+When both the main and the reserved cycle balances of a canister fall to zero, the canister is *deallocated*. This has the same effect as
 
 -   uninstalling the canister (as described in [IC method](#ic-uninstall_code))
 
 -   setting all resource reservations to zero
 
-Afterwards the canister is empty. It can be reinstalled after topping up its balance.
+Afterwards the canister is empty. It can be reinstalled after topping up its main balance.
 
 :::note
 
-Once the IC frees the resources of a canister, its id, *cycles* balance, *controllers*, canister *version*, and the total number of canister changes are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
+Once the IC frees the resources of a canister, its id, *cycle* balances, *controllers*, canister *version*, and the total number of canister changes are preserved on the IC for a minimum of 10 years. What happens to the canister after this period is currently unspecified.
 
 :::
 
@@ -1660,7 +1662,7 @@ Example: To accept all cycles provided in a call, invoke `ic0.msg_cycles_accept(
 
     It burns no more cycles than the amount obtained by combining `amount_high` and `amount_low`. Cycles are represented by 128-bit values.
 
-    It burns no more cycles than `balance` - `freezing_limit`, where `freezing_limit` is the amount of idle cycles burned by the canister during its `freezing_threshold`.
+    It burns no more cycles than the amount of cycles available for spending `liquid_balance(balance, reserved_balance, freezing_limit)`, where `reserved_balance` are cycles reserved for resource payments and `freezing_limit` is the amount of idle cycles burned by the canister during its `freezing_threshold`.
 
     It can be called multiple times, each time possibly burning more cycles from the balance.
 
@@ -1946,6 +1948,14 @@ The optional `settings` parameter can be used to set the following settings:
 
     Default value: 2592000 (approximately 30 days).
 
+-   `reserved_cycles_limit` (`nat`)
+
+    Must be a number between 0 and 2<sup>128</sup>-1, inclusively, and indicates the upper limit on `reserved_cycles` of the canister.
+
+    An operation that allocates resources such as compute and memory will fail of the new value of `reserved_cycles` exceeds this limit.
+
+    Default value: 5_000_000_000_000 (5 trillion cycles).
+
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
@@ -2027,7 +2037,7 @@ Uninstalling a canister's code will reject all calls that the canister has not y
 
 The canister is now [empty](#canister-lifecycle). In particular, any incoming or queued calls will be rejected.
 
-A canister after *uninstalling* retains its *cycles* balance, *controllers*, history, status, and allocations.
+A canister after *uninstalling* retains its *cycle* balances, *controllers*, history, status, and allocations.
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
@@ -2636,6 +2646,8 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           controllers : List Principal;
           global_timer : Nat;
           balance : Nat;
+          reserved_balance : Nat;
+          reserved_balance_limit : Nat;
           compute_allocation : Nat;
           memory_allocation : Nat;
           memory_usage_raw_module : Nat;
@@ -2931,6 +2943,8 @@ Finally, we can describe the state of the IC as a record having the following fi
       time : CanisterId ↦ Timestamp;
       global_timer : CanisterId ↦ Timestamp;
       balances: CanisterId ↦ Nat;
+      reserved_balances: CanisterId ↦ Nat;
+      reserved_balance_limits: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
       system_time : Timestamp
@@ -2959,6 +2973,27 @@ To convert `CallOrigin` into `ChangeOrigin`, we define the following conversion 
         canister_version = sender_canister_version
       }
 
+#### Cycle bookkeeping and resource consumption
+
+The main cycle balance of canister `A` in state `S` can be obtained with `S.balances(A)`.
+In addition to the main balance, each canister has a reserved balance `S.reserved_balances(A)`.
+The reserved balance contains cycles that were set aside from the main balance for future payments for the consumption of resources such as memory and compute.
+The reserved cycles can only be used for resource payments and cannot be transferred back to the main balance.
+
+The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage & and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
+
+        freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
+
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
+
+The amount of cycles that is available for spending in calls and execution is computed by the `liquid_balance(balance, reserved_balance, freezing_limit)` function:
+
+        liquid_balance(balance, reserved_balance, freezing_limit) = balance - max(freezing_limit - reserved_balance, 0)
+
+The reasoning behind this is that resource payments first drain the reserved balance, only when it gets to zero they start draining the main balance.
+
+The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, compute_allocation, memory_allocatoin, CanState)` that depends on the system state, the new allocation settings of the cansiter, and the new state of the canister.
+
 #### Initial state
 
 The initial state of the IC is
@@ -2976,6 +3011,8 @@ The initial state of the IC is
       time = ();
       global_timer = ();
       balances = ();
+      reserved_balances = ();
+      reserved_balance_limits = ();
       certified_data = ();
       canister_history = ();
       system_time = T;
@@ -3077,13 +3114,7 @@ Requests that have expired are dropped here.
 
 Ingress message inspection is applied, and messages that are not accepted by the canister are dropped.
 
-The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage & and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
-
-        freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
-
-The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
-
-Submitted request  
+Submitted request
 `E : Envelope`
 
 Conditions  
@@ -3114,6 +3145,8 @@ is_effective_canister_id(E.content, ECID)
     controllers = S.controllers[E.content.canister_id];
     global_timer = S.global_timer[E.content.canister_id];
     balance = S.balances[E.content.canister_id];
+    reserved_balance = S.reserved_balances[E.content.canister_id];
+    reserved_balance_limit = S.reserved_balance_limits[E.content.canister_id];
     compute_allocation = S.compute_allocation[E.content.canister_id];
     memory_allocation = S.memory_allocation[E.content.canister_id];
     memory_usage_raw_module = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module);
@@ -3124,15 +3157,19 @@ is_effective_canister_id(E.content, ECID)
     status = simple_status(S.canister_status[E.content.canister_id]);
     canister_version = S.canister_version[E.content.canister_id];
   }
-  S.balances[E.content.canister_id] ≥ freezing_limit(
-    S.compute_allocation[E.content.canister_id],
-    S.memory_allocation[E.content.canister_id],
-    S.freezing_threshold[E.content.canister_id],
-    memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
-      memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[E.content.canister_id]),
-    S.canister_subnet[E.content.canister_id].subnet_size,
-  )
+  liquid_balance(
+    S.balances[E.content.canister_id],
+    S.reserved_balance(E.content.canister_id),
+    freezing_limit(
+      S.compute_allocation[E.content.canister_id],
+      S.memory_allocation[E.content.canister_id],
+      S.freezing_threshold[E.content.canister_id],
+      memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
+        memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
+        memory_usage_canister_history(S.canister_history[E.content.canister_id]),
+      S.canister_subnet[E.content.canister_id].subnet_size,
+    )
+  ) ≥ 0
   S.canisters[E.content.canister_id].module.inspect_message
     (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
 )
@@ -3224,16 +3261,19 @@ Conditions
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
-S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or balances[CM.callee] < freezing_limit(
-  S.compute_allocation[CM.callee],
-  S.memory_allocation[CM.callee],
-  S.freezing_threshold[CM.callee],
-  memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
-    memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-    memory_usage_canister_history(S.canister_history[CM.callee]),
-  S.canister_subnet[CM.callee].subnet_size,
-)
-
+S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or liquid_balance(
+  balances[CM.callee],
+  reserved_balances[CM.callee],
+  freezing_limit(
+    S.compute_allocation[CM.callee],
+    S.memory_allocation[CM.callee],
+    S.freezing_threshold[CM.callee],
+    memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
+      memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
+      memory_usage_canister_history(S.canister_history[CM.callee]),
+    S.canister_subnet[CM.callee].subnet_size,
+  )
+) < 0
 ```
 
 State after  
@@ -3268,15 +3308,19 @@ Conditions
 S.messages = Older_messages · CallMessage CM · Younger_messages
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Running
-S.balances[CM.callee] ≥ freezing_limit(
-  S.compute_allocation[CM.callee],
-  S.memory_allocation[CM.callee],
-  S.freezing_threshold[CM.callee],
-  memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
-    memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-    memory_usage_canister_history(S.canister_history[CM.callee]),
-  S.canister_subnet[CM.callee].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE
+liquid_balance(
+  S.balances[CM.callee],
+  S.reserved_balances[CM.callee],
+  freezing_limit(
+    S.compute_allocation[CM.callee],
+    S.memory_allocation[CM.callee],
+    S.freezing_threshold[CM.callee],
+    memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
+      memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
+      memory_usage_canister_history(S.canister_history[CM.callee]),
+    S.canister_subnet[CM.callee].subnet_size,
+  )
+) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3316,15 +3360,19 @@ Conditions
 
 S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
-S.balances[C] ≥ freezing_limit(
-  S.compute_allocation[C],
-  S.memory_allocation[C],
-  S.freezing_threshold[C],
-  memory_usage_wasm_state(S.canisters[C].wasm_state) +
-    memory_usage_raw_module(S.canisters[C].raw_module) +
-    memory_usage_canister_history(S.canister_history[C]),
-  S.canister_subnet[C].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE
+liquid_balance(
+  S.balances[C],
+  S.reserved_balance[C],
+  freezing_limit(
+    S.compute_allocation[C],
+    S.memory_allocation[C],
+    S.freezing_threshold[C],
+    memory_usage_wasm_state(S.canisters[C].wasm_state) +
+      memory_usage_raw_module(S.canisters[C].raw_module) +
+      memory_usage_canister_history(S.canister_history[C]),
+    S.canister_subnet[C].subnet_size,
+  )
+) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3365,15 +3413,19 @@ S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
 S.global_timer[C] ≠ 0
 S.time[C] ≥ S.global_timer[C]
-S.balances[C] ≥ freezing_limit(
-  S.compute_allocation[C],
-  S.memory_allocation[C],
-  S.freezing_threshold[C],
-  memory_usage_wasm_state(S.canisters[C].wasm_state) +
-    memory_usage_raw_module(S.canisters[C].raw_module) +
-    memory_usage_canister_history(S.canister_history[C]),
-  S.canister_subnet[C].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE
+liquid_balance(
+  S.balances[C],
+  S.reserved_balances[C],
+  freezing_limit(
+    S.compute_allocation[C],
+    S.memory_allocation[C],
+    S.freezing_threshold[C],
+    memory_usage_wasm_state(S.canisters[C].wasm_state) +
+      memory_usage_raw_module(S.canisters[C].raw_module) +
+      memory_usage_canister_history(S.canister_history[C]),
+    S.canister_subnet[C].subnet_size,
+  )
+) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3427,6 +3479,8 @@ Env = {
   controllers = S.controllers[M.receiver];
   global_timer = S.global_timer[M.receiver];
   balance = S.balances[M.receiver]
+  reserved_balance = S.reserved_balances[M.receiver];
+  reserved_balance_limit = S.reserved_balance_limits[M.receiver];
   compute_allocation = S.compute_allocation[M.receiver];
   memory_allocation = S.memory_allocation[M.receiver];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[M.receiver].raw_module);
@@ -3479,10 +3533,13 @@ if
   res.cycles_accepted ≤ Available
   (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
     (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
+  Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
-  New_balance ≥ if Is_response then 0 else freezing_limit(
+      - Cycles_reserved
+  New_reserved_balance = S.reserved_balances[M.receiver] + Cycles_reserved
+  Min_balance = if Is_response then 0 else freezing_limit(
     S.compute_allocation[M.receiver],
     S.memory_allocation[M.receiver],
     S.freezing_threshold[M.receiver],
@@ -3490,7 +3547,13 @@ if
       memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
       memory_usage_canister_history(S.canister_history[M.receiver]),
     S.canister_subnet[M.receiver].subnet_size,
-  );
+  )
+  New_reserved_balance ≤ S.reserved_balance_limits[M.receiver]
+  liquid_balance(
+    New_balance,
+    New_reserved_balance,
+    Min_balance
+  ) ≥ 0
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
@@ -3535,6 +3598,7 @@ then
       global_timer[M.receiver] = res.new_global_timer
 
     balances[M.receiver] = New_balance
+    reserved_balances[M.receiver] = New_reserved_balance
 else
   S with
     messages = Older_messages · Younger_messages
@@ -3680,14 +3744,6 @@ if A.settings.controllers is not null:
 else:
   New_controllers = [M.caller]
 
-if New_compute_allocation > 0 or New_memory_allocation > 0:
-  freezing_limit(
-    New_compute_allocation,
-    New_memory_allocation,
-    New_freezing_threshold,
-    memory_usage_canister_history(New_canister_history),
-    SubnetSize,
-  ) ≤ M.transferred_cycles
 if New_memory_allocation > 0:
   memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
 
@@ -3703,6 +3759,26 @@ if A.settings.freezing_threshold is not null:
   New_freezing_threshold = A.settings.freezing_threshold
 else:
   New_freezing_threshold = 2592000
+if A.settings.reserved_cycles_limit is not null:
+  New_reserved_balance_limit = A.settings.reserved_cycles_limit
+else:
+  New_reserved_balance_limit = 5_000_000_000_000
+
+Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister)
+New_balance = M.transferred_cycles - Cycles_reserved
+New_reserved_balance = Cycles_reserved
+New_reserved_balance <= New_reserved_balance_limit
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage_canister_history(New_canister_history),
+    SubnetSize,
+  )
+) ≥ 0
 
 New_canister_history = {
   total_num_changes = 1
@@ -3732,6 +3808,8 @@ S with
     memory_allocation[CanisterId] = New_memory_allocation
     freezing_threshold[CanisterId] = New_freezing_threshold
     balances[CanisterId] = M.transferred_cycles
+    reserved_balances[Canister_id] = 0
+    reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = New_canister_history
     messages = Older_messages · Younger_messages ·
@@ -3781,15 +3859,19 @@ M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
 if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id]:
-  freezing_limit(
-    New_compute_allocation,
-    New_memory_allocation,
-    New_freezing_threshold,
-    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(New_canister_history),
-    S.canister_subnet[A.canister_id].subnet_size,
-  ) ≤ S.balances[A.canister_id]
+  liquid_balance(
+    S.balances[A.canister_id],
+    S.reserved_balances[A.canister_id],
+    freezing_limit(
+      New_compute_allocation,
+      New_memory_allocation,
+      New_freezing_threshold,
+      memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+        memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+        memory_usage_canister_history(New_canister_history),
+      S.canister_subnet[A.canister_id].subnet_size,
+    )
+  ) ≥ 0
 if New_memory_allocation > 0:
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
@@ -3807,7 +3889,11 @@ if A.settings.freezing_threshold is not null:
   New_freezing_threshold = A.settings.freezing_threshold
 else:
   New_freezing_threshold = S.freezing_threshold[A.canister_id]
-
+if A.settings.reserved_cycles_limit is not null:
+  New_reserved_balance_limit = A.settings.reserved_cycles_limit
+else:
+  New_reserved_balance_limit = S.reserved_balance_limits[A.canister_id]
+S.reserved_balances[A.canister_id] ≤ New_reserved_balance_limit
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
@@ -3840,6 +3926,7 @@ S with
     compute_allocation[A.canister_id] = New_compute_allocation
     memory_allocation[A.canister_id] = New_memory_allocation
     freezing_threshold[A.canister_id] = New_freezing_threshold
+    reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -3888,6 +3975,7 @@ S with
           controllers = S.controllers[A.canister_id];
           memory_size = Memory_size;
           cycles = S.balances[A.canister_id];
+          reserved_cycles = S.reserved_balances[A.canister_id]
           freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(
             S.compute_allocation[A.canister_id],
@@ -4062,6 +4150,8 @@ Env = {
   controllers = S.controllers[A.canister_id];
   global_timer = 0;
   balance = S.balances[A.canister_id];
+  reserved_balance = S.reserved_balances[A.canister_id];
+  reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
@@ -4073,30 +4163,43 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
+Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
 
-freezing_limit(
-  S.compute_allocation[A.canister_id],
-  S.memory_allocation[A.canister_id],
-  S.freezing_threshold[A.canister_id],
-  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]),
-  S.canister_subnet[A.canister_id].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
-freezing_limit(
-  S.compute_allocation[A.canister_id],
-  S.memory_allocation[A.canister_id],
-  S.freezing_threshold[A.canister_id],
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
-  S.canister_subnet[A.canister_id].subnet_size,
-) + Cycles_used ≤ S.balances[A.canister_id]
+liquid_balance(
+  S.balances[A.canister_id],
+  S.reserved_balances[A.canister_id],
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_canister_history(S.canister_history[A.canister_id]),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ MAX_CYCLES_PER_MESSAGE
+
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(New_state) +
+      memory_usage_raw_module(A.wasm_module) +
+      memory_usage_canister_history(New_canister_history),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ 0
+
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
-  ) ≤ S.memory_allocation[A.canister_id]
+    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4135,7 +4238,8 @@ S with
     else:
       global_timer[A.canister_id] = 0
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
-    balances[A.canister_id] = S.balances[A.canister_id] - Cycles_used
+    balances[A.canister_id] = New_balance
+    reserved_balances[A.canister_id] = New_reserved_balance
     canister_history[A.canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -4173,6 +4277,8 @@ Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
   balance = S.balances[A.canister_id];
+  reserved_balance = S.reserved_balances[A.canister_id];
+  reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
@@ -4207,24 +4313,39 @@ Env2 = Env with {
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
-freezing_limit(
-  S.compute_allocation[A.canister_id],
-  S.memory_allocation[A.canister_id],
-  S.freezing_threshold[A.canister_id],
-  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]),
-  S.canister_subnet[A.canister_id].subnet_size,
-) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
-freezing_limit(
-  S.compute_allocation[A.canister_id],
-  S.memory_allocation[A.canister_id],
-  S.freezing_threshold[A.canister_id],
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
-  S.canister_subnet[A.canister_id].subnet_size,
-) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
+Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
+
+liquid_balance(
+  S.balances[A.canister_id],
+  S.reserved_balances[A.canister_id],
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_canister_history(S.canister_history[A.canister_id]),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ MAX_CYCLES_PER_MESSAGE
+
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(New_state) +
+      memory_usage_raw_module(A.wasm_module) +
+      memory_usage_canister_history(New_canister_history),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ 0
+
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
@@ -4269,7 +4390,8 @@ S with
     else:
       global_timer[A.canister_id] = 0
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
-    balances[A.canister_id] = S.balances[A.canister_id] - (Cycles_used + Cycles_used');
+    balances[A.canister_id] = New_balance;
+    reserved_balances[A.canister_id] = New_reserved_balance;
     canister_history[A.canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -4627,6 +4749,8 @@ S with
     time[A.canister_id] = (deleted)
     global_timer[A.canister_id] = (deleted)
     balances[A.canister_id] = (deleted)
+    reserved_balances[A.canister_id] = (deleted)
+    reserved_balance_limits[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
@@ -4723,15 +4847,6 @@ if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
   New_controllers = [M.caller]
-
-if New_compute_allocation > 0 or New_memory_allocation > 0:
-  freezing_limit(
-    New_compute_allocation,
-    New_memory_allocation,
-    New_freezing_threshold,
-    memory_usage_canister_history(New_canister_history),
-    SubnetSize
-  ) ≤ New_balance
 if New_memory_allocation > 0:
   memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
 
@@ -4747,10 +4862,29 @@ if A.settings.freezing_threshold is not null:
   New_freezing_threshold = A.settings.freezing_threshold
 else:
   New_freezing_threshold = 2592000
-if A.amount is not null:
-  New_balance = A.amount
+if A.settings.reserved_cycles_limit is not null:
+  New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
-  New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE
+  New_reserved_balance_limit = 5_000_000_000_000
+
+Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister)
+if A.amount is not null:
+  New_balance = A.amount - Cycles_reserved
+else:
+  New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE - Cycles_reserved
+New_reserved_balance  = Cycles_reserved
+New_reserved_balance ≤ New_reserved_balance_limit
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    New_compute_allocation,
+    New_memory_allocation,
+    New_freezing_threshold,
+    memory_usage_canister_history(New_canister_history),
+    SubnetSize
+  )
+) ≥ 0
 
 New_canister_history {
   total_num_changes = 1
@@ -4779,6 +4913,8 @@ S with
     memory_allocation[Canister_id] = New_memory_allocation
     freezing_threshold[Canister_id] = New_freezing_threshold
     balances[Canister_id] = New_balance
+    reserved_balances[Canister_id] = New_reserved_balance
+    reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
@@ -4964,6 +5100,7 @@ Conditions
 ```html
 
 S.balances[CanisterId] = 0
+S.reserved_balances[CanisterId] = 0
 S.canister_history[CanisterId] = {
   total_num_changes = N;
   recent_changes = H;
@@ -5026,12 +5163,32 @@ S with
 
 ```
 
-The canister cycle balance similarly depletes at an unspecified rate, but stays non-negative:
+The canister cycle balances similarly deplete at an unspecified rate, but stays non-negative.
+If the canister has a positive reserved balance, then it depletes before the main balance:
 
 Conditions  
 
 ```html
+R0 = S.reserved_balances[CanisterId]
+0 ≤ R1 < R0
 
+```
+
+State after
+
+```html
+
+S with
+    reserved_balances[CanisterId] = R1
+
+```
+
+Once the reserved balance reaches zero, then the main balance starts depleting:
+
+Conditions
+
+```html
+S.reserved_balances[CanisterId] = 0
 B0 = S.balances[CanisterId]
 0 ≤ B1 < B0
 
@@ -5142,6 +5299,8 @@ We define an auxiliary method that handles calls from composite query methods by
       let Env = { time = S.time[Canister_id];
                   global_timer = S.global_timer[Canister_id];
                   balance = S.balances[Canister_id];
+                  reserved_balance = S.reserved_balances[Canister_id];
+                  reserved_balance_limit = S.reserved_balance_limits[Canister_id];
                   compute_allocation = S.compute_allocation[Canister_id];
                   memory_allocation = S.memory_allocation[Canister_id];
                   memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
@@ -5154,15 +5313,19 @@ We define an auxiliary method that handles calls from composite query methods by
                 }
       if S.canisters[Canister_id] ≠ EmptyCanister and
          S.canister_status[Canister_id] = Running and
-         S.balances[Canister_id] >= freezing_limit(
-           S.compute_allocation[Canister_id],
-           S.memory_allocation[Canister_id],
-           S.freezing_threshold[Canister_id],
-           memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
-             memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-             memory_usage_canister_history(S.canister_history[Canister_id]),
-           S.canister_subnet[Canister_id].subnet_size,
-         ) and
+         liquid_balance(
+            S.balances[Canister_id],
+            S.reserved_balances[Canister_id],
+            freezing_limit(
+              S.compute_allocation[Canister_id],
+              S.memory_allocation[Canister_id],
+              S.freezing_threshold[Canister_id],
+              memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
+                memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
+                memory_usage_canister_history(S.canister_history[Canister_id]),
+              S.canister_subnet[Canister_id].subnet_size,
+            )
+          ) >= 0 and
          (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
          Cycles >= MAX_CYCLES_PER_MESSAGE
       then
@@ -5954,13 +6117,20 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
     ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
       if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
-      let burned_amount = min(amount, es.balance - freezing_limit(
-        es.params.sysenv.compute_allocation,
-        es.params.sysenv.memory_allocation,
-        es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
-        es.params.sysenv.subnet_size,
-      ))
+      let burned_amount = min(
+        amount,
+        liquid_balance(
+          es.balance,
+          es.params.sysenv.reserved_balance,
+          freezing_limit(
+            es.params.sysenv.compute_allocation,
+            es.params.sysenv.memory_allocation,
+            es.params.sysenv.freezing_threshold,
+            memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+            es.params.sysenv.subnet_size,
+          )
+        )
+      )
       es.balance := es.balance - burned_amount
       copy_cycles_to_canister<es>(dst, burned_amount.to_little_endian_bytes())
 
@@ -6060,14 +6230,17 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
     ic0.call_cycles_add<es>(amount : i64) =
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-      if es.balance < amount then Trap {cycles_used = es.cycles_used;}
-      if es.balance - amount < freezing_limit(
-        es.params.sysenv.compute_allocation,
-        es.params.sysenv.memory_allocation,
-        es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
-        es.params.sysenv.subnet_size,
-      ) then Trap {cycles_used = es.cycles_used;}
+      if liquid_balance(
+        es.balance,
+        es.params.sysenv.reserved_balance,
+        freezing_limit(
+          es.params.sysenv.compute_allocation,
+          es.params.sysenv.memory_allocation,
+          es.params.sysenv.freezing_threshold,
+          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          es.params.sysenv.subnet_size,
+        )
+      ) < amount then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -6076,14 +6249,17 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-      if es.balance < amount then Trap {cycles_used = es.cycles_used;}
-      if es.balance - amount < freezing_limit(
-        es.params.sysenv.compute_allocation,
-        es.params.sysenv.memory_allocation,
-        es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
-        es.params.sysenv.subnet_size,
-      ) then Trap {cycles_used = es.cycles_used;}
+      if liquid_balance(
+        es.balance,
+        es.params.sysenv.reserved_balance,
+        freezing_limit(
+          es.params.sysenv.compute_allocation,
+          es.params.sysenv.memory_allocation,
+          es.params.sysenv.freezing_threshold,
+          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          es.params.sysenv.subnet_size,
+        )
+      ) < amount then Trap {cycles_used = es.cycles_used;}
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -6094,13 +6270,17 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       // are we below the threezing threshold?
       // Or maybe the system has other reasons to not perform this
-      if es.balance < freezing_limit(
-        es.params.sysenv.compute_allocation,
-        es.params.sysenv.memory_allocation,
-        es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
-        es.params.sysenv.subnet_size,
-      ) or system_cannot_do_this_call_now()
+      if liquid_balance(
+        es.balance,
+        es.params.sysenv.reserved_balance,
+        freezing_limit(
+          es.params.sysenv.compute_allocation,
+          es.params.sysenv.memory_allocation,
+          es.params.sysenv.freezing_threshold,
+          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          es.params.sysenv.subnet_size,
+        )
+      ) < 0 or system_cannot_do_this_call_now()
       then
         discard_pending_call<es>()
         return 1
