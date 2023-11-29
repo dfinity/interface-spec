@@ -1952,7 +1952,7 @@ The optional `settings` parameter can be used to set the following settings:
 
     Must be a number between 0 and 2<sup>128</sup>-1, inclusively, and indicates the upper limit on `reserved_cycles` of the canister.
 
-    An operation that allocates resources such as compute and memory will fail of the new value of `reserved_cycles` exceeds this limit.
+    An operation that allocates resources such as compute and memory will fail if the new value of `reserved_cycles` exceeds this limit.
 
     Default value: 5_000_000_000_000 (5 trillion cycles).
 
@@ -2977,22 +2977,22 @@ To convert `CallOrigin` into `ChangeOrigin`, we define the following conversion 
 
 The main cycle balance of canister `A` in state `S` can be obtained with `S.balances(A)`.
 In addition to the main balance, each canister has a reserved balance `S.reserved_balances(A)`.
-The reserved balance contains cycles that were set aside from the main balance for future payments for the consumption of resources such as memory and compute.
+The reserved balance contains cycles that were set aside from the main balance for future payments for the consumption of resources such as compute and memory.
 The reserved cycles can only be used for resource payments and cannot be transferred back to the main balance.
 
-The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage & and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
+The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` determines the idle resource consumption rate in cycles per day of a canister given its current compute and memory allocation, memory usage, and subnet size. The function `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` determines the freezing limit in cycles of a canister given its current compute and memory allocation, freezing threshold in seconds, memory usage, and subnet size. The value `freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size)` is derived from `idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size)` and `freezing_threshold` as follows:
 
         freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 
 The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
 
-The amount of cycles that is available for spending in calls and execution is computed by the `liquid_balance(balance, reserved_balance, freezing_limit)` function:
+The amount of cycles that is available for spending in calls and execution is computed by the function `liquid_balance(balance, reserved_balance, freezing_limit)`:
 
         liquid_balance(balance, reserved_balance, freezing_limit) = balance - max(freezing_limit - reserved_balance, 0)
 
-The reasoning behind this is that resource payments first drain the reserved balance, only when it gets to zero they start draining the main balance.
+The reasoning behind this is that resource payments first drain the reserved balance and only when the reserved balance gets to zero, they start draining the main balance.
 
-The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, compute_allocation, memory_allocatoin, CanState)` that depends on the system state, the new allocation settings of the cansiter, and the new state of the canister.
+The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, compute_allocation, memory_allocation, CanState)` that depends on the old IC state, the new allocations of the canister, and the new state of the canister.
 
 #### Initial state
 
@@ -3159,7 +3159,7 @@ is_effective_canister_id(E.content, ECID)
   }
   liquid_balance(
     S.balances[E.content.canister_id],
-    S.reserved_balance(E.content.canister_id),
+    S.reserved_balances[E.content.canister_id],
     freezing_limit(
       S.compute_allocation[E.content.canister_id],
       S.memory_allocation[E.content.canister_id],
@@ -3262,8 +3262,8 @@ S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or liquid_balance(
-  balances[CM.callee],
-  reserved_balances[CM.callee],
+  S.balances[CM.callee],
+  S.reserved_balances[CM.callee],
   freezing_limit(
     S.compute_allocation[CM.callee],
     S.memory_allocation[CM.callee],
@@ -3764,7 +3764,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister)
+Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
@@ -3808,7 +3808,7 @@ S with
     memory_allocation[CanisterId] = New_memory_allocation
     freezing_threshold[CanisterId] = New_freezing_threshold
     balances[CanisterId] = M.transferred_cycles
-    reserved_balances[Canister_id] = 0
+    reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = New_canister_history
@@ -4867,12 +4867,12 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister)
+Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 if A.amount is not null:
   New_balance = A.amount - Cycles_reserved
 else:
   New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE - Cycles_reserved
-New_reserved_balance  = Cycles_reserved
+New_reserved_balance = Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
 liquid_balance(
   New_balance,
@@ -5163,8 +5163,8 @@ S with
 
 ```
 
-The canister cycle balances similarly deplete at an unspecified rate, but stays non-negative.
-If the canister has a positive reserved balance, then it depletes before the main balance:
+The canister cycle balances similarly deplete at an unspecified rate, but stay non-negative.
+If the canister has a positive reserved balance, then the reserved balance depletes before the main balance:
 
 Conditions  
 
