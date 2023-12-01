@@ -113,6 +113,14 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
+type snapshot_id = nat64;
+type snapshot = record {
+  id: snapshot_id;
+  taken_on: timestamp;
+  total_size: bytes;
+  checksum: blob;   
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings;
@@ -214,6 +222,18 @@ service ic : {
   bitcoin_get_utxos_query: (get_utxos_request) -> (get_utxos_response) query;
   bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
+
+  // Canister backup and restore
+  take_snapshot: (record { 
+    canister_id: canister_id;
+    duration: opt nat64;
+  }) -> (snapshot_id);
+  load_snapshot: (record { 
+    snapshot_id: snapshot_id;
+    canister_id: canister_id
+  }) -> ();
+  list_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
+  delete_snapshot: (record {snapshot_id : snapshot_id}) -> ();
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {

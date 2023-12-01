@@ -2301,6 +2301,34 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
+### IC method `take_snapshot` {#ic-take_snapshot}
+
+This method takes a snapshot of the canister. Subsequent `take_snapshot` calls will replace the existing snapshot with a new one.
+
+The optional `duration` parameter can be used to limit the storage duration of a snapshot. When provided, the snapshot will be stored for the specified duration (in seconds) and will be deleted automatically at the end of this duration. In this case,
+subsequent calls to `load_snapshot` or `delete_snapshot` will fail.  
+
+It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the balance must have the right amount of cycles to support the new freezing threshold.
+
+Only controllers can take a snapshot of a canister and restore it.
+
+### IC method `load_snapshot` {#ic-take_snapshot}
+
+This method loads a snapshot identified by `snapshot_id` onto the canister.  
+
+Only controllers can take a snapshot of a canister and restore it.
+
+### IC method `list_snapshots` {#ic-take_snapshot}
+
+This method lists the snapshots of the canister identified by `canister_id`. Currently, only one snapshot per canister will be stored.
+
+### IC method `delete_snapshot` {#ic-take_snapshot}
+
+This method deletes the snapshot of the canister. An error will be returned if the snapshot is not found. A snapshot cannot be 
+found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted.
+
+A snapshot may be deleted only by the controllers of the canister which owns the snapshot.
+
 ## Certification {#certification}
 
 Some parts of the IC state are exposed to users in a tamperproof way via certification: the IC can reveal a *partial state tree* which includes just the data of interest, together with a signature on the root hash of the state tree. This means that a user can be sure that the response is correct, even if the user happens to be communicating with a malicious node, or has received the certificate via some other untrusted way.
@@ -3079,7 +3107,7 @@ The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_a
 
         freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 
-The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`,`memory_usage_canister_history(canister_history)` and `memory_usage_snapshot(snapshot)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
 
 Submitted request  
 `E : Envelope`
@@ -3128,7 +3156,8 @@ is_effective_canister_id(E.content, ECID)
     S.freezing_threshold[E.content.canister_id],
     memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
       memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[E.content.canister_id]),
+      memory_usage_canister_history(S.canister_history[E.content.canister_id]) +
+      memory_usage_snapshot(S.snapshots[E.content.canister_id]),
     S.canister_subnet[E.content.canister_id].subnet_size,
   )
   S.canisters[E.content.canister_id].module.inspect_message
@@ -3228,7 +3257,8 @@ S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stoppin
   S.freezing_threshold[CM.callee],
   memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
     memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-    memory_usage_canister_history(S.canister_history[CM.callee]),
+    memory_usage_canister_history(S.canister_history[CM.callee]) +
+    memory_usage_snapshot(S.snapshots[CM.callee]),
   S.canister_subnet[CM.callee].subnet_size,
 )
 
@@ -3272,7 +3302,8 @@ S.balances[CM.callee] ≥ freezing_limit(
   S.freezing_threshold[CM.callee],
   memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
     memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-    memory_usage_canister_history(S.canister_history[CM.callee]),
+    memory_usage_canister_history(S.canister_history[CM.callee]) +
+    memory_usage_snapshot(S.snapshots[CM.callee]),
   S.canister_subnet[CM.callee].subnet_size,
 ) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
@@ -3320,7 +3351,8 @@ S.balances[C] ≥ freezing_limit(
   S.freezing_threshold[C],
   memory_usage_wasm_state(S.canisters[C].wasm_state) +
     memory_usage_raw_module(S.canisters[C].raw_module) +
-    memory_usage_canister_history(S.canister_history[C]),
+    memory_usage_canister_history(S.canister_history[C]) +
+    memory_usage_snapshot(S.snapshots[C]),
   S.canister_subnet[C].subnet_size,
 ) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
@@ -3369,7 +3401,8 @@ S.balances[C] ≥ freezing_limit(
   S.freezing_threshold[C],
   memory_usage_wasm_state(S.canisters[C].wasm_state) +
     memory_usage_raw_module(S.canisters[C].raw_module) +
-    memory_usage_canister_history(S.canister_history[C]),
+    memory_usage_canister_history(S.canister_history[C])
+    memory_usage_snapshot(S.snapshots[C]),
   S.canister_subnet[C].subnet_size,
 ) + MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
@@ -3486,12 +3519,14 @@ if
     S.freezing_threshold[M.receiver],
     memory_usage_wasm_state(res.new_state) +
       memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-      memory_usage_canister_history(S.canister_history[M.receiver]),
+      memory_usage_canister_history(S.canister_history[M.receiver]) +
+      memory_usage_snapshot(S.snapshots[M.receiver]),
     S.canister_subnet[M.receiver].subnet_size,
   );
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-    memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
+    memory_usage_canister_history(S.canister_history[M.receiver] +
+    memory_usage_snapshot(S.snapshots[M.receiver])) ≤ S.memory_allocation[M.receiver])
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3785,13 +3820,15 @@ if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_al
     New_freezing_threshold,
     memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
       memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(New_canister_history),
+      memory_usage_canister_history(New_canister_history) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   ) ≤ S.balances[A.canister_id]
 if New_memory_allocation > 0:
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ New_memory_allocation
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
@@ -3892,7 +3929,8 @@ S with
             S.memory_allocation[A.canister_id],
             memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
               memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-              memory_usage_canister_history(S.canister_history[A.canister_id]),
+              memory_usage_canister_history(S.canister_history[A.canister_id]) +
+              memory_usage_snapshot(S.snapshots[A.canister_id]),
             S.freezing_threshold[A.canister_id],
             S.canister_subnet[A.canister_id].subnet_size,
           );
@@ -4078,7 +4116,8 @@ freezing_limit(
   S.freezing_threshold[A.canister_id],
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]),
+    memory_usage_canister_history(S.canister_history[A.canister_id]) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
 freezing_limit(
@@ -4087,13 +4126,15 @@ freezing_limit(
   S.freezing_threshold[A.canister_id],
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + Cycles_used ≤ S.balances[A.canister_id]
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]),
   ) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
@@ -4211,7 +4252,8 @@ freezing_limit(
   S.freezing_threshold[A.canister_id],
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(S.canister_history[A.canister_id]),
+    memory_usage_canister_history(S.canister_history[A.canister_id]) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + MAX_CYCLES_PER_MESSAGE ≤ S.balances[A.canister_id]
 freezing_limit(
@@ -4220,13 +4262,15 @@ freezing_limit(
   S.freezing_threshold[A.canister_id],
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history),
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]),
   S.canister_subnet[A.canister_id].subnet_size,
 ) + Cycles_used + Cycles_used' ≤ S.balances[A.canister_id]
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -5157,8 +5201,9 @@ We define an auxiliary method that handles calls from composite query methods by
            S.memory_allocation[Canister_id],
            S.freezing_threshold[Canister_id],
            memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
-             memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-             memory_usage_canister_history(S.canister_history[Canister_id]),
+              memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
+              memory_usage_canister_history(S.canister_history[Canister_id]) +
+              memory_usage_snapshot(S.snapshots[Canister_id]),
            S.canister_subnet[Canister_id].subnet_size,
          ) and
          (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
@@ -5956,7 +6001,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        memory_usage_wasm_state(es.wasm_state) + 
+          es.params.sysenv.memory_usage_raw_module + 
+          es.params.sysenv.memory_usage_canister_history +
+          es.params.sysenv.memory_usage_snapshot,
         es.params.sysenv.subnet_size,
       ))
       es.balance := es.balance - burned_amount
@@ -6063,7 +6111,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        memory_usage_wasm_state(es.wasm_state) + 
+          es.params.sysenv.memory_usage_raw_module + 
+          es.params.sysenv.memory_usage_canister_history +
+          es.params.sysenv.memory_usage_snapshot,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -6079,7 +6130,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        memory_usage_wasm_state(es.wasm_state) + 
+          es.params.sysenv.memory_usage_raw_module + 
+          es.params.sysenv.memory_usage_canister_history +
+          es.params.sysenv.memory_usage_snapshot,
         es.params.sysenv.subnet_size,
       ) then Trap {cycles_used = es.cycles_used;}
 
@@ -6096,7 +6150,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         es.params.sysenv.compute_allocation,
         es.params.sysenv.memory_allocation,
         es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+        memory_usage_wasm_state(es.wasm_state) + 
+          es.params.sysenv.memory_usage_raw_module + 
+          es.params.sysenv.memory_usage_canister_history +
+          es.params.sysenv.memory_usage_snapshot,
         es.params.sysenv.subnet_size,
       ) or system_cannot_do_this_call_now()
       then
