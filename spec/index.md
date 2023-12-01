@@ -3250,7 +3250,7 @@ State after
 messages = Older_messages · Younger_messages  ·
   ResponseMessage {
       origin = CM.origin;
-      response = Reject (CANISTER_ERROR, "canister not running");
+      response = Reject (CANISTER_ERROR, <implementation-specific>);
       refunded_cycles = CM.transferred_cycles;
   }
 
@@ -3633,7 +3633,7 @@ S with
       S.messages ·
       ResponseMessage {
         origin = S.call_contexts[Ctxt_id].origin;
-        response = Reject (CANISTER_ERROR, "starvation");
+        response = Reject (CANISTER_ERROR, <implementation-specific>);
         refunded_cycles = S.call_contexts[Ctxt_id].available_cycles
       }
 
@@ -4372,7 +4372,7 @@ S with
       } ·
       [ ResponseMessage {
           origin = Ctxt.origin
-          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
@@ -4525,7 +4525,7 @@ S with
     messages = S.Messages ·
       ResponseMessage {
         origin = O
-        response = Reject (SYS_TRANSIENT, 'Stop canister request timed out')
+        response = Reject (SYS_TRANSIENT, <implementation-specific>)
         refunded_cycles = C
       }
 
@@ -4594,7 +4594,7 @@ S with
         } ·
         [ ResponseMessage {
             origin = O
-            response = Reject (CANISTER_ERROR, 'Canister has been restarted')
+            response = Reject (CANISTER_ERROR, <implementation-specific>)
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
@@ -4995,7 +4995,7 @@ S with
     messages = S.messages ·
       [ ResponseMessage {
           origin = Ctxt.origin
-          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
