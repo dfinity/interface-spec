@@ -2992,7 +2992,7 @@ The amount of cycles that is available for spending in calls and execution is co
 
 The reasoning behind this is that resource payments first drain the reserved balance and only when the reserved balance gets to zero, they start draining the main balance.
 
-The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, compute_allocation, memory_allocation, CanState)` that depends on the old IC state, the new allocations of the canister, and the new state of the canister.
+The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, CanisterId, compute_allocation, memory_allocation, CanState)` that depends on the old IC state, the id of the canister, the new allocations of the canister, and the new state of the canister.
 
 #### Initial state
 
@@ -3533,7 +3533,7 @@ if
   res.cycles_accepted ≤ Available
   (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
     (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-  Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+  Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
@@ -3736,8 +3736,8 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'create_canister'
 M.arg = candid(A)
-is_system_assigned CanisterId
-CanisterId ∉ dom(S.canisters)
+is_system_assigned Canister_id
+Canister_id ∉ dom(S.canisters)
 SubnetId ∈ Subnets
 if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
@@ -3764,7 +3764,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
@@ -3801,28 +3801,28 @@ State after
 ```html
 
 S with
-    canisters[CanisterId] = EmptyCanister
-    time[CanisterId] = CurrentTime
-    global_timer[CanisterId] = 0
-    controllers[CanisterId] = New_controllers
-    chunk_store[CanisterId] = ()
-    compute_allocation[CanisterId] = New_compute_allocation
-    memory_allocation[CanisterId] = New_memory_allocation
-    freezing_threshold[CanisterId] = New_freezing_threshold
-    balances[CanisterId] = New_balance
+    canisters[Canister_id] = EmptyCanister
+    time[Canister_id] = CurrentTime
+    global_timer[Canister_id] = 0
+    controllers[Canister_id] = New_controllers
+    chunk_store[Canister_id] = ()
+    compute_allocation[Canister_id] = New_compute_allocation
+    memory_allocation[Canister_id] = New_memory_allocation
+    freezing_threshold[Canister_id] = New_freezing_threshold
+    balances[Canister_id] = New_balance
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
-    certified_data[CanisterId] = ""
-    canister_history[CanisterId] = New_canister_history
+    certified_data[Canister_id] = ""
+    canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid({canister_id = CanisterId}))
+        response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = 0
       }
-    canister_status[CanisterId] = Running
-    canister_version[CanisterId] = 0
-    canister_subnet[CanisterId] = Subnet {
+    canister_status[Canister_id] = Running
+    canister_version[Canister_id] = 0
+    canister_subnet[Canister_id] = Subnet {
       subnet_id : SubnetId
       subnet_size : SubnetSize
     }
@@ -3882,7 +3882,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = S.reserved_balance_limits[A.canister_id]
 
-Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, S.canisters[A.canister_id].wasm_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation, S.canisters[A.canister_id].wasm_state)
 New_balance = S.balances[A.canister_id] - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
@@ -4172,7 +4172,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
@@ -4322,7 +4322,7 @@ Env2 = Env with {
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
-Cycles_reserved = cycles_to_reserve(S, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
@@ -4848,8 +4848,8 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'provisional_create_canister_with_cycles'
 M.arg = candid(A)
-is_system_assigned CanisterId
-CanisterId ∉ dom(S.canisters)
+is_system_assigned Canister_id
+Canister_id ∉ dom(S.canisters)
 if A.specified_id is not null:
   Canister_id = A.specified_id
 if A.settings.controllers is not null:
@@ -4877,7 +4877,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 if A.amount is not null:
   New_balance = A.amount - Cycles_reserved
 else:
