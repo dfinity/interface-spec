@@ -3768,17 +3768,19 @@ Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_alloca
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    New_compute_allocation,
-    New_memory_allocation,
-    New_freezing_threshold,
-    memory_usage_canister_history(New_canister_history),
-    SubnetSize,
-  )
-) ≥ 0
+if New_compute_allocation > 0 or New_memory_allocation > 0 or Cycles_reserved > 0:
+  liquid_balance(
+    New_balance,
+    New_reserved_balance,
+    freezing_limit(
+      New_compute_allocation,
+      New_memory_allocation,
+      New_freezing_threshold,
+      memory_usage_canister_history(New_canister_history),
+      SubnetSize,
+    )
+  ) ≥ 0
+
 
 New_canister_history = {
   total_num_changes = 1
@@ -3807,7 +3809,7 @@ S with
     compute_allocation[CanisterId] = New_compute_allocation
     memory_allocation[CanisterId] = New_memory_allocation
     freezing_threshold[CanisterId] = New_freezing_threshold
-    balances[CanisterId] = M.transferred_cycles
+    balances[CanisterId] = New_balance
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[CanisterId] = ""
@@ -3858,20 +3860,6 @@ M.method_name = 'update_settings'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
-if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id]:
-  liquid_balance(
-    S.balances[A.canister_id],
-    S.reserved_balances[A.canister_id],
-    freezing_limit(
-      New_compute_allocation,
-      New_memory_allocation,
-      New_freezing_threshold,
-      memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-        memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-        memory_usage_canister_history(New_canister_history),
-      S.canister_subnet[A.canister_id].subnet_size,
-    )
-  ) ≥ 0
 if New_memory_allocation > 0:
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
@@ -3893,7 +3881,26 @@ if A.settings.reserved_cycles_limit is not null:
   New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
   New_reserved_balance_limit = S.reserved_balance_limits[A.canister_id]
-S.reserved_balances[A.canister_id] ≤ New_reserved_balance_limit
+
+Cycles_reserved = cycles_to_reserve(S, New_compute_allocation, New_memory_allocation, S.canisters[A.canister_id].wasm_state)
+New_balance = S.balances[A.canister_id] - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ New_reserved_balance_limit
+if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id] or Cycles_reserved > 0:
+  liquid_balance(
+    New_balance,
+    New_reserved_balance,
+    freezing_limit(
+      New_compute_allocation,
+      New_memory_allocation,
+      New_freezing_threshold,
+      memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+        memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+        memory_usage_canister_history(New_canister_history),
+      S.canister_subnet[A.canister_id].subnet_size,
+    )
+  ) ≥ 0
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
@@ -3926,6 +3933,8 @@ S with
     compute_allocation[A.canister_id] = New_compute_allocation
     memory_allocation[A.canister_id] = New_memory_allocation
     freezing_threshold[A.canister_id] = New_freezing_threshold
+    balances[A.canister_id] = New_balance
+    reserved_balances[A.canister_id] = New_reserved_balance
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
@@ -4847,6 +4856,7 @@ if A.settings.controllers is not null:
   New_controllers = A.settings.controllers
 else:
   New_controllers = [M.caller]
+
 if New_memory_allocation > 0:
   memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
 
@@ -4874,17 +4884,19 @@ else:
   New_balance = DEFAULT_PROVISIONAL_CYCLES_BALANCE - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    New_compute_allocation,
-    New_memory_allocation,
-    New_freezing_threshold,
-    memory_usage_canister_history(New_canister_history),
-    SubnetSize
-  )
-) ≥ 0
+if New_compute_allocation > 0 or New_memory_allocation > 0 or Cycles_reserved > 0:
+  liquid_balance(
+    New_balance,
+    New_reserved_balance,
+    freezing_limit(
+      New_compute_allocation,
+      New_memory_allocation,
+      New_freezing_threshold,
+      memory_usage_canister_history(New_canister_history),
+      SubnetSize,
+    )
+  ) ≥ 0
+
 
 New_canister_history {
   total_num_changes = 1
