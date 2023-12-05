@@ -1,6 +1,13 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* The maximum length of a nonce in an ingress message is 32 bytes.
+* Update specification of responses from the endpoint `/api/v2/status`.
+* Stop canister calls might be rejected upon timeout.
+* The IC sends a `user-agent` header with the value `ic/1.0` in canister HTTPS outcalls if the canister does not provide one.
+* Add a management canister method for retrieving node metrics.
+
+### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
 * Add management canister methods to support installing large WebAssembly modules split into chunks.
 * Add a system API method to determine if the canister is running in replicated or non-replicated mode.
@@ -10,9 +17,6 @@
 * Add per-call context performance counter.
 * Update the computation of the representation-independent hash for the case of maps with nested maps.
 * Remove `senders` field from user delegations.
-* The maximum length of a nonce in an ingress message is 32 bytes.
-* Update specification of responses from the endpoint `/api/v2/status`.
-* Stop canister calls might be rejected upon timeout.
 
 ### 0.21.0 (2023-09-18) {#0_21_0}
 * Canister cycle balance cannot decrease below the freezing limit after executing `install_code` on the management canister.

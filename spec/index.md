@@ -1026,8 +1026,6 @@ Additionally, the Internet Computer provides an API endpoint to obtain various s
 
 For this endpoint, the user performs a GET request, and receives a CBOR (see [CBOR](#cbor)) value with the following fields. The IC may include additional implementation-specific fields.
 
--   `impl_version` (string, optional): The precise git revision of the Internet Computer Protocol implementation
-
 -   `root_key` (blob, optional): The public key (a DER-encoded BLS key) of the root key of this instance of the Internet Computer Protocol. This *must* be present in short-lived development instances, to allow the agent to fetch the public key. For the Internet Computer, agents must have an independent trustworthy source for this data, and must not be tempted to fetch it from this insecure location.
 
 See [CBOR encoding of requests and responses](#api-cbor) for details on the precise CBOR encoding of this object.
@@ -2139,7 +2137,11 @@ For this reason, the calling canister can supply a transformation function, whic
 
 Currently, the `GET`, `HEAD`, and `POST` methods are supported for HTTP requests.
 
-It is important to note the following for the usage of the `POST` method: - The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request. - There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
+It is important to note the following for the usage of the `POST` method:
+
+- The calling canister must make sure that the remote server is able to handle idempotent requests sent from multiple sources. This may require, for example, to set a certain request header to uniquely identify the request.
+
+- There are no confidentiality guarantees on the request content. There is no guarantee that all sent requests are as specified by the canister. If the canister receives a response, then at least one request that was sent matched the canister's request, and the response was to that request.
 
 For security reasons, only HTTPS connections are allowed (URLs must start with `https://`). The IC uses industry-standard root CA lists to validate certificates of remote web servers.
 
@@ -2181,6 +2183,11 @@ The following additional limits apply to HTTP requests and HTTP responses from t
 
 -   the total number of bytes representing the header names and values must not exceed `48KiB`.
 
+If the request headers provided by the canister do not contain a `user-agent` header (case-insensitive),
+then the IC sends a `user-agent` header (case-insensitive) with the value `ic/1.0`
+in addition to the headers provided by the canister. Such an additional header does not contribute
+to the above limits on HTTP request headers.
+
 :::note
 
 Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6 destinations (i.e., the domain has a `AAAA` DNS record) in HTTP requests.
@@ -2192,6 +2199,26 @@ Currently, the Internet Computer mainnet only supports URLs that resolve to IPv6
 If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB` response will be charged for, which is expensive in terms of cycles. Always set the parameter to a reasonable upper bound of the expected network response size to not incur unnecessary cycles costs for your request.
 
 :::
+
+### IC method `node_metrics_history` {#ic-node-metrics-history}
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+Given a subnet ID as input, this method returns a time series of node metrics (field `node_metrics`). The timestamps are represented as nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. The returned timestamps are all timestamps after (and including) the provided timestamp (field `start_at_timestamp_nanos`) for which node metrics are available. The maximum number of returned timestamps is 60 and no two returned timestamps belong to the same UTC day.
+
+Note that a sample will only include metrics for nodes whose metrics changed compared to the previous sample. This means that if a node disappears in one sample and later reappears its metrics will restart from 0 and consumers of this API need to adjust for these resets when aggregating over multiple samples.
+
+A single metric entry is a record with the following fields:
+
+- `node_id` (`principal`): the principal characterizing a node;
+
+- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+
+- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
 ### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
@@ -3283,7 +3310,7 @@ State after
 messages = Older_messages · Younger_messages  ·
   ResponseMessage {
       origin = CM.origin;
-      response = Reject (CANISTER_ERROR, "canister not running");
+      response = Reject (CANISTER_ERROR, <implementation-specific>);
       refunded_cycles = CM.transferred_cycles;
   }
 
@@ -3690,7 +3717,7 @@ S with
       S.messages ·
       ResponseMessage {
         origin = S.call_contexts[Ctxt_id].origin;
-        response = Reject (CANISTER_ERROR, "starvation");
+        response = Reject (CANISTER_ERROR, <implementation-specific>);
         refunded_cycles = S.call_contexts[Ctxt_id].available_cycles
       }
 
@@ -4496,7 +4523,7 @@ S with
       } ·
       [ ResponseMessage {
           origin = Ctxt.origin
-          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
@@ -4649,7 +4676,7 @@ S with
     messages = S.Messages ·
       ResponseMessage {
         origin = O
-        response = Reject (SYS_TRANSIENT, 'Stop canister request timed out')
+        response = Reject (SYS_TRANSIENT, <implementation-specific>)
         refunded_cycles = C
       }
 
@@ -4718,7 +4745,7 @@ S with
         } ·
         [ ResponseMessage {
             origin = O
-            response = Reject (CANISTER_ERROR, 'Canister has been restarted')
+            response = Reject (CANISTER_ERROR, <implementation-specific>)
             refunded_cycles = C
           }
         | (O, C) ∈ Origins
@@ -4830,6 +4857,44 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Reply (candid(B))
+        refunded_cycles = M.transferred_cycles
+      }
+
+```
+
+#### IC Management Canister: Node Metrics
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+The management canister returns metrics for nodes on a given subnet. The definition of the metrics values
+is not captured in this formal semantics.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'node_metrics_history'
+M.arg = candid(A)
+R = <implementation-specific>
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid(R))
         refunded_cycles = M.transferred_cycles
       }
 
@@ -5137,7 +5202,7 @@ S with
     messages = S.messages ·
       [ ResponseMessage {
           origin = Ctxt.origin
-          response = Reject (CANISTER_REJECT, 'Canister has been uninstalled')
+          response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
