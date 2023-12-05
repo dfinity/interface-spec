@@ -2190,6 +2190,26 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 :::
 
+### IC method `node_metrics_history` {#ic-node-metrics-history}
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+Given a subnet ID as input, this method returns a time series of node metrics (field `node_metrics`). The timestamps are represented as nanoseconds since 1970-01-01 (field `timestamp_nanos`) at which the metrics were sampled. The returned timestamps are all timestamps after (and including) the provided timestamp (field `start_at_timestamp_nanos`) for which node metrics are available. The maximum number of returned timestamps is 60 and no two returned timestamps belong to the same UTC day.
+
+Note that a sample will only include metrics for nodes whose metrics changed compared to the previous sample. This means that if a node disappears in one sample and later reappears its metrics will restart from 0 and consumers of this API need to adjust for these resets when aggregating over multiple samples.
+
+A single metric entry is a record with the following fields:
+
+- `node_id` (`principal`): the principal characterizing a node;
+
+- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+
+- `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
+
 ### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
@@ -4704,6 +4724,44 @@ S with
       ResponseMessage {
         origin = M.origin
         response = Reply (candid(B))
+        refunded_cycles = M.transferred_cycles
+      }
+
+```
+
+#### IC Management Canister: Node Metrics
+
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+The management canister returns metrics for nodes on a given subnet. The definition of the metrics values
+is not captured in this formal semantics.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'node_metrics_history'
+M.arg = candid(A)
+R = <implementation-specific>
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid(R))
         refunded_cycles = M.transferred_cycles
       }
 
