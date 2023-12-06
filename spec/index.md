@@ -2338,6 +2338,13 @@ It's important to note that a snapshot will increase the memory footprint of the
 
 Only controllers can take a snapshot of a canister and restore it.
 
+:::note
+
+It's important to stop a canister before taking a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored using the snapshot.
+It is expected that the canister admin (or their tooling) does this separately.
+
+:::
+
 ### IC method `load_snapshot` {#ic-take_snapshot}
 
 This method loads a snapshot identified by `snapshot_id` onto the canister.  This method fails if the snapshot was previously deleted.
