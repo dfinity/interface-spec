@@ -3140,7 +3140,7 @@ The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_a
 
         freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 
-The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`,`memory_usage_canister_history(canister_history)` and `memory_usage_snapshot(snapshot)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, `memory_usage_canister_history(canister_history)` and `memory_usage_snapshot(snapshot)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
 
 Submitted request  
 `E : Envelope`
