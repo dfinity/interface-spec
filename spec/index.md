@@ -2334,16 +2334,13 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 This method takes a snapshot of the canister. Subsequent `take_snapshot` calls will replace the existing snapshot with a new one.
 
-The optional `duration` parameter can be used to limit the storage duration of a snapshot. When provided, the snapshot will be stored for the specified duration (in seconds) and will be deleted automatically at the end of this duration. In this case,
-subsequent calls to `load_snapshot` or `delete_snapshot` will fail.  
-
 It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the balance must have the right amount of cycles to support the new freezing threshold.
 
 Only controllers can take a snapshot of a canister and restore it.
 
 ### IC method `load_snapshot` {#ic-take_snapshot}
 
-This method loads a snapshot identified by `snapshot_id` onto the canister.  
+This method loads a snapshot identified by `snapshot_id` onto the canister.  This method fails if the snapshot was previously deleted.
 
 Only controllers can take a snapshot of a canister and restore it.
 
@@ -2353,10 +2350,10 @@ This method lists the snapshots of the canister identified by `canister_id`. Cur
 
 ### IC method `delete_snapshot` {#ic-take_snapshot}
 
-This method deletes the snapshot of the canister. An error will be returned if the snapshot is not found. A snapshot cannot be 
-found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted.
+This method deletes a specified snapshot of the canister. An error will be returned if the snapshot is not found. 
+A snapshot cannot be found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted.
 
-A snapshot may be deleted only by the controllers of the canister which owns the snapshot.
+A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
 ## Certification {#certification}
 

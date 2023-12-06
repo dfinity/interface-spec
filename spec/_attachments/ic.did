@@ -117,7 +117,7 @@ type snapshot_id = nat64;
 type snapshot = record {
   id: snapshot_id;
   taken_on: timestamp;
-  total_size: bytes;
+  total_size: nat64;
   checksum: blob;   
 };
 
@@ -232,11 +232,10 @@ service ic : {
   // Canister backup and restore
   take_snapshot: (record { 
     canister_id: canister_id;
-    duration: opt nat64;
   }) -> (snapshot_id);
   load_snapshot: (record { 
+    canister_id: canister_id;
     snapshot_id: snapshot_id;
-    canister_id: canister_id
   }) -> ();
   list_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
   delete_snapshot: (record {snapshot_id : snapshot_id}) -> ();
