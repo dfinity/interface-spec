@@ -6470,7 +6470,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         Trap {cycles_used = es.cycles_used;}
 
     ic0.in_replicated_execution<es>() : i32 =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate
       then return 1
       else return 0
