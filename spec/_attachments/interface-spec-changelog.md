@@ -7,7 +7,7 @@
 * The IC sends a `user-agent` header with the value `ic/1.0` in canister HTTPS outcalls if the canister does not provide one.
 * Add a management canister method for retrieving node metrics.
 * Specify the resource reservation mechanism.
-* Allow `in_replicated_execution` system API method to be executed during `canister_start`
+* Allow `in_replicated_execution` system API method to be executed during `canister_start`.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
