@@ -1344,7 +1344,7 @@ The following sections describe various System API functions, also referred to a
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
-    ic0.in_replicated_execution: () -> (result: i32);                           // * 
+    ic0.in_replicated_execution: () -> (result: i32);                           // * s
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -6470,7 +6470,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         Trap {cycles_used = es.cycles_used;}
 
     ic0.in_replicated_execution<es>() : i32 =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate
       then return 1
       else return 0
