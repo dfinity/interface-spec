@@ -115,11 +115,11 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
-type snapshot_id = nat64;
+type snapshot_id = nat;
 type snapshot = record {
   id: snapshot_id;
   taken_on_timestap: nat;
-  total_size: nat64;
+  total_size: nat;
   checksum: blob;   
 };
 
@@ -235,6 +235,7 @@ service ic : {
   // Canister backup and restore
   take_snapshot: (record { 
     canister_id: canister_id;
+    replace_snapshot: opt snapshot_id;
   }) -> (snapshot_id);
   load_snapshot: (record { 
     canister_id: canister_id;
