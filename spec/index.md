@@ -2342,7 +2342,9 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `take_snapshot` {#ic-take_snapshot}
 
-This method takes a snapshot of the canister. Subsequent `take_snapshot` calls will replace the existing snapshot with a new one.
+This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and binary.
+
+Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing an existing snapshot via `replace_snapshot` which will be deleted.  Currently, only one snapshot per canister will stored.
 
 It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the balance must have the right amount of cycles to support the new freezing threshold.
 
@@ -2357,7 +2359,7 @@ It is expected that the canister admin (or their tooling) does this separately.
 
 ### IC method `load_snapshot` {#ic-take_snapshot}
 
-This method loads a snapshot identified by `snapshot_id` onto the canister.  This method fails if the snapshot was previously deleted.
+This method loads a snapshot identified by `snapshot_id` onto the canister. This method fails if the snapshot was previously deleted.
 
 Only controllers can take a snapshot of a canister and restore it.
 
@@ -2368,7 +2370,8 @@ This method lists the snapshots of the canister identified by `canister_id`. Cur
 ### IC method `delete_snapshot` {#ic-take_snapshot}
 
 This method deletes a specified snapshot of the canister. An error will be returned if the snapshot is not found. 
-A snapshot cannot be found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted.
+
+A snapshot cannot be found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted or depleted of cycles.
 
 A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
@@ -2711,6 +2714,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           memory_allocation : Nat;
           memory_usage_raw_module : Nat;
           memory_usage_canister_history : Nat;
+          memory_usage_snapshots: Nat;
           freezing_threshold : Nat;
           subnet_size : Nat;
           certificate : NoCertificate | Blob;
@@ -5075,6 +5079,61 @@ State after
 
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
+
+```
+
+#### IC Management Canister: List snapshots
+
+Only the controllers of the given canister can get a list of the existing snapshots.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'list_snapshots'
+M.arg = candid(A)
+S.snapshots = Other_snapshots ∪ S.snapshots[A.snapshot_id]
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid(dom(S.snapshots[A.canister_id]))
+      }
+
+```
+#### IC Management Canister: Delete snapshot
+
+A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.method_name = 'delete_snapshot'
+M.arg = candid(A)
+M.caller ∈ S.controllers[S.snapshots[A.snapshot_id].canister_id]
+S.snapshots = Other_snapshots ∪ S.snapshots[A.snapshot_id]
+
+```
+
+State after
+
+```html
+
+S with
+    snapshots = Other_snapshots
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = candid()
+      }
 
 ```
 
