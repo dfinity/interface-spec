@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+- Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
