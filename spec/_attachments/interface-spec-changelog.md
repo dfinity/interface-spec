@@ -1,7 +1,6 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
-- Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
@@ -9,6 +8,7 @@
 * Add a management canister method for retrieving node metrics.
 * Specify the resource reservation mechanism.
 * Allow `in_replicated_execution` system API method to be executed during `canister_start`.
+- Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
