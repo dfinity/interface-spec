@@ -16,10 +16,11 @@ An HTTP request by an HTTP client is handled by these steps:
 4. The HTTP Gateway Candid encodes the HTTP request.
 5. The HTTP Gateway invokes the canister via a query call to the `http_request` interface.
 6. The canister handles the request and returns an HTTP response, encoded in Candid, together with additional metadata.
-7. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
-8. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
-9. If applicable, the HTTP Gateway validates the certificate of the response.
-10. The HTTP Gateway Candid decodes the response and returns it to the HTTP client.
+7. The HTTP Gateway Candid decodes the response for inspection and further processing.
+8. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
+9. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
+10. If applicable, the HTTP Gateway validates the certificate of the response.
+11. The HTTP Gateway returns the decoded response to the HTTP client.
 
 ## Canister ID Resolution
 
@@ -140,7 +141,7 @@ Response verification fills the security gap left by query calls. It is a versio
    - Otherwise, verification fails.
 5. Parse the `expr_path` field from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
 6. The parsed `expr_path` is valid as per [Expression Path](#expression-path) otherwise, verification fails.
-7. Case-insensitive search for the `IC-CertificationExpression` header.
+7. Case-insensitive search for the `IC-CertificateExpression` header.
    - If no such header is found, verification fails.
    - If the header value is not structured as per [the certificate expression header](#the-certificate-expression-header), verification fails.
 8. Let `expr_hash` be the label of the node in the tree at path `expr_path`.
@@ -274,14 +275,18 @@ REQUEST-CERTIFICATION = 'RequestCertification{certified_request_headers:', STRIN
 
 RESPONSE-CERTIFICATION = 'ResponseCertification{', ('response_header_exclusions:' | 'certified_response_headers:'), RESPONSE-HEADER-LIST, '}'
 
-CERTIFICATION = 'Certification{', ('no_request_certification: Empty{}' | 'request_certification:', REQUEST-CERTIFICATION), ',response_certification:', RESPONSE-CERTIFICATION, '}'
+CERTIFICATION = 'Certification{', ('no_request_certification:Empty{}' | 'request_certification:', REQUEST-CERTIFICATION), ',response_certification:', RESPONSE-CERTIFICATION, '}'
 
-VALIDATION-ARGS = 'ValidationArgs{', ('no_certification: Empty{}' | 'certification:', CERTIFICATION), '}'
+VALIDATION-ARGS = 'ValidationArgs{', ('no_certification:Empty{}' | 'certification:', CERTIFICATION), '}'
 
 HEADER-VALUE = 'default_certification(', VALIDATION-ARGS, ')'
 
-HEADER = 'IC-CertificateExpression: ', HEADER-VALUE
+HEADER = 'IC-CertificateExpression:', HEADER-VALUE
 ```
+
+:::note
+Implementors should note that the EBNF specification does not allow for any whitespace within the header value. This is intentional and should be supported by all implementations. Optionally, support could also be added for whitespace agnosticism.
+:::
 
 ### Request Hash Calculation
 
@@ -375,17 +380,15 @@ The steps for response verification are as follows:
 
 ## Response Verification Version Assertion
 
-Canisters can report the supported versions of response verification using (public) metadata sections available in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). The metadata section must be a (public) custom section with the name `supported_certificate_versions` and contain a comma-delimited string of versions, e.g., `1,2`. This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added (i.e., the `read_state` request *succeeds* and the lookup of the metadata section in the `read_state` response certificate returns `Absent`), then the HTTP Gateway will allow for whatever version the canister has responded with.
-
+Canisters can report the supported versions of response verification using (public) metadata sections available in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). The metadata section must be a (public) custom section with the name `supported_certificate_versions` and contain a comma-delimited string of versions, e.g., `1,2`. This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added (i.e., the `read_state` request _succeeds_ and the lookup of the metadata section in the `read_state` response certificate returns `Absent`), then the HTTP Gateway will allow for whatever version the canister has responded with.
 
 The request for the metadata will only be made by the HTTP Gateway if there is a downgrade. If the HTTP Gateway requests v2 and the canister responds with v2, then a request will not be made. If the HTTP Gateway requests v2 and the canister responds with v1, a request will be made. If a request is made, the HTTP Gateway will not accept any response from the canister that is below the max version supported by both the HTTP Gateway and the canister. This will guarantee that a canister supporting both v1 and v2 will always have v2 security when accessed by an HTTP Gateway that supports v2.
 
 :::note
 
-The HTTP Gateway can only allow for arbitrary certification version if the custom section `supported_certificate_versions` is *provably* not present, i.e., if the `read_state` response contains a valid certificate whose lookup of the corresponding path yields `Absent`. Otherwise, e.g., if the replica is overloaded or if the `read_state` is rejected because the custom section with the name `supported_certificate_versions` is private, the HTTP Gateway should also reject the canister's response.
+The HTTP Gateway can only allow for arbitrary certification version if the custom section `supported_certificate_versions` is _provably_ not present, i.e., if the `read_state` response contains a valid certificate whose lookup of the corresponding path yields `Absent`. Otherwise, e.g., if the replica is overloaded or if the `read_state` is rejected because the custom section with the name `supported_certificate_versions` is private, the HTTP Gateway should also reject the canister's response.
 
 :::
-
 
 ## Canister HTTP Interface
 
