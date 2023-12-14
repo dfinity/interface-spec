@@ -2344,7 +2344,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and binary.
 
-Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing an existing snapshot via `replace_snapshot` which will be deleted.  Currently, only one snapshot per canister will stored.
+Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted. Currently, only one snapshot per canister is allowed.
 
 It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the balance must have the right amount of cycles to support the new freezing threshold.
 
@@ -2359,9 +2359,14 @@ It is expected that the canister admin (or their tooling) does this separately.
 
 ### IC method `load_snapshot` {#ic-take_snapshot}
 
-This method loads a snapshot identified by `snapshot_id` onto the canister. This method fails if the snapshot was previously deleted.
+This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if the snapshot was previously deleted.
 
 Only controllers can take a snapshot of a canister and restore it.
+
+:::note
+
+It's important to stop a canister before loading a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored.
+It is expected that the canister admin (or their tooling) does this separately.
 
 ### IC method `list_snapshots` {#ic-take_snapshot}
 
@@ -2369,7 +2374,7 @@ This method lists the snapshots of the canister identified by `canister_id`. Cur
 
 ### IC method `delete_snapshot` {#ic-take_snapshot}
 
-This method deletes a specified snapshot of the canister. An error will be returned if the snapshot is not found. 
+This method deletes a specified snapshot that belongs to an existing canister. An error will be returned if the snapshot is not found. 
 
 A snapshot cannot be found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted or depleted of cycles.
 
