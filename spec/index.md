@@ -5057,6 +5057,10 @@ S with
 
 ```
 
+#### IC Management Canister: Canister logs
+
+TBD
+
 #### Callback invocation
 
 When an inter-canister call has been responded to, we can queue the call to the callback.
