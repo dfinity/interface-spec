@@ -121,6 +121,16 @@ type node_metrics = record {
     num_block_failures_total : nat64;
 };
 
+type log_record = record {
+  idx: nat;
+  timestamp: nat;
+  contents: blob;
+};
+
+type fetch_logs_response = record {
+  log_records: vec log_record;
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings;
@@ -242,4 +252,8 @@ service ic : {
   }) -> (record {canister_id : canister_id});
   provisional_top_up_canister :
     (record { canister_id: canister_id; amount: nat }) -> ();
+
+  // canister loging
+  fetch_logs : (record { canister_id }) -> (fetch_logs_response);
+  fetch_logs_query : (record { canister_id }) -> (fetch_logs_response) query;
 }
