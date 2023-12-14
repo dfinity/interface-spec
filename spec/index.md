@@ -2340,6 +2340,30 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
+### IC method `fetch_logs` {#ic-fetch_logs}
+
+Provides the logs of the canister including trap messages.
+Logs are stored in a circular buffer of 4KiB.
+Log memory persists across upgrades and it is deleted if the canister is reinstalled or uninstalled.
+The log visibility is defined in `log_visibility` field of `canister_settings`.
+Users cannot call this method.
+
+### IC method `fetch_logs_query` {#ic-fetch_logs_query}
+
+This method is identical to [`fetch_logs`](#ic-fetch_logs), but exposed as a query.
+
+:::note
+
+This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+
+:::
+
 ## Certification {#certification}
 
 Some parts of the IC state are exposed to users in a tamperproof way via certification: the IC can reveal a *partial state tree* which includes just the data of interest, together with a signature on the root hash of the state tree. This means that a user can be sure that the response is correct, even if the user happens to be communicating with a malicious node, or has received the certificate via some other untrusted way.
