@@ -130,7 +130,7 @@ type node_metrics = record {
 
 type log_record = record {
   idx: nat;
-  timestamp: nat;
+  timestamp_nanos: nat64;
   contents: blob;
 };
 
