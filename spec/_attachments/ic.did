@@ -258,9 +258,9 @@ service ic : {
     sender_canister_version : opt nat64;
   }) -> (record {canister_id : canister_id});
   provisional_top_up_canister :
-    (record { canister_id: canister_id; amount: nat }) -> ();
+    (record { canister_id : canister_id; amount: nat }) -> ();
 
   // canister logging
-  fetch_logs : (record { canister_id }) -> (fetch_logs_response);
-  fetch_logs_query : (record { canister_id }) -> (fetch_logs_response) query;
+  fetch_logs : (record { canister_id : canister_id }) -> (fetch_logs_response);
+  fetch_logs_query : (record { canister_id : canister_id }) -> (fetch_logs_response) query;
 }
