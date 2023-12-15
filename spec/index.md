@@ -2342,11 +2342,17 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `fetch_logs` {#ic-fetch_logs}
 
-Provides the logs of the canister including trap messages.
+Given a canister ID as input provides the logs of that canister including trap messages.
 Logs are stored in a circular buffer of 4KiB.
 Log memory persists across upgrades and it is deleted if the canister is reinstalled or uninstalled.
 The log visibility is defined in `log_visibility` field of `canister_settings`.
 Users cannot call this method.
+
+A single log entry is a record with the following fields:
+
+- `idx` (`nat64`): the unique incremental index of an entry;
+- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the entry was recorded;
+- `contents` (`blob`): the content of a log entry;
 
 ### IC method `fetch_logs_query` {#ic-fetch_logs_query}
 
