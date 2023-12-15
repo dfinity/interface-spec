@@ -260,7 +260,7 @@ service ic : {
   provisional_top_up_canister :
     (record { canister_id: canister_id; amount: nat }) -> ();
 
-  // canister loging
+  // canister logging
   fetch_logs : (record { canister_id }) -> (fetch_logs_response);
   fetch_logs_query : (record { canister_id }) -> (fetch_logs_response) query;
 }
