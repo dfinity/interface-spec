@@ -118,8 +118,8 @@ type millisatoshi_per_byte = nat64;
 type snapshot_id = nat;
 type snapshot = record {
   id: snapshot_id;
-  taken_on_timestap: nat;
-  total_size: nat;
+  taken_at_timestamp: nat64;
+  total_size: nat64;
   checksum: blob;   
 };
 

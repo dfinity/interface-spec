@@ -2342,7 +2342,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `take_snapshot` {#ic-take_snapshot}
 
-This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and binary.
+This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and wasm binary.
 
 Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted. Currently, only one snapshot per canister is allowed.
 
@@ -2353,7 +2353,7 @@ Only controllers can take a snapshot of a canister and restore it.
 :::note
 
 It's important to stop a canister before taking a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored using the snapshot.
-It is expected that the canister admin (or their tooling) does this separately.
+It is expected that the canister controllers (or their tooling) do this separately.
 
 :::
 
@@ -2366,7 +2366,9 @@ Only controllers can take a snapshot of a canister and restore it.
 :::note
 
 It's important to stop a canister before loading a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored.
-It is expected that the canister admin (or their tooling) does this separately.
+It is expected that the canister controllers (or their tooling) do this separately.
+
+:::
 
 ### IC method `list_snapshots` {#ic-take_snapshot}
 
@@ -2998,9 +3000,13 @@ Finally, we can describe the state of the IC as a record having the following fi
       subnet_id : Principal;
       subnet_size : Nat;
     }
+    Snapshot = {
+
+    }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
+      snapshots: SnapshotId ↦ Snapshot;
       controllers : CanisterId ↦ Set Principal;
       compute_allocation : CanisterId ↦ Nat;
       memory_allocation : CanisterId ↦ Nat;
@@ -3060,7 +3066,7 @@ The amount of cycles that is available for spending in calls and execution is co
 
 The reasoning behind this is that resource payments first drain the reserved balance and only when the reserved balance gets to zero, they start draining the main balance.
 
-The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, CanisterId, compute_allocation, memory_allocation, CanState)` that depends on the old IC state, the id of the canister, the new allocations of the canister, and the new state of the canister.
+The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, CanisterId, compute_allocation, memory_allocation, snapshots_memory, CanState)` that depends on the old IC state, the id of the canister, the new allocations of the canister, the snapshots of the canister, and the new state of the canister.
 
 #### Initial state
 
@@ -3069,6 +3075,7 @@ The initial state of the IC is
     {
       requests = ();
       canisters = ();
+      snapshots = ();
       controllers = ();
       compute_allocation = ();
       memory_allocation = ();
@@ -5129,7 +5136,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
-        response = Reply (candid());
+        response = Reply (candid(SnapshotId));
         refunded_cycles = M.transferred_cycles;
       }
 
@@ -5148,23 +5155,17 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'load_snapshot'
 M.arg = candid(A)
-M.caller ∈ S.controllers[S.snapshots[A.snapshot_id].canister_id]
+M.caller ∈ S.controllers[A.canister_id]
 
-Env = { 
-  canister_id = S.snapshots[A.snapshot_id].canister_id;
-  balance = S.balances[canister_id];
-  Public_custom_sections = parse_public_custom_sections(S.snapshots[canister_id].wasm_module);
-  Private_custom_sections = parse_private_custom_sections(S.snapshots[canister_id].wasm_module);
-}
-New_balance = balance - Cycles_used - S.reserved_balances[canister_id]
+New_balance = S.balances[A.canister_id] - Cycles_used
 liquid_balance(
   New_balance,
-  S.reserved_balances[canister_id],
+  S.reserved_balances[A.canister_id],
   freezing_limit(
-    S.compute_allocation[canister_id],
-    S.memory_allocation[canister_id],
-    S.freezing_threshold[canister_id],
-    memory_usage_wasm_state(S.canisters[cansiter_id]) +
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(S.canisters[A.canister_id]) +
       memory_usage_raw_module(A.wasm_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
@@ -5180,12 +5181,12 @@ State after
 
 S with
     canisters[A.canister_id] = {
-      wasm_state = S.snapshots[canister_id].wasm_state;
-      raw_module = S.snapshots[canister_id].raw_module;
-      module = S.snapshots[canister_id].wasm_module;
-      chunk_store = S.snapshots[canister_id].chunk_store;
-      public_custom_sections = Public_custom_sections;
-      private_custom_sections = Private_custom_sections;
+      wasm_state = S.snapshots[A.canister_id].wasm_state;
+      raw_module = S.snapshots[A.canister_id].raw_module;
+      module = S.snapshots[A.canister_id].wasm_module;
+      chunk_store = S.snapshots[A.canister_id].chunk_store;
+      public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].wasm_module);
+      private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].wasm_module);
     }
     balances[A.canister_id] = New_balance
     messages = Older_messages · Younger_messages ·
@@ -5205,8 +5206,10 @@ Only the controllers of the given canister can get a list of the existing snapsh
 
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'list_snapshots'
 M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id]
 S.snapshots = Other_snapshots ∪ S.snapshots[A.snapshot_id]
 
 ```
@@ -5231,10 +5234,11 @@ A snapshot may be deleted only by the controllers of the canister for which the 
 
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'delete_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[S.snapshots[A.snapshot_id].canister_id]
-S.snapshots = Other_snapshots ∪ S.snapshots[A.snapshot_id]
+S.snapshots[A.snapshot_id] = (deleted)
 
 ```
 
@@ -6560,9 +6564,9 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           es.params.sysenv.memory_allocation,
           es.params.sysenv.freezing_threshold,
           memory_usage_wasm_state(es.wasm_state) + 
-          es.params.sysenv.memory_usage_raw_module + 
-          es.params.sysenv.memory_usage_canister_history +
-           es.params.sysenv.memory_usage_snapshot,
+            es.params.sysenv.memory_usage_raw_module + 
+            es.params.sysenv.memory_usage_canister_history +
+            es.params.sysenv.memory_usage_snapshot,
           es.params.sysenv.subnet_size,
         )
       ) < amount then Trap {cycles_used = es.cycles_used;}
@@ -6584,9 +6588,9 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           es.params.sysenv.memory_allocation,
           es.params.sysenv.freezing_threshold,
           memory_usage_wasm_state(es.wasm_state) + 
-          es.params.sysenv.memory_usage_raw_module + 
-          es.params.sysenv.memory_usage_canister_history +
-           es.params.sysenv.memory_usage_snapshot,
+            es.params.sysenv.memory_usage_raw_module + 
+            es.params.sysenv.memory_usage_canister_history +
+            es.params.sysenv.memory_usage_snapshot,
           es.params.sysenv.subnet_size,
         )
       ) < 0 or system_cannot_do_this_call_now()
