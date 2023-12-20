@@ -119,8 +119,7 @@ type snapshot_id = nat;
 type snapshot = record {
   id: snapshot_id;
   taken_at_timestamp: nat64;
-  total_size: nat64;
-  checksum: blob;   
+  total_size: nat64;  
 };
 
 type node_metrics = record {

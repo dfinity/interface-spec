@@ -3640,7 +3640,7 @@ if
   ) ≥ 0
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-    memory_usage_canister_history(S.canister_history[M.receiver] ≤ S.memory_allocation[M.receiver])
+    memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
