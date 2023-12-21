@@ -2344,11 +2344,11 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and wasm binary.
 
-Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted. Currently, only one snapshot per canister is allowed.
+Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
 
-It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the balance must have the right amount of cycles to support the new freezing threshold.
+It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the canister's balance must have a sufficient amount of cycles to support the new freezing threshold.
 
-Only controllers can take a snapshot of a canister and restore it.
+Only controllers can take a snapshot of a canister and load it back to the canister.
 
 :::note
 
@@ -2359,9 +2359,9 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 ### IC method `load_snapshot` {#ic-take_snapshot}
 
-This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if the snapshot was previously deleted.
+This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` was created or if the snapshot was already deleted.
 
-Only controllers can take a snapshot of a canister and restore it.
+Only controllers can take a snapshot of a canister and load it back to the canister.
 
 :::note
 
@@ -2372,13 +2372,13 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 ### IC method `list_snapshots` {#ic-take_snapshot}
 
-This method lists the snapshots of the canister identified by `canister_id`. Currently, only one snapshot per canister will be stored.
+This method lists the snapshots of the canister identified by `canister_id`. Currently, at most one snapshot per canister will be stored.
 
 ### IC method `delete_snapshot` {#ic-take_snapshot}
 
 This method deletes a specified snapshot that belongs to an existing canister. An error will be returned if the snapshot is not found. 
 
-A snapshot cannot be found if it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted or depleted of cycles.
+A snapshot cannot be found if it was never created, it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted or run out of cycles.
 
 A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
@@ -3003,7 +3003,6 @@ Finally, we can describe the state of the IC as a record having the following fi
     Snapshot = {
       wasm_state : WasmState;
       raw_module : Blob;
-      wasm_module : CanisterModule;
       chunk_store : ChunkStore;
     }
     S = {
@@ -4230,8 +4229,8 @@ M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
-Public_custom_sections = parse_public_custom_sections(A.wasm_module);
-Private_custom_sections = parse_private_custom_sections(A.wasm_module);
+Public_custom_sections = parse_public_custom_sections(A.raw_module);
+Private_custom_sections = parse_private_custom_sections(A.raw_module);
 (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
 M.caller ∈ S.controllers[A.canister_id]
 
@@ -4248,7 +4247,7 @@ Env = {
   reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
-  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
@@ -4284,7 +4283,7 @@ liquid_balance(
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(A.wasm_module) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
       memory_usage_canister_history(New_canister_history),
     S.canister_subnet[A.canister_id].subnet_size,
   )
@@ -4292,7 +4291,7 @@ liquid_balance(
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
+    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
@@ -4358,8 +4357,8 @@ M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
-Public_custom_sections = parse_public_custom_sections(A.wasm_module)
-Private_custom_sections = parse_private_custom_sections(A.wasm_module)
+Public_custom_sections = parse_public_custom_sections(A.raw_module)
+Private_custom_sections = parse_private_custom_sections(A.raw_module)
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
 
@@ -4400,7 +4399,7 @@ or
 )
 
 Env2 = Env with {
-  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
@@ -4435,7 +4434,7 @@ liquid_balance(
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(A.wasm_module) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
@@ -4443,8 +4442,8 @@ liquid_balance(
 ) ≥ 0
 
 if S.memory_allocation[A.canister_id] > 0:
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
+  memory_usage_wasm_state(New_state.wasm_state) +
+    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
@@ -5003,7 +5002,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  S.snapshots[A.canister_id], EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
 if A.amount is not null:
   New_balance = A.amount - Cycles_reserved
 else:
@@ -5044,6 +5043,7 @@ State after
 
 S with
     canisters[Canister_id] = EmptyCanister
+    snapshots[Canister_id] = null
     time[Canister_id] = CurrentTime
     global_timer[Canister_id] = 0
     controllers[Canister_id] = New_controllers
@@ -5110,7 +5110,6 @@ M.caller ∈ S.controllers[A.canister_id]
 New_snapshot = Snapshot {
   wasm_state = canisters[A.canister_id].wasm_state;
   raw_module = canisters[A.canister_id].raw_module;
-  wasm_module = canisters[A.canister_id].wasm_module;
   chunk_store = canisters[A.canister_id].chunk_store;
 }
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_snapshot, S.canisters[A.canister_id])
@@ -5125,9 +5124,9 @@ liquid_balance(
     S.compute_allocation[A.canister_id],
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(A.wasm_module) +
-      memory_usage_canister_history(New_canister_history) +
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_canister_history(S.canister_history[A.canister_id]) +
       memory_usage_snapshot(New_snapshot),
     S.canister_subnet[A.canister_id].subnet_size,
   )
@@ -5175,8 +5174,8 @@ liquid_balance(
     S.compute_allocation[A.canister_id],
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(S.canisters[A.canister_id]) +
-      memory_usage_raw_module(A.wasm_module) +
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_module) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
@@ -5193,10 +5192,10 @@ S with
     canisters[A.canister_id] = {
       wasm_state = S.snapshots[A.canister_id].wasm_state;
       raw_module = S.snapshots[A.canister_id].raw_module;
-      module = S.snapshots[A.canister_id].wasm_module;
+      module = parse_wasm_mod(S.snapshots[A.canister_id].raw_module;
       chunk_store = S.snapshots[A.canister_id].chunk_store;
-      public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].wasm_module);
-      private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].wasm_module);
+      public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].raw_module);
+      private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].raw_module);
     }
     balances[A.canister_id] = New_balance
     messages = Older_messages · Younger_messages ·
@@ -5247,8 +5246,8 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'delete_snapshot'
 M.arg = candid(A)
-M.caller ∈ S.controllers[S.snapshots[A.snapshot_id].canister_id]
-S.snapshots[A.snapshot_id] = (deleted)
+M.caller ∈ S.controllers[A.canister_id]
+S.snapshots[A.canister_id] = (deleted)
 
 ```
 

@@ -241,7 +241,10 @@ service ic : {
     snapshot_id: snapshot_id;
   }) -> ();
   list_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
-  delete_snapshot: (record {snapshot_id : snapshot_id}) -> ();
+  delete_snapshot: (record {
+    canister_id: canister_id;
+    snapshot_id : snapshot_id;
+  }) -> ();
 
   // metrics interface
   node_metrics_history : (record {
