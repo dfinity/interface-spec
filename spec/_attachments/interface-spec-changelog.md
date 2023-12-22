@@ -7,6 +7,8 @@
 * The IC sends a `user-agent` header with the value `ic/1.0` in canister HTTPS outcalls if the canister does not provide one.
 * Add a management canister method for retrieving node metrics.
 * Specify the resource reservation mechanism.
+* Allow `in_replicated_execution` system API method to be executed during `canister_start`.
+* Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 * Add new management canister methods for canister snapshot support.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
