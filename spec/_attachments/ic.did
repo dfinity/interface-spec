@@ -231,17 +231,17 @@ service ic : {
   bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
 
-  // Canister backup and restore
-  take_snapshot: (record { 
+  // Canister snapshots
+  take_canister_snapshot: (record { 
     canister_id: canister_id;
     replace_snapshot: opt snapshot_id;
   }) -> (snapshot_id);
-  load_snapshot: (record { 
+  load_canister_snapshot: (record { 
     canister_id: canister_id;
     snapshot_id: snapshot_id;
   }) -> ();
-  list_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
-  delete_snapshot: (record {
+  list_canister_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
+  delete_canister_snapshot: (record {
     canister_id: canister_id;
     snapshot_id : snapshot_id;
   }) -> ();

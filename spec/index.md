@@ -2340,11 +2340,11 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-### IC method `take_snapshot` {#ic-take_snapshot}
+### IC method `take_canister_snapshot` {#ic-take_canister_snapshot}
 
 This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and wasm binary.
 
-Subsequent `take_snapshot` calls will create a new snapshot. However, a `take_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
+Subsequent `take_canister_snapshot` calls will create a new snapshot. However, a `take_canister_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
 
 It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the canister's balance must have a sufficient amount of cycles to support the new freezing threshold.
 
@@ -2357,7 +2357,7 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 :::
 
-### IC method `load_snapshot` {#ic-take_snapshot}
+### IC method `load_canister_snapshot` {#ic-load_canister_snapshot}
 
 This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` was created or if the snapshot was already deleted.
 
@@ -2370,15 +2370,15 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 :::
 
-### IC method `list_snapshots` {#ic-take_snapshot}
+### IC method `list_canister_snapshots` {#ic-list_canister_snapshots}
 
 This method lists the snapshots of the canister identified by `canister_id`. Currently, at most one snapshot per canister will be stored.
 
-### IC method `delete_snapshot` {#ic-take_snapshot}
+### IC method `delete_canister_snapshot` {#ic-delete_canister_snapshot}
 
 This method deletes a specified snapshot that belongs to an existing canister. An error will be returned if the snapshot is not found. 
 
-A snapshot cannot be found if it was never created, it was previously deleted, replaced by a new snapshot through a `take_snapshot` request, or if the canister itself has been deleted or run out of cycles.
+A snapshot cannot be found if it was never created, it was previously deleted, replaced by a new snapshot through a `take_canister_snapshot` request, or if the canister itself has been deleted or run out of cycles.
 
 A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
@@ -2983,6 +2983,9 @@ Finally, we can describe the state of the IC as a record having the following fi
           mode : CodeDeploymentMode;
           module_hash : Blob;
         }
+      | LoadSnapshot {
+          module_hash : Blob;
+        }
       | ControllersChange {
           controllers : [PrincipalId];
         }
@@ -3004,6 +3007,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       wasm_state : WasmState;
       raw_module : Blob;
       chunk_store : ChunkStore;
+      certified_data: Blob;
     }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
@@ -5094,7 +5098,7 @@ S with
 
 ```
 
-#### IC Management Canister: Take snapshot
+#### IC Management Canister: Take canister snapshot
 
 Only the controllers of the given canister can take a snapshot.
 
@@ -5103,7 +5107,7 @@ Only the controllers of the given canister can take a snapshot.
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'take_snapshot'
+M.method_name = 'take_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
@@ -5111,6 +5115,7 @@ New_snapshot = Snapshot {
   wasm_state = canisters[A.canister_id].wasm_state;
   raw_module = canisters[A.canister_id].raw_module;
   chunk_store = canisters[A.canister_id].chunk_store;
+  certified_data = S.certified_data[A.canister_id];
 }
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_snapshot, S.canisters[A.canister_id])
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
@@ -5145,14 +5150,14 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
-        response = Reply (candid(SnapshotId));
+        response = Reply (candid(SnapshotId)); // `SnapshotId` is an opaque ID generated by the system.
         refunded_cycles = M.transferred_cycles;
       }
 
 ```
 
 
-#### IC Management Canister: Load snapshots
+#### IC Management Canister: Load canister snapshots
 
 
 Only the controllers of the given canister can load a snapshot.
@@ -5162,25 +5167,58 @@ Only the controllers of the given canister can load a snapshot.
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'load_snapshot'
+M.method_name = 'load_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
-New_balance = S.balances[A.canister_id] - Cycles_used
+New_state = {
+  wasm_state = S.snapshots[A.canister_id].wasm_state;
+  raw_module = S.snapshots[A.canister_id].raw_module;
+  module = parse_wasm_mod(S.snapshots[A.canister_id].raw_module;
+  chunk_store = S.snapshots[A.canister_id].chunk_store;
+  public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].raw_module);
+  private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].raw_module);
+}
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], S.snapshots[A.canister_id], New_state)
+New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
+
+S.canister_history[A.canister_id] = {
+  total_num_changes = N;
+  recent_changes = H;
+}
+New_canister_history = {
+  total_num_changes = N + 1;
+  recent_changes = H · {
+    timestamp_nanos = S.time[A.canister_id];
+    canister_version = S.canister_version[A.canister_id] + 1
+    origin = change_origin(M.caller, null, M.origin);
+    details = LoadSnapshot {
+      module_hash = SHA-256(New_state.wasm_module);
+    };
+  };
+}
+
 liquid_balance(
   New_balance,
-  S.reserved_balances[A.canister_id],
+  New_reserved_balance,
   freezing_limit(
     S.compute_allocation[A.canister_id],
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_module) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_wasm_state(New_state.wasm_module) +
+      memory_usage_raw_module(New_state.raw_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   )
 ) ≥ 0
+
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage_wasm_state(New_state.wasm_state) +
+    memory_usage_raw_module(New_state.raw_module) +
+    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 ```
 
@@ -5197,7 +5235,10 @@ S with
       public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].raw_module);
       private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].raw_module);
     }
+    certified_data[A.canister_id] = S.snapshots[A.canister_id].certified_data
     balances[A.canister_id] = New_balance
+    reserved_balances[Canister_id] = New_reserved_balance
+    canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -5207,7 +5248,7 @@ S with
 
 ```
 
-#### IC Management Canister: List snapshots
+#### IC Management Canister: List canister snapshots
 
 Only the controllers of the given canister can get a list of the existing snapshots.
 
@@ -5216,7 +5257,7 @@ Only the controllers of the given canister can get a list of the existing snapsh
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'list_snapshots'
+M.method_name = 'list_canister_snapshots'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
@@ -5230,12 +5271,12 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply( candid(dom(S.snapshots[A.canister_id])))
+        response = Reply (candid(S.snapshots[A.canister_id]))
         refunded_cycles = M.transferred_cycles
       }
 
 ```
-#### IC Management Canister: Delete snapshot
+#### IC Management Canister: Delete canister snapshot
 
 A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
@@ -5244,7 +5285,7 @@ A snapshot may be deleted only by the controllers of the canister for which the 
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
-M.method_name = 'delete_snapshot'
+M.method_name = 'delete_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 S.snapshots[A.canister_id] = (deleted)
