@@ -1505,7 +1505,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
 ### Canister version {#system-api-canister-version}
 
-For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `load_canister_snapshot`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
 -   `ic0.canister_version : () → i64`
 
@@ -2369,6 +2369,8 @@ It's important to stop a canister before loading a snapshot to ensure that all o
 It is expected that the canister controllers (or their tooling) do this separately.
 
 :::
+
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 ### IC method `list_canister_snapshots` {#ic-list_canister_snapshots}
 
@@ -5158,7 +5160,7 @@ S with
 ```
 
 
-#### IC Management Canister: Load canister snapshots
+#### IC Management Canister: Load canister snapshot
 
 
 Only the controllers of the given canister can load a snapshot.
@@ -5194,7 +5196,7 @@ New_canister_history = {
   recent_changes = H · {
     timestamp_nanos = S.time[A.canister_id];
     canister_version = S.canister_version[A.canister_id] + 1
-    origin = change_origin(M.caller, null, M.origin);
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin);
     details = LoadSnapshot {
       module_hash = SHA-256(New_state.wasm_module);
     };

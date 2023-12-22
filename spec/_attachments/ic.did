@@ -239,11 +239,12 @@ service ic : {
   load_canister_snapshot: (record { 
     canister_id: canister_id;
     snapshot_id: snapshot_id;
+    sender_canister_version: opt nat64;
   }) -> ();
   list_canister_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
   delete_canister_snapshot: (record {
     canister_id: canister_id;
-    snapshot_id : snapshot_id;
+    snapshot_id: snapshot_id;
   }) -> ();
 
   // metrics interface
