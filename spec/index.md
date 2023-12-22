@@ -4252,7 +4252,7 @@ Env = {
   reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
-  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.wasm_module);
+  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
@@ -4448,7 +4448,7 @@ liquid_balance(
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state.wasm_state) +
-    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
