@@ -3851,7 +3851,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  S.snapshots[A.canister_id], EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
@@ -3889,6 +3889,7 @@ State after
 
 S with
     canisters[Canister_id] = EmptyCanister
+    snapshots[A.canister_id] = ()
     time[Canister_id] = CurrentTime
     global_timer[Canister_id] = 0
     controllers[Canister_id] = New_controllers
@@ -4233,8 +4234,8 @@ M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
-Public_custom_sections = parse_public_custom_sections(A.raw_module);
-Private_custom_sections = parse_private_custom_sections(A.raw_module);
+Public_custom_sections = parse_public_custom_sections(A.wasm_module);
+Private_custom_sections = parse_private_custom_sections(A.wasm_module);
 (A.mode = install and S.canisters[A.canister_id] = EmptyCanister) or A.mode = reinstall
 M.caller ∈ S.controllers[A.canister_id]
 
@@ -4251,7 +4252,7 @@ Env = {
   reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
   compute_allocation = S.compute_allocation[A.canister_id];
   memory_allocation = S.memory_allocation[A.canister_id];
-  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
+  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
@@ -4287,7 +4288,7 @@ liquid_balance(
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_raw_module(A.wasm_module) +
       memory_usage_canister_history(New_canister_history),
     S.canister_subnet[A.canister_id].subnet_size,
   )
@@ -4295,7 +4296,7 @@ liquid_balance(
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+    memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
@@ -4361,8 +4362,8 @@ M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
 Mod = parse_wasm_mod(A.wasm_module)
-Public_custom_sections = parse_public_custom_sections(A.raw_module)
-Private_custom_sections = parse_private_custom_sections(A.raw_module)
+Public_custom_sections = parse_public_custom_sections(A.wasm_module)
+Private_custom_sections = parse_private_custom_sections(A.wasm_module)
 M.caller ∈ S.controllers[A.canister_id]
 S.canisters[A.canister_id] = { wasm_state = Old_state; module = Old_module, …}
 
@@ -4403,7 +4404,7 @@ or
 )
 
 Env2 = Env with {
-  memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
+  memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
@@ -4438,7 +4439,7 @@ liquid_balance(
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_raw_module(A.wasm_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
@@ -5207,7 +5208,7 @@ liquid_balance(
     S.compute_allocation[A.canister_id],
     S.memory_allocation[A.canister_id],
     S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(New_state.wasm_module) +
+    memory_usage_wasm_state(New_state.wasm_state) +
       memory_usage_raw_module(New_state.raw_module) +
       memory_usage_canister_history(New_canister_history) +
       memory_usage_snapshot(S.snapshots[A.canister_id]),
