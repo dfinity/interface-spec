@@ -844,6 +844,14 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
+-   If the request is a query call to the Management Canister (`aaaaa-aa`), then:
+
+    -   If the call is to the `bitcoin_get_balance_query` or `bitcoin_get_utxos_query` method, then the effective canister id for this call must be the Management Canister (`aaaaa-aa`).
+
+    -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
+
+    -   Otherwise, the call is rejected by the system independently of the effective canister id.
+
 -   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
 
 :::note
@@ -2981,6 +2989,9 @@ Finally, we can describe the state of the IC as a record having the following fi
       total_num_changes : Nat;
       recent_changes : [Change];
     }
+    CanisterLogVisibility
+      = Public
+      | Controllers
     CanisterLog = {
       idx : Nat;
       timestamp_nanos : Nat;
@@ -3007,6 +3018,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       reserved_balance_limits: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
+      canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
       canister_logs: CanisterId ↦ [CanisterLog];
       system_time : Timestamp
       call_contexts : CallId ↦ CallCtxt;
@@ -3076,6 +3088,7 @@ The initial state of the IC is
       reserved_balance_limits = ();
       certified_data = ();
       canister_history = ();
+      canister_log_visibility = ();
       canister_logs = ();
       system_time = T;
       call_contexts = ();
@@ -3876,6 +3889,11 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
+    if A.settings.log_visibility is not null:
+      canister_log_visibility[Canister_id] = A.settings.log_visibility
+    else:
+      canister_log_visibility[Canister_id] = Public
+    canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -3999,6 +4017,8 @@ S with
     reserved_balances[A.canister_id] = New_reserved_balance
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
+    if A.settings.log_visibility is not null:
+      log_visibility[A.canister_id] = A.settings.log_visibility
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5029,6 +5049,8 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
+    canister_log_visibility[Canister_id] = Public
+    canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5065,37 +5087,6 @@ State after
 
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
-
-```
-
-#### IC Management Canister: Canister logs
-
-The management canister returns logs for a requested `canister_id`.
-
-Conditions
-
-```html
-
-S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-M.callee = ic_principal
-M.method_name = 'fetch_logs'
-M.arg = candid(A)
-A.log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
-
-```
-
-State after
-
-```html
-
-S with
-    messages = Older_messages · Younger_messages ·
-      ResponseMessage {
-        origin = M.origin
-        response = Reply (candid(S.canister_logs[A.canister_id]))
-        refunded_cycles = M.transferred_cycles
-      }
 
 ```
 
@@ -5414,7 +5405,47 @@ S with
 
 ```
 
+#### IC Management Canister: Canister logs (query call) {#ic-mgmt-canister-fetch-logs}
+
+This section specifies management canister query calls.
+They are calls to `/api/v2/canister/<effective_canister_id>/query`
+with CBOR body `Q` such that `Q.canister_id = ic_principal`.
+
+The management canister offers the method `fetch_logs`
+that can be called as a query call and
+returns logs of a requested canister.
+
+Conditions
+
+```html
+
+Q.canister_id = ic_principal
+Q.method_name = 'fetch_logs'
+Q.arg = candid(A)
+A.canister_id = effective_canister_id
+S[A.canister_id].log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
+
+```
+
+Query response `R`:
+
+```html
+
+{status: "replied"; reply: {arg: candid(S.canister_logs[A.canister_id])}, signatures: Sigs}
+
+```
+
+where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
+
+```html
+
+verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+
+```
+
 #### Query call {#query-call}
+
+This section specifies query calls `Q` whose `Q.canister_id` is a non-empty canister `S.canisters[Q.canister_id]`. Query calls to the management canister, i.e., `Q.canister_id = ic_principal`, are specified in Section [Canister logs](#ic-mgmt-canister-fetch-logs).
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
