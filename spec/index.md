@@ -2342,17 +2342,17 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `fetch_logs` {#ic-fetch_logs}
 
-Given a canister ID as input provides the logs of that canister including trap messages.
+Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
 The total length of all log contents does not exceed 4KiB.
-If new logs are added that exceed the memory capacity, the oldest logs will be removed.
-Log memory persists across upgrades and it is deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in `log_visibility` field of `canister_settings`.
+If new logs are added resulting in exceeding the maximum total log length of 4KiB, the oldest logs will be removed.
+Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
+The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers.
 
-A single log entry is a record with the following fields:
+A single log is a record with the following fields:
 
-- `idx` (`nat64`): the unique incremental index of an entry;
-- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the entry was recorded;
-- `contents` (`blob`): the content of a log entry;
+- `idx` (`nat64`): the unique sequence number of the log;
+- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
+- `contents` (`blob`): the actual content of the log;
 
 :::note
 
