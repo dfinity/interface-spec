@@ -2981,6 +2981,11 @@ Finally, we can describe the state of the IC as a record having the following fi
       total_num_changes : Nat;
       recent_changes : [Change];
     }
+    CanisterLog = {
+      idx : Nat;
+      timestamp_nanos : Nat;
+      content : Blob;
+    }
     Subnet = {
       subnet_id : Principal;
       subnet_size : Nat;
@@ -3002,6 +3007,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       reserved_balance_limits: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
+      canister_logs: CanisterId ↦ [CanisterLog];
       system_time : Timestamp
       call_contexts : CallId ↦ CallCtxt;
       messages : List Message; // ordered!
@@ -3070,6 +3076,7 @@ The initial state of the IC is
       reserved_balance_limits = ();
       certified_data = ();
       canister_history = ();
+      canister_logs = ();
       system_time = T;
       call_contexts = ();
       messages = [];
@@ -5074,19 +5081,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'fetch_logs'
 M.arg = candid(A)
-S.log_visibility ∈ Controllers or Public
-if S.log_visibility is Controllers:
-  M.caller ∈ S.controllers[A.canister_id]
-if S.log_visibility is Public:
-  M.caller ∈ <any>
-LogRecord = {
-  idx : Nat;
-  timestamp_nanos: Nat;
-  contents: Blob;
-}
-Response = {
-  log_records : List LogRecord
-}
+A.log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
 
 ```
 
@@ -5098,7 +5093,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid(Response))
+        response = Reply (candid(S.canister_logs[A.canister_id]))
         refunded_cycles = M.transferred_cycles
       }
 
