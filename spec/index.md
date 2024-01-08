@@ -2365,6 +2365,7 @@ Calls in replicated mode are rejected.
 :::warning
 
 The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
 
 :::
 
