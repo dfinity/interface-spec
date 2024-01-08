@@ -2355,13 +2355,10 @@ A single log entry is a record with the following fields:
 - `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the entry was recorded;
 - `contents` (`blob`): the content of a log entry;
 
-### IC method `fetch_logs_query` {#ic-fetch_logs_query}
-
-This method is identical to [`fetch_logs`](#ic-fetch_logs), but exposed as a query.
-
 :::note
 
-This query is only accessible in non-replicated mode. Calls in replicated mode are rejected.
+This method is exposed as a query and is only accessible in non-replicated mode. 
+Calls in replicated mode are rejected.
 
 :::
 
