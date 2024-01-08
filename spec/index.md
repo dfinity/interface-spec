@@ -5087,6 +5087,7 @@ LogRecord = {
 Response = {
   log_records : List LogRecord
 }
+
 ```
 
 State after
@@ -5100,6 +5101,7 @@ S with
         response = Reply (candid(Response))
         refunded_cycles = M.transferred_cycles
       }
+
 ```
 
 #### Callback invocation
