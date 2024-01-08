@@ -2061,6 +2061,8 @@ Indicates various information about the canister. It contains:
 
 -   The cycle balance of the canister.
 
+-   The canister log visibility of the canister.
+
 Only the controllers of the canister or the canister itself can request its status.
 
 ### IC method `canister_info` {#ic-canister-info}
@@ -3674,6 +3676,8 @@ then
 
     balances[M.receiver] = New_balance
     reserved_balances[M.receiver] = New_reserved_balance
+
+    canister_logs[M.receiver] = S.canister_logs[M.receiver] · canister_logs
 else
   S with
     messages = Older_messages · Younger_messages
@@ -3686,6 +3690,8 @@ else
 Depending on whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
 
 The cycle consumption of executing this message is modeled via the unspecified `cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
+
+The logs produced by the canister during message execution are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[M.receiver]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -4332,6 +4338,7 @@ S with
     balances[A.canister_id] = New_balance
     reserved_balances[A.canister_id] = New_reserved_balance
     canister_history[A.canister_id] = New_canister_history
+    canister_logs[A.canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4567,6 +4574,7 @@ S with
           details = CodeUninstall;
         };
     }
+    canister_logs[A.canister_id] = []
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     global_timer[A.canister_id] = 0
 
@@ -4844,6 +4852,8 @@ S with
     reserved_balance_limits[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
+    canister_log_visibility[A.canister_id] = (deleted)
+    canister_logs[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5253,6 +5263,7 @@ S with
       total_num_changes = N;
       recent_changes = [];
     }
+    canister_logs[CanisterId] = []
     canister_version[CanisterId] = S.canister_version[CanisterId] + 1
     global_timer[CanisterId] = 0
 
@@ -5402,6 +5413,28 @@ S with
       total_num_changes = N;
       recent_changes = Newer_changes;
     }
+
+```
+
+#### Trimming canister logs
+
+Canister logs can be trimmed if the total length of their contents exceeds 4KiB.
+
+Conditions
+
+```html
+
+S.canister_logs[CanisterId] = Older_logs · Newer_logs
+SUM { |l.content| | l <- Older_logs } > 4KiB
+
+```
+
+State after
+
+```html
+
+S with
+    canister_logs[CanisterId] = Newer_logs
 
 ```
 
