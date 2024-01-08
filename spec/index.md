@@ -2343,7 +2343,8 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 ### IC method `fetch_logs` {#ic-fetch_logs}
 
 Given a canister ID as input provides the logs of that canister including trap messages.
-Logs are stored in a circular buffer of 4KiB.
+The total length of all log contents does not exceed 4KiB.
+If new logs are added that exceed the memory capacity, the oldest logs will be removed.
 Log memory persists across upgrades and it is deleted if the canister is reinstalled or uninstalled.
 The log visibility is defined in `log_visibility` field of `canister_settings`.
 Users cannot call this method.
