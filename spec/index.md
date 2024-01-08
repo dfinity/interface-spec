@@ -5063,7 +5063,44 @@ S with
 
 #### IC Management Canister: Canister logs
 
-TBD
+The management canister returns logs for a requested `canister_id`.
+
+Conditions
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'fetch_logs'
+M.arg = candid(A)
+S.log_visibility ∈ Controllers or Public
+if S.log_visibility is Controllers:
+  M.caller ∈ S.controllers[A.canister_id]
+if S.log_visibility is Public:
+  M.caller ∈ <any>
+LogRecord = {
+  idx : Nat;
+  timestamp_nanos: Nat;
+  contents: Blob;
+}
+Response = {
+  log_records : List LogRecord
+}
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid(Response))
+        refunded_cycles = M.transferred_cycles
+      }
+```
 
 #### Callback invocation
 
