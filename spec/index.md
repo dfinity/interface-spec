@@ -2347,7 +2347,6 @@ The total length of all log contents does not exceed 4KiB.
 If new logs are added that exceed the memory capacity, the oldest logs will be removed.
 Log memory persists across upgrades and it is deleted if the canister is reinstalled or uninstalled.
 The log visibility is defined in `log_visibility` field of `canister_settings`.
-Users cannot call this method.
 
 A single log entry is a record with the following fields:
 
