@@ -852,7 +852,7 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
--   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
+-   If the request is an update or query call to a canister that is not the Management Canister (`aaaaa-aa`), then the effective canister id must be the `canister_id` in the request.
 
 :::note
 
