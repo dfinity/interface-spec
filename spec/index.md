@@ -4338,7 +4338,7 @@ S with
     balances[A.canister_id] = New_balance
     reserved_balances[A.canister_id] = New_reserved_balance
     canister_history[A.canister_id] = New_canister_history
-    canister_logs[A.canister_id] = []
+    canister_logs[A.canister_id] = canister_logs
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4347,6 +4347,8 @@ S with
       }
 
 ```
+
+The logs produced by the canister during the execution of the WebAssembly `start` and `canister_init` functions are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[A.canister_id]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 #### IC Management Canister: Code upgrade
 
@@ -4491,6 +4493,7 @@ S with
     balances[A.canister_id] = New_balance;
     reserved_balances[A.canister_id] = New_reserved_balance;
     canister_history[A.canister_id] = New_canister_history
+    canister_logs[A.canister_id] = S.canister_logs[A.canister_id] · canister_logs
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4499,6 +4502,8 @@ S with
       }
 
 ```
+
+The logs produced by the canister during the execution of the WebAssembly `canister_pre_upgrade`, `start`, and `canister_post_upgrade` functions are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[A.canister_id]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 #### IC Management Canister: Install chunked code
 
