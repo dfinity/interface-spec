@@ -4025,7 +4025,7 @@ S with
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     if A.settings.log_visibility is not null:
-      log_visibility[A.canister_id] = A.settings.log_visibility
+      canister_log_visibility[A.canister_id] = A.settings.log_visibility
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5462,7 +5462,7 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
+S[A.canister_id].canister_log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
 
 ```
 
