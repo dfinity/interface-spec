@@ -2362,7 +2362,7 @@ A single log is a record with the following fields:
 
 - `idx` (`nat64`): the unique sequence number of the log;
 - `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
-- `contents` (`blob`): the actual content of the log;
+- `content` (`blob`): the actual content of the log;
 
 :::note
 
