@@ -3899,7 +3899,7 @@ S with
     if A.settings.log_visibility is not null:
       canister_log_visibility[Canister_id] = A.settings.log_visibility
     else:
-      canister_log_visibility[Canister_id] = New_controllers
+      canister_log_visibility[Canister_id] = Controllers
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -5065,7 +5065,7 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
-    canister_log_visibility[Canister_id] = New_controllers
+    canister_log_visibility[Canister_id] = Controllers
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -5462,7 +5462,7 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].canister_log_visibility = M.caller ∈ S.controllers[A.canister_id] or Public
+S[A.canister_id].canister_log_visibility = Controllers or Public
 
 ```
 
