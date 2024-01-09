@@ -2368,6 +2368,7 @@ A single log is a record with the following fields:
 
 This method is exposed as a query and is only accessible in non-replicated mode. 
 Calls in replicated mode are rejected.
+Only users can call this method, not canisters (also no nested composite query calls).
 
 :::
 
