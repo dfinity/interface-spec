@@ -2,8 +2,8 @@ type canister_id = principal;
 type wasm_module = blob;
 
 type log_visibility = variant {
-  public;
   controllers;
+  public;
 };
 
 type canister_settings = record {
