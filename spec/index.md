@@ -2993,8 +2993,8 @@ Finally, we can describe the state of the IC as a record having the following fi
       recent_changes : [Change];
     }
     CanisterLogVisibility
-      = Public
-      | Controllers
+      = Controllers
+      | Public
     CanisterLog = {
       idx : Nat;
       timestamp_nanos : Nat;
@@ -3899,7 +3899,7 @@ S with
     if A.settings.log_visibility is not null:
       canister_log_visibility[Canister_id] = A.settings.log_visibility
     else:
-      canister_log_visibility[Canister_id] = Public
+      canister_log_visibility[Canister_id] = New_controllers
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -5462,7 +5462,7 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].canister_log_visibility = Public or M.caller ∈ S.controllers[A.canister_id]
+S[A.canister_id].canister_log_visibility = M.caller ∈ S.controllers[A.canister_id] or Public
 
 ```
 
