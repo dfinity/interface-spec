@@ -227,7 +227,7 @@ Dapps on the Internet Computer are called *canisters*. Conceptually, they consis
 
 -   A cycle balance
 
--   A reserved cycle balance, which are cycles set aside from the main cycle balance for resource payments.
+-   A reserved cycles balance, which are cycles set aside from the main cycle balance for resource payments.
 
 -   The *canister status*, which is one of `running`, `stopping` or `stopped`.
 
@@ -249,7 +249,7 @@ If an empty canister receives a response, that response is dropped, as if the ca
 
 The IC relies on *cycles*, a utility token, to manage its resources. A canister pays for the resources it uses from its *cycle balances*. A *cycle\_balance* is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if *cycles* are added to a canister that would bring its main cycle balance beyond 2<sup>128</sup>-1, then the balance will be capped at 2<sup>128</sup>-1 and any additional cycles will be lost.
 
-When both the main and the reserved cycle balances of a canister fall to zero, the canister is *deallocated*. This has the same effect as
+When both the main and the reserved cycles balances of a canister fall to zero, the canister is *deallocated*. This has the same effect as
 
 -   uninstalling the canister (as described in [IC method](#ic-uninstall_code))
 
@@ -2053,15 +2053,27 @@ Indicates various information about the canister. It contains:
 
 -   The status of the canister. It could be one of `running`, `stopping` or `stopped`.
 
+-   The "settings" of the canister containing:
+
+    -   The controllers of the canister. The order of returned controllers may vary depending on the implementation.
+
+    -   The compute and memory allocation of the canister.
+
+    -   The freezing threshold of the canister in seconds.
+
+    -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
+
+    -   The canister log visibility of the canister.
+
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
--   The controllers of the canister. The order of returned controllers may vary depending on the implementation.
-
--   The memory size taken by the canister.
+-   The actual memory usage of the canister.
 
 -   The cycle balance of the canister.
 
--   The canister log visibility of the canister.
+-   The reserved cycles balance of the canister, i.e., the number of cycles reserved when increasing the canister's memory allocation and/or actual memory usage.
+
+-   The idle cycle consumption of the canister, i.e., the number of cycles burned by the canister per day due to its compute and memory allocation and actual memory usage.
 
 Only the controllers of the canister or the canister itself can request its status.
 
@@ -4037,9 +4049,9 @@ S with
 
 #### IC Management Canister: Canister status
 
-The controllers of a canister can obtain information about the canister.
+The controllers of a canister can obtain detailed information about the canister.
 
-The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
+The `Memory_usage` is the (in this specification underspecified) total size of storage in bytes.
 
 The `idle_cycles_burned_per_day` is the idle consumption of resources in cycles per day.
 
@@ -4066,15 +4078,20 @@ S with
         origin = M.origin
         response = candid({
           status = simple_status(S.canister_status[A.canister_id]);
+          settings = {
+            controllers = S.controllers[A.canister_id];
+            compute_allocation = S.compute_allocation[A.canister_id];
+            memory_allocation = S.memory_allocation[A.canister_id];
+            freezing_threshold = S.freezing_threshold[A.canister_id];
+            reserved_cycles_limit = S.reserved_balance_limit[A.canister_id];
+          }
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
             else opt (SHA-256(S.canisters[A.canister_id].raw_module));
-          controllers = S.controllers[A.canister_id];
-          memory_size = Memory_size;
+          memory_size = Memory_usage;
           cycles = S.balances[A.canister_id];
           reserved_cycles = S.reserved_balances[A.canister_id]
-          freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(
             S.compute_allocation[A.canister_id],
             S.memory_allocation[A.canister_id],
