@@ -652,7 +652,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 :::
 
 ### Request: Sync Call {#http-sync-call}
-Synchronous update calls, or `call and await`, are a form of update calls (See [Call]{#http-call}) where the replica will wait with replying to the user until the call has been processed by execution. This means the user will receive a certified result of the call, and thus *do not* need to poll [`read_state`](#http-read-state) to determine the status of the call.
+A synchronous update call, or "call and await", is a type of update [call](#http-call) where the replica will wait with replying to the user until the call has been processed and the result has been added to the replicated state. This means the user will receive a certified result of the call, and thus __do not need to poll__ [`read_state`](#http-read-state) to determine the status of the call.
 In order to make a synchronous update call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `sync-call`
