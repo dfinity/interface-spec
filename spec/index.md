@@ -562,7 +562,7 @@ The Internet Computer therefore has a two models for canister calling:
 -  [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer.
 - [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the request.
 
-## Synchronous canister calling {#http-sync-call}
+#### Synchronous canister calling {#http-sync-call}
 
 1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
 
@@ -580,7 +580,7 @@ The Internet Computer therefore has a two models for canister calling:
 
 8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
 
-## Asynchronous canister calling {#http-async-call}
+#### Asynchronous canister calling {#http-async-call}
 
 1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
 
