@@ -559,7 +559,7 @@ This document does not yet explain how to find the location and port of the Inte
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
 The Internet Computer therefore has a two models for canister calling:
--  [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer.
+- [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer for the initial call.
 - [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the request.
 
 #### Synchronous canister calling {#http-sync-call}
