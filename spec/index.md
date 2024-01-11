@@ -651,6 +651,48 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 :::
 
+### Request: Sync Call {#http-sync-call}
+
+In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+
+-   `request_type` (`text`): Always `call`
+
+-   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
+
+-   `canister_id` (`blob`): The principal of the canister to call.
+
+-   `method_name` (`text`): Name of the canister method to call
+
+-   `arg` (`blob`): Argument to pass to the canister method
+
+The HTTP response to this request can have the following responses:
+
+-   202 HTTP status with a non-empty body. Implying the request was accepted by the IC for further processing.
+    -   `reject code`
+
+-   200 HTTP status with a non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+
+    -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+
+    -   `reject_message` (`text`): a textual diagnostic message.
+
+    -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+
+-   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
+
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
+
+:::note
+
+The functionality exposed via the [The IC management canister](#ic-management-canister) can be used this way.
+
+:::
+
+See [The system state tree](#state-tree) for details on the state tree.
+
+
 ### Request: Read state {#http-read-state}
 
 :::note
