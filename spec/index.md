@@ -558,27 +558,9 @@ This document does not yet explain how to find the location and port of the Inte
 
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
-The Internet Computer therefore has a two models for canister calling:
-- [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer for the initial call.
+The Internet Computer has two HTTPS APIs for canister calling:
 - [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the request.
-
-#### Synchronous canister calling {#http-sync-call}
-
-1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
-
-2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
-
-3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load).
-
-4.  If the call is processed (sufficient resources, call not yet expired), it will be executed, for some calls this may be atomic, for others this involves multiple internal steps.
-
-5.  Eventually, a response will be produced which will be replied the user. The response can be a `reply`, indicating success, a `reject`, indicating some form of error.
-
-6.  In the case that the call has been retained for long enough before a response is generated, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
-
-7. The user can also afterwards retrieve the state of the request via the [HTTPS Interface](#http-interface) for a certain amount of time.
-
-8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
+- [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer for the initial call.
 
 #### Asynchronous canister calling {#http-async-call}
 
@@ -638,6 +620,27 @@ To avoid replay attacks, the transition from `done` or `received` to `pruned` mu
 Calls must stay in `replied` or `rejected` long enough for polling users to catch the response.
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
+
+#### Synchronous canister calling {#http-sync-call}
+
+Unlike asynchronous canister calling, synchronous canister calling does not require the user to poll the Internet Computer for the status of the request. Instead, the user waits for a certified response from the Internet Computer for the initial call. However, The state transitions and semantics of the call are the same as for asynchronous canister calling.
+
+1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
+
+2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
+
+3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load).
+
+4.  If the call is processed (sufficient resources, call not yet expired), it will be executed, for some calls this may be atomic, for others this involves multiple internal steps.
+
+5.  Eventually, a response will be produced which will be replied the user. The response can be a `reply`, indicating success, a `reject`, indicating some form of error.
+
+6.  In the case that the call has been retained for long enough before a response is generated, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
+
+7. The user can also afterwards retrieve the state of the request via the [HTTPS Interface](#http-interface) for a certain amount of time.
+
+8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
+
 
 ### Request: Call {#http-call}
 
