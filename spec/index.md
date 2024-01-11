@@ -652,10 +652,11 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 :::
 
 ### Request: Sync Call {#http-sync-call}
+Synchronous update calls, or `call and await`, are a form of update calls (See [Call]{#http-call}) where the replica will wait with replying to the user until the call
+has been processed by execution. This means the user will receive the result the call and *do not* need to poll [`read_state`](#http-read-state) to determine the status of the call.
+In order to make a synchronous update call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
-In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
-
--   `request_type` (`text`): Always `call`
+-   `request_type` (`text`): Always `sync-call`
 
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
 
@@ -668,7 +669,9 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 The HTTP response to this request can have the following responses:
 
 -   202 HTTP status with a non-empty body. Implying the request was accepted by the IC for further processing.
-    -   `reject code`
+    -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
+
+The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
 
 -   200 HTTP status with a non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
 
