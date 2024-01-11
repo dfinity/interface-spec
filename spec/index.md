@@ -536,6 +536,8 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
 
+-   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit (synchronous, potentially state-changing) calls.
+
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
 -   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
@@ -554,7 +556,31 @@ This document does not yet explain how to find the location and port of the Inte
 
 ### Overview of canister calling {#http-call-overview}
 
-Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
+
+The Internet Computer therefore has a two models for canister calling:
+-  [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer.
+- [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the request.
+
+## Synchronous canister calling {#http-sync-call}
+
+1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
+
+2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
+
+3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load).
+
+4.  If the call is processed (sufficient resources, call not yet expired), it will be executed, for some calls this may be atomic, for others this involves multiple internal steps.
+
+5.  Eventually, a response will be produced which will be replied the user. The response can be a `reply`, indicating success, a `reject`, indicating some form of error.
+
+6.  In the case that the call has been retained for long enough before a response is generated, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
+
+7. The user can also afterwards retrieve the state of the request via the [HTTPS Interface](#http-interface) for a certain amount of time.
+
+8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
+
+## Asynchronous canister calling {#http-async-call}
 
 1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
 
@@ -667,8 +693,8 @@ In order to make a synchronous update call to a canister, the user makes a POST 
 
 The HTTP response to this request can have the following responses:
 
--   202 HTTP status with a non-empty body. Implying the request was accepted by the IC for further processing.
-    -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
+-   202 HTTP status with a non-empty body. Implying the request was processed.
+    -   `response` (`blob`): A certificate (see [Certification](#certification)).
 
 The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
 
