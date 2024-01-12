@@ -623,13 +623,13 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call}
 
-Unlike asynchronous canister calling, synchronous canister calling does not require the user to poll the Internet Computer for the status of the request. Instead, the user waits for a certified response from the Internet Computer for the initial call. However, The state transitions and semantics of the call are the same as for asynchronous canister calling.
+Unlike asynchronous canister calling, synchronous canister calling does not require the user to poll the Internet Computer for the status of the request. Instead, the user waits for a certified response from the Internet Computer for the initial call. Still, the state transitions and semantics of the call itself are the same as for asynchronous canister calling.
 
 1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
 
-2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
+2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for calls to regular canisters. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
 
-3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load).
+3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although the IC may still not start processing the request if it is under high load).
 
 4.  If the call is processed (sufficient resources, call not yet expired), it will be executed, for some calls this may be atomic, for others this involves multiple internal steps.
 
@@ -699,7 +699,7 @@ The HTTP response to this request can have the following responses:
 -   202 HTTP status with a non-empty body. Implying the request was processed.
     -   `response` (`blob`): A certificate (see [Certification](#certification)).
 
-The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
+    The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
 
 -   200 HTTP status with a non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
 
