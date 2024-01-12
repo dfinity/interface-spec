@@ -2362,7 +2362,7 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-### IC method `fetch_logs` {#ic-fetch_logs}
+### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
 Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
 The total length of all log contents does not exceed 4KiB.
@@ -5467,7 +5467,7 @@ This section specifies management canister query calls.
 They are calls to `/api/v2/canister/<effective_canister_id>/query`
 with CBOR body `Q` such that `Q.canister_id = ic_principal`.
 
-The management canister offers the method `fetch_logs`
+The management canister offers the method `fetch_canister_logs`
 that can be called as a query call and
 returns logs of a requested canister.
 
@@ -5476,7 +5476,7 @@ Conditions
 ```html
 
 Q.canister_id = ic_principal
-Q.method_name = 'fetch_logs'
+Q.method_name = 'fetch_canister_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
 S[A.canister_id].canister_log_visibility = Controllers or Public

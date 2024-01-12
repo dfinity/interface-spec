@@ -128,14 +128,14 @@ type node_metrics = record {
     num_block_failures_total : nat64;
 };
 
-type log_record = record {
+type canister_log_record = record {
   idx: nat64;
   timestamp_nanos: nat64;
   content: blob;
 };
 
-type fetch_logs_response = record {
-  log_records: vec log_record;
+type fetch_canister_logs_response = record {
+  canister_log_records: vec canister_log_record;
 };
 
 service ic : {
@@ -261,5 +261,5 @@ service ic : {
     (record { canister_id : canister_id; amount: nat }) -> ();
 
   // canister logging
-  fetch_logs : (record { canister_id : canister_id }) -> (fetch_logs_response) query;
+  fetch_canister_logs : (record { canister_id : canister_id }) -> (fetch_canister_logs_response) query;
 }
