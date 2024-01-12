@@ -674,12 +674,6 @@ The HTTP response to this request can have the following responses:
 
 This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
 
-:::note
-
-The functionality exposed via the [The IC management canister](#ic-management-canister) can be used this way.
-
-:::
-
 ### Request: Sync Call {#http-sync-call}
 A synchronous update call, or "call and await", is a type of update [call](#http-call) where the replica will wait with replying to the user until the call has been processed and the result has been added to the replicated state. This means the user will receive a certified result of the call, and thus __do not need to poll__ [`read_state`](#http-read-state) to determine the status of the call.
 In order to make a synchronous update call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
