@@ -623,7 +623,7 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call}
 
-Unlike asynchronous canister calling, synchronous canister calling does not require the user to poll the Internet Computer for the status of the request. Instead, the user waits for a certified response from the Internet Computer for the initial call. Still, the state transitions and semantics of the call itself are the same as for asynchronous canister calling.
+Unlike asynchronous canister calling, synchronous canister calling does not initially require the user to poll the Internet Computer for the status of the request. Instead, the user waits for a certified response from the Internet Computer for the initial call. However, if a certified response is not received (due to a timeout or pre-execution error), the user must poll the Internet Computer for the status. Still, the state transitions and semantics of the call itself are the same as for asynchronous canister calling.
 
 1.  A user submits a synchronous call via the [HTTPS Interface](#http-interface).
 
@@ -696,10 +696,12 @@ In order to make a synchronous update call to a canister, the user makes a POST 
 
 The HTTP response to this request can have the following responses:
 
--   202 HTTP status with a non-empty body. Implying the request was processed.
+-   201 HTTP status with a non-empty body. Implying the request was processed.
     -   `response` (`blob`): A certificate (see [Certification](#certification)).
 
     The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
+
+-   202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
 
 -   200 HTTP status with a non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
 
