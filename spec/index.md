@@ -3857,6 +3857,10 @@ if A.settings.reserved_cycles_limit is not null:
   New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
   New_reserved_balance_limit = 5_000_000_000_000
+if A.settings.log_visibility is not null:
+  New_canister_log_visibility = A.settings.log_visibility
+else:
+  New_canister_log_visibility = Controllers
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
@@ -3908,10 +3912,7 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
-    if A.settings.log_visibility is not null:
-      canister_log_visibility[Canister_id] = A.settings.log_visibility
-    else:
-      canister_log_visibility[Canister_id] = Controllers
+    canister_log_visibility[Canister_id] = New_canister_log_visibility
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
