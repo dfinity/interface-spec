@@ -5461,7 +5461,7 @@ S with
 
 ```
 
-#### IC Management Canister: Canister logs (query call) {#ic-mgmt-canister-fetch-logs}
+#### IC Management Canister: Canister logs (query call) {#ic-mgmt-canister-fetch-canister-logs}
 
 This section specifies management canister query calls.
 They are calls to `/api/v2/canister/<effective_canister_id>/query`
@@ -5501,7 +5501,7 @@ verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time /
 
 #### Query call {#query-call}
 
-This section specifies query calls `Q` whose `Q.canister_id` is a non-empty canister `S.canisters[Q.canister_id]`. Query calls to the management canister, i.e., `Q.canister_id = ic_principal`, are specified in Section [Canister logs](#ic-mgmt-canister-fetch-logs).
+This section specifies query calls `Q` whose `Q.canister_id` is a non-empty canister `S.canisters[Q.canister_id]`. Query calls to the management canister, i.e., `Q.canister_id = ic_principal`, are specified in Section [Canister logs](#ic-mgmt-canister-fetch-canister-logs).
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
