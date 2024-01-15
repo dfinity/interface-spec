@@ -5082,7 +5082,7 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
-    canister_log_visibility[Canister_id] = Controllers
+    canister_log_visibility[Canister_id] = New_canister_log_visibility
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
