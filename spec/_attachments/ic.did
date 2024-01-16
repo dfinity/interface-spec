@@ -36,6 +36,10 @@ type change_details = variant {
     mode : variant {install; reinstall; upgrade};
     module_hash : blob;
   };
+  load_snapshot : record {
+    module_hash : blob;
+    taken_at_timestamp: nat64;
+  }
   controllers_change : record {
     controllers : vec principal;
   };

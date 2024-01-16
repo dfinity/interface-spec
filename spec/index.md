@@ -2059,7 +2059,7 @@ Only the controllers of the canister or the canister itself can request its stat
 
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
-The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
+The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, snapshot restoration, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Loading a snapshot is desribed by the SHA-256 hash of the newly deployed canister module and the timestamp at which the snapshot was taken. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
 
 The system can drop the oldest canister changes from the list to keep its length bounded (at least `20` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
 
@@ -2359,7 +2359,7 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 ### IC method `load_canister_snapshot` {#ic-load_canister_snapshot}
 
-This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` was created or if the snapshot was already deleted.
+This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` can be found.
 
 Only controllers can take a snapshot of a canister and load it back to the canister.
 
@@ -2723,7 +2723,6 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           memory_allocation : Nat;
           memory_usage_raw_module : Nat;
           memory_usage_canister_history : Nat;
-          memory_usage_snapshots: Nat;
           freezing_threshold : Nat;
           subnet_size : Nat;
           certificate : NoCertificate | Blob;
@@ -2987,6 +2986,7 @@ Finally, we can describe the state of the IC as a record having the following fi
         }
       | LoadSnapshot {
           module_hash : Blob;
+          taken_at_timestamp : Timestamp;
         }
       | ControllersChange {
           controllers : [PrincipalId];
@@ -3014,7 +3014,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     S = {
       requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
-      snapshots: SnapshotId ↦ Snapshot;
+      snapshots: CanisterId ↦ Snapshot;
       controllers : CanisterId ↦ Set Principal;
       compute_allocation : CanisterId ↦ Nat;
       memory_allocation : CanisterId ↦ Nat;
@@ -5112,9 +5112,16 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 M.callee = ic_principal
 M.method_name = 'take_canister_snapshot'
 M.arg = candid(A)
+is_system_assigned Snapshot_id
 M.caller ∈ S.controllers[A.canister_id]
+A.snapshot_id ∈ S.snapshots[A.canister_id]
+if A.replace_snapshot is not null:
+  S.snapshots[A.canister_id].snapshot_id = A.replace_snapshot
+else:
+  S.snapshots[A.canister_id] = null
 
 New_snapshot = Snapshot {
+  snapshot_id = Snapshot_id;
   wasm_state = canisters[A.canister_id].wasm_state;
   raw_module = canisters[A.canister_id].raw_module;
   chunk_store = canisters[A.canister_id].chunk_store;
@@ -5173,6 +5180,7 @@ M.callee = ic_principal
 M.method_name = 'load_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
+S.snapshots[A.canister_id].snapshot_id  = A.snapshot_id
 
 New_state = {
   wasm_state = S.snapshots[A.canister_id].wasm_state;
@@ -5198,7 +5206,7 @@ New_canister_history = {
     canister_version = S.canister_version[A.canister_id] + 1
     origin = change_origin(M.caller, A.sender_canister_version, M.origin);
     details = LoadSnapshot {
-      module_hash = SHA-256(New_state.wasm_module);
+      module_hash = SHA-256(New_state.raw_module);
     };
   };
 }
@@ -5230,14 +5238,7 @@ State after
 ```html
 
 S with
-    canisters[A.canister_id] = {
-      wasm_state = S.snapshots[A.canister_id].wasm_state;
-      raw_module = S.snapshots[A.canister_id].raw_module;
-      module = parse_wasm_mod(S.snapshots[A.canister_id].raw_module;
-      chunk_store = S.snapshots[A.canister_id].chunk_store;
-      public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].raw_module);
-      private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].raw_module);
-    }
+    canisters[A.canister_id] = New_state
     certified_data[A.canister_id] = S.snapshots[A.canister_id].certified_data
     balances[A.canister_id] = New_balance
     reserved_balances[Canister_id] = New_reserved_balance
@@ -5291,7 +5292,7 @@ M.callee = ic_principal
 M.method_name = 'delete_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
-S.snapshots[A.canister_id] = (deleted)
+S.snapshots[A.canister_id].snapshot_id = A.snapshot_id 
 
 ```
 
@@ -5300,7 +5301,7 @@ State after
 ```html
 
 S with
-    snapshots = Other_snapshots
+    S.snapshots[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
