@@ -559,8 +559,8 @@ This document does not yet explain how to find the location and port of the Inte
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
 The Internet Computer has two HTTPS APIs for canister calling:
-- [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the request.
-- [*Synchronous*](#http-sync-call) canister calling, where the user waits for a certified response from the Internet Computer for the initial call.
+- [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
+- [*Synchronous*](#http-sync-call) canister calling, where the Internet Computer serves the response of the canister call as the response to the original HTTPS request.
 
 #### Asynchronous canister calling {#http-async-call}
 
@@ -631,9 +631,9 @@ Unlike asynchronous canister calling, synchronous canister calling does not init
 
 3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although the IC may still not start processing the request if it is under high load).
 
-4.  If the call is processed (sufficient resources, call not yet expired), it will be executed, for some calls this may be atomic, for others this involves multiple internal steps.
+4.  If the call is processed (sufficient resources, call not yet expired), it will be executed. For some calls this may be atomic, for others this involves multiple internal steps.
 
-5.  Eventually, a response will be produced which will be replied the user. The response can be a `reply`, indicating success, a `reject`, indicating some form of error.
+5.  Eventually, a response will be produced and returned to the user. The response can be a `reply`, indicating success, or a `reject`, indicating some form of error.
 
 6.  In the case that the call has been retained for long enough before a response is generated, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
 
@@ -675,7 +675,7 @@ The HTTP response to this request can have the following responses:
 This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
 
 ### Request: Sync Call {#http-sync-call}
-A synchronous update call, or "call and await", is a type of update [call](#http-call) where the replica will wait with replying to the user until the call has been processed and the result has been added to the replicated state. This means the user will receive a certified result of the call, and thus __do not need to poll__ [`read_state`](#http-read-state) to determine the status of the call.
+A synchronous update call, or "call and await", is a type of update [call](#http-call) where the replica will wait with replying to the user until the call has been processed and the result has been added to the certified state. This means the user will receive a certified result of the call, and thus __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the status of the call.
 In order to make a synchronous update call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `sync-call`
