@@ -37,7 +37,7 @@ type change_details = variant {
     module_hash : blob;
   };
   load_snapshot : record {
-    module_hash : blob;
+    canister_version : nat64;
     taken_at_timestamp: nat64;
   };
   controllers_change : record {
