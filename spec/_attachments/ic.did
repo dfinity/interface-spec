@@ -39,7 +39,7 @@ type change_details = variant {
   load_snapshot : record {
     module_hash : blob;
     taken_at_timestamp: nat64;
-  }
+  };
   controllers_change : record {
     controllers : vec principal;
   };
