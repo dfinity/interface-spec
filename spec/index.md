@@ -709,7 +709,6 @@ This request type can *also* be used to call a query method (but not a composite
 
 See [Request status](#state-tree-request-status) for details on the request status.
 
-
 ### Request: Read state {#http-read-state}
 
 :::note
