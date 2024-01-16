@@ -691,6 +691,7 @@ In order to make a synchronous update call to a canister, the user makes a POST 
 The HTTP response to this request can have the following responses:
 
 -   201 HTTP status with a non-empty body. Implying the request was processed.
+
     -   `response` (`blob`): A certificate (see [Certification](#certification)).
 
     The returned certificate includes the subtree at `/request_status/<request_id>` and `/time`.
@@ -717,7 +718,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 :::
 
-See [The system state tree](#state-tree) for details on the state tree.
+See [Request status](#state-tree-request-status) for details on the request status.
 
 
 ### Request: Read state {#http-read-state}
