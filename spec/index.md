@@ -2985,7 +2985,7 @@ Finally, we can describe the state of the IC as a record having the following fi
           module_hash : Blob;
         }
       | LoadSnapshot {
-          module_hash : Blob;
+          canister_version : CanisterVersion;
           taken_at_timestamp : Timestamp;
         }
       | ControllersChange {
@@ -3006,10 +3006,13 @@ Finally, we can describe the state of the IC as a record having the following fi
       subnet_size : Nat;
     }
     Snapshot = {
+      snapshot_id: SnapshotId;
       wasm_state : WasmState;
       raw_module : Blob;
       chunk_store : ChunkStore;
-      certified_data: Blob;
+      certified_data : Blob;
+      canister_version : CanisterVersion;
+      taken_at_timestamp : Timestamp;
     }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
