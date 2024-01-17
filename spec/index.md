@@ -5117,7 +5117,6 @@ M.method_name = 'take_canister_snapshot'
 M.arg = candid(A)
 is_system_assigned Snapshot_id
 M.caller ∈ S.controllers[A.canister_id]
-A.snapshot_id ∈ S.snapshots[A.canister_id]
 if A.replace_snapshot is not null:
   S.snapshots[A.canister_id].snapshot_id = A.replace_snapshot
 else:
