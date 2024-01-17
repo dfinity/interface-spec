@@ -239,7 +239,7 @@ service ic : {
   take_canister_snapshot: (record { 
     canister_id: canister_id;
     replace_snapshot: opt snapshot_id;
-  }) -> (snapshot_id);
+  }) -> (snapshot);
   load_canister_snapshot: (record { 
     canister_id: canister_id;
     snapshot_id: snapshot_id;
