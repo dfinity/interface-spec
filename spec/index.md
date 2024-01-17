@@ -3006,7 +3006,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       subnet_size : Nat;
     }
     Snapshot = {
-      snapshot_id: SnapshotId;
+      snapshot_id: Nat;
       wasm_state : WasmState;
       raw_module : Blob;
       chunk_store : ChunkStore;
