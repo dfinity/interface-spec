@@ -472,7 +472,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 ### Request status {#state-tree-request-status}
 
-For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
+For each call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
 
 -   `/request_status/<request_id>/status` (text)
 
@@ -534,9 +534,9 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes four endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
+-   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous.
 
--   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit (synchronous, potentially state-changing) calls.
+-   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and get a synchronous response from the canister to the HTTPS request. Please note that this endpoint will only provide a response from the canister if the canister call is completed within an acceptable timeframe.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -623,11 +623,11 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call}
 
-A synchronous update call, also known as a "call and await", is a specific type of update call. It operates on the principle that if the canister call completes within a reasonable time, the replica will respond to the user's HTTPs request with a certified status. 
+A synchronous update call, also known as a "call and await", is a specific type of update call. It operates on the principle that if the canister call completes within a reasonable time, the replica will respond to the user's HTTPS request with a certified status. 
 
 This means that when the replica returns the certified result in response to the HTTPS request, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the status of the call.
 
-However, if the call does not complete in time, the replica will immediately reply to the HTTPS request without certification. In this case, the user will need to revert to the same behavior as for asynchronous update calls. This means the user must poll the Internet Computer to determine the call's certified status. 
+However, if the call does not complete in time, the replica will reply to the HTTPS request without certification. In this case, the user will need to revert to the same behavior as for asynchronous update calls. This means the user must poll the Internet Computer to determine the call's certified status. 
 
 Synchronous calls are therefore best suited for update calls that complete quickly. This is because the replica does not wait indefinitely for the call to complete.
 
@@ -685,8 +685,6 @@ In order to make a synchronous update call to a canister, the user makes a POST 
 
 The HTTP response to this request can have the following responses:
 
--   202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
-
 -   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
     
     -   If the update call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
@@ -704,6 +702,8 @@ The HTTP response to this request can have the following responses:
         -   `reject_message` (`text`): a textual diagnostic message.
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when a response from the canister was not produced in reasonable time. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
@@ -922,7 +922,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to not only call, but all requests alike (and could have been called `request_expiry`).
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -2915,9 +2915,9 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v2/…/sync_call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v2/…/sync_call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
-These are the synchronous read messages:
+These are the read-only messages:
 
     Path = List(Blob)
     APIReadRequest
@@ -3159,7 +3159,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Asynchronous API requests that are submitted via `/api/v2/…/call` and `/api/v2/…/sync_call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v2/…/call` and `/api/v2/…/sync_call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
