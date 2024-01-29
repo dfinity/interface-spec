@@ -127,6 +127,10 @@ This specification may refer to certain constants and limits without specifying 
 
     Maximum wall clock time spent on evaluation of a query call.
 
+-   `MAX_CALL_TIMEOUT`
+
+    The maximum timeout (in seconds) for an inter-canister call.
+
 ### Principals {#principal}
 
 Principals are generic identifiers for canisters, users and possibly other concepts in the future. As far as most uses of the IC are concerned they are *opaque* binary blobs with a length between 0 and 29 bytes, and there is intentionally no mechanism to tell canister ids and user ids apart.
@@ -1008,6 +1012,8 @@ Rejection codes are member of the following enumeration:
 
 -   `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
+-   `SYS_TIMEOUT` (6): Timed out while waiting for a response.
+
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
 The error message is guaranteed to be a string, i.e. not arbitrary binary data.
@@ -1322,6 +1328,7 @@ The following sections describe various System API functions, also referred to a
       ) -> ();
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : i32, size : i32) -> ();                       // U CQ Ry Rt CRy CRt T
+    ic0.call_set_timeout : (seconds : i32) -> ();                               // U Ry Rt T
     ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                // U CQ Ry Rt CRy CRt T
@@ -1549,6 +1556,14 @@ During the execution of the `cleanup` function, only a subset of the System API 
 If this traps (e.g. runs out of cycles), the state changes from the `cleanup` function are discarded, as usual, and no further actions are taken related to that call. Canisters likely want to avoid this from happening.
 
 There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
+
+-   `ic0.call_set_timeout : (seconds : i32) -> ()`
+
+    Requests the system to generate a synthetic timeout reject if no reply is received within the specified amount of seconds. This amount is silently bounded by the `MAX_CALL_TIMEOUT` system constant; i.e., larger timeouts are treated as equivalent to `MAX_CALL_TIMEOUT` and do not cause an error. The returned reject code will be `SYSTEM_TIMEOUT`.
+
+    Note that a timeout response does **not** guarantee that the call failed. It is possible that the call was still successfully received by the canister, but that processing the call took too long, or that the response took too long to deliver to the calling canister. If the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
+
+    This method can be called only in between `ic0.call_new` and `ic0.call_perform`, and at most once, otherwise it traps. Multiple calls can specify their own timeouts
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
