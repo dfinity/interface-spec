@@ -1561,9 +1561,9 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     Requests the system to generate a synthetic timeout reject if no reply is received within the specified amount of seconds. This amount is silently bounded by the `MAX_CALL_TIMEOUT` system constant; i.e., larger timeouts are treated as equivalent to `MAX_CALL_TIMEOUT` and do not cause an error. The returned reject code will be `SYSTEM_TIMEOUT`.
 
-    Note that a timeout response does **not** guarantee that the call failed. It is possible that the call was still successfully received by the canister, but that processing the call took too long, or that the response took too long to deliver to the calling canister. If the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
+    Note that a timeout reject does **not** guarantee that the call failed. It is possible that the call was still successfully received by the canister, but that processing the call took too long, or that the reply took too long to deliver to the calling canister. After the timeout reject is delivered to the calling canister, no further response (reply or reject) for this call will be delivered, even if the callee produces one. If the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
 
-    This method can be called only in between `ic0.call_new` and `ic0.call_perform`, and at most once, otherwise it traps. Multiple calls can specify their own timeouts
+    This method can be called only in between `ic0.call_new` and `ic0.call_perform`, and at most once at that. Otherwise, it traps. A different timeout can be specified for each call.
 
 -   `ic0.call_data_append : (src : i32, size : i32) -> ()`
 
