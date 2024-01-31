@@ -1012,7 +1012,7 @@ Rejection codes are member of the following enumeration:
 
 -   `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
--   `SYS_TIMEOUT` (6): Timed out while waiting for a response.
+-   `SYS_UNKNOWN` (6): Response unknown; aborted waiting for it (e.g., timed out, or system under high load).
 
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
@@ -1290,6 +1290,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
+    ic0.msg_deadline : () -> i64;                                               // U Ry Rt
 
     ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q CQ Ry Rt CRy CRt
     ic0.msg_reply : () -> ();                                                   // U Q CQ Ry Rt CRy CRt
@@ -1328,7 +1329,7 @@ The following sections describe various System API functions, also referred to a
       ) -> ();
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : i32, size : i32) -> ();                       // U CQ Ry Rt CRy CRt T
-    ic0.call_set_timeout : (seconds : i32) -> ();                               // U Ry Rt T
+    ic0.call_with_best_effort_response : (timeout_seconds : i32) -> ();         // U Ry Rt T
     ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                // U CQ Ry Rt CRy CRt T
@@ -1430,6 +1431,12 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 -   `ic0.msg_reject_msg_size : () → i32` and `ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) → ()`
 
     The reject message. Traps if there is no reject message (i.e. if `reject_code` is `0`).
+
+-   `ic0.msg_deadline : () -> i64`
+
+    The deadline, in nanoseconds since 1970-01-01, by which the caller expect to see a response.
+
+    For calls with best-effort responses, the deadline will computed based on the time the call was made, and the `timeout_seconds` parameter  provided by the caller. For other calls, the deadline will be set to 0.
 
 ### Responding {#responding}
 
@@ -1557,13 +1564,11 @@ If this traps (e.g. runs out of cycles), the state changes from the `cleanup` fu
 
 There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` and `ic0.call_perform`.
 
--   `ic0.call_set_timeout : (seconds : i32) -> ()`
+-   `ic0.call_with_best_effort_response : (timeout_seconds : i32) -> ()`
 
-    Requests the system to generate a synthetic timeout reject if no reply is received within the specified amount of seconds. The returned reject code will be `SYS_TIMEOUT`.
+    Allows the system to generate a synthetic reject response without waiting for the actual response from the called canister, even if such a response was produced by the callee. The reject callback will be triggered with either `SYS_TRANSIENT` or `SYS_UNKNOWN` reject codes. If the code is `SYS_TRANSIENT`, the caller can be sure that the call never made it to the callee. If it is `SYS_UNKNOWN`, then the call **may or may not** have been processed by the callee; for example, it could be that processing the call took too long, that the reply took too long to deliver to the calling canister, or simply that the system decided that it needed to shed load. In this case, if the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
 
-    The `seconds` parameter is only advisory. First, it is silently bounded by the `MAX_CALL_TIMEOUT` system constant; i.e., larger timeouts are treated as equivalent to `MAX_CALL_TIMEOUT` and do not cause an error. Second, the system may trigger the timeout earlier than requested (e.g., under high load); the calling canister should not rely on the timeout not occurring early. Finally, even under normal circumstances, the timeout may trigger significantly later than the specified time.
-
-    Note that a timeout reject does **not** guarantee that the call failed. It is possible that the call was still successfully received by the canister, but that processing the call took too long, or that the reply took too long to deliver to the calling canister. After the timeout reject is delivered to the calling canister, no further response (reply or reject) for this call will be delivered, even if the callee produces one. If the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
+    The `timeout_seconds` parameter is a hint to the system when the reject should be produced. However, it is only advisory. First, it is silently bounded by the `MAX_CALL_TIMEOUT` system constant; i.e., larger timeouts are treated as equivalent to `MAX_CALL_TIMEOUT` and do not cause an error. Second, the system may invoke the reject callback earlier than requested (e.g., under high load); the calling canister should not rely on the timeout not occurring early. Finally, the reject callback may also be executed (possibly significantly) later than the specified time, e.g., if the canister is under high load.
 
     This method can be called only in between `ic0.call_new` and `ic0.call_perform`, and at most once at that. Otherwise, it traps. A different timeout can be specified for each call.
 
