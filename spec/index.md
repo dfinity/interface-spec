@@ -1436,7 +1436,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
     The deadline, in nanoseconds since 1970-01-01, by which the caller expect to see a response.
 
-    For calls with best-effort responses, the deadline will computed based on the time the call was made, and the `timeout_seconds` parameter  provided by the caller. For other calls, the deadline will be set to 0.
+    For calls with best-effort responses, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls, the deadline will be set to 0.
 
 ### Responding {#responding}
 
@@ -1566,7 +1566,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
 -   `ic0.call_with_best_effort_response : (timeout_seconds : i32) -> ()`
 
-    Allows the system to generate a synthetic reject response without waiting for the actual response from the called canister, even if such a response was produced by the callee. The reject callback will be triggered with either `SYS_TRANSIENT` or `SYS_UNKNOWN` reject codes. If the code is `SYS_TRANSIENT`, the caller can be sure that the call never made it to the callee. If it is `SYS_UNKNOWN`, then the call **may or may not** have been processed by the callee; for example, it could be that processing the call took too long, that the reply took too long to deliver to the calling canister, or simply that the system decided that it needed to shed load. In this case, if the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
+    Allows the system to generate a synthetic reject response without waiting for the actual response from the callee, even if the callee produces a response. The reject callback will be triggered with either `SYS_TRANSIENT` or `SYS_UNKNOWN` reject codes. If the code is `SYS_TRANSIENT`, the caller can be sure that the call never made it to the callee. If it is `SYS_UNKNOWN`, then the call **may or may not** have been processed by the callee; for example, it could be that processing the call took too long, that the reply took too long to deliver to the calling canister, or simply that the system decided that it needed to shed load. In this case, if the calling canister needs to know whether the call was successful, it must find an out-of-band way of doing so. For example, if the callee provides idempotent function calls, the calling canister can simply retry the call.
 
     The `timeout_seconds` parameter is a hint to the system when the reject should be produced. However, it is only advisory. First, it is silently bounded by the `MAX_CALL_TIMEOUT` system constant; i.e., larger timeouts are treated as equivalent to `MAX_CALL_TIMEOUT` and do not cause an error. Second, the system may invoke the reject callback earlier than requested (e.g., under high load); the calling canister should not rely on the timeout not occurring early. Finally, the reject callback may also be executed (possibly significantly) later than the specified time, e.g., if the canister is under high load.
 
