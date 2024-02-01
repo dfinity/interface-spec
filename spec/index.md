@@ -4113,7 +4113,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(hash)
+        response = candid({hash: hash})
       }
 
 ```
@@ -4167,7 +4167,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(dom(S.chunk_store[A.canister_id]))
+        response = candid([{hash: hash} | hash <- dom(S.chunk_store[A.canister_id])])
       }
 
 ```

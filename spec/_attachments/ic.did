@@ -48,7 +48,9 @@ type change = record {
   details : change_details;
 };
 
-type chunk_hash = blob;
+type chunk_hash = record {
+  hash : blob;
+};
 
 type http_header = record { name: text; value: text };
 
@@ -160,7 +162,7 @@ service ic : {
     };
     target_canister: canister_id;
     storage_canister: opt canister_id;
-    chunk_hashes_list: vec chunk_hash;
+    chunk_hashes_list: vec blob;
     wasm_module_hash: blob;
     arg : blob;
     sender_canister_version : opt nat64;
