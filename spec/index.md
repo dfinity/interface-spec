@@ -1337,8 +1337,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                   // *
-    ic0.data_certificate_size : () -> i32;                                      // *
-    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // *
+    ic0.data_certificate_size : () -> i32;                                      // Q CQ
+    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // Q CQ
 
     ic0.time : () -> (timestamp : i64);                                         // *
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
@@ -6453,12 +6453,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       else return 1
 
     ic0.data_certificate_size<es>() : i32 =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       return |es.params.sysenv.certificate|
 
     ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
