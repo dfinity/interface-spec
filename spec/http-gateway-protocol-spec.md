@@ -16,10 +16,11 @@ An HTTP request by an HTTP client is handled by these steps:
 4. The HTTP Gateway Candid encodes the HTTP request.
 5. The HTTP Gateway invokes the canister via a query call to the `http_request` interface.
 6. The canister handles the request and returns an HTTP response, encoded in Candid, together with additional metadata.
-7. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
-8. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
-9. If applicable, the HTTP Gateway validates the certificate of the response.
-10. The HTTP Gateway Candid decodes the response and returns it to the HTTP client.
+7. The HTTP Gateway Candid decodes the response for inspection and further processing.
+8. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
+9. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
+10. If applicable, the HTTP Gateway validates the certificate of the response.
+11. The HTTP Gateway returns the decoded response to the HTTP client.
 
 ## Canister ID Resolution
 

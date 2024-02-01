@@ -177,8 +177,8 @@ service ic : {
       module_hash: opt blob;
       memory_size: nat;
       cycles: nat;
-      idle_cycles_burned_per_day: nat;
       reserved_cycles: nat;
+      idle_cycles_burned_per_day: nat;
       query_stats: record {
         num_calls_total: nat;
         num_instructions_total: nat;

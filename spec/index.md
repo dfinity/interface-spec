@@ -227,7 +227,7 @@ Dapps on the Internet Computer are called *canisters*. Conceptually, they consis
 
 -   A cycle balance
 
--   A reserved cycle balance, which are cycles set aside from the main cycle balance for resource payments.
+-   A reserved cycles balance, which are cycles set aside from the main cycle balance for resource payments.
 
 -   The *canister status*, which is one of `running`, `stopping` or `stopped`.
 
@@ -249,7 +249,7 @@ If an empty canister receives a response, that response is dropped, as if the ca
 
 The IC relies on *cycles*, a utility token, to manage its resources. A canister pays for the resources it uses from its *cycle balances*. A *cycle\_balance* is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if *cycles* are added to a canister that would bring its main cycle balance beyond 2<sup>128</sup>-1, then the balance will be capped at 2<sup>128</sup>-1 and any additional cycles will be lost.
 
-When both the main and the reserved cycle balances of a canister fall to zero, the canister is *deallocated*. This has the same effect as
+When both the main and the reserved cycles balances of a canister fall to zero, the canister is *deallocated*. This has the same effect as
 
 -   uninstalling the canister (as described in [IC method](#ic-uninstall_code))
 
@@ -381,7 +381,7 @@ This section makes forward references to other concepts in this document, in par
 
     where `signing_canister_id` is the id of the signing canister and `reconstruct` is a function that computes a root-hash for the tree.
 
-    -   If the `certificate` includes subnet delegations (possibly nested), then the `signing_canister_id` must be included in each delegation's canister id range (see [Delegation](#certification-delegation)).
+    -   If the `certificate` includes a subnet delegation, then the `signing_canister_id` must be included in the delegation's canister id range (see [Delegation](#certification-delegation)).
 
     -   The `tree` must be a `well_formed` tree with
 
@@ -673,11 +673,11 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
 -   `certificate` (`blob`): A certificate (see [Certification](#certification)).
 
-    If this `certificate` includes (possibly nested) subnet delegations (see [Delegation](#certification-delegation)), then
+    If this `certificate` includes a subnet delegation (see [Delegation](#certification-delegation)), then
 
-    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in each delegation's canister id range,
+    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in the delegation's canister id range,
 
-    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match each delegation's subnet id.
+    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match the delegation's subnet id.
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
@@ -1344,7 +1344,7 @@ The following sections describe various System API functions, also referred to a
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
-    ic0.in_replicated_execution: () -> (result: i32);                           // * 
+    ic0.in_replicated_execution: () -> (result: i32);                           // * s
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
@@ -1854,7 +1854,7 @@ When executing a query or composite query method via a query call (i.e. in non-r
 
     The certificate is a blob as described in [Certification](#certification) that contains the values at path `/canister/<canister_id>/certified_data` and at path `/time` of [The system state tree](#state-tree).
 
-    If this `certificate` includes subnet delegations (possibly nested), then the id of the current canister will be included in each delegation's canister id range.
+    If this `certificate` includes a subnet delegation, then the id of the current canister will be included in the delegation's canister id range.
 
     This traps if `ic0.data_certificate_present()` returns `0`.
 
@@ -2045,13 +2045,25 @@ Indicates various information about the canister. It contains:
 
 -   The status of the canister. It could be one of `running`, `stopping` or `stopped`.
 
+-   The "settings" of the canister containing:
+
+    -   The controllers of the canister. The order of returned controllers may vary depending on the implementation.
+
+    -   The compute and memory allocation of the canister.
+
+    -   The freezing threshold of the canister in seconds.
+
+    -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
+
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
--   The controllers of the canister. The order of returned controllers may vary depending on the implementation.
-
--   The memory size taken by the canister.
+-   The actual memory usage of the canister.
 
 -   The cycle balance of the canister.
+
+-   The reserved cycles balance of the canister, i.e., the number of cycles reserved when increasing the canister's memory allocation and/or actual memory usage.
+
+-   The idle cycle consumption of the canister, i.e., the number of cycles burned by the canister per day due to its compute and memory allocation and actual memory usage.
 
 -   Statistics regarding the query call execution of the canister, i.e., a record containing the following fields:
 
@@ -2483,7 +2495,7 @@ A certificate by the root subnet does not have a delegation field. A certificate
 
 :::note
 
-The nested certificate *typically* does not itself again contain a delegation, although there is no reason why agents should enforce that property.
+The certificate included in the delegation (if present) must not itself again contain a delegation.
 
 :::
 
@@ -2493,10 +2505,10 @@ The nested certificate *typically* does not itself again contain a delegation, a
        certificate : Certificate;
      }
 
-A chain of delegations is verified using the following algorithm:
+A delegation is verified using the following algorithm:
 
     check_delegation(NoDelegation) = true
-    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _
+    check_delegation(Delegation d) = verify_cert(d.certificate) and lookup(["subnet",d.subnet_id,"public_key"],d.certificate) = Found _ and d.certificate.delegation = NoDelegation
 
 The delegation key (a BLS key) is computed by the following algorithm:
 
@@ -3994,9 +4006,9 @@ S with
 
 #### IC Management Canister: Canister status
 
-The controllers of a canister can obtain information about the canister.
+The controllers of a canister can obtain detailed information about the canister.
 
-The `Memory_size` is the (in this specification underspecified) total size of storage in bytes.
+The `Memory_usage` is the (in this specification underspecified) total size of storage in bytes.
 
 The `idle_cycles_burned_per_day` is the idle consumption of resources in cycles per day.
 
@@ -4023,15 +4035,20 @@ S with
         origin = M.origin
         response = candid({
           status = simple_status(S.canister_status[A.canister_id]);
+          settings = {
+            controllers = S.controllers[A.canister_id];
+            compute_allocation = S.compute_allocation[A.canister_id];
+            memory_allocation = S.memory_allocation[A.canister_id];
+            freezing_threshold = S.freezing_threshold[A.canister_id];
+            reserved_cycles_limit = S.reserved_balance_limit[A.canister_id];
+          }
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
             then null
             else opt (SHA-256(S.canisters[A.canister_id].raw_module));
-          controllers = S.controllers[A.canister_id];
-          memory_size = Memory_size;
+          memory_size = Memory_usage;
           cycles = S.balances[A.canister_id];
           reserved_cycles = S.reserved_balances[A.canister_id]
-          freezing_threshold = S.freezing_threshold[A.canister_id];
           idle_cycles_burned_per_day = idle_cycles_burned_rate(
             S.compute_allocation[A.canister_id],
             S.memory_allocation[A.canister_id],
@@ -6525,7 +6542,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         Trap {cycles_used = es.cycles_used;}
 
     ic0.in_replicated_execution<es>() : i32 =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate
       then return 1
       else return 0
