@@ -431,17 +431,23 @@ This section specifies the publicly relevant paths in the tree.
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
-### Api boundary bodes information {#state-tree-subnet}
+### Api boundary nodes information {#state-tree-subnet}
 
 The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (its replica nodes). The source of truth for these API boundary node records is stored in the NNS registry canister.
 
 - `/api_boundary_nodes/<node_id>/domain` (text)
+
+    Domain name associated with a node. All domains are unique across nodes.
+    Example: `api-bn1.example.com`.
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
   
-    If the `ipv4_address` is empty, this path does not exist.
+    Public IPv4 address of a node in the dotted-decimal notation.
+    If the `ipv4_address` is empty, this path does not exist.  
+    Example: `192.168.10.150`.
 - `/api_boundary_nodes/<node_id>/ipv6_address` (text)
 
-    The domain name associated with a node, e.g., `api-bn1.example.com`.
+    Public IPv6 address of a node in the hexadecimal notation with colons.
+    Example: `3002:0bd6:0000:0000:0000:ee00:0033:6778`.
 ### Subnet information {#state-tree-subnet}
 
 The state tree contains information about the topology of the Internet Computer.
