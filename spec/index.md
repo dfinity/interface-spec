@@ -435,6 +435,8 @@ This section specifies the publicly relevant paths in the tree.
 The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (replica nodes). The source of truth for these API boundary node records is stored in the registry canister and can be added/modified/removed via proposals.
 - `/api_boundary_nodes/<node_id>/domain` (text)
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
+  
+    If the `ipv4_address` is empty, this path does not exist.
 - `/api_boundary_nodes/<node_id>/ipv6_address` (text)
 
     The domain name associated with a node, e.g., `api-bn1.example.com`.
