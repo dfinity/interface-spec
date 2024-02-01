@@ -432,7 +432,7 @@ This section specifies the publicly relevant paths in the tree.
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
 ### Api boundary bodes information {#state-tree-subnet}
-The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (replica nodes). The source of truth for these API boundary node records is stored in the registry canister and can be added/modified/removed via proposals.
+The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (replica nodes). The source of truth for these API boundary node records is stored in the registry canister.
 - `/api_boundary_nodes/<node_id>/domain` (text)
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
   
