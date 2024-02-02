@@ -450,6 +450,7 @@ The state tree contains information about all API boundary nodes, which can comm
 
     Public IPv6 address of a node in the hexadecimal notation with colons.
     Example: `3002:0bd6:0000:0000:0000:ee00:0033:6778`.
+
 ### Subnet information {#state-tree-subnet}
 
 The state tree contains information about the topology of the Internet Computer.
