@@ -431,7 +431,7 @@ This section specifies the publicly relevant paths in the tree.
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
-### Api boundary nodes information {#state-tree-subnet}
+### Api boundary nodes information {#state-tree-api-bn}
 
 The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (its replica nodes). The source of truth for these API boundary node records is stored in the NNS registry canister.
 
