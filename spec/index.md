@@ -439,6 +439,7 @@ The state tree contains information about all API boundary nodes, which can comm
 
     Domain name associated with a node. All domains are unique across nodes.
     Example: `api-bn1.example.com`.
+
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
   
     Public IPv4 address of a node in the dotted-decimal notation.
