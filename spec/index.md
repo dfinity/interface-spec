@@ -1012,7 +1012,7 @@ Rejection codes are member of the following enumeration:
 
 -   `CANISTER_ERROR` (5): Canister error (e.g., trap, no response)
 
--   `SYS_UNKNOWN` (6): Response unknown; aborted waiting for it (e.g., timed out, or system under high load).
+-   `SYS_UNKNOWN` (6): Response unknown; system stopped waiting for it (e.g., timed out, or system under high load).
 
 The symbolic names of this enumeration are used throughout this specification, but on all interfaces (HTTPS API, System API), they are represented as positive numbers as given in the list above.
 
