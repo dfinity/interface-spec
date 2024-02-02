@@ -445,6 +445,7 @@ The state tree contains information about all API boundary nodes, which can comm
     Public IPv4 address of a node in the dotted-decimal notation.
     If the `ipv4_address` is empty, this path does not exist.  
     Example: `192.168.10.150`.
+
 - `/api_boundary_nodes/<node_id>/ipv6_address` (text)
 
     Public IPv6 address of a node in the hexadecimal notation with colons.
