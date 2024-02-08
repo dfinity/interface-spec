@@ -472,7 +472,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 ### Request status {#state-tree-request-status}
 
-For each call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
+For each update call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
 
 -   `/request_status/<request_id>/status` (text)
 
@@ -534,9 +534,9 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes four endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous.
+-   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
 
--   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and get a synchronous response from the canister to the HTTPS request. Please note that this endpoint will only provide a response from the canister if the canister call is completed within an acceptable timeframe.
+-   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and either get a synchronous HTTPS response from the canister (if the update call is completed quickly) or have the update call processed asynchronously.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -623,13 +623,13 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call}
 
-A synchronous update call, also known as a "call and await", is a specific type of update call. It operates on the principle that if the canister call completes within a reasonable time, the replica will respond to the user's HTTPS request with a certified status. 
+A synchronous update call, also known as a "call and await", is a specific type of update call. It operates on the principle that if the canister call completes within a reasonable time, the replica will respond to the user's HTTPS request with a certified response.
 
-This means that when the replica returns the certified result in response to the HTTPS request, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the status of the call.
+This means that when the replica returns the certified result in its response to the original HTTPS request, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the status of the call.
 
-However, if the call does not complete in time, the replica will reply to the HTTPS request without certification. In this case, the user will need to revert to the same behavior as for asynchronous update calls. This means the user must poll the Internet Computer to determine the call's certified status. 
+However, if the call does not complete within a reasonable time, the replica will reply to the original HTTPS request indicating that the update call was accepted by the IC for asynchronous processing. In this case, the user will need to revert to the same behavior as for asynchronous update calls. This means the user must poll the Internet Computer to determine the call's status.
 
-Synchronous calls are therefore best suited for update calls that complete quickly. This is because the replica does not wait indefinitely for the call to complete.
+Synchronous calls are therefore best suited for update calls that complete quickly.
 
 ### Request: Call {#http-call}
 
@@ -663,7 +663,7 @@ The HTTP response to this request can have the following responses:
 
 -   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
-This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
 
 :::note
 
@@ -673,7 +673,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 ### Request: Sync Call {#http-sync-call}
 
-In order to make a synchronous update call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to make an update call to a canister and potentially get a synchronous response, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `sync_call`
 
@@ -681,21 +681,21 @@ In order to make a synchronous update call to a canister, the user makes a POST 
 
 -   `canister_id` (`blob`): The principal of the canister to call.
 
--   `method_name` (`text`): Name of the canister method to call
+-   `method_name` (`text`): Name of the canister method to call.
 
--   `arg` (`blob`): Argument to pass to the canister method
+-   `arg` (`blob`): Argument to pass to the canister method.
 
 The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
     
-    -   If the update call resulted in a reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call resulted in a (replicated) reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
         -   `status` (`text`): `"replied"`
 
-        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with the subtree at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   If the update call resulted in a reject, the response is a CBOR map with the following fields:
+    -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
 
         -   `status` (`text`): `"rejected"`
 
@@ -711,7 +711,7 @@ The HTTP response to this request can have the following responses:
 
 -   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
-This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
 
 ### Request: Read state {#http-read-state}
 
@@ -924,7 +924,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to not only call, but all requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
