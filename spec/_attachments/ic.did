@@ -121,6 +121,39 @@ type node_metrics = record {
     num_block_failures_total : nat64;
 };
 
+type icrc21_consent_preferences = record {
+    language: text;
+};
+
+type icrc21_consent_message_request = record {
+    method: text;
+    arg: blob;
+    consent_preferences: icrc21_consent_preferences;
+};
+
+type icrc21_consent_info = record {
+    consent_message: text;
+    language: text;
+};
+
+type icrc21_error_info = record {
+    description: text;
+};
+
+type icrc21_error = variant {
+    UnsupportedCanisterCall: icrc21_error_info;
+    ConsentMessageUnavailable: icrc21_error_info;
+    GenericError: record {
+       error_code: nat;
+       description: text;
+   };
+};
+
+type icrc21_consent_message_response = variant {
+    Ok: icrc21_consent_info;
+    Err: icrc21_error;
+};
+
 service ic : {
   create_canister : (record {
     settings : opt canister_settings;
@@ -232,6 +265,10 @@ service ic : {
     timestamp_nanos : nat64;
     node_metrics : vec node_metrics;
   });
+
+  // ICRC-21 interface
+  icrc21_canister_call_consent_message: (icrc21_consent_message_request) -> (icrc21_consent_message_response);
+  icrc21_supported_standards : () -> (vec record { name : text; url : text }) query;
 
   // provisional interfaces for the pre-ledger world
   provisional_create_canister_with_cycles : (record {
