@@ -2127,7 +2127,7 @@ This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA pub
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
 
-The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+The return value is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
@@ -2136,6 +2136,60 @@ This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FI
 The signatures are encoded as the concatenation of the [SEC1](https://www.secg.org/sec1-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
+
+### IC method `vetkd_public_key` {#ic-vetkd_public_key}
+
+:::note
+
+The vetKD API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+This method returns a (derived) vetKD public key for the given canister using the given derivation path.
+
+If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings, containing at most 255 byte strings. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on the implementation.
+
+For curve `bls12_381`, the returned `public_key` is a G<sub>2</sub> element in compressed form in [BLS Signatures Draft RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-bls12-381) encoding.
+
+This call requires that the vetKD feature is enabled, and the `canister_id` meets the requirement of a canister id. Otherwise it will be rejected.
+
+### IC method `vetkd_encrypted_key` {#ic-vetkd_encrypted_key}
+
+:::note
+
+The vetKD API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+This method returns a vetKD key encrypted under `encryption_public_key` for the given derivation information consisting of `public_key_derivation_path` and `derivation_id`.
+
+The `public_key_derivation_path` is a vector of variable length byte strings, containing at most 255 byte strings, and (together with the calling canister's ID) acts as domain separator to derive different public (verification) keys with the IC method `vetkd_public_key`. The `derivation_id` is used to derive different encrypted keys. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on the implementation.
+
+For curve `bls12_381`, the following holds:
+
+-   The `encryption_public_key` is a G<sub>1</sub> element in compressed form in [BLS Signatures Draft RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-bls12-381) encoding. Encryption public keys are created by calculating *epk = g<sub>1</sub><sup>esk</sup>*, where the encryption secret key *esk* is chosen uniformly at random from Z<sub>p</sub>.
+
+-   The returned `encrypted_key` is the blob `E1 · E2 · E3`, where E<sub>1</sub> and E<sub>3</sub> are G<sub>1</sub> elements, and E<sub>2</sub> is a G<sub>2</sub> element, all in compressed form in [BLS Signatures Draft RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-bls12-381) encoding.
+
+    The encrypted key can be verified by ensuring *e(E<sub>1</sub>, g<sub>2</sub>) == e(g<sub>1</sub>, E<sub>2</sub>)*, and *e(E<sub>3</sub>, g<sub>2</sub>) == e(epk, E<sub>2</sub>) \* e(H(dpk · `derivation_id`), dpk)*, where the derived public key *dpk* is obtained by calling IC method `vetkd_public_key` with the same `derivation_path` and `key_id`, and the canister id of the caller.
+
+-   The decrypted vetKD key *k* is obtained by calculating E<sub>3</sub> \* E<sub>1</sub><sup>-esk</sup>, where esk ∈ Z<sub>p</sub> is the encryption secret key that was used to generate the `encryption_public_key`.
+
+    The key can be verified by ensuring *e(k, g<sub>2</sub>) == e(H(dpk · `derivation_id`), dpk)*, where *dpk* is obtained by calling IC method `vetkd_public_key` with the same `derivation_path` and `key_id`, and the canister id of the caller. Such verification protects against untrusted canisters returning invalid keys.
+
+where
+
+-   g<sub>1</sub>, g<sub>2</sub> are generators of G<sub>1</sub>, G<sub>2</sub>, which are groups of prime order *p*,
+
+-   \* denotes the group operation in G<sub>1</sub>, G<sub>2</sub>, and G<sub>T</sub>,
+
+-   e: `G1 x G2 → GT` is the pairing (see [BLS Signatures Draft RFC, Appendix A](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-bls12-381)),
+
+-   H hashes into G<sub>1</sub> according to the [BLS12-381 message augmentation scheme ciphersuite in the BLS Signatures Draft RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature#name-message-augmentation-2) (see also [Hashing to Elliptic Curves Draft RFC](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve#name-suites-for-bls12-381)),
+
+-   `·` and · denote concatenation
+
+This call requires that the vetKD feature is enabled and the caller is a canister. Otherwise it will be rejected.
 
 ### IC method `http_request` {#ic-http_request}
 
