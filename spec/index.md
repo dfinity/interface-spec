@@ -433,7 +433,7 @@ This section specifies the publicly relevant paths in the tree.
 
 ### Api boundary nodes information {#state-tree-api-bn}
 
-The state tree contains information about all API boundary nodes, which can communicate with the Internet Computer (its replica nodes). The source of truth for these API boundary node records is stored in the NNS registry canister.
+The state tree contains information about all API boundary nodes. The source of truth for these API boundary node records is stored in the NNS registry canister.
 
 - `/api_boundary_nodes/<node_id>/domain` (text)
 
