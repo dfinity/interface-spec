@@ -1085,7 +1085,7 @@ This section summarizes the format of the CBOR data passed to and from the entry
 
 ### Ordering guarantees
 
-The order in which the various messages between canisters are delivered and executed is not fully specified. The guarantee provided by the IC is that successful function calls between two canisters are executed in order.
+The order in which the various messages between canisters are delivered and executed is not fully specified. The guarantee provided by the IC is that if a canister sends two messages to a canister and they both start being executed by the receiving canister, then they do so in the order in which the messages were sent.
 
 More precisely:
 
