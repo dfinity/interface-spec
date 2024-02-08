@@ -2352,6 +2352,32 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
+## The ICRC-21 API {#ic-icrc21-api}
+
+The management canister supports the ICRC-21 API as specified in the [ICRC-21 standard](https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21/ICRC-21.md). The purpose of this API is to produce consent messages for transaction approval flows.
+
+### IC method `icrc21_canister_call_consent_message` {#ic-icrc21_canister_call_consent_message}
+
+This method returns a consent message for a given canister call. The consent message is a string that can be presented to the user for approval.
+See [ICRC-21 standard](https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21/ICRC-21.md) for additional details.
+
+Consent messages are only supported for the following calls:
+* [`update_settings`](#ic-update_settings)
+* [`upload_chunk`](#ic-upload_chunk)
+* [`clear_store`](#ic-clear_store)
+* [`stored_chunks`](#ic-stored_chunks)
+* [`install_code`](#ic-install_code)
+* [`install_chunked_code`](#ic-install_chunked_code)
+* [`uninstall_code`](#ic-uninstall_code)
+* [`canister_status`](#ic-canister_status)
+* [`stop_canister`](#ic-stop_canister)
+* [`start_canister`](#ic-start_canister)
+* [`delete_canister`](#ic-delete_canister)
+
+### IC method `icrc21_supported_standards` {#ic-icrc21_supported_standards}
+
+Lists the supported standards for the ICRC-21 API (and future extensions).
+
 ## Certification {#certification}
 
 Some parts of the IC state are exposed to users in a tamperproof way via certification: the IC can reveal a *partial state tree* which includes just the data of interest, together with a signature on the root hash of the state tree. This means that a user can be sure that the response is correct, even if the user happens to be communicating with a malicious node, or has received the certificate via some other untrusted way.
