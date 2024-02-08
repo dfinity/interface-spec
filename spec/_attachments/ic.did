@@ -36,6 +36,10 @@ type change_details = variant {
     mode : variant {install; reinstall; upgrade};
     module_hash : blob;
   };
+  load_snapshot : record {
+    canister_version : nat64;
+    taken_at_timestamp: nat64;
+  };
   controllers_change : record {
     controllers : vec principal;
   };
@@ -114,6 +118,13 @@ type send_transaction_request = record {
 };
 
 type millisatoshi_per_byte = nat64;
+
+type snapshot_id = nat;
+type snapshot = record {
+  id: snapshot_id;
+  taken_at_timestamp: nat64;
+  total_size: nat64;  
+};
 
 type node_metrics = record {
     node_id : principal;
@@ -223,6 +234,22 @@ service ic : {
   bitcoin_get_utxos_query: (get_utxos_request) -> (get_utxos_response) query;
   bitcoin_send_transaction: (send_transaction_request) -> ();
   bitcoin_get_current_fee_percentiles: (get_current_fee_percentiles_request) -> (vec millisatoshi_per_byte);
+
+  // Canister snapshots
+  take_canister_snapshot: (record { 
+    canister_id: canister_id;
+    replace_snapshot: opt snapshot_id;
+  }) -> (snapshot);
+  load_canister_snapshot: (record { 
+    canister_id: canister_id;
+    snapshot_id: snapshot_id;
+    sender_canister_version: opt nat64;
+  }) -> ();
+  list_canister_snapshots: (record {canister_id : canister_id}) -> (vec snapshot);
+  delete_canister_snapshot: (record {
+    canister_id: canister_id;
+    snapshot_id: snapshot_id;
+  }) -> ();
 
   // metrics interface
   node_metrics_history : (record {

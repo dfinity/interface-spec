@@ -1505,7 +1505,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
 ### Canister version {#system-api-canister-version}
 
-For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `load_canister_snapshot`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
 
 -   `ic0.canister_version : () → i64`
 
@@ -2071,7 +2071,7 @@ Only the controllers of the canister or the canister itself can request its stat
 
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
-The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
+The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, snapshot restoration, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Loading a snapshot is described by the canister version and timestamp at which the snapshot was taken. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
 
 The system can drop the oldest canister changes from the list to keep its length bounded (at least `20` changes are guaranteed to remain in the list). The system also drops all canister changes if the canister runs out of cycles.
 
@@ -2351,6 +2351,50 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
+
+### IC method `take_canister_snapshot` {#ic-take_canister_snapshot}
+
+This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and wasm binary.
+
+Subsequent `take_canister_snapshot` calls will create a new snapshot. However, a `take_canister_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
+
+It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the canister's balance must have a sufficient amount of cycles to support the new freezing threshold.
+
+Only controllers can take a snapshot of a canister and load it back to the canister.
+
+:::note
+
+It's important to stop a canister before taking a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored using the snapshot.
+It is expected that the canister controllers (or their tooling) do this separately.
+
+:::
+
+### IC method `load_canister_snapshot` {#ic-load_canister_snapshot}
+
+This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` can be found.
+
+Only controllers can take a snapshot of a canister and load it back to the canister.
+
+:::note
+
+It's important to stop a canister before loading a snapshot to ensure that all outstanding callbacks are completed. Failing to do so may cause the canister to not make sense of the callbacks if its state is restored.
+It is expected that the canister controllers (or their tooling) do this separately.
+
+:::
+
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
+### IC method `list_canister_snapshots` {#ic-list_canister_snapshots}
+
+This method lists the snapshots of the canister identified by `canister_id`. Currently, at most one snapshot per canister will be stored.
+
+### IC method `delete_canister_snapshot` {#ic-delete_canister_snapshot}
+
+This method deletes a specified snapshot that belongs to an existing canister. An error will be returned if the snapshot is not found. 
+
+A snapshot cannot be found if it was never created, it was previously deleted, replaced by a new snapshot through a `take_canister_snapshot` request, or if the canister itself has been deleted or run out of cycles.
+
+A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
 
 ## Certification {#certification}
 
@@ -2951,6 +2995,10 @@ Finally, we can describe the state of the IC as a record having the following fi
           mode : CodeDeploymentMode;
           module_hash : Blob;
         }
+      | LoadSnapshot {
+          canister_version : CanisterVersion;
+          taken_at_timestamp : Timestamp;
+        }
       | ControllersChange {
           controllers : [PrincipalId];
         }
@@ -2968,9 +3016,19 @@ Finally, we can describe the state of the IC as a record having the following fi
       subnet_id : Principal;
       subnet_size : Nat;
     }
+    Snapshot = {
+      snapshot_id: Nat;
+      wasm_state : WasmState;
+      raw_module : Blob;
+      chunk_store : ChunkStore;
+      certified_data : Blob;
+      canister_version : CanisterVersion;
+      taken_at_timestamp : Timestamp;
+    }
     S = {
       requests : Request ↦ (RequestStatus, Principal);
       canisters : CanisterId ↦ CanState;
+      snapshots: CanisterId ↦ Snapshot;
       controllers : CanisterId ↦ Set Principal;
       compute_allocation : CanisterId ↦ Nat;
       memory_allocation : CanisterId ↦ Nat;
@@ -3030,7 +3088,7 @@ The amount of cycles that is available for spending in calls and execution is co
 
 The reasoning behind this is that resource payments first drain the reserved balance and only when the reserved balance gets to zero, they start draining the main balance.
 
-The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, CanisterId, compute_allocation, memory_allocation, CanState)` that depends on the old IC state, the id of the canister, the new allocations of the canister, and the new state of the canister.
+The amount of cycles that need to be reserved after operations that allocate resources is modeled with an unspecified function `cycles_to_reserve(S, CanisterId, compute_allocation, memory_allocation, snapshots, CanState)` that depends on the old IC state, the id of the canister, the new allocations of the canister, the snapshots of the canister, and the new state of the canister.
 
 #### Initial state
 
@@ -3039,6 +3097,7 @@ The initial state of the IC is
     {
       requests = ();
       canisters = ();
+      snapshots = ();
       controllers = ();
       compute_allocation = ();
       memory_allocation = ();
@@ -3204,7 +3263,8 @@ is_effective_canister_id(E.content, ECID)
       S.freezing_threshold[E.content.canister_id],
       memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
         memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
-        memory_usage_canister_history(S.canister_history[E.content.canister_id]),
+        memory_usage_canister_history(S.canister_history[E.content.canister_id]) +
+        memory_usage_snapshot(S.snapshots[E.content.canister_id]),
       S.canister_subnet[E.content.canister_id].subnet_size,
     )
   ) ≥ 0
@@ -3308,7 +3368,8 @@ S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stoppin
     S.freezing_threshold[CM.callee],
     memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
       memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-      memory_usage_canister_history(S.canister_history[CM.callee]),
+      memory_usage_canister_history(S.canister_history[CM.callee]) +
+      memory_usage_snapshot(S.snapshots[CM.callee]),
     S.canister_subnet[CM.callee].subnet_size,
   )
 ) < 0
@@ -3355,7 +3416,8 @@ liquid_balance(
     S.freezing_threshold[CM.callee],
     memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
       memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-      memory_usage_canister_history(S.canister_history[CM.callee]),
+      memory_usage_canister_history(S.canister_history[CM.callee]) +
+      memory_usage_snapshot(S.snapshots[CM.callee]),
     S.canister_subnet[CM.callee].subnet_size,
   )
 ) ≥ MAX_CYCLES_PER_MESSAGE
@@ -3407,7 +3469,8 @@ liquid_balance(
     S.freezing_threshold[C],
     memory_usage_wasm_state(S.canisters[C].wasm_state) +
       memory_usage_raw_module(S.canisters[C].raw_module) +
-      memory_usage_canister_history(S.canister_history[C]),
+      memory_usage_canister_history(S.canister_history[C]) +
+      memory_usage_snapshot(S.snapshots[C]),
     S.canister_subnet[C].subnet_size,
   )
 ) ≥ MAX_CYCLES_PER_MESSAGE
@@ -3460,7 +3523,8 @@ liquid_balance(
     S.freezing_threshold[C],
     memory_usage_wasm_state(S.canisters[C].wasm_state) +
       memory_usage_raw_module(S.canisters[C].raw_module) +
-      memory_usage_canister_history(S.canister_history[C]),
+      memory_usage_canister_history(S.canister_history[C])
+      memory_usage_snapshot(S.snapshots[C]),
     S.canister_subnet[C].subnet_size,
   )
 ) ≥ MAX_CYCLES_PER_MESSAGE
@@ -3571,7 +3635,7 @@ if
   res.cycles_accepted ≤ Available
   (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ]) ≤
     (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
-  Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+  Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], S.snapshots[A.canister_id], New_state)
   New_balance =
       (S.balances[M.receiver] + res.cycles_accepted + (if Is_response then MAX_CYCLES_PER_RESPONSE else MAX_CYCLES_PER_MESSAGE))
       - (res.cycles_used + ∑ [ MAX_CYCLES_PER_RESPONSE + call.transferred_cycles | call ∈ res.new_calls ])
@@ -3583,7 +3647,8 @@ if
     S.freezing_threshold[M.receiver],
     memory_usage_wasm_state(res.new_state) +
       memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-      memory_usage_canister_history(S.canister_history[M.receiver]),
+      memory_usage_canister_history(S.canister_history[M.receiver]) +
+      memory_usage_snapshot(S.snapshots[M.receiver]),
     S.canister_subnet[M.receiver].subnet_size,
   )
   New_reserved_balance ≤ S.reserved_balance_limits[M.receiver]
@@ -3802,7 +3867,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
@@ -3840,6 +3905,7 @@ State after
 
 S with
     canisters[Canister_id] = EmptyCanister
+    snapshots[A.canister_id] = ()
     time[Canister_id] = CurrentTime
     global_timer[Canister_id] = 0
     controllers[Canister_id] = New_controllers
@@ -3920,7 +3986,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = S.reserved_balance_limits[A.canister_id]
 
-Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation, S.canisters[A.canister_id].wasm_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation,  S.snapshots[A.canister_id], S.canisters[A.canister_id].wasm_state)
 New_balance = S.balances[A.canister_id] - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
@@ -4034,7 +4100,8 @@ S with
             S.memory_allocation[A.canister_id],
             memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
               memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-              memory_usage_canister_history(S.canister_history[A.canister_id]),
+              memory_usage_canister_history(S.canister_history[A.canister_id]) +
+              memory_usage_snapshot(S.snapshots[A.canister_id]),
             S.freezing_threshold[A.canister_id],
             S.canister_subnet[A.canister_id].subnet_size,
           );
@@ -4215,7 +4282,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id],  S.snapshots[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
@@ -4365,7 +4432,7 @@ Env2 = Env with {
 }
 Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
-Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], S.snapshots[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
@@ -4379,7 +4446,8 @@ liquid_balance(
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
       memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[A.canister_id]),
+      memory_usage_canister_history(S.canister_history[A.canister_id]) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   )
 ) ≥ MAX_CYCLES_PER_MESSAGE
@@ -4393,7 +4461,8 @@ liquid_balance(
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
       memory_usage_raw_module(A.wasm_module) +
-      memory_usage_canister_history(New_canister_history),
+      memory_usage_canister_history(New_canister_history) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   )
 ) ≥ 0
@@ -4791,6 +4860,7 @@ State after
 
 S with
     canisters[A.canister_id] = (deleted)
+    snapshots[A.canister_id] = (deleted)
     controllers[A.canister_id] = (deleted)
     compute_allocation[A.canister_id] = (deleted)
     memory_allocation[A.canister_id] = (deleted)
@@ -4958,7 +5028,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
 if A.amount is not null:
   New_balance = A.amount - Cycles_reserved
 else:
@@ -4999,6 +5069,7 @@ State after
 
 S with
     canisters[Canister_id] = EmptyCanister
+    snapshots[Canister_id] = null
     time[Canister_id] = CurrentTime
     global_timer[Canister_id] = 0
     controllers[Canister_id] = New_controllers
@@ -5046,6 +5117,218 @@ State after
 
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
+
+```
+
+#### IC Management Canister: Take canister snapshot
+
+Only the controllers of the given canister can take a snapshot.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'take_canister_snapshot'
+M.arg = candid(A)
+is_system_assigned Snapshot_id    // Snapshot ID is an opaque generated by the system
+M.caller ∈ S.controllers[A.canister_id]
+if A.replace_snapshot is not null:
+  S.snapshots[A.canister_id].snapshot_id = A.replace_snapshot
+else:
+  S.snapshots[A.canister_id] = null
+
+New_snapshot = Snapshot {
+  snapshot_id = Snapshot_id;
+  wasm_state = canisters[A.canister_id].wasm_state;
+  raw_module = canisters[A.canister_id].raw_module;
+  chunk_store = canisters[A.canister_id].chunk_store;
+  certified_data = S.certified_data[A.canister_id];
+  canister_version = S.canister_version[A.canister_id];
+  take_at_timestamp = CurrentTime;
+}
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_snapshot, S.canisters[A.canister_id])
+New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
+
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+      memory_usage_canister_history(S.canister_history[A.canister_id]) +
+      memory_usage_snapshot(New_snapshot),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ 0
+R = <implementation-specific>
+```
+
+State after  
+
+```html
+
+S with
+    snapshots[A.canister_id] = New_snapshot
+    balances[A.canister_id] = New_balance
+    reserved_balances[A.canister_id] = New_reserved_balance
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin;
+        response = Reply (candid(R)); 
+        refunded_cycles = M.transferred_cycles;
+      }
+
+```
+
+
+#### IC Management Canister: Load canister snapshot
+
+
+Only the controllers of the given canister can load a snapshot.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'load_canister_snapshot'
+M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id]
+S.snapshots[A.canister_id].snapshot_id  = A.snapshot_id
+
+New_state = {
+  wasm_state = S.snapshots[A.canister_id].wasm_state;
+  raw_module = S.snapshots[A.canister_id].raw_module;
+  module = parse_wasm_mod(S.snapshots[A.canister_id].raw_module;
+  chunk_store = S.snapshots[A.canister_id].chunk_store;
+  public_custom_sections = parse_public_custom_sections(S.snapshots[A.canister_id].raw_module);
+  private_custom_sections = parse_private_custom_sections(S.snapshots[A.canister_id].raw_module);
+}
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], S.snapshots[A.canister_id], New_state)
+New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
+New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
+New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
+
+S.canister_history[A.canister_id] = {
+  total_num_changes = N;
+  recent_changes = H;
+}
+New_canister_history = {
+  total_num_changes = N + 1;
+  recent_changes = H · {
+    timestamp_nanos = S.time[A.canister_id];
+    canister_version = S.canister_version[A.canister_id] + 1
+    origin = change_origin(M.caller, A.sender_canister_version, M.origin);
+    details = LoadSnapshot {
+      canister_version: S.snapshots[A.canister_id].canister_version
+      taken_at_timestamp: S.snapshots[A.canister_id].take_at_timestamp
+    };
+  };
+}
+
+liquid_balance(
+  New_balance,
+  New_reserved_balance,
+  freezing_limit(
+    S.compute_allocation[A.canister_id],
+    S.memory_allocation[A.canister_id],
+    S.freezing_threshold[A.canister_id],
+    memory_usage_wasm_state(New_state.wasm_state) +
+      memory_usage_raw_module(New_state.raw_module) +
+      memory_usage_canister_history(New_canister_history) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
+    S.canister_subnet[A.canister_id].subnet_size,
+  )
+) ≥ 0
+
+if S.memory_allocation[A.canister_id] > 0:
+  memory_usage_wasm_state(New_state.wasm_state) +
+    memory_usage_raw_module(New_state.raw_module) +
+    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+
+```
+
+State after  
+
+```html
+
+S with
+    canisters[A.canister_id] = New_state
+    certified_data[A.canister_id] = S.snapshots[A.canister_id].certified_data
+    balances[A.canister_id] = New_balance
+    reserved_balances[Canister_id] = New_reserved_balance
+    canister_history[Canister_id] = New_canister_history
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin;
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles;
+      }
+
+```
+
+#### IC Management Canister: List canister snapshots
+
+Only the controllers of the given canister can get a list of the existing snapshots.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'list_canister_snapshots'
+M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id]
+
+```
+
+State after
+
+```html
+
+S with
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid(S.snapshots[A.canister_id]))
+        refunded_cycles = M.transferred_cycles
+      }
+
+```
+#### IC Management Canister: Delete canister snapshot
+
+A snapshot may be deleted only by the controllers of the canister for which the snapshot was taken.
+
+```html
+
+S.messages = Older_messages · CallMessage M · Younger_messages
+(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+M.callee = ic_principal
+M.method_name = 'delete_canister_snapshot'
+M.arg = candid(A)
+M.caller ∈ S.controllers[A.canister_id]
+S.snapshots[A.canister_id].snapshot_id = A.snapshot_id 
+
+```
+
+State after
+
+```html
+
+S with
+    S.snapshots[A.canister_id] = (deleted)
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid());
+        refunded_cycles = M.transferred_cycles
+      }
 
 ```
 
@@ -5207,6 +5490,7 @@ State after
 
 S with
     canisters[CanisterId] = EmptyCanister
+    snapshots[CanisterId] = (deleted)
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = N;
@@ -5415,7 +5699,8 @@ We define an auxiliary method that handles calls from composite query methods by
               S.freezing_threshold[Canister_id],
               memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
                 memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-                memory_usage_canister_history(S.canister_history[Canister_id]),
+                memory_usage_canister_history(S.canister_history[Canister_id]) +
+                memory_usage_snapshot(S.snapshots[Canister_id]),
               S.canister_subnet[Canister_id].subnet_size,
             )
           ) >= 0 and
@@ -6219,7 +6504,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
             es.params.sysenv.compute_allocation,
             es.params.sysenv.memory_allocation,
             es.params.sysenv.freezing_threshold,
-            memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+            memory_usage_wasm_state(es.wasm_state) + 
+              es.params.sysenv.memory_usage_raw_module + 
+              es.params.sysenv.memory_usage_canister_history +
+              es.params.sysenv.memory_usage_snapshot,
             es.params.sysenv.subnet_size,
           )
         )
@@ -6330,7 +6618,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           es.params.sysenv.compute_allocation,
           es.params.sysenv.memory_allocation,
           es.params.sysenv.freezing_threshold,
-          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          memory_usage_wasm_state(es.wasm_state) + 
+            es.params.sysenv.memory_usage_raw_module + 
+            es.params.sysenv.memory_usage_canister_history +
+            es.params.sysenv.memory_usage_snapshot,
           es.params.sysenv.subnet_size,
         )
       ) < amount then Trap {cycles_used = es.cycles_used;}
@@ -6349,7 +6640,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           es.params.sysenv.compute_allocation,
           es.params.sysenv.memory_allocation,
           es.params.sysenv.freezing_threshold,
-          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          memory_usage_wasm_state(es.wasm_state) + 
+            es.params.sysenv.memory_usage_raw_module + 
+            es.params.sysenv.memory_usage_canister_history +
+            es.params.sysenv.memory_usage_snapshot,
           es.params.sysenv.subnet_size,
         )
       ) < amount then Trap {cycles_used = es.cycles_used;}
@@ -6370,7 +6664,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           es.params.sysenv.compute_allocation,
           es.params.sysenv.memory_allocation,
           es.params.sysenv.freezing_threshold,
-          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
+          memory_usage_wasm_state(es.wasm_state) + 
+            es.params.sysenv.memory_usage_raw_module + 
+            es.params.sysenv.memory_usage_canister_history +
+            es.params.sysenv.memory_usage_snapshot,
           es.params.sysenv.subnet_size,
         )
       ) < 0 or system_cannot_do_this_call_now()
