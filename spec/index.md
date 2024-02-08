@@ -650,6 +650,8 @@ The HTTP response to this request can have the following responses:
 -   202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
 
 -   200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+    
+    -   `status` (`text`): `"rejected"`
 
     -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
