@@ -2730,6 +2730,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           arg: Blob;
           transferred_cycles: Nat;
           callback: Callback;
+          timeout_seconds : NoTimeout | Nat;
         }
 
         UpdateFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -2836,6 +2837,7 @@ To ensure that only one response is generated, and also to detect when no respon
       needs_to_respond : bool;
       deleted : bool;
       available_cycles : Nat;
+      deadline : NoDeadline | Timestamp | Expired
     }
 
 #### Calls and Messages
@@ -2860,17 +2862,20 @@ Therefore, a message can have different shapes:
           arg : Blob;
           transferred_cycles : Nat;
           queue : Queue;
+          deadline : NoDeadline | Timestamp | Expired;
         }
       | FuncMessage {
           call_context : CallId;
           receiver : CanisterId;
           entry_point : EntryPoint;
           queue : Queue;
+          deadline : NoDeadline | Timestamp | Expired;
         }
       | ResponseMessage {
           origin : CallOrigin;
           response : Response;
           refunded_cycles : Nat;
+          deadline : NoDeadline | Timestamp | Expired;
         }
 
 The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
@@ -2953,7 +2958,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     }
     CanStatus
       = Running
-      | Stopping (List (CallOrigin, Nat))
+      | Stopping (List (CallOrigin, Nat, NoDeadline | Timestamp | Expired))
       | Stopped
     ChangeOrigin
       = FromUser {
@@ -3348,11 +3353,14 @@ messages = Older_messages · Younger_messages  ·
       origin = CM.origin;
       response = Reject (CANISTER_ERROR, <implementation-specific>);
       refunded_cycles = CM.transferred_cycles;
+      deadline = CM.deadline;
   }
 
 ```
 
 #### Call context creation {#call-context-creation}
+
+DONE: add timeouts here
 
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped or stopping). Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
@@ -3400,6 +3408,7 @@ S with
         receiver = CM.callee;
         entry_point = PublicMethod CM.method_name CM.caller CM.arg;
         queue = CM.queue;
+        deadline = CM.deadline;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
@@ -3408,6 +3417,7 @@ S with
       needs_to_respond = true;
       deleted = false;
       available_cycles = CM.transferred_cycles;
+      deadline = CM.deadline;
     }
     balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 
@@ -3451,6 +3461,7 @@ S with
         receiver = C;
         entry_point = Heartbeat;
         queue = Queue { from = System; to = C };
+        deadline = NoDeadline;
       }
       · S.messages
     call_contexts[Ctxt_id] = {
@@ -3459,6 +3470,7 @@ S with
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
+      deadline = NoDeadline;
     }
     balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
 
@@ -3504,6 +3516,7 @@ S with
         receiver = C;
         entry_point = GlobalTimer;
         queue = Queue { from = System; to = C };
+        deadline = NoDeadline;
       }
       · S.messages
     call_contexts[Ctxt_id] = {
@@ -3512,6 +3525,7 @@ S with
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
+      deadline = NoDeadline;
     }
     global_timer[C] = 0
     balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
@@ -3523,6 +3537,8 @@ The IC can execute any message that is at the head of its queue, i.e. there is n
 Note that new messages are executed only if the canister is Running and is not frozen.
 
 #### Message execution {#rule-message-execution}
+
+DONE:
 
 The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition "Call context creation").
 
@@ -3639,12 +3655,17 @@ then
           arg = call.arg;
           transferred_cycles = call.transferred_cycles
           queue = Queue { from = M.receiver; to = call.callee };
+          deadline = if call.timeout_seconds ≠ NoTimeout
+                        // TODO: is this correct with DTS?
+                        then time[M.receiver] + call.timeout_seconds
+                        else NoDeadline
         }
       | call ∈ res.new_calls ] ·
       [ ResponseMessage {
-          origin = S.call_contexts[M.call_context].origin
+          origin = S.call_contexts[M.call_context].origin;
           response = res.response;
           refunded_cycles = Available - res.cycles_accepted;
+          deadline = S.call_contexts[M.call_context].deadline
         }
       | res.response ≠ NoResponse ]
 
@@ -3726,7 +3747,78 @@ The functions `query_as_update` and `system_task_as_update` turns a query functi
 
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
+#### Spontaneous request rejection {#request-rejection}
+
+TODO: make sure that this reflects early timeouts (with SYS_TRANSIENT); but even if it does, maybe we want to have an explicit transition to cover this, to avoid confusion?
+
+The system can reject a request at any point in time, e.g., because it is overloaded. The following specification is an overapproximation of the rejection behavior. In particular, the system is guaranteed not to emit `DESTINATION_INVALID` in some cases, e.g., if the callee exists, and if the caller successfully calls the caller once, subsequent calls will not fail with `DESTINATION_INVALID`.
+
+Condition:
+```html
+S.messages = Older_messages · CallMessage CM · Younger_messages
+(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
+∃reject_msg: True
+```
+
+State after:
+```html
+S.messages = ResponseMessage
+    {
+        origin = CM.origin;
+        response = Reject (reject_code, reject_msg);
+        refunded_cycles = CM.transferred_cycles;
+        deadline = CM.deadline;
+    } · Older_messages · Younger_messages
+```
+
+#### Call expiry {#call-expiry}
+
+These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early, we don't account for the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress.
+
+The first transition defines the expiry of messages.
+
+```html
+S.messages = Older_messages · M · Younger_messages
+M = CallMessage _ ∨ M = ResponseMessage _
+M.origin = FromCanister _
+∃reject_msg: True
+```
+
+State after
+```html
+S.messages = Older_messages · M { deadline = Expired } · Younger_messages ·
+    ResponseMessage {
+        origin = CM.origin;
+        response = Reject (SYS_UNKNOWN, reject_msg);
+        refunded_cycles = 0;
+        deadline = NoDeadline;
+    }
+```
+
+The next transition defines the expiry of calls that are being processed by the callee.
+
+Condition
+```html
+ctxt_id ∈ S.call_contexts
+S.call_contexts[ctxt_id].origin = FromCanister _
+```
+
+State after
+
+```html
+S.call_contexts[ctxt_id].deadline = Expired
+S.messages = S.messages · ResponseMessage {
+        origin = CM.origin;
+        response = Reject (SYS_UNKNOWN, reject_msg);
+        refunded_cycles = 0;
+        deadline = NoDeadline;
+}
+```
+
 #### Call context starvation {#rule-starvation}
+
+DONE: add deadlines here
 
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
@@ -3754,12 +3846,15 @@ S with
       ResponseMessage {
         origin = S.call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, <implementation-specific>);
-        refunded_cycles = S.call_contexts[Ctxt_id].available_cycles
+        refunded_cycles = S.call_contexts[Ctxt_id].available_cycles;
+        deadline = S.call_contexts[Ctxt_id].deadline;
       }
 
 ```
 
 #### Call context removal {#call-context-removal}
+
+DONE: maybe need to take care of timeouts here? But how do we ensure that reject callbacks have been triggered?
 
 If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
@@ -3768,10 +3863,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = false
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ CallMessage {origin = FromCanister O, deadline, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ ResponseMessage {origin = FromCanister O, deadline …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, deadline, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, deadline) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
 
 ```
 
@@ -3882,6 +3977,8 @@ S with
         origin = M.origin
         response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = 0
+        deadline = M.deadline
+
       }
     canister_status[Canister_id] = Running
     canister_version[Canister_id] = 0
@@ -4005,6 +4102,7 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -4065,6 +4163,7 @@ S with
           );
         })
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -4106,6 +4205,7 @@ S with
           controllers = S.controllers[A.canister_id];
         })
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -4138,6 +4238,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid(hash)
+        deadline = M.deadline
       }
 
 ```
@@ -4165,6 +4266,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid()
+        deadline = M.deadline
       }
 
 ```
@@ -4192,6 +4294,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid(dom(S.chunk_store[A.canister_id]))
+        deadline = M.deadline
       }
 
 ```
@@ -4323,6 +4426,7 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
+        deadline = M.deadline
       }
 
 ```
@@ -4475,6 +4579,7 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
+        deadline = M.deadline
       }
 
 ```
@@ -4561,11 +4666,13 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       } ·
       [ ResponseMessage {
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
+          deadline = Ctxt.deadline
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
@@ -4581,6 +4688,8 @@ S with
 ```
 
 #### IC Management Canister: Stopping a canister
+
+TODO: where are the responses to stopping a canister processed? We need to convert this to an "expired" somewhere
 
 The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped or stopping will accept (and respond) to further `stop_canister` requests.
 
@@ -4636,7 +4745,7 @@ State after
 
 S with
     messages = Older_messages · Younger_messages
-    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles)])
+    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles, M.deadline)])
 
 ```
 
@@ -4662,8 +4771,9 @@ S with
             origin = O
             response = Reply (candid())
             refunded_cycles = C
+            deadline = D
           }
-        | (O, C) ∈ Origins
+        | (O, C, D) ∈ Origins
         ]
 
 ```
@@ -4694,6 +4804,7 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
+        deadline = M.deadline
       }
 
 ```
@@ -4704,7 +4815,7 @@ Conditions
 
 ```html
 
-S.canister_status[CanisterId] = Stopping (Older_origins · (O, C) · Younger_origins)
+S.canister_status[CanisterId] = Stopping (Older_origins · (O, C, D) · Younger_origins)
 
 ```
 
@@ -4719,6 +4830,7 @@ S with
         origin = O
         response = Reject (SYS_TRANSIENT, <implementation-specific>)
         refunded_cycles = C
+        deadline = D
       }
 
 ```
@@ -4752,6 +4864,7 @@ S with
             origin = M.origin
             response = Reply (candid())
             refunded_cycles = M.transferred_cycles
+            deadline = M.deadline
         }
 
 ```
@@ -4783,13 +4896,15 @@ S with
             origin = M.origin
             response = Reply (candid())
             refunded_cycles = M.transferred_cycles
+            deadline = M.deadline
         } ·
         [ ResponseMessage {
             origin = O
             response = Reject (CANISTER_ERROR, <implementation-specific>)
             refunded_cycles = C
+            deadline = D
           }
-        | (O, C) ∈ Origins
+        | (O, C, D) ∈ Origins
         ]
 
 ```
@@ -4835,6 +4950,7 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -4866,6 +4982,7 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = 0
+        deadline = M.deadline
       }
 
 ```
@@ -4899,6 +5016,7 @@ S with
         origin = M.origin
         response = Reply (candid(B))
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -4937,6 +5055,7 @@ S with
         origin = M.origin
         response = Reply (candid(R))
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
 
 ```
@@ -5040,6 +5159,7 @@ S with
         origin = M.origin
         response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = M.transferred_cycles
+        deadline = M.deadline
       }
     canister_status[Canister_id] = Running
     canister_version[Canister_id] = 0
@@ -5076,6 +5196,8 @@ S with
 
 #### Callback invocation
 
+DONE: add timeouts here
+
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
 This "bookkeeping transition" must be immediately followed by the corresponding ["Message execution" transition](#rule-message-execution).
@@ -5091,6 +5213,7 @@ RM.origin = FromCanister {
   }
 not S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
+RM.deadline ≠ Expired
 
 ```
 
@@ -5126,6 +5249,7 @@ RM.origin = FromCanister {
   }
 S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
+RM.deadline ≠ Expired
 
 ```
 
@@ -5138,6 +5262,22 @@ S with
       S.balances[S.call_contexts[Ctxt_id].canister] + RM.refunded_cycles + MAX_CYCLES_PER_RESPONSE
     messages = Older_messages · Younger_messages
 
+```
+
+#### Dropping expired responses {#response-timeout}
+
+DONE: drop expired messages
+
+Condition:
+```html
+S.messages = Older_messages · ResponseMessage RM · Younger_messages
+RM.deadline = Expired
+```
+
+State after
+
+```html
+S.messages = Older_messages · Younger_messages
 ```
 
 #### Respond to user request
@@ -5245,6 +5385,7 @@ S with
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
+          deadline = Ctxt.deadline
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = CanisterId
