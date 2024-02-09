@@ -1089,7 +1089,7 @@ The order in which the various messages between canisters are delivered and exec
 
 More precisely:
 
--   Method calls between any *two* canisters, if delivered, start executing in order. Note that function call delivery can fail for arbitrary reasons (e.g., high system load).
+-   Messages between any *two* canisters, if delivered to the canister, start executing in order. Note that message delivery can fail for arbitrary reasons (e.g., high system load).
 
 -   If a WebAssembly function, within a single invocation, makes multiple calls to the same canister, they are queued in the order of invocations to `ic0.call_perform`.
 
