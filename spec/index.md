@@ -4704,7 +4704,7 @@ S with
 
 #### IC Management Canister: Starting a canister
 
-The controllers of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister.
+The controllers of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister (except for incrementing its canister version).
 
 Conditions  
 
