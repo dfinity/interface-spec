@@ -3752,13 +3752,15 @@ reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
 
 State after:
 ```html
-S.messages = ResponseMessage
-    {
+S.messages =
+    Older_messages ·
+    ResponseMessage {
         origin = CM.origin;
         response = Reject (reject_code, reject_msg);
         refunded_cycles = CM.transferred_cycles;
         deadline = CM.deadline;
-    } · Older_messages · Younger_messages
+    } ·
+    Younger_messages
 ```
 
 #### Call expiry {#call-expiry}
