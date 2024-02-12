@@ -5249,12 +5249,13 @@ S with
 
 ```
 
-#### Dropping expired responses {#response-timeout}
+#### Dropping expired messages {#message-timeout}
 
 Condition:
 ```html
-S.messages = Older_messages · ResponseMessage RM · Younger_messages
-RM.deadline = Expired
+S.messages = Older_messages · M · Younger_messages
+M = ResponseMessage _ ∨ M = CallMessage _
+M.deadline = Expired
 ```
 
 State after
