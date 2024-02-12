@@ -3359,8 +3359,6 @@ messages = Older_messages · Younger_messages  ·
 
 #### Call context creation {#call-context-creation}
 
-DONE: add timeouts here
-
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped or stopping). Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
 This "bookkeeping transition" must be immediately followed by the corresponding ["Message execution" transition](#rule-message-execution).
@@ -3533,8 +3531,6 @@ The IC can execute any message that is at the head of its queue, i.e. there is n
 Note that new messages are executed only if the canister is Running and is not frozen.
 
 #### Message execution {#rule-message-execution}
-
-DONE:
 
 The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition "Call context creation").
 
@@ -3744,8 +3740,6 @@ Note that by construction, a query function will either trap or return with a re
 
 #### Spontaneous request rejection {#request-rejection}
 
-DONE: make sure that this reflects early timeouts (with SYS_TRANSIENT); but even if it does, maybe we want to have an explicit transition to cover this, to avoid confusion?
-
 The system can reject a request at any point in time, e.g., because it is overloaded. The following specification is an overapproximation of the rejection behavior. In particular, the system is guaranteed not to emit `DESTINATION_INVALID` in some cases, e.g., if the callee exists, and if the caller successfully calls the caller once, subsequent calls will not fail with `DESTINATION_INVALID`.
 
 Condition:
@@ -3768,8 +3762,6 @@ S.messages = ResponseMessage
 ```
 
 #### Call expiry {#call-expiry}
-
-DONE: add call expiry
 
 These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early (e.g., due to high system load), we ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
 
@@ -3817,8 +3809,6 @@ S.messages = S.messages · ResponseMessage {
 
 #### Call context starvation {#rule-starvation}
 
-DONE: add deadlines here
-
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
 Conditions  
@@ -3852,8 +3842,6 @@ S with
 ```
 
 #### Call context removal {#call-context-removal}
-
-DONE: maybe need to take care of timeouts here? But how do we ensure that reject callbacks have been triggered?
 
 If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
@@ -5193,8 +5181,6 @@ S with
 
 #### Callback invocation
 
-DONE: add timeouts here
-
 When an inter-canister call has been responded to, we can queue the call to the callback.
 
 This "bookkeeping transition" must be immediately followed by the corresponding ["Message execution" transition](#rule-message-execution).
@@ -5262,8 +5248,6 @@ S with
 ```
 
 #### Dropping expired responses {#response-timeout}
-
-DONE: drop expired messages
 
 Condition:
 ```html
