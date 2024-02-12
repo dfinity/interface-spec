@@ -2869,7 +2869,6 @@ Therefore, a message can have different shapes:
           receiver : CanisterId;
           entry_point : EntryPoint;
           queue : Queue;
-          deadline : NoDeadline | Timestamp | Expired;
         }
       | ResponseMessage {
           origin : CallOrigin;
@@ -3408,7 +3407,6 @@ S with
         receiver = CM.callee;
         entry_point = PublicMethod CM.method_name CM.caller CM.arg;
         queue = CM.queue;
-        deadline = CM.deadline;
       } ·
       Younger_messages
     call_contexts[Ctxt_id] = {
@@ -3461,7 +3459,6 @@ S with
         receiver = C;
         entry_point = Heartbeat;
         queue = Queue { from = System; to = C };
-        deadline = NoDeadline;
       }
       · S.messages
     call_contexts[Ctxt_id] = {
@@ -3516,7 +3513,6 @@ S with
         receiver = C;
         entry_point = GlobalTimer;
         queue = Queue { from = System; to = C };
-        deadline = NoDeadline;
       }
       · S.messages
     call_contexts[Ctxt_id] = {
@@ -3656,8 +3652,7 @@ then
           transferred_cycles = call.transferred_cycles
           queue = Queue { from = M.receiver; to = call.callee };
           deadline = if call.timeout_seconds ≠ NoTimeout
-                        // TODO: is this correct with DTS?
-                        then time[M.receiver] + call.timeout_seconds
+                        then S.time[M.receiver] + call.timeout_seconds
                         else NoDeadline
         }
       | call ∈ res.new_calls ] ·
@@ -3749,7 +3744,7 @@ Note that by construction, a query function will either trap or return with a re
 
 #### Spontaneous request rejection {#request-rejection}
 
-TODO: make sure that this reflects early timeouts (with SYS_TRANSIENT); but even if it does, maybe we want to have an explicit transition to cover this, to avoid confusion?
+DONE: make sure that this reflects early timeouts (with SYS_TRANSIENT); but even if it does, maybe we want to have an explicit transition to cover this, to avoid confusion?
 
 The system can reject a request at any point in time, e.g., because it is overloaded. The following specification is an overapproximation of the rejection behavior. In particular, the system is guaranteed not to emit `DESTINATION_INVALID` in some cases, e.g., if the callee exists, and if the caller successfully calls the caller once, subsequent calls will not fail with `DESTINATION_INVALID`.
 
@@ -3774,7 +3769,9 @@ S.messages = ResponseMessage
 
 #### Call expiry {#call-expiry}
 
-These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early, we don't account for the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress.
+DONE: add call expiry
+
+These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early (e.g., due to high system load), we ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
 
 The first transition defines the expiry of messages.
 
@@ -3782,6 +3779,7 @@ The first transition defines the expiry of messages.
 S.messages = Older_messages · M · Younger_messages
 M = CallMessage _ ∨ M = ResponseMessage _
 M.origin = FromCanister _
+M.deadline ∉ { NoDeadline, Expired }
 ∃reject_msg: True
 ```
 
@@ -3802,6 +3800,7 @@ Condition
 ```html
 ctxt_id ∈ S.call_contexts
 S.call_contexts[ctxt_id].origin = FromCanister _
+S.call_contexts[ctxt_id].deadline ∉ { NoDeadline, Expired }
 ```
 
 State after
@@ -3827,10 +3826,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = true
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id
-∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id
+∀ CallMessage {origin = FromCanister O, deadline, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ ResponseMessage {origin = FromCanister O, deadline …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, deadline) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
 
 ```
 
@@ -4689,8 +4688,6 @@ S with
 
 #### IC Management Canister: Stopping a canister
 
-TODO: where are the responses to stopping a canister processed? We need to convert this to an "expired" somewhere
-
 The controllers of a canister can stop a canister. Stopping a canister goes through two steps. First, the status of the canister is set to `Stopping`; as explained above, a stopping canister rejects all incoming requests and continues processing outstanding responses. When a stopping canister has no more open call contexts, its status is changed to `Stopped` and a response is generated. Note that when processing responses, a stopping canister can make calls to other canisters and thus create new call contexts. In addition, a canister which is stopped or stopping will accept (and respond) to further `stop_canister` requests.
 
 We encode this behavior via three (types of) transitions:
@@ -5236,7 +5233,7 @@ S with
 
 ```
 
-If the responded call context does not exist anymore, because the canister has been uninstalled since, the refunded cycles are still added to the canister balance, but no function invocation is enqueued:
+If the responded call context does not exist anymore, because the canister has been uninstalled since, the refunded cycles are still added to the canister balance, but no function invocation is enqueued. No refunds are issued for expired calls.
 
 Conditions  
 
