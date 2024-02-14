@@ -235,7 +235,7 @@ type canister_status_result = record {
 
 type canister_info_args = record {
     canister_id : canister_id;
-    num_argsed_changes : opt nat64;
+    num_requested_changes : opt nat64;
 };
 
 type canister_info_result = record {
