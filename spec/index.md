@@ -1337,8 +1337,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                   // *
-    ic0.data_certificate_size : () -> i32;                                      // *
-    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // *
+    ic0.data_certificate_size : () -> i32;                                      // Q CQ
+    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // Q CQ
 
     ic0.time : () -> (timestamp : i64);                                         // *
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
@@ -1505,7 +1505,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
 ### Canister version {#system-api-canister-version}
 
-For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code or settings and successful message execution except for successful message execution of a query method, i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, and `uninstall_code` on that canister, code uninstallation due to that canister running out of cycles, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code and settings do not change.
+For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code, settings, running status (Running, Stopping, Stopped), and memory (WASM and stable memory), i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, `uninstall_code`, `start_canister`, and `stop_canister` on that canister, code uninstallation due to that canister running out of cycles, canister's running status transitioning from Stopping to Stopped, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code, settings, running status, and memory do not change.
 
 -   `ic0.canister_version : () → i64`
 
@@ -1970,7 +1970,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
  
-### IC method `clear_store` {#ic-clear_store}
+### IC method `clear_chunk_store` {#ic-clear_chunk_store}
 
 Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
 
@@ -2921,7 +2921,6 @@ Finally, we can describe the state of the IC as a record having the following fi
     CanState
      = EmptyCanister | {
       wasm_state : WasmState;
-      chunk_store: ChunkStore;
       module : CanisterModule;
       raw_module : Blob;
       public_custom_sections: Text ↦ Blob;
@@ -4126,7 +4125,7 @@ The controller of a canister, or the canister itself can clear the chunk store o
 
 S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
-M.method_name = 'clear_store'
+M.method_name = 'clear_chunk_store'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
 ```
@@ -4589,6 +4588,7 @@ State after
 S with
     messages = Older_messages · Younger_messages
     canister_status[A.canister_id] = Stopping [(M.origin, M.transferred_cycles)]
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
 
 ```
 
@@ -4613,6 +4613,7 @@ State after
 S with
     messages = Older_messages · Younger_messages
     canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles)])
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
 
 ```
 
@@ -4633,6 +4634,7 @@ State after
 
 S with
     canister_status[CanisterId] = Stopped
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = S.Messages ·
         [ ResponseMessage {
             origin = O
@@ -4644,7 +4646,7 @@ S with
 
 ```
 
-Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success), but is otherwise a no-op:
+Sending a `stop_canister` message to an already stopped canister is acknowledged (i.e. responded with success) and the canister version is incremented, but is otherwise a no-op:
 
 Conditions  
 
@@ -4665,6 +4667,7 @@ State after
 ```html
 
 S with
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4701,7 +4704,7 @@ S with
 
 #### IC Management Canister: Starting a canister
 
-The controllers of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister.
+The controllers of a canister can start a `stopped` canister. If the canister is already running, the command has no effect on the canister (except for incrementing its canister version).
 
 Conditions  
 
@@ -4723,6 +4726,7 @@ State after
 
 S with
     canister_status[A.canister_id] = Running
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
@@ -4754,6 +4758,7 @@ State after
 
 S with
     canister_status[A.canister_id] = Running
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
         ResponseMessage{
             origin = M.origin
@@ -6453,12 +6458,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       else return 1
 
     ic0.data_certificate_size<es>() : i32 =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       return |es.params.sysenv.certificate|
 
     ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-      if es.context = s then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
