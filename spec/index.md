@@ -1954,6 +1954,15 @@ The optional `settings` parameter can be used to set the following settings:
 
     Default value: 5_000_000_000_000 (5 trillion cycles).
 
+-   `wasm_heap_memory_limit` (`nat`)
+
+    Must be a number between 0 and 2<sup>32</sup>-1, inclusively, and indicates the upper limit on the WASM heap memory consumption of the canister.
+
+    An operation (update method, global timer, heartbeat, canister init, canister post_upgrade) that causes the WASM heap memory consumption to exceed this limit will trap.
+    The WASM heap memory limit is ignored for query methods, response callback handlers, and canister pre_upgrade.
+
+    Default value: 4_294_967_296 (4 GiB).
+
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
@@ -2054,6 +2063,8 @@ Indicates various information about the canister. It contains:
     -   The freezing threshold of the canister in seconds.
 
     -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
+
+    -   The WASM heap memory limit of the canister in bytes.
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
@@ -2983,6 +2994,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       balances: CanisterId ↦ Nat;
       reserved_balances: CanisterId ↦ Nat;
       reserved_balance_limits: CanisterId ↦ Nat;
+      wasm_heap_memory_limit: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
       system_time : Timestamp
@@ -3051,6 +3063,7 @@ The initial state of the IC is
       balances = ();
       reserved_balances = ();
       reserved_balance_limits = ();
+      wasm_heap_memory_limit = ();
       certified_data = ();
       canister_history = ();
       system_time = T;
@@ -3534,26 +3547,31 @@ Available = S.call_contexts[M.call_contexts].available_cycles
 ( M.entry_point = PublicMethod Name Caller Arg
   F = Mod.update_methods[Name](Arg, Caller, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
+  Wasm_heap_memory_limit = S.wasm_heap_memory_limit[M.receiver]
 )
 or
 ( M.entry_point = PublicMethod Name Caller Arg
   F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
   New_canister_version = S.canister_version[M.receiver]
+  Wasm_heap_memory_limit = 4_294_967_296
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
   F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
+  Wasm_heap_memory_limit = 4_294_967_296
 )
 or
 ( M.entry_point = Heartbeat
   F = system_task_as_update(Mod.heartbeat, Env)
   New_canister_version = S.canister_version[M.receiver] + 1
+  Wasm_heap_memory_limit = S.wasm_heap_memory_limit[M.receiver]
 )
 or
 ( M.entry_point = GlobalTimer
   F = system_task_as_update(Mod.global_timer, Env)
   New_canister_version = S.canister_version[M.receiver] + 1
+  Wasm_heap_memory_limit = S.wasm_heap_memory_limit[M.receiver]
 )
 
 R = F(S.canisters[M.receiver].wasm_state)
@@ -3595,6 +3613,7 @@ if
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
+  |res.new_state.store.mem| <= Wasm_heap_memory_limit
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -3801,6 +3820,10 @@ if A.settings.reserved_cycles_limit is not null:
   New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
   New_reserved_balance_limit = 5_000_000_000_000
+if A.settings.wasm_heap_memory_limit is not null:
+  New_wasm_heap_memory_limit = A.settings.wasm_heap_memory_limit
+else:
+  New_wasm_heap_memory_limit = 4_294_967_296
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
@@ -3850,6 +3873,7 @@ S with
     balances[Canister_id] = New_balance
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
+    wasm_heap_memory_limit[Canister_id] = New_wasm_heap_memory_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
@@ -3919,6 +3943,10 @@ if A.settings.reserved_cycles_limit is not null:
   New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
   New_reserved_balance_limit = S.reserved_balance_limits[A.canister_id]
+if A.settings.wasm_heap_memory_limit is not null:
+  New_wasm_heap_memory_limit = A.settings.wasm_heap_memory_limit
+else:
+  New_wasm_heap_memory_limit = S.wasm_heap_memory_limit[A.canister_id]
 
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation, S.canisters[A.canister_id].wasm_state)
 New_balance = S.balances[A.canister_id] - Cycles_reserved
@@ -3974,6 +4002,7 @@ S with
     balances[A.canister_id] = New_balance
     reserved_balances[A.canister_id] = New_reserved_balance
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
+    wasm_heap_memory_limit[A.canister_id] = New_wasm_heap_memory_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -4021,6 +4050,7 @@ S with
             memory_allocation = S.memory_allocation[A.canister_id];
             freezing_threshold = S.freezing_threshold[A.canister_id];
             reserved_cycles_limit = S.reserved_balance_limit[A.canister_id];
+            wasm_heap_memory_limit = S.wasm_heap_memory_limit[A.canister_id];
           }
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
@@ -4253,6 +4283,8 @@ if S.memory_allocation[A.canister_id] > 0:
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
+|New_state.store.mem| <= wasm_heap_memory_limit[A.canister_id]
+
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
   recent_changes = H;
@@ -4402,6 +4434,8 @@ if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+
+|New_state.store.mem| <= wasm_heap_memory_limit[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4809,6 +4843,7 @@ S with
     balances[A.canister_id] = (deleted)
     reserved_balances[A.canister_id] = (deleted)
     reserved_balance_limits[A.canister_id] = (deleted)
+    wasm_heap_memory_limit[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
@@ -4963,6 +4998,10 @@ if A.settings.reserved_cycles_limit is not null:
   New_reserved_balance_limit = A.settings.reserved_cycles_limit
 else:
   New_reserved_balance_limit = 5_000_000_000_000
+if A.settings.wasm_heap_memory_limit is not null:
+  New_wasm_heap_memory_limit = A.settings.wasm_heap_memory_limit
+else:
+  New_wasm_heap_memory_limit = 4_294_967_296
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 if A.amount is not null:
@@ -5014,6 +5053,7 @@ S with
     balances[Canister_id] = New_balance
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
+    wasm_heap_memory_limit[Canister_id] = New_wasm_heap_memory_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
     messages = Older_messages · Younger_messages ·
