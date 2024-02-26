@@ -1961,7 +1961,7 @@ The optional `settings` parameter can be used to set the following settings:
     An operation (update method, global timer, heartbeat, canister init, canister post_upgrade) that causes the WASM heap memory consumption to exceed this limit will trap.
     The WASM heap memory limit is ignored for query methods, response callback handlers, and canister pre_upgrade.
 
-    Default value: 4_294_967_296 (4 GiB).
+    Default value: 3_221_225_472 (3 GiB).
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
@@ -3553,13 +3553,13 @@ or
 ( M.entry_point = PublicMethod Name Caller Arg
   F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
   New_canister_version = S.canister_version[M.receiver]
-  Wasm_memory_limit = 4_294_967_296
+  Wasm_memory_limit = 3_221_225_472
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
   F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
-  Wasm_memory_limit = 4_294_967_296
+  Wasm_memory_limit = 3_221_225_472
 )
 or
 ( M.entry_point = Heartbeat
@@ -3823,7 +3823,7 @@ else:
 if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
-  New_wasm_memory_limit = 4_294_967_296
+  New_wasm_memory_limit = 3_221_225_472
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
@@ -5001,7 +5001,7 @@ else:
 if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
-  New_wasm_memory_limit = 4_294_967_296
+  New_wasm_memory_limit = 3_221_225_472
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 if A.amount is not null:
