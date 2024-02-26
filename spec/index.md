@@ -3553,13 +3553,13 @@ or
 ( M.entry_point = PublicMethod Name Caller Arg
   F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
   New_canister_version = S.canister_version[M.receiver]
-  Wasm_memory_limit = 3_221_225_472
+  Wasm_memory_limit = 4_294_967_296
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
   F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
-  Wasm_memory_limit = 3_221_225_472
+  Wasm_memory_limit = 4_294_967_296
 )
 or
 ( M.entry_point = Heartbeat
