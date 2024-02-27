@@ -1085,11 +1085,11 @@ This section summarizes the format of the CBOR data passed to and from the entry
 
 ### Ordering guarantees
 
-The order in which the various messages between canisters are delivered and executed is not fully specified. The guarantee provided by the IC is that function calls between two canisters are executed in order, so that a canister that requires in-order execution need not wait for the response from an earlier message to a canister before sending a later message to that same canister.
+The order in which the various messages between canisters are delivered and executed is not fully specified. The guarantee provided by the IC is that if a canister sends two messages to a canister and they both start being executed by the receiving canister, then they do so in the order in which the messages were sent.
 
 More precisely:
 
--   Method calls between any *two* canisters are delivered in order, as if they were communicating over a single simple FIFO queue.
+-   Messages between any *two* canisters, if delivered to the canister, start executing in order. Note that message delivery can fail for arbitrary reasons (e.g., high system load).
 
 -   If a WebAssembly function, within a single invocation, makes multiple calls to the same canister, they are queued in the order of invocations to `ic0.call_perform`.
 
