@@ -625,7 +625,7 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within one execution round.
 
-The purpose of the synchronous call endpoint is to allow the user to get a certificate with response from the IC. This means that if a certificate is returned, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
 A certificate is returned by the IC to the user if:
 
