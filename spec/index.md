@@ -536,7 +536,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
 
--   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and either get a synchronous HTTPS response from the canister (if the update call is completed quickly) or have the update call processed asynchronously.
+-   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and either get a synchronous HTTPS response with a certified status (if the update call completes within one execution round) or have the update call processed asynchronously.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -623,13 +623,19 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call}
 
-A synchronous update call, also known as a "call and await", is a specific type of update call. It operates on the principle that if the canister call completes within a reasonable time, the replica will respond to the user's HTTPS request with a certified response.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within one execution round.
 
-This means that when the replica returns the certified result in its response to the original HTTPS request, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the status of the call.
+The purpose of the synchronous call endpoint is to allow the user to get a certificate with response from the IC. This means that if a certificate is returned, the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
-However, if the call does not complete within a reasonable time, the replica will reply to the original HTTPS request indicating that the update call was accepted by the IC for asynchronous processing. In this case, the user will need to revert to the same behavior as for asynchronous update calls. This means the user must poll the Internet Computer to determine the call's status.
+A certificate is returned by the IC to the user if:
 
-Synchronous calls are therefore best suited for update calls that complete quickly.
+-   The execution of the call completes within one execution round, and the status is certified by the IC within the ingress expiry time. The status will be either `replied`, `rejected` or `done`.
+
+-   The call expires before it is queued and is dropped by the IC. The status of the call will be `unknown` with the certificate time stamp at a later time than the ingress expiry time.
+
+The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
+
+Synchronous calls are therefore best suited for calls that are fast and expected to complete within one execution round. If a call does not complete within one execution round, the replica won't return a certificate and the user will need to poll the IC to determine the status of the call.
 
 ### Request: Call {#http-call}
 
@@ -651,7 +657,7 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
     
-    -   `status` (`text`): `"rejected"`
+    -   `status` (`text`): `"non_replicated_rejection"`
 
     -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
@@ -689,15 +695,15 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
     
-    -   If the update call resulted in a (replicated) reply, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completes within one execution round, or the call expires, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
-        -   `status` (`text`): `"replied"`
+        -   `status` (`text`): `"terminal"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
     -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
 
-        -   `status` (`text`): `"rejected"`
+        -   `status` (`text`): `"non_replicated_rejection"`
 
         -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
@@ -705,7 +711,7 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when a response from the canister was not produced in reasonable time. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+-   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when the canister call is running for more than one execution round. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
