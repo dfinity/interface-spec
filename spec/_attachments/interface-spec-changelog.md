@@ -10,6 +10,7 @@
 * Allow `in_replicated_execution` system API method to be executed during `canister_start`.
 * Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 * Canister version is guaranteed to increase if the canister's running status changes.
+* Calls to frozen canisters are rejected with `SYS_TRANSIENT` instead of `CANISTER_ERROR`.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
