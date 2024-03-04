@@ -285,7 +285,7 @@ This status is orthogonal to whether a canister is empty or not: an empty canist
 
 :::note
 
-This status is orthogonal to whether a canister is frozen or not: a frozen canister can be in status `running`. Calls to such a canister are still rejected by the IC, but because the canister is frozen.
+This status is orthogonal to whether a canister is frozen or not: a frozen canister can be in status `running`. Calls to such a canister are still rejected by the IC, but because the canister is frozen, the returned reject code is `SYS_TRANSIENT`.
 
 :::
 
@@ -1942,7 +1942,7 @@ The optional `settings` parameter can be used to set the following settings:
 
     A canister is considered frozen whenever the IC estimates that the canister would be depleted of cycles before `freezing_threshold` seconds pass, given the canister's current size and the IC's current cost for storage.
 
-    Calls to a frozen canister will be rejected (like for a stopping canister). Additionally, a canister cannot perform calls if that would, due the cost of the call and transferred cycles, would push the balance into frozen territory; these calls fail with `ic0.call_perform` returning a non-zero error code.
+    Calls to a frozen canister will be rejected with `SYS_TRANSIENT` reject code. Additionally, a canister cannot perform calls if that would, due the cost of the call and transferred cycles, would push the balance into frozen territory; these calls fail with `ic0.call_perform` returning a non-zero error code.
 
     Default value: 2592000 (approximately 30 days).
 
@@ -3288,9 +3288,9 @@ S with
 
 ```
 
-#### Calls to stopped/stopping/frozen canisters are rejected
+#### Calls to stopped/stopping canisters are rejected
 
-A call to a canister which is stopping, stopped, or frozen is automatically rejected.
+A call to a canister which is stopping, or stopped is automatically rejected.
 
 Conditions  
 
@@ -3299,7 +3299,34 @@ Conditions
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
-S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping _ or liquid_balance(
+S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping
+```
+
+State after:
+
+```html
+
+messages = Older_messages · Younger_messages  ·
+  ResponseMessage {
+      origin = CM.origin;
+      response = Reject (CANISTER_ERROR, <implementation-specific>);
+      refunded_cycles = CM.transferred_cycles;
+  }
+
+```
+
+#### Calls to frozen canisters are rejected
+
+A call to a canister which is frozen is automatically rejected.
+
+Conditions  
+
+```html
+
+S.messages = Older_messages · CallMessage CM · Younger_messages
+(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+S.canisters[CM.callee] ≠ EmptyCanister
+S.canister_status[CM.callee] = liquid_balance(
   S.balances[CM.callee],
   S.reserved_balances[CM.callee],
   freezing_limit(
@@ -3314,14 +3341,14 @@ S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stoppin
 ) < 0
 ```
 
-State after  
+State after:
 
 ```html
 
 messages = Older_messages · Younger_messages  ·
   ResponseMessage {
       origin = CM.origin;
-      response = Reject (CANISTER_ERROR, <implementation-specific>);
+      response = Reject (SYS_TRANSIENT, <implementation-specific>);
       refunded_cycles = CM.transferred_cycles;
   }
 
@@ -5412,24 +5439,26 @@ We define an auxiliary method that handles calls from composite query methods by
                 }
       if S.canisters[Canister_id] ≠ EmptyCanister and
          S.canister_status[Canister_id] = Running and
-         liquid_balance(
-            S.balances[Canister_id],
-            S.reserved_balances[Canister_id],
-            freezing_limit(
-              S.compute_allocation[Canister_id],
-              S.memory_allocation[Canister_id],
-              S.freezing_threshold[Canister_id],
-              memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
-                memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-                memory_usage_canister_history(S.canister_history[Canister_id]),
-              S.canister_subnet[Canister_id].subnet_size,
-            )
-          ) >= 0 and
          (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
          Cycles >= MAX_CYCLES_PER_MESSAGE
       then
          let W = S.canisters[Canister_id].wasm_state
          let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
+         if liquid_balance(
+             S.balances[Canister_id],
+             S.reserved_balances[Canister_id],
+             freezing_limit(
+               S.compute_allocation[Canister_id],
+               S.memory_allocation[Canister_id],
+               S.freezing_threshold[Canister_id],
+               memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
+                 memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
+                 memory_usage_canister_history(S.canister_history[Canister_id]),
+               S.canister_subnet[Canister_id].subnet_size,
+             )
+           ) < 0
+         then
+           Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles)
          let R = F(Arg, Caller, Env)(W)
          if R = Trap trap
          then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used)
