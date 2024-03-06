@@ -14,12 +14,13 @@ An HTTP request by an HTTP client is handled by these steps:
 2. The HTTP Gateway intercepts the request.
 3. The HTTP Gateway resolves the canister ID that the request is intended for.
 4. The HTTP Gateway Candid encodes the HTTP request.
-5. The HTTP Gateway invokes the canister via a query call to the `http_request` interface.
-6. The canister handles the request and returns an HTTP response, encoded in Candid, together with additional metadata.
-7. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
-8. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
-9. If applicable, the HTTP Gateway validates the certificate of the response.
-10. The HTTP Gateway Candid decodes the response and returns it to the HTTP client.
+5. The HTTP Gateway invokes the canister via a query call to the `http_request` canister method.
+6. The canister handles the request and returns an HTTP response, encoded in Candid.
+7. The HTTP Gateway Candid decodes the response for inspection and further processing.
+8. If requested by the canister, the HTTP Gateway sends the request again via an update call to `http_request_update`.
+9. If applicable, the HTTP Gateway fetches further response body data via streaming query calls.
+10. If applicable, the HTTP Gateway validates the certificate of the response.
+11. The HTTP Gateway returns the decoded response to the HTTP client.
 
 ## Canister ID Resolution
 
@@ -47,7 +48,7 @@ The HTTP Gateway needs to know the canister ID of the canister to talk to, and o
 
 5. Else fail and handle the request as a Web2 request.
 
-If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname. Note that other domains may also be used to access canisters, such as `icp0.io`. The same logic concerning \_raw\_\_ domains can also be applied to these alternative domains.
+If the hostname was of the form `<name>.ic0.app`, it is a _safe_ hostname; if it was of the form `<name>.raw.ic0.app`, it is a _raw_ hostname. Note that other domains may also be used to access canisters, such as `icp0.io`. The same logic concerning _raw_ domains can also be applied to these alternative domains.
 
 ## API Gateway Resolution
 
@@ -140,7 +141,7 @@ Response verification fills the security gap left by query calls. It is a versio
    - Otherwise, verification fails.
 5. Parse the `expr_path` field from the `IC-Certificate` header value as per [the certificate header](#the-certificate-header).
 6. The parsed `expr_path` is valid as per [Expression Path](#expression-path) otherwise, verification fails.
-7. Case-insensitive search for the `IC-CertificationExpression` header.
+7. Case-insensitive search for the `IC-CertificateExpression` header.
    - If no such header is found, verification fails.
    - If the header value is not structured as per [the certificate expression header](#the-certificate-expression-header), verification fails.
 8. Let `expr_hash` be the label of the node in the tree at path `expr_path`.
@@ -344,7 +345,7 @@ If the function reference in the callback field of the `streaming_strategy` is n
 
 Else, it makes a query call to the given method, passing the token value given in the `streaming_strategy` as the argument.
 
-That query method returns a `StreamingCallbackHttpResponse`. The body therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the token field until that field is null.
+That method returns a `StreamingCallbackHttpResponse`. The body therein is appended to the body of the HTTP response. This is repeated as long as the method returns some token in the token field until that field is null.
 
 The type of the token value is chosen by the canister; the HTTP Gateway obtains the Candid type of the encoded message from the canister and uses it when passing the token back to the canister. This generic use of Candid is not covered by the Candid specification, and may not be possible in some cases (e.g. when using "future types"). Canister authors may have to use "simple" types.
 
@@ -446,6 +447,19 @@ service : {
 You can also [download the file](./_attachments/http-gateway.did).
 
 Not all of this interface is required. The following sections detail what can be optionally omitted depending on the requirements of the canister in question.
+
+Note. Composite query methods can be used instead of query methods to allow for calling composite query methods of other canisters on the same subnet
+when processing an HTTP request, e.g., the canister can export
+
+```
+http_request: (request: HttpRequest) -> (HttpResponse) composite_query;
+```
+
+instead of
+
+```
+http_request: (request: HttpRequest) -> (HttpResponse) query;
+```
 
 ### Response Verification Interface
 
