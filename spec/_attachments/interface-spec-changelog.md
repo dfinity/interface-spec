@@ -1,7 +1,6 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
-* Add API boundary nodes into the certified state tree and new HTTP endpoints for retrieving them.
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
@@ -12,6 +11,7 @@
 * Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
 * Canister version is guaranteed to increase if the canister's running status changes.
 * Calls to frozen canisters are rejected with `SYS_TRANSIENT` instead of `CANISTER_ERROR`.
+* Add API boundary nodes into the certified state tree and new HTTP endpoints for retrieving them.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
