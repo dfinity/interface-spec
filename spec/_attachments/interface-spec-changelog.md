@@ -1,5 +1,7 @@
 ## Changelog {#changelog}
 
+### ∞ (unreleased)
+
 ### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
