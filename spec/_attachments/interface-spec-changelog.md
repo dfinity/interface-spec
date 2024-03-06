@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add API boundary nodes into the certified state tree and new HTTP endpoints for retrieving them.
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
