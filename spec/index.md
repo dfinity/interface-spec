@@ -433,6 +433,26 @@ This section specifies the publicly relevant paths in the tree.
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
+### Api boundary nodes information {#state-tree-api-bn}
+
+The state tree contains information about all API boundary nodes (the source of truth for these API boundary node records is stored in the NNS registry canister).
+
+- `/api_boundary_nodes/<node_id>/domain` (text)
+
+    Domain name associated with a node. All domains are unique across nodes.
+    Example: `api-bn1.example.com`.
+
+- `/api_boundary_nodes/<node_id>/ipv4_address` (text)
+  
+    Public IPv4 address of a node in the dotted-decimal notation.
+    If no `ipv4_address` is available for the corresponding node, then this path does not exist.  
+    Example: `192.168.10.150`.
+
+- `/api_boundary_nodes/<node_id>/ipv6_address` (text)
+
+    Public IPv6 address of a node in the hexadecimal notation with colons.
+    Example: `3002:0bd6:0000:0000:0000:ee00:0033:6778`.
+
 ### Subnet information {#state-tree-subnet}
 
 The state tree contains information about the topology of the Internet Computer.
@@ -699,6 +719,8 @@ canister developers that aim at keeping data confidential are advised to add a s
 All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
+
+- `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`,  `/api_boundary_nodes/<node_id>/ipv4_address`, `/api_boundary_nodes/<node_id>/ipv6_address`. Can always be requested.
 
 -   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
