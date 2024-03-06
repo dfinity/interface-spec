@@ -5488,7 +5488,7 @@ We define an auxiliary method that handles calls from composite query methods by
              )
            ) < 0
          then
-           Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles)
+           Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles, S)
          let R = F(Arg, Caller, Env)(W)
          if R = Trap trap
          then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used, S)
