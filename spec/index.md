@@ -2390,11 +2390,11 @@ Given a canister ID as input, this method returns a vector of logs of that canis
 The total length of all log contents does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log length of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers.
+The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
 
 A single log is a record with the following fields:
 
-- `idx` (`nat64`): the unique sequence number of the log;
+- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
 - `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
 - `content` (`blob`): the actual content of the log;
 
