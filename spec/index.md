@@ -1235,7 +1235,7 @@ When a canister is upgraded to a new WebAssembly module, the IC:
 
 3.  Invokes `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call ([IC method](#ic-install_code)).
 
-The stable memory is preserved throughout the process; any other WebAssembly state is discarded unless `wasm_memory_persistence` is `opt keep` in which case only WebAssembly data segments are discarded.
+The stable memory is preserved throughout the process; any other WebAssembly state is discarded unless `wasm_memory_persistence` is `opt keep`.
 
 During these steps, no other entry point of the old or new canister is invoked. The `canister_init` function of the new canister is *not* invoked.
 
@@ -2012,7 +2012,7 @@ Only controllers of the canister can install code.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
--   If `mode = variant { upgrade }` or `mode = variant { upgrade = opt record { skip_pre_upgrade = .., wasm_memory_persistence = .. } }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance. If `skip_pre_upgrade = opt true`, then the `canister_pre_upgrade` method on the old instance is not executed. If `wasm_memory_persistence = opt keep`, then the WebAssembly state is preserved except for WebAssembly data segments.
+-   If `mode = variant { upgrade }` or `mode = variant { upgrade = opt record { skip_pre_upgrade = .., wasm_memory_persistence = .. } }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance. If `skip_pre_upgrade = opt true`, then the `canister_pre_upgrade` method on the old instance is not executed. If `wasm_memory_persistence = opt keep`, then the WebAssembly state is preserved.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -2766,7 +2766,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
             cycles_used : Nat;
           }
           pre_upgrade : (WasmState, Principal, Env) -> Trap { cycles_used : Nat; } | Return {
-            stable_memory : StableMemory;
+            new_state : WasmState;
             new_certified_data : NoCertifiedData | Blob;
             cycles_used : Nat;
           }
@@ -4351,9 +4351,9 @@ S with
 
 #### IC Management Canister: Code upgrade
 
-Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods. If the `wasm_memory_persistence` flag is set to `opt keep`, then the WebAssembly state is preserved except for WebAssembly data segments.
+Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods. If the `wasm_memory_persistence` flag is set to `opt keep`, then the WebAssembly state is preserved.
 
-In the following, the `initial_wasm_store` is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WebAssembly module contained in the [canister module](#canister-module-format), before executing a potential `(start)` function. The function `load_data_segments(S, wasm_module)` returns the WebAssembly store `S` after loading the data segments from the given WebAssembly module.
+In the following, the `initial_wasm_store` is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WebAssembly module contained in the [canister module](#canister-module-format), before executing a potential `(start)` function.
 
 Conditions  
 
@@ -4396,24 +4396,24 @@ Env = {
     global_timer = S.global_timer[A.canister_id];
     canister_version = S.canister_version[A.canister_id];
   }
-  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {new_state = Intermediate_state; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
 )
 or
 (
   (A.mode = upgrade U and U.skip_pre_upgrade = true)
-  Stable_memory = Old_State.stable_mem
+  Intermediate_state = Old_state
   New_certified_data = NoCertifiedData
   Cycles_used = 0
 )
 
 (
   (A.mode = upgrade U and U.wasm_memory_persistence ≠ keep)
-  Intermediate_state = {store = initial_wasm_store; self_id = A.canister_id; stable_mem = Stable_memory}
+  Persisted_state = {store = initial_wasm_store; self_id = A.canister_id; stable_mem = Intermediate_state.stable_memory}
 )
 or
 (
   (A.mode = upgrade U and U.wasm_memory_persistence = keep)
-  Intermediate_state = {store = load_data_segments(Old_state.store, A.wasm_module); self_id = A.canister_id; stable_mem = Stable_memory}
+  Persisted_state = Intermediate_state
 )
 
 Env2 = Env with {
@@ -4423,7 +4423,7 @@ Env2 = Env with {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 
-Mod.post_upgrade(Intermediate_state, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
+Mod.post_upgrade(Persisted_state, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_reserved
@@ -5883,7 +5883,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
     If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
 
-        pre_upgrade = λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; new_certified_data = NoCertifiedData; cycles_used = 0;}
+        pre_upgrade = λ (old_state, caller, sysenv) → Return {new_state = old_state; new_certified_data = NoCertifiedData; cycles_used = 0;}
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 
@@ -5896,7 +5896,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
             }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
           Return {
-            stable_memory = es.wasm_state.stable_mem;
+            new_state = es.wasm_state;
             new_certified_data = es.new_certified_data;
             cycles_used = es.cycles_used;
           }
