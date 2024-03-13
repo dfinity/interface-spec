@@ -6313,7 +6313,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return es.balance
 
     I ∈ {i32, i64}
-    ic0.canister_cycles_balance128<es>(dst : i) =
+    ic0.canister_cycles_balance128<es>(dst : I) =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
       let amount = es.balance
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
