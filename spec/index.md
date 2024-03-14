@@ -3741,10 +3741,9 @@ Condition:
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
-∃reject_msg: True
 ```
 
-State after:
+State after (given some `reject_msg`):
 ```html
 S.messages =
     Older_messages ·
@@ -6439,7 +6438,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           or es.pending_call = NoPendingCall
           or es.pending_call.timeout ≠ NoTimeout
       then Trap {cycles_used = es.cycles_used;}
-      es.pending_call.timeout := timeout_seconds
+      es.pending_call.timeout_seconds := timeout_seconds
 
     ic0.call_on_cleanup<es> (fun : i32, env : i32) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
