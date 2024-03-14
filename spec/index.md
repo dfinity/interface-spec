@@ -2829,6 +2829,7 @@ To ensure that only one response is generated, and also to detect when no respon
       | FromCanister {
           calling_context : CallId;
           callback: Callback;
+          deadline : NoDeadline | Timestamp | Expired
         }
       | FromSystemTask
     CallCtxt = {
@@ -2837,7 +2838,6 @@ To ensure that only one response is generated, and also to detect when no respon
       needs_to_respond : bool;
       deleted : bool;
       available_cycles : Nat;
-      deadline : NoDeadline | Timestamp | Expired
     }
 
 #### Calls and Messages
@@ -2862,7 +2862,6 @@ Therefore, a message can have different shapes:
           arg : Blob;
           transferred_cycles : Nat;
           queue : Queue;
-          deadline : NoDeadline | Timestamp | Expired;
         }
       | FuncMessage {
           call_context : CallId;
@@ -2874,7 +2873,6 @@ Therefore, a message can have different shapes:
           origin : CallOrigin;
           response : Response;
           refunded_cycles : Nat;
-          deadline : NoDeadline | Timestamp | Expired;
         }
 
 The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
@@ -2957,7 +2955,7 @@ Finally, we can describe the state of the IC as a record having the following fi
     }
     CanStatus
       = Running
-      | Stopping (List (CallOrigin, Nat, NoDeadline | Timestamp | Expired))
+      | Stopping (List (CallOrigin, Nat))
       | Stopped
     ChangeOrigin
       = FromUser {
@@ -3352,7 +3350,6 @@ messages = Older_messages · Younger_messages  ·
       origin = CM.origin;
       response = Reject (CANISTER_ERROR, <implementation-specific>);
       refunded_cycles = CM.transferred_cycles;
-      deadline = CM.deadline;
   }
 
 ```
@@ -3413,7 +3410,6 @@ S with
       needs_to_respond = true;
       deleted = false;
       available_cycles = CM.transferred_cycles;
-      deadline = CM.deadline;
     }
     balances[CM.callee] = S.balances[CM.callee] - MAX_CYCLES_PER_MESSAGE
 
@@ -3465,7 +3461,6 @@ S with
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
-      deadline = NoDeadline;
     }
     balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
 
@@ -3519,7 +3514,6 @@ S with
       needs_to_respond = false;
       deleted = false;
       available_cycles = 0;
-      deadline = NoDeadline;
     }
     global_timer[C] = 0
     balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
@@ -3640,6 +3634,10 @@ then
           origin = FromCanister {
             call_context = M.call_context;
             callback = call.callback;
+            deadline = if call.timeout_seconds ≠ NoTimeout
+                        then S.time[M.receiver] + call.timeout_seconds
+                        else NoDeadline
+
           };
           caller = M.receiver;
           callee = call.callee;
@@ -3647,16 +3645,12 @@ then
           arg = call.arg;
           transferred_cycles = call.transferred_cycles
           queue = Queue { from = M.receiver; to = call.callee };
-          deadline = if call.timeout_seconds ≠ NoTimeout
-                        then S.time[M.receiver] + call.timeout_seconds
-                        else NoDeadline
         }
       | call ∈ res.new_calls ] ·
       [ ResponseMessage {
           origin = S.call_contexts[M.call_context].origin;
           response = res.response;
           refunded_cycles = Available - res.cycles_accepted;
-          deadline = S.call_contexts[M.call_context].deadline
         }
       | res.response ≠ NoResponse ]
 
@@ -3758,7 +3752,6 @@ S.messages =
         origin = CM.origin;
         response = Reject (reject_code, reject_msg);
         refunded_cycles = CM.transferred_cycles;
-        deadline = CM.deadline;
     } ·
     Younger_messages
 ```
@@ -3772,19 +3765,18 @@ The first transition defines the expiry of messages.
 ```html
 S.messages = Older_messages · M · Younger_messages
 M = CallMessage _ ∨ M = ResponseMessage _
-M.origin = FromCanister _
-M.deadline ∉ { NoDeadline, Expired }
+M.origin = FromCanister O
+O.deadline ∉ { NoDeadline, Expired }
 ∃reject_msg: True
 ```
 
 State after
 ```html
-S.messages = Older_messages · M { deadline = Expired } · Younger_messages ·
+S.messages = Older_messages · (M with origin = FromCanister O with deadline = Expired) · Younger_messages ·
     ResponseMessage {
-        origin = CM.origin;
+        origin = FromCanister O with deadline = NoDeadline;
         response = Reject (SYS_UNKNOWN, reject_msg);
         refunded_cycles = 0;
-        deadline = NoDeadline;
     }
 ```
 
@@ -3793,19 +3785,18 @@ The next transition defines the expiry of calls that are being processed by the 
 Condition
 ```html
 ctxt_id ∈ S.call_contexts
-S.call_contexts[ctxt_id].origin = FromCanister _
-S.call_contexts[ctxt_id].deadline ∉ { NoDeadline, Expired }
+S.call_contexts[ctxt_id].origin = FromCanister O
+O.deadline ∉ { NoDeadline, Expired }
 ```
 
 State after
 
 ```html
-S.call_contexts[ctxt_id].deadline = Expired
+S.call_contexts[ctxt_id].origin = FromCanister O with deadline = Expired
 S.messages = S.messages · ResponseMessage {
-        origin = CM.origin;
+        origin = FromCanister O with deadline = NoDeadline;
         response = Reject (SYS_UNKNOWN, reject_msg);
         refunded_cycles = 0;
-        deadline = NoDeadline;
 }
 ```
 
@@ -3818,10 +3809,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = true
-∀ CallMessage {origin = FromCanister O, deadline, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
-∀ ResponseMessage {origin = FromCanister O, deadline …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
 ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, deadline) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
 
 ```
 
@@ -3838,7 +3829,6 @@ S with
         origin = S.call_contexts[Ctxt_id].origin;
         response = Reject (CANISTER_ERROR, <implementation-specific>);
         refunded_cycles = S.call_contexts[Ctxt_id].available_cycles;
-        deadline = S.call_contexts[Ctxt_id].deadline;
       }
 
 ```
@@ -3852,10 +3842,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = false
-∀ CallMessage {origin = FromCanister O, deadline, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
-∀ ResponseMessage {origin = FromCanister O, deadline …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
-∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, deadline, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ deadline = Expired
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _, deadline) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ deadline = Expired
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
 
 ```
 
@@ -3966,8 +3956,6 @@ S with
         origin = M.origin
         response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = 0
-        deadline = M.deadline
-
       }
     canister_status[Canister_id] = Running
     canister_version[Canister_id] = 0
@@ -4091,7 +4079,6 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -4152,7 +4139,6 @@ S with
           );
         })
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -4194,7 +4180,6 @@ S with
           controllers = S.controllers[A.canister_id];
         })
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -4227,7 +4212,6 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid(hash)
-        deadline = M.deadline
       }
 
 ```
@@ -4255,7 +4239,6 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid()
-        deadline = M.deadline
       }
 
 ```
@@ -4283,7 +4266,6 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid(dom(S.chunk_store[A.canister_id]))
-        deadline = M.deadline
       }
 
 ```
@@ -4415,7 +4397,6 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
-        deadline = M.deadline
       }
 
 ```
@@ -4568,7 +4549,6 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
-        deadline = M.deadline
       }
 
 ```
@@ -4655,13 +4635,11 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       } ·
       [ ResponseMessage {
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
-          deadline = Ctxt.deadline
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = A.canister_id
@@ -4732,7 +4710,7 @@ State after
 
 S with
     messages = Older_messages · Younger_messages
-    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles, M.deadline)])
+    canister_status[A.canister_id] = Stopping (Origins · [(M.origin, M.transferred_cycles)])
 
 ```
 
@@ -4758,9 +4736,8 @@ S with
             origin = O
             response = Reply (candid())
             refunded_cycles = C
-            deadline = D
           }
-        | (O, C, D) ∈ Origins
+        | (O, C) ∈ Origins
         ]
 
 ```
@@ -4791,7 +4768,6 @@ S with
         origin = M.origin;
         response = Reply (candid());
         refunded_cycles = M.transferred_cycles;
-        deadline = M.deadline
       }
 
 ```
@@ -4802,7 +4778,7 @@ Conditions
 
 ```html
 
-S.canister_status[CanisterId] = Stopping (Older_origins · (O, C, D) · Younger_origins)
+S.canister_status[CanisterId] = Stopping (Older_origins · (O, C) · Younger_origins)
 
 ```
 
@@ -4817,7 +4793,6 @@ S with
         origin = O
         response = Reject (SYS_TRANSIENT, <implementation-specific>)
         refunded_cycles = C
-        deadline = D
       }
 
 ```
@@ -4851,7 +4826,6 @@ S with
             origin = M.origin
             response = Reply (candid())
             refunded_cycles = M.transferred_cycles
-            deadline = M.deadline
         }
 
 ```
@@ -4883,15 +4857,13 @@ S with
             origin = M.origin
             response = Reply (candid())
             refunded_cycles = M.transferred_cycles
-            deadline = M.deadline
         } ·
         [ ResponseMessage {
             origin = O
             response = Reject (CANISTER_ERROR, <implementation-specific>)
             refunded_cycles = C
-            deadline = D
           }
-        | (O, C, D) ∈ Origins
+        | (O, C) ∈ Origins
         ]
 
 ```
@@ -4937,7 +4909,6 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -4969,7 +4940,6 @@ S with
         origin = M.origin
         response = Reply (candid())
         refunded_cycles = 0
-        deadline = M.deadline
       }
 
 ```
@@ -5003,7 +4973,6 @@ S with
         origin = M.origin
         response = Reply (candid(B))
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -5042,7 +5011,6 @@ S with
         origin = M.origin
         response = Reply (candid(R))
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
 
 ```
@@ -5146,7 +5114,6 @@ S with
         origin = M.origin
         response = Reply (candid({canister_id = Canister_id}))
         refunded_cycles = M.transferred_cycles
-        deadline = M.deadline
       }
     canister_status[Canister_id] = Running
     canister_version[Canister_id] = 0
@@ -5195,10 +5162,11 @@ S.messages = Older_messages · ResponseMessage RM · Younger_messages
 RM.origin = FromCanister {
     call_context = Ctxt_id
     callback = Callback
+    deadline = D
   }
 not S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
-RM.deadline ≠ Expired
+D ≠ Expired
 
 ```
 
@@ -5231,10 +5199,11 @@ S.messages = Older_messages · ResponseMessage RM · Younger_messages
 RM.origin = FromCanister {
     call_context = Ctxt_id
     callback = Callback
+    deadline = D
   }
 S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
-RM.deadline ≠ Expired
+D ≠ Expired
 
 ```
 
@@ -5255,7 +5224,8 @@ Condition:
 ```html
 S.messages = Older_messages · M · Younger_messages
 M = ResponseMessage _ ∨ M = CallMessage _
-M.deadline = Expired
+M.origin = FromCanister O
+O.deadline = Expired
 ```
 
 State after
@@ -5369,7 +5339,6 @@ S with
           origin = Ctxt.origin
           response = Reject (CANISTER_REJECT, <implementation-specific>)
           refunded_cycles = Ctxt.available_cycles
-          deadline = Ctxt.deadline
         }
       | Ctxt_id ↦ Ctxt ∈ S.call_contexts
       , Ctxt.canister = CanisterId
