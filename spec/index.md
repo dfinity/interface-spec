@@ -3760,14 +3760,13 @@ S.messages =
 
 These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early (e.g., due to high system load), we ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
 
-The first transition defines the expiry of messages.
+The first transition defines the expiry of messages, where `reject_msg` is some textual message describing the rejection reason.
 
 ```html
 S.messages = Older_messages · M · Younger_messages
 M = CallMessage _ ∨ M = ResponseMessage _
 M.origin = FromCanister O
 O.deadline ∉ { NoDeadline, Expired }
-∃reject_msg: True
 ```
 
 State after
