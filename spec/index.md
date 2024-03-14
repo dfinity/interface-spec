@@ -5796,6 +5796,7 @@ We can model the execution of WebAssembly functions as stateful functions that h
       sysenv : Env;
       cycles_refunded : Nat;
       method_name : NoText | Text;
+      deadline : NoDeadline | Timestamp;
     }
     ExecutionState = {
       wasm_state : WasmState;
@@ -6271,6 +6272,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {Rt, CRt} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
+    ic0.msg_deadline<es>() : i64 =
+        if es.context ∉ {U Q CQ Ry Rt CRy CRt} then Trap {cycles_used = es.cycles_used;}
+        if es.params.deadline = Timestamp t
+            then return t
+            else return 0
+
     ic0.msg_reply_data_append<es>(src : i32, size : i32) =
       if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
@@ -6423,7 +6430,16 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           on_reject = Closure { fun = reject_fun; env = reject_env }
           on_cleanup = NoClosure
         };
+        timeout_seconds = NoTimeout
       }
+
+    ic0.call_with_best_effort_response<es>(timeout_seconds : i32) =
+      if
+          es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T}
+          or es.pending_call = NoPendingCall
+          or es.pending_call.timeout ≠ NoTimeout
+      then Trap {cycles_used = es.cycles_used;}
+      es.pending_call.timeout := timeout_seconds
 
     ic0.call_on_cleanup<es> (fun : i32, env : i32) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
