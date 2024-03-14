@@ -1290,7 +1290,7 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
-    ic0.msg_deadline : () -> i64;                                               // U Ry Rt
+    ic0.msg_deadline : () -> i64;                                               // U Q CQ Ry Rt CRy CRt
 
     ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q CQ Ry Rt CRy CRt
     ic0.msg_reply : () -> ();                                                   // U Q CQ Ry Rt CRy CRt
@@ -1329,7 +1329,7 @@ The following sections describe various System API functions, also referred to a
       ) -> ();
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : i32, size : i32) -> ();                       // U CQ Ry Rt CRy CRt T
-    ic0.call_with_best_effort_response : (timeout_seconds : i32) -> ();         // U Ry Rt T
+    ic0.call_with_best_effort_response : (timeout_seconds : i32) -> ();         // U CQ Ry Rt CRy CRt T
     ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                // U CQ Ry Rt CRy CRt T
