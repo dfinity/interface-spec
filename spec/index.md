@@ -4353,7 +4353,7 @@ S with
 
 Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods. If the `wasm_memory_persistence` flag is set to `opt keep`, then the WebAssembly state is preserved.
 
-In the following, the `initial_wasm_store` is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WebAssembly module contained in the [canister module](#canister-module-format), before executing a potential `(start)` function.
+In the following, the `initial_wasm_store` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module`, before executing a potential `(start)` function. The store `initialize_store(State, A.wasm_module)` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module` while reusing the WebAssembly memory of `State`.
 
 Conditions  
 
@@ -4413,7 +4413,7 @@ or
 or
 (
   (A.mode = upgrade U and U.wasm_memory_persistence = keep)
-  Persisted_state = Intermediate_state
+  Persisted_state = initialize_store(Intermediate_state, A.wasm_module)
 )
 
 Env2 = Env with {
