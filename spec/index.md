@@ -720,9 +720,13 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
-- `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`,  `/api_boundary_nodes/<node_id>/ipv4_address`, `/api_boundary_nodes/<node_id>/ipv6_address`. Can always be requested.
+-   `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`,  `/api_boundary_nodes/<node_id>/ipv4_address`, `/api_boundary_nodes/<node_id>/ipv6_address`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
+-   `/subnet`. Can always be requested.
+
+-   `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested at `/api/v2/canister/<effective_canister_id>/read_state` and can also be requested at `/api/v2/subnet/<subnet_id>/read_state` (i.e., if the `<subnet_id>` in the URL matches the `<subnet_id>` in the paths).
+
+-   `/subnet/<subnet_id>/metrics`. Can be requested at `/api/v2/subnet/<subnet_id>/read_state` (i.e., if the `<subnet_id>` in the URL matches the `<subnet_id>` in the paths). Cannot be requested at `/api/v2/canister/<effective_canister_id>/read_state`.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -5652,13 +5656,13 @@ The predicate `may_read_path_for_subnet` is defined as follows, implementing the
 
     may_read_path_for_subnet(S, _, ["time"]) = True
     may_read_path_for_subnet(S, _, ["subnet"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "node"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node"]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid]) = sid == subnet_id
+    may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid, "public_key"]) = sid == subnet_id
     may_read_path_for_subnet(S, _, _) = False
 
 The response is a certificate `cert`, as specified in [Certification](#certification), which passes `verify_cert` (assuming `S.root_key` as the root of trust), and where for every `path` documented in [The system state tree](#state-tree) that has a path in `RS.paths` or `["time"]` as a prefix, we have
