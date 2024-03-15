@@ -201,7 +201,7 @@ type install_chunked_code_args = record {
         };
     };
     target_canister : canister_id;
-    storage_canister : opt canister_id;
+    store_canister : opt canister_id;
     chunk_hashes_list : vec chunk_hash;
     wasm_module_hash : blob;
     arg : blob;
