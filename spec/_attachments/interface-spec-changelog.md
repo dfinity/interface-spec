@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
 
 ### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
