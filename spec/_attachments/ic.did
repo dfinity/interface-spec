@@ -119,7 +119,7 @@ type send_transaction_request = record {
 
 type millisatoshi_per_byte = nat64;
 
-type snapshot_id = nat;
+type snapshot_id = blob;
 type snapshot = record {
   id: snapshot_id;
   taken_at_timestamp: nat64;
