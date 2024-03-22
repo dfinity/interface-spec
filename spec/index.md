@@ -1295,7 +1295,7 @@ While an implementation will likely try to keep the interval between the value o
 
 #### On Low Wasm Memory {#on-low-wasm-memory}
 
-A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's wasm memory size in bytes grows from below a threshold `t` to >= t.
+A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's wasm memory size in bytes grows from below a threshold `t` to >= `t`.
 The threshold `t` can be defined in the [canister's settings](#ic-canister_status) and by default it is set to 2<sup>64</sup> − 1.
 
 :::note
@@ -2093,7 +2093,7 @@ Indicates various information about the canister. It contains:
 
     -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
 
-    -   The "low wasm memory" threshold, which is used to determine when the `on_low_wasm_memory` function is executed. See {#on-low-wasm-memory}.
+    -   The "low wasm memory" threshold, which is used to determine when the [canister_on_low_wasm_memory](#on-low-wasm-memory) function is executed.
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
