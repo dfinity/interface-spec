@@ -1163,6 +1163,8 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 -   If it exports a function called `canister_heartbeat`, the function must have type `() -> ()`.
 
+-   If it exports a function called `canister_on_low_wasm_memory`, the function must have type `() -> ()`.
+
 -   If it exports a function called `canister_global_timer`, the function must have type `() -> ()`.
 
 -   If it exports any functions called `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` for some `name`, the functions must have type `() -> ()`.
@@ -1214,6 +1216,8 @@ The canister provides entry points which are invoked by the IC under various cir
 -   The canister may export functions with name `canister_query <name>` and type `() -> ()`.
 
 -   The canister may export functions with name `canister_composite_query <name>` and type `() -> ()`.
+
+-   The canister may export functions with name `canister_on_low_wasm_memory` and type `() -> ()`.
 
 -   The canister table may contain functions of type `(env : i32) -> ()` which may be used as callbacks for inter-canister calls and composite query methods.
 
@@ -1286,6 +1290,18 @@ Once the function `canister_global_timer` is scheduled, the canister's global ti
 :::note
 
 While an implementation will likely try to keep the interval between the value of the global timer and the time-stamp of the `canister_global_timer` invocation within a few seconds, this is not formally part of this specification.
+
+:::
+
+#### On Low Wasm Memory {#on-low-wasm-memory}
+
+A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's wasm memory size in bytes grows from below a threshold `t` to >= t.
+The threshold `t` can be defined in the [canister's settings](#ic-canister_status) and by default it is set to 2<sup>64</sup> − 1.
+
+:::note
+
+While the above function is scheduled immediately once the condition above is triggered, it may not necessarily be executed immediately if it does not have enough cycles.
+If the canister gets frozen immediately after the function is scheduled for execution, the function will run once the canister's unfrozen _if_ the canister's wasm memory remains above the threshold `t`.
 
 :::
 
@@ -1399,7 +1415,7 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `F`: from `canister_inspect_message`
 
--   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer`)
+-   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer` `canister_on_low_wasm_memory`)
 
 -   `*` = `I G U Q CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
 
@@ -2076,6 +2092,8 @@ Indicates various information about the canister. It contains:
     -   The freezing threshold of the canister in seconds.
 
     -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
+
+    -   The "low wasm memory" threshold, which is used to determine when the `on_low_wasm_memory` function is executed. See {#on-low-wasm-memory}.
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
