@@ -2145,11 +2145,11 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 ### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
 
-This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
+This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on the implementation.
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
 
-The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+The return value is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
@@ -2158,6 +2158,32 @@ This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FI
 The signatures are encoded as the concatenation of the [SEC1](https://www.secg.org/sec1-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
+
+### IC method `schnorr_public_key` {#ic-schnorr_public_key}
+
+This method returns a (derived) Schnorr public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both an algorithm and a name. The availability of a particular `key_id` depends on the implementation.
+
+The return value is an extended Schnorr public key consisting of a Schnorr `public_key` and a `chain_code`. The chain code can be used to deterministically derive child keys of the `public_key`. Both the derivation and the encoding of the public key depends on the key ID's `algorithm`:
+
+-   For algorithm `bip340secp256k1`, the public key is derived using the generalization of BIP32 defined in [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
+
+    The public key is encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form. To use BIP32 public keys to verify BIP340 Schnorr signatures, the first byte of the (33-byte) SEC1-encoded public key must be removed (see [BIP-340, Public Key Conversion](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki#public-key-conversion)).
+
+-   For algorithm `ed25519`, the public key is derived using the scheme specified in the Threshold Schnorr signatures reference of the Internet Computer Developer Docs.
+
+    The public key is encoded in standard 32-byte compressed form (see [RFC8032, 5.1.2 Encoding](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.2)).
+
+### IC method `sign_with_schnorr` {#ic-sign_with_schnorr}
+
+This method returns a Schnorr signature of the given `message` that can be verified against a (derived) public key obtained by calling `schnorr_public_key` using the caller's `canister_id` and the given `derivation_path` and `key_id`.
+
+The encoding of the signature depends on the key ID's `algorithm`:
+
+-   For algorithm `bip340secp256k1`, the signature is encoded in 64 bytes according to [BIP340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
+
+-   For algorithm `ed25519`, the signature is encoded in 64 bytes according to [RFC8032, 5.1.6 Sign](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.6).
+
+This call requires that the Schnorr feature is enabled and the caller is a canister. Otherwise it will be rejected.
 
 ### IC method `http_request` {#ic-http_request}
 
