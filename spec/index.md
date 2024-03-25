@@ -4355,6 +4355,8 @@ Only the controllers of the given canister can install new code. This changes th
 
 In the following, the `initial_wasm_store` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module`, before executing a potential `(start)` function. The store `initialize_store(State, A.wasm_module)` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module` while reusing the WebAssembly memory of `State`.
 
+If the canister exports a private custom section with the name "enhanced-orthogonal-persistence", then the `wasm_memory_persistence` option must be set to `opt keep`.
+
 Conditions  
 
 ```html
@@ -4415,6 +4417,10 @@ or
   (A.mode = upgrade U and U.wasm_memory_persistence = keep)
   Persisted_state = initialize_store(Intermediate_state, A.wasm_module)
 )
+
+(A.mode = upgrade U and U.wasm_memory_persistence = keep)
+or
+(S.canisters[A.canister_id].private_custom_sections["enhanced-orthogonal-persistence"] = null)
 
 Env2 = Env with {
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
