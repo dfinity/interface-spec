@@ -1235,7 +1235,7 @@ When a canister is upgraded to a new WebAssembly module, the IC:
 
 3.  Invokes `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call ([IC method](#ic-install_code)).
 
-The stable memory is preserved throughout the process; the WebAssembly heap memory is discarded unless `wasm_memory_persistence` is `opt keep`.
+The stable memory is preserved throughout the process; the WebAssembly heap memory is discarded unless `wasm_memory_persistence` is `opt keep`; any other WebAssembly state is discarded.
 
 During these steps, no other entry point of the old or new canister is invoked. The `canister_init` function of the new canister is *not* invoked.
 
