@@ -6273,7 +6273,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
     ic0.msg_deadline<es>() : i64 =
-        if es.context ∉ {U Q CQ Ry Rt CRy CRt} then Trap {cycles_used = es.cycles_used;}
+        if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
         if es.params.deadline = Timestamp t
             then return t
             else return 0
