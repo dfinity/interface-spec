@@ -5188,7 +5188,7 @@ S with
 
 ```
 
-If the responded call context does not exist anymore, because the canister has been uninstalled since, the refunded cycles are still added to the canister balance, but no function invocation is enqueued. No refunds are issued for expired calls.
+If the responded call context does not exist anymore, because the canister has been uninstalled since, the refunded cycles are still added to the canister balance, but no function invocation is enqueued.
 
 Conditions  
 
