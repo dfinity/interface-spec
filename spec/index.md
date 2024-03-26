@@ -2386,6 +2386,12 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
+:::note
+
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
 Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
 The total length of all log contents does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log length of 4KiB, the oldest logs will be removed.
@@ -5523,6 +5529,12 @@ S with
 ```
 
 #### IC Management Canister: Canister logs (query call) {#ic-mgmt-canister-fetch-canister-logs}
+
+:::note
+
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
 
 This section specifies management canister query calls.
 They are calls to `/api/v2/canister/<effective_canister_id>/query`
