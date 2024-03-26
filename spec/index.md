@@ -6439,7 +6439,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
           or es.pending_call = NoPendingCall
           or es.pending_call.timeout ≠ NoTimeout
       then Trap {cycles_used = es.cycles_used;}
-      es.pending_call.timeout_seconds := timeout_seconds
+      es.pending_call.timeout_seconds := max(timeout_seconds, MAX_CALL_TIMEOUT)
 
     ic0.call_on_cleanup<es> (fun : i32, env : i32) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
