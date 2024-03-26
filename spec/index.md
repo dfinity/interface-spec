@@ -3784,6 +3784,7 @@ Condition
 ```html
 ctxt_id ∈ S.call_contexts
 S.call_contexts[ctxt_id].origin = FromCanister O
+S.call_contexts[ctxt_id].needs_to_respond = true
 O.deadline ∉ { NoDeadline, Expired }
 ```
 
