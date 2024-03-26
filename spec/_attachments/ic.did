@@ -183,6 +183,10 @@ type canister_install_mode = variant {
     reinstall;
     upgrade : opt record {
         skip_pre_upgrade : opt bool;
+        wasm_memory_persistence : opt variant {
+            keep;
+            replace;
+        };
     };
 };
 
