@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Update subnet read state request conditions on requested paths.
 
 ### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
