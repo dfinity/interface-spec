@@ -2044,10 +2044,10 @@ Only controllers of the target canister can call this method.
 
 The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
 The `target_canister` specifies the canister where the code should be installed.
-The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
-For the call to succeed, the caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`. The `storage_canister` must be on the same subnet as the target canister.
+The optional `store_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
+For the call to succeed, the caller must be a controller of the `store_canister` or the caller must be the `store_canister`. The `store_canister` must be on the same subnet as the target canister.
 
-The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `storage_canister` (or that of the target canister if `storage_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
+The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `store_canister` (or that of the target canister if `store_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -4163,7 +4163,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(hash)
+        response = candid({hash: hash})
       }
 
 ```
@@ -4217,7 +4217,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(dom(S.chunk_store[A.canister_id]))
+        response = candid([{hash: hash} | hash <- dom(S.chunk_store[A.canister_id])])
       }
 
 ```
@@ -4515,16 +4515,16 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
-if A.storage_canister = null then
-  storage_canister = A.target_canister
+if A.store_canister = null then
+  store_canister = A.target_canister
 else
-  storage_canister = A.storage_canister
+  store_canister = A.store_canister
 M.caller ∈ S.controllers[A.target_canister]
-M.caller ∈ S.controllers[storage_canister] ∪ {storage_canister}
+M.caller ∈ S.controllers[store_canister] ∪ {store_canister}
 S.canister_subnet[A.target_canister] = S.canister_subnet[strorage_canister]
-∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[storage_canister])
+∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[store_canister])
 A.chunk_hashes_list = [h1,h2,...,hk]
-wasm_module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
+wasm_module = S.chunk_store[store_canister][h1] || ... || S.chunk_store[store_canister][hk]
 A.wasm_module_hash = SHA-256(wasm_module)
 M' = M with
     method_name = 'install_code'
