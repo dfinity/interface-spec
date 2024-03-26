@@ -2169,7 +2169,7 @@ The return value is an extended Schnorr public key consisting of a Schnorr `publ
 
     The public key is encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form. To use BIP32 public keys to verify BIP340 Schnorr signatures, the first byte of the (33-byte) SEC1-encoded public key must be removed (see [BIP-340, Public Key Conversion](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki#public-key-conversion)).
 
--   For algorithm `ed25519`, the public key is derived using the scheme specified in the Threshold Schnorr signatures reference of the Internet Computer Developer Docs.
+-   For algorithm `ed25519`, the public key is derived using the [Ed25519 hierarchical key derivation scheme specified in the Internet Computer Developer Docs](https://2xf6o-laaaa-aaaam-abrla-cai.icp0.io/docs/current/references/t-schnorr-how-it-works#ed25519-hierarchical-key-derivation).
 
     The public key is encoded in standard 32-byte compressed form (see [RFC8032, 5.1.2 Encoding](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.2)).
 
