@@ -5887,7 +5887,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
 -   The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 
-    If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
+    If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the current state:
 
         pre_upgrade = λ (old_state, caller, sysenv) → Return {new_state = old_state; new_certified_data = NoCertifiedData; cycles_used = 0;}
 
