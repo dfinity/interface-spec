@@ -20,7 +20,7 @@ envelope<t> = tagged<{
 }>
 
 
-; A request as submitted to /api/v2/.../call
+; A request as submitted to /api/v3/.../call
 call-request = envelope<call-request-content>
 call-request-content = {
   request_type: "call"
@@ -32,7 +32,7 @@ call-request-content = {
   arg : bytes
 }
 
-; A request as submitted to /api/v2/.../read_state
+; A request as submitted to /api/v3/.../read_state
 read-state-request = envelope<read-state-content>
 read-state-content = {
   request_type: "read_state"
@@ -45,12 +45,12 @@ read-state-content = {
 state-path = [* path-label]
 path-label = bytes
 
-; The response, as returned from /api/v2/.../read_state
+; The response, as returned from /api/v3/.../read_state
 read-state-response = tagged<{
   certificate: bytes
 }>
 
-; A request as submitted to /api/v2/.../query
+; A request as submitted to /api/v3/.../query
 query-request = envelope<query-content>
 query-content = {
   request_type: "query"
@@ -62,7 +62,7 @@ query-content = {
   arg : bytes
 }
 
-; The response, as returned from /api/v2/.../query
+; The response, as returned from /api/v3/.../query
 query-response = tagged<{
   status: "replied"
   reply: call-reply

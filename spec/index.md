@@ -492,7 +492,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 ### Request status {#state-tree-request-status}
 
-For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
+For each update call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
 
 -   `/request_status/<request_id>/status` (text)
 
@@ -552,19 +552,19 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 ## HTTPS Interface {#http-interface}
 
-The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes four endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
+-   At `/api/v3/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
 
--   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
+-   At `/api/v3/canister/<effective_canister_id>/read_state` or `/api/v3/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
--   At `/api/v2/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
+-   At `/api/v3/canister/<effective_canister_id>/query` the user can perform (synchronous, non-state-changing) query calls.
 
--   At `/api/v2/status` the user can retrieve status information about the Internet Computer.
+-   At `/api/v3/status` the user can retrieve status information about the Internet Computer.
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v3/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/read_state`, `/api/v3/subnet/<subnet_id>/read_state`, and `/api/v3/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -574,30 +574,30 @@ This document does not yet explain how to find the location and port of the Inte
 
 ### Overview of canister calling {#http-call-overview}
 
-Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
-1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
+#### Asynchronous canister calling {#http-async-call}
 
-2.  For a certain amount of time, the IC behaves as if it does not know about the call.
+1.  A user submits a call via the [HTTPS Interface](#http-interface).
 
-3.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
+2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
 
-4.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
+3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
 
-5.  Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
+4.  Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
 
-6.  The IC is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
+5.  The IC is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
 
-7.  Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
+6.  Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
 
-8.  In the case that the call has been retained for long enough, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
+7.  In the case that the call has been retained for long enough, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
 
-9.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
+8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
 
 This yields the following interaction diagram:
 ```plantuml
     (*) --> "User creates call" #DDDDDD
-       --> "Submitted to node\n(with 202 response)" as submit #DDDDDD
+       --> "Submitted to node" as submit #DDDDDD
        --> "received"
        --> "processing"
     if "" as X then
@@ -617,6 +617,8 @@ This yields the following interaction diagram:
 
     endif
 ```
+The replica will reply back to the user's submitted update call with a certificate of the state of the update call. The replica will keep the HTTPS connection alive for the submitted update call and only respond once the state transitions to `replied` or `rejected`, or as soon as a timeout for the request is reached. If the timeout is reached and the returned certificate's contained status is not in `replied`, `rejected`, or `done`, the user should poll the IC to determine the status of the call.
+
 State transitions may be instantaneous and not always externally visible. For example, the state of a request may move from `received` via `processing` to `replied` in one go. Similarly, the IC may not implement the `done` state at all, and keep calls in state `replied`/`rejected` until they are pruned.
 
 All gray states are *not* explicitly represented in the state of the IC, and are indistinguishable from "call does not exist".
@@ -633,9 +635,9 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
-### Request: Call {#http-call}
+### Request: Sync Call {#http-call}
 
-In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to call a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `call`
 
@@ -643,45 +645,53 @@ In order to call a canister, the user makes a POST request to `/api/v2/canister/
 
 -   `canister_id` (`blob`): The principal of the canister to call.
 
--   `method_name` (`text`): Name of the canister method to call
+-   `method_name` (`text`): Name of the canister method to call.
 
--   `arg` (`blob`): Argument to pass to the canister method
+-   `arg` (`blob`): Argument to pass to the canister method.
 
 The HTTP response to this request can have the following responses:
 
--   202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+-   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
+    
+    -   If the update call completes, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
--   200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
+        -   `status` (`text`): `"certified_state"`
 
-    -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   `reject_message` (`text`): a textual diagnostic message.
+    -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
 
-    -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+        -   `status` (`text`): `"non_replicated_rejection"`
+
+        -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+
+        -   `reject_message` (`text`): a textual diagnostic message.
+
+        -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+
+    -   `status` (`text`): `"certified_state"`
+
+    -   `reply` (`blob`): A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
 -   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
 
-This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
-
-:::note
-
-The functionality exposed via the [The IC management canister](#ic-management-canister) can be used this way.
-
-:::
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
 
 ### Request: Read state {#http-read-state}
 
 :::note
 
-Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+Requesting paths with the prefix `/subnet` at `/api/v3/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v3/subnet/<subnet_id>/read_state`.
 
-On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
+On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v3/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
 
 :::
 
-In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific, i.e., when requesting paths with the prefix `/time` or `/subnet`, and the subnet form must be used when requesting paths of the form `/subnet/<subnet_id>/metrics`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to read parts of the [The system state tree](#state-tree), the user makes a POST request to `/api/v3/canister/<effective_canister_id>/read_state` or `/api/v3/subnet/<subnet_id>/read_state`. The subnet form should be used when the information to be retrieved is subnet specific, i.e., when requesting paths with the prefix `/time` or `/subnet`, and the subnet form must be used when requesting paths of the form `/subnet/<subnet_id>/metrics`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `read_state`
 
@@ -695,9 +705,9 @@ The HTTP response to this request consists of a CBOR (see [CBOR](#cbor)) map wit
 
     If this `certificate` includes a subnet delegation (see [Delegation](#certification-delegation)), then
 
-    - for requests to `/api/v2/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in the delegation's canister id range,
+    - for requests to `/api/v3/canister/<effective_canister_id>/read_state`, the `<effective_canister_id>` must be included in the delegation's canister id range,
 
-    - for requests to `/api/v2/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match the delegation's subnet id.
+    - for requests to `/api/v3/subnet/<subnet_id>/read_state`, the `<subnet_id>` must match the delegation's subnet id.
 
 The returned certificate reveals all values whose path has a requested path as a prefix except for
 
@@ -724,7 +734,7 @@ All requested paths must have the following form:
 
 -   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
 
--   `/subnet/<subnet_id>/metrics`. Can be requested at `/api/v2/subnet/<subnet_id>/read_state` (i.e., if the `<subnet_id>` in the URL matches the `<subnet_id>` in the paths). Cannot be requested at `/api/v2/canister/<effective_canister_id>/read_state`.
+-   `/subnet/<subnet_id>/metrics`. Can be requested at `/api/v3/subnet/<subnet_id>/read_state` (i.e., if the `<subnet_id>` in the URL matches the `<subnet_id>` in the paths). Cannot be requested at `/api/v3/canister/<effective_canister_id>/read_state`.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -774,7 +784,7 @@ Composite query methods are EXPERIMENTAL and there might be breaking changes of 
 
 :::
 
-In order to make a query call to a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to make a query call to a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/query`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `"query"`.
 
@@ -823,7 +833,7 @@ The response to a query call contains a list with one signature for the returned
 
 -   `identity` (`principal`): the principal of the node producing the signature.
 
-Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state`, the following predicate describes when the returned response `R` is correctly signed:
+Given a query (the `content` map from the request body) `Q`, a response `R`, and a certificate `Cert` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v3/canister/<effective_canister_id>/read_state`, the following predicate describes when the returned response `R` is correctly signed:
 
     verify_response(Q, R, Cert)
       = verify_cert(Cert) ∧
@@ -886,7 +896,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -1046,7 +1056,7 @@ Implementations of the API can provide additional details for rejected messages 
 
 Additionally, the Internet Computer provides an API endpoint to obtain various status fields at
 
-    /api/v2/status
+    /api/v3/status
 
 For this endpoint, the user performs a GET request, and receives a CBOR (see [CBOR](#cbor)) value with the following fields. The IC may include additional implementation-specific fields.
 
@@ -2390,7 +2400,7 @@ This mechanism is used in the `read_state` request type, and eventually also for
 
 ### Root of trust
 
-The root of trust is the *root public key*, which must be known to the user a priori. In a local canister execution environment, the key can be fetched via the [`/api/v2/status`](#api-status) endpoint.
+The root of trust is the *root public key*, which must be known to the user a priori. In a local canister execution environment, the key can be fetched via the [`/api/v3/status`](#api-status) endpoint.
 
 ### Certificate
 
@@ -2879,9 +2889,9 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v3/…/call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v3/…/read_state` and `/api/v3/…/query`, which are only ephemeral.
 
-These are the synchronous read messages:
+These are the read-only messages:
 
     Path = List(Blob)
     APIReadRequest
@@ -3122,11 +3132,11 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v3/…/call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
--   Responses to reads (i.e. `/api/v2/…/read_state` and `/api/v2/…/query`). By definition, these do *not* change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
+-   Responses to reads (i.e. `/api/v3/…/read_state` and `/api/v3/…/query`). By definition, these do *not* change the state of the IC, and merely describe the response based on the read request (or query, respectively) and the current state.
 
 The state transitions are not complete with regard to error handling. For example, the behavior of sending a request to a non-existent canister is not specified here. For now, we trust implementors to make sensible decisions there.
 
@@ -3168,7 +3178,7 @@ A `Request` has an effective canister id according to the rules in [Effective ca
 
 #### API Request submission
 
-After a node accepts a request via `/api/v2/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
+After a node accepts a request via `/api/v3/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
 
 This may only happen if the signature is valid and is created with a correct key. Due to this check, the envelope is discarded after this point.
 
@@ -5423,7 +5433,7 @@ S with
 
 #### Query call {#query-call}
 
-Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
+Canister query calls to `/api/v3/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
 In query and composite query methods evaluated on the target canister of the query call, a certificate is provided to the canister that is valid, contains a current state tree (or "recent enough"; the specification is currently vague about how old the certificate may be), and reveals the canister's [Certified Data](#system-api-certified-data).
 
@@ -5558,7 +5568,7 @@ Query response `R`:
 
         {status: "replied"; reply: {arg: Res}, signatures: Sigs}
 
-where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
+where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v3/canister/<effective_canister_id>/read_state` satisfy the following:
 
 ```html
 
@@ -5570,15 +5580,15 @@ verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time /
 
 :::note
 
-Requesting paths with the prefix `/subnet` at `/api/v2/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v2/subnet/<subnet_id>/read_state`.
+Requesting paths with the prefix `/subnet` at `/api/v3/canister/<effective_canister_id>/read_state` might be deprecated in the future. Hence, users might want to point their requests for paths with the prefix `/subnet` to `/api/v3/subnet/<subnet_id>/read_state`.
 
-On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v2/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
+On the IC mainnet, the root subnet ID `tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe` can be used to retrieve the list of all IC mainnet's subnets by requesting the prefix `/subnet` at `/api/v3/subnet/tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe/read_state`.
 
 :::
 
-The user can read elements of the *state tree*, using a `read_state` request to `/api/v2/canister/<ECID>/read_state` or `/api/v2/subnet/<subnet_id>/read_state`.
+The user can read elements of the *state tree*, using a `read_state` request to `/api/v3/canister/<ECID>/read_state` or `/api/v3/subnet/<subnet_id>/read_state`.
 
-Submitted request to `/api/v2/canister/<ECID>/read_state`
+Submitted request to `/api/v3/canister/<ECID>/read_state`
 `E`
 
 Conditions  
@@ -5629,7 +5639,7 @@ The predicate `may_read_path_for_canister` is defined as follows, implementing t
 
 where `UTF8(name)` holds if `name` is encoded in UTF-8.
 
-Submitted request to `/api/v2/subnet/<subnet_id>/read_state`
+Submitted request to `/api/v3/subnet/<subnet_id>/read_state`
 `E`
 
 Conditions  

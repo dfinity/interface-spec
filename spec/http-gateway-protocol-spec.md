@@ -369,8 +369,8 @@ Version 1 response verification only supports verifying a request path and respo
 The steps for response verification are as follows:
 
 - See the [response verification outline](#response-verification-outline) for the full subprotocol description.
-- Assert that the canister returning the response does not have support for response verification v2 via [Response Verification Version Assertion](#response-verification-version-assertion).
-  - If the canister reports that it has support for response verification v2, verification fails.
+- Assert that the canister returning the response does not have support for response verification v3 via [Response Verification Version Assertion](#response-verification-version-assertion).
+  - If the canister reports that it has support for response verification v3, verification fails.
   - Otherwise, continue.
 - The path `["http_assets", <url>]` exists in the `tree` and is a leaf with a value, where `<url>` is the utf8-encoded URL from the `HttpRequest`.
 - Otherwise, the path `["http_assets", "/index.html"]` must exist in the `tree` and be a leaf.
@@ -382,7 +382,7 @@ The steps for response verification are as follows:
 
 Canisters can report the supported versions of response verification using (public) metadata sections available in the [system state tree](https://internetcomputer.org/docs/current/references/ic-interface-spec/#state-tree-canister-information). This metadata will be read by the HTTP Gateway using a [read_state request](https://internetcomputer.org/docs/current/references/ic-interface-spec/#http-read-state). The metadata section must be a (public) custom section with the name `supported_certificate_versions` and contain a comma-delimited string of versions, e.g., `1,2`. This is treated as an optional, additional layer of security for canisters supporting multiple versions. If the metadata has not been added (i.e., the `read_state` request _succeeds_ and the lookup of the metadata section in the `read_state` response certificate returns `Absent`), then the HTTP Gateway will allow for whatever version the canister has responded with.
 
-The request for the metadata will only be made by the HTTP Gateway if there is a downgrade. If the HTTP Gateway requests v2 and the canister responds with v2, then a request will not be made. If the HTTP Gateway requests v2 and the canister responds with v1, a request will be made. If a request is made, the HTTP Gateway will not accept any response from the canister that is below the max version supported by both the HTTP Gateway and the canister. This will guarantee that a canister supporting both v1 and v2 will always have v2 security when accessed by an HTTP Gateway that supports v2.
+The request for the metadata will only be made by the HTTP Gateway if there is a downgrade. If the HTTP Gateway requests v3 and the canister responds with v3, then a request will not be made. If the HTTP Gateway requests v3 and the canister responds with v1, a request will be made. If a request is made, the HTTP Gateway will not accept any response from the canister that is below the max version supported by both the HTTP Gateway and the canister. This will guarantee that a canister supporting both v1 and v3 will always have v3 security when accessed by an HTTP Gateway that supports v3.
 
 :::note
 
