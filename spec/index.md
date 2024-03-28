@@ -576,34 +576,28 @@ This document does not yet explain how to find the location and port of the Inte
 
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
-The Internet Computer has two HTTPS APIs for canister calling:
-- [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
-- [*Synchronous*](#http-sync-call) canister calling, where the status of the canister call is in the response of the original HTTPS request.
-
 #### Asynchronous canister calling {#http-async-call}
 
-1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
+1.  A user submits a call via the [HTTPS Interface](#http-interface).
 
-2.  For a certain amount of time, the IC behaves as if it does not know about the call.
+2.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
 
-3.  The IC asks the targeted canister if it is willing to accept this message and be charged for the expense of processing it. This uses the [Ingress message inspection](#system-api-inspect-message) API for normal calls. For calls to the management canister, the rules in [The IC management canister](#ic-management-canister) apply.
+3.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
 
-4.  At some point, the IC may accept the call for processing and set its status to `received`. This indicates that the IC as a whole has received the call and plans on processing it (although it may still not get processed if the IC is under high load). Furthermore, the user should also be able to ask any endpoint about the status of the pending call.
+4.  Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
 
-5.  Once it is clear that the call will be acted upon (sufficient resources, call not yet expired), the status changes to `processing`. Now the user has the guarantee that the request will have an effect, e.g. it will reach the target canister.
+5.  The IC is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
 
-6.  The IC is processing the call. For some calls this may be atomic, for others this involves multiple internal steps.
+6.  Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
 
-7.  Eventually, a response will be produced, and can be retrieved for a certain amount of time. The response is either a `reply`, indicating success, or a `reject`, indicating some form of error.
+7.  In the case that the call has been retained for long enough, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
 
-8.  In the case that the call has been retained for long enough, but the request has not expired yet, the IC can forget the response data and only remember the call as `done`, to prevent a replay attack.
-
-9.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
+8.  Once the expiry time is past, the IC can prune the call and its response, and completely forget about it.
 
 This yields the following interaction diagram:
 ```plantuml
     (*) --> "User creates call" #DDDDDD
-       --> "Submitted to node\n(with 202 response)" as submit #DDDDDD
+       --> "Submitted to node" as submit #DDDDDD
        --> "received"
        --> "processing"
     if "" as X then
@@ -623,6 +617,8 @@ This yields the following interaction diagram:
 
     endif
 ```
+The replica will reply back to the user's submitted update call with a certificate of the state of the update call. The replica will keep the HTTPS connection alive for the submitted update call and only respond once the state transitions to `replied` or `rejected`, or as soon as a timeout for the request is reached. If the timeout is reached and the returned certificate's contained status is not in `replied`, `rejected`, or `done`, the user should poll the IC to determine the status of the call.
+
 State transitions may be instantaneous and not always externally visible. For example, the state of a request may move from `received` via `processing` to `replied` in one go. Similarly, the IC may not implement the `done` state at all, and keep calls in state `replied`/`rejected` until they are pruned.
 
 All gray states are *not* explicitly represented in the state of the IC, and are indistinguishable from "call does not exist".
@@ -638,22 +634,6 @@ To avoid replay attacks, the transition from `done` or `received` to `pruned` mu
 Calls must stay in `replied` or `rejected` long enough for polling users to catch the response.
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
-
-#### Synchronous canister calling {#http-sync-call}
-
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within one execution round.
-
-The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
-
-A certificate is returned by the IC to the user if:
-
--   The execution of the call completes within one execution round, and the status is certified by the IC within the ingress expiry time. The status will be either `replied`, `rejected` or `done`.
-
--   The call expires before it is queued and is dropped by the IC. The status of the call will be `unknown` with the certificate time stamp at a later time than the ingress expiry time.
-
-The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
-
-Synchronous calls are therefore best suited for calls that are fast and expected to complete within one execution round. If a call does not complete within one execution round, the replica won't return a certificate and the user will need to poll the IC to determine the status of the call.
 
 ### Request: Call {#http-call}
 
