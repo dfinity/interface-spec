@@ -564,7 +564,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v3/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/sync_call`, `/api/v3/canister/<effective_canister_id>/read_state`, `/api/v3/subnet/<subnet_id>/read_state`, and `/api/v3/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v3/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/read_state`, `/api/v3/subnet/<subnet_id>/read_state`, and `/api/v3/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -635,51 +635,11 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
-### Request: Call {#http-call}
+### Request: Sync Call {#http-call}
 
 In order to call a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `call`
-
--   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
-
--   `canister_id` (`blob`): The principal of the canister to call.
-
--   `method_name` (`text`): Name of the canister method to call
-
--   `arg` (`blob`): Argument to pass to the canister method
-
-The HTTP response to this request can have the following responses:
-
--   202 HTTP status with empty body. Implying the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
-
--   200 HTTP status with non-empty body. Implying an execution pre-processing error occurred. The body of the response contains more information about the IC specific error encountered. The body is a CBOR map with the following fields:
-    
-    -   `status` (`text`): `"non_replicated_rejection"`
-
-    -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
-
-    -   `reject_message` (`text`): a textual diagnostic message.
-
-    -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
-
--   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
-
--   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
-
-This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
-
-:::note
-
-The functionality exposed via the [The IC management canister](#ic-management-canister) can be used this way.
-
-:::
-
-### Request: Sync Call {#http-sync-call}
-
-In order to make an update call to a canister and potentially get a synchronous response, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
-
--   `request_type` (`text`): Always `sync_call`
 
 -   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
 
@@ -693,9 +653,9 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
     
-    -   If the update call completes within one execution round, or the call expires, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completes, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
-        -   `status` (`text`): `"terminal"`
+        -   `status` (`text`): `"certified_state"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
@@ -709,7 +669,11 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when the canister call is running for more than one execution round. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+-   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+
+    -   `status` (`text`): `"certified_state"`
+
+    -   `reply` (`blob`): A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
@@ -2925,7 +2889,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between API requests (type `Request`) passed to `/api/v3/…/call` and `/api/v3/…/sync_call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v3/…/read_state` and `/api/v3/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v3/…/call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v3/…/read_state` and `/api/v3/…/query`, which are only ephemeral.
 
 These are the read-only messages:
 
@@ -3168,7 +3132,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Potentially state changing API requests that are submitted via `/api/v3/…/call` and `/api/v3/…/sync_call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v3/…/call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
@@ -3214,7 +3178,7 @@ A `Request` has an effective canister id according to the rules in [Effective ca
 
 #### API Request submission
 
-After a node accepts a request via `/api/v3/canister/<ECID>/call` or `/api/v3/canister/<ECID>/sync_call`, the request gets added to the IC state as `Received`.
+After a node accepts a request via `/api/v3/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
 
 This may only happen if the signature is valid and is created with a correct key. Due to this check, the envelope is discarded after this point.
 
