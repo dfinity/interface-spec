@@ -3743,13 +3743,13 @@ S.messages = Older_messages · CallMessage CM · Younger_messages
 reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
 ```
 
-State after (given some `reject_msg`):
+State after:
 ```html
 S.messages =
     Older_messages ·
     ResponseMessage {
         origin = CM.origin;
-        response = Reject (reject_code, reject_msg);
+        response = Reject (reject_code, <implementation-specific>);
         refunded_cycles = CM.transferred_cycles;
     } ·
     Younger_messages
@@ -3759,7 +3759,7 @@ S.messages =
 
 These transitions expire calls with best-effort responses. The transition can be taken before the specified call deadline (e.g., due to high system load), and we thus ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
 
-The first transition defines the expiry of messages, where `reject_msg` is some textual message describing the rejection reason.
+The first transition defines the expiry of messages.
 
 ```html
 S.messages = Older_messages · M · Younger_messages
@@ -3773,7 +3773,7 @@ State after
 S.messages = Older_messages · (M with origin = FromCanister O with deadline = Expired timestamp) · Younger_messages ·
     ResponseMessage {
         origin = FromCanister O with deadline = NoDeadline;
-        response = Reject (SYS_UNKNOWN, reject_msg);
+        response = Reject (SYS_UNKNOWN, <implementation-specific>);
         refunded_cycles = 0;
     }
 ```
@@ -3794,7 +3794,7 @@ State after
 S.call_contexts[ctxt_id].origin = FromCanister O with deadline = Expired timestamp
 S.messages = S.messages · ResponseMessage {
         origin = FromCanister O with deadline = NoDeadline;
-        response = Reject (SYS_UNKNOWN, reject_msg);
+        response = Reject (SYS_UNKNOWN, <implementation-specific>);
         refunded_cycles = 0;
 }
 ```
