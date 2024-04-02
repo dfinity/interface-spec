@@ -418,11 +418,11 @@ Particular concepts to note from the spec are:
 
 -   [CBOR Self-Describe](https://www.rfc-editor.org/rfc/rfc8949#self-describe)
 
-#### CDDL \{#cddl\}
+<h4 id="cddl">CDDL</h4>
 
 The [Concise Data Definition Language (CDDL)](https://datatracker.ietf.org/doc/html/rfc8610) is a data description language for CBOR. It is used at various points throughout this document to describe how certain data structures are encoded with CBOR.
 
-## The system state tree \{#state-tree\}
+<h2 id="state-tree">The system state tree</h2>
 
 Parts of the IC state are publicly exposed (e.g. via [Request: Read state](#http-read-state) or [Certified data](#system-api-certified-data)) in a verified way (see [Certification](#certification) for the machinery for certifying). This section describes the content of this system state abstractly.
 
@@ -432,13 +432,13 @@ Labels are always blobs (but often with a human readable representation). In thi
 
 This section specifies the publicly relevant paths in the tree.
 
-### Time \{#state-tree-time\}
+<h3 id="state-tree-time">Time</h3>
 
 -   `/time` (natural):
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
-### Api boundary nodes information \{#state-tree-api-bn\}
+<h3 id="state-tree-api-bn">Api boundary nodes information</h3>
 
 The state tree contains information about all API boundary nodes (the source of truth for these API boundary node records is stored in the NNS registry canister).
 
@@ -458,7 +458,7 @@ The state tree contains information about all API boundary nodes (the source of 
     Public IPv6 address of a node in the hexadecimal notation with colons.
     Example: `3002:0bd6:0000:0000:0000:ee00:0033:6778`.
 
-### Subnet information \{#state-tree-subnet\}
+<h3 id="state-tree-subnet">Subnet information</h3>
 
 The state tree contains information about the topology of the Internet Computer.
 
@@ -496,7 +496,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
     The public key of a node (a DER-encoded Ed25519 signing key, see [RFC 8410](https://tools.ietf.org/html/rfc8410) for reference) with principal `<node_id>` belonging to the subnet with principal `<subnet_id>`.
 
-### Request status \{#state-tree-request-status\}
+<h3 id="state-tree-request-status">Request status</h3>
 
 For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
 
@@ -532,13 +532,13 @@ Request statuses will not actually be kept around indefinitely, and eventually t
 
 :::
 
-### Certified data \{#(state-tree-certified-data)\}
+<h3 id="state-tree-certified-data">Certified data</h3>
 
 -   `/canister/<canister_id>/certified_data` (blob):
 
     The certified data of the canister with the given id, see [Certified data](#system-api-certified-data).
 
-### Canister information \{#(state-tree-canister-information)\}
+<h3 id="state-tree-canister-information">Canister information</h3>
 
 Users have the ability to learn about the hash of the canister's module, its current controllers, and metadata in a certified way.
 
@@ -556,7 +556,7 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
     It is recommended for the canister to have a custom section called "icp:public candid:service", which contains the UTF-8 encoding of [the Candid interface](https://github.com/dfinity/candid/blob/master/spec/Candid.md#core-grammar) for the canister.
 
-## HTTPS Interface \{#(http-interface)\}
+<h2 id="http-interface">HTTPS Interface</h2>
 
 The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
 
@@ -578,7 +578,7 @@ This document does not yet explain how to find the location and port of the Inte
 
 :::
 
-### Overview of canister calling \{#(http-call-overview)\}
+<h3 id="http-call-overview">Overview of canister calling</h3>
 
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
 
@@ -639,7 +639,7 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
-### Request: Call \{#(http-call)\}
+<h3 id="http-call">Request: Call</h3>
 
 In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
@@ -677,7 +677,7 @@ The functionality exposed via the [The IC management canister](#ic-management-ca
 
 :::
 
-### Request: Read state \{#(http-read-state)\}
+<h3 id="http-read-state">Request: Read state</h3>
 
 :::note
 
@@ -762,7 +762,7 @@ Note that the paths `/canisters/<canister_id>/certified_data` are not accessible
 
 See [The system state tree](#state-tree) for details on the state tree.
 
-### Request: Query call \{#(http-query)\}
+<h3 id="http-query">Request: Query call</h3>
 
 A query call is a fast, but less secure way to call a canister. Only methods that are explicitly marked as "query methods" and "composite query methods" by the canister can be called this way. In contrast to a query method, a composite query method can make further calls to query and composite query methods of canisters on the same subnet.
 
@@ -862,7 +862,7 @@ This specification leaves it up to the client to define expiry times for the tim
 
 :::
 
-### Effective canister id \{#(http-effective-canister-id)\}
+<h3 id="http-effective-canister-id">Effective canister id</h3>
 
 The `<effective_canister_id>` in the URL paths of requests is the *effective* destination of the request.
 It must be contained in the canister ranges of a subnet, otherwise the corresponding HTTP request is rejected.
@@ -887,7 +887,7 @@ In development instances of the Internet Computer Protocol (e.g. testnets), the 
 
 :::
 
-### Authentication \{#(authentication)\}
+<h3 id="authentication">Authentication</h3>
 
 All requests coming in via the HTTPS interface need to be either *anonymous* or *authenticated* using a cryptographic signature. To that end, the following fields are present in the `content` map in all cases:
 
@@ -935,7 +935,7 @@ The `sender_sig` field is calculated by signing the concatenation of the 11 byte
 
 The delegation field, if present, must not contain more than 20 delegations.
 
-### Representation-independent hashing of structured data \{#(hash-of-map)\}
+<h3 id="hash-of-map">Representation-independent hashing of structured data</h3>
 
 Structured data, such as (recursive) maps, are authenticated by signing a representation-independent hash of the data. This hash is computed as follows (using SHA256 in the steps below):
 
@@ -975,7 +975,7 @@ hash_of_map({ "reply": { "arg": "DIDL\x00\x00" } })
 
 :::
 
-### Request ids \{#(request-id)\}
+<h3 id="request-id">Request ids</h3>
 
 When signing requests or querying the status of a request (see [Request status](#state-tree-request-status)) in the state tree, the user identifies the request using a *request id*, which is the [representation-independent hash](#hash-of-map) of the `content` map of the original request. A request id must have length of 32 bytes.
 
@@ -1025,7 +1025,7 @@ hash_of_map({ request_type: "call", sender: 0x04, ingress_expiry: 16855704000000
 
 :::
 
-### Reject codes \{#(reject-codes)\}
+<h3 id="reject-codes">Reject codes</h3>
 
 An API request or inter-canister call that is pending in the IC will eventually result in either a *reply* (indicating success, and carrying data) or a *reject* (indicating an error of some sorts). A reject contains a *rejection code* that classifies the error and a hopefully helpful *reject message* string.
 
@@ -1047,11 +1047,11 @@ The error message is guaranteed to be a string, i.e. not arbitrary binary data.
 
 When canisters explicitly reject a message (see [Public methods](#system-api-requests)), they can specify the reject message, but *not* the reject code; it is always `CANISTER_REJECT`. In this sense, the reject code is trustworthy: If the IC responds with a `SYS_FATAL` reject, then it really was the IC issuing this reject.
 
-### Error codes \{#(error-codes)\}
+<h3 id="error-codes">Error codes</h3>
 
 Implementations of the API can provide additional details for rejected messages in the form of a textual label identifying the error condition. API clients can use these labels to handle errors programmatically or suggest recovery paths to the user. The specification reserves error codes matching the regular expression `IC[0-9]+` (e.g., `IC502`) for the DFINITY implementation of the API.
 
-### Status endpoint \{#(api-status)\}
+<h3 id="api-status">Status endpoint</h3>
 
 Additionally, the Internet Computer provides an API endpoint to obtain various status fields at
 
@@ -1069,7 +1069,7 @@ Future additions may include local time, geographic location, and other useful i
 
 :::
 
-### CBOR encoding of requests and responses \{#(api-cbor)\}
+<h3 id="api-cbor">CBOR encoding of requests and responses</h3>
 
 Requests and responses are specified here as records with named fields and using suggestive human readable syntax. The actual format in the body of the HTTP request or response, however, is CBOR (see [CBOR](#cbor)).
 
@@ -1113,7 +1113,7 @@ A typical request would be (written in [CBOR diagnostic notation](https://www.rf
 
 :::
 
-### CDDL description of requests and responses \{#(api-cddl)\}
+<h3 id="api-cddl">CDDL description of requests and responses</h3>
 
 This section summarizes the format of the CBOR data passed to and from the entry points described above. You can also [download the file](_attachments/requests.cddl) and see [CDDL](#cddl) for more information.
 
@@ -1147,17 +1147,17 @@ Applications can work around these problems. For the first problem, the query re
 
 :::
 
-## Canister module format \{#(canister-module-format)\}
+<h2 id="canister-module-format">Canister module format</h2>
 
 A canister module is a [WebAssembly module](https://webassembly.github.io/spec/core/index.html) that is either in binary format (typically `.wasm`) or gzip-compressed (typically `.wasm.gz`). If the module starts with byte sequence `[0x1f, 0x8b, 0x08]`, then the system decompresses the contents as a gzip stream according to [RFC-1952](https://datatracker.ietf.org/doc/html/rfc1952.html) and then parses the output as a WebAssembly binary.
 
-## Canister interface (System API) \{#(system-api)\}
+<h2 id="system-api">Canister interface (System API)</h2>
 
 The System API is the interface between the running canister and the Internet Computer. It allows the WebAssembly module of a canister to expose functionality to the users (method entry points) and the IC (e.g. initialization), and exposes functionality of the IC to the canister (e.g. calling other canisters). Because WebAssembly is rather low-level, it also explains how to express higher level concepts (e.g. binary blobs).
 
 We want to leverage advanced WebAssembly features, such as WebAssembly host references. But as they are not yet supported by all tools involved, this section describes an initial System API that does not rely on host references. In section [Outlook: Using Host References](#host-references), we outline some of the proposed uses of WebAssembly host references.
 
-### WebAssembly module requirements \{#(system-api-module)\}
+<h3 id="system-api-module">WebAssembly module requirements</h3>
 
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
@@ -1205,7 +1205,7 @@ In order for a WebAssembly module to be usable as the code for the canister, it 
 
 WebAssembly number types (`i32`, `i64`) do not indicate if the numbers are to be interpreted as signed or unsigned. Unless noted otherwise, whenever the System API interprets them as numbers (e.g. memory pointers, buffer offsets, array sizes), they are to be interpreted as unsigned.
 
-### Entry points \{#(entry-points)\}
+<h3 id="entry-points">Entry points</h3>
 
 The canister provides entry points which are invoked by the IC under various circumstances:
 
@@ -1231,13 +1231,13 @@ The canister provides entry points which are invoked by the IC under various cir
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
-#### Canister initialization \{#(system-api-init)\}
+<h4 id="system-api-init">Canister initialization</h4>
 
 If `canister_init` is present, then this is the first exported WebAssembly function invoked by the IC. The argument that was passed along with the canister initialization call (see [IC method](#ic-install_code)) is available to the canister via `ic0.msg_arg_data_size/copy`.
 
 The IC assumes the canister to be fully instantiated if the `canister_init` method entry point returns. If the `canister_init` method entry point traps, then canister installation has failed, and the canister is reverted to its previous state (i.e. empty with `install`, or whatever it was for a `reinstall`).
 
-#### Canister upgrades \{#(system-api-upgrades)\}
+<h4 id="system-api-upgrades">Canister upgrades</h4>
 
 When a canister is upgraded to a new WebAssembly module, the IC:
 
@@ -1261,7 +1261,7 @@ Skipping the pre-upgrade can lead to data loss.
 Use it only as the last resort and only if the stable memory already contains the entire canister state.
 :::
 
-#### Public methods \{#(system-api-requests)\}
+<h4 id="system-api-requests">Public methods</h4>
 
 To define a public method of name `name`, a WebAssembly module exports a function with name `canister_update <name>`, `canister_query <name>`, or `canister_composite_query <name>` and type `() -> ()`. We call this the *method entry point*. The name of the exported function distinguishes update, query, and composite query methods.
 
@@ -1307,7 +1307,7 @@ Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
 
 In the reply callback of a [inter-canister method call](#system-api-call), the argument refers to the response to that call. In reject callbacks, no argument is available.
 
-### Overview of imports \{#(system-api-imports)\}
+<h3 id="system-api-imports">Overview of imports</h3>
 
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
 
@@ -1458,7 +1458,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
     The reject message. Traps if there is no reject message (i.e. if `reject_code` is `0`).
 
-### Responding \{#(responding)\}
+<h3 id="responding">Responding</h3>
 
 Eventually, the canister will want to respond to the original call, either by replying (indicating success) or rejecting (signalling an error):
 
@@ -1496,7 +1496,7 @@ This can be invoked multiple times within the same message execution to build up
 
     See [Cycles](#system-api-cycles) for how this interacts with cycles available on this call.
 
-### Ingress message inspection \{#(system-api-inspect-message)\}
+<h3 id="system-api-inspect-message">Ingress message inspection</h3>
 
 A canister can inspect ingress messages before executing them. When the IC receives an update call from a user, the IC will use the canister method `canister_inspect_message` to determine whether the message shall be accepted. If the canister is empty (i.e. does not have a Wasm module), then the ingress message will be rejected. If the canister is not empty and does not implement `canister_inspect_message`, then the ingress message will be accepted.
 
@@ -1517,7 +1517,7 @@ The `canister_inspect_message` is *not* invoked for query calls, inter-canister 
 
 :::
 
-### Self-identification \{#(system-api-canister-self)\}
+<h3 id="system-api-canister-self">Self-identification</h3>
 
 A canister can learn about its own identity:
 
@@ -1525,7 +1525,7 @@ A canister can learn about its own identity:
 
     These functions allow the canister to query its own canister id (as a blob).
 
-### Canister status \{#(system-api-canister-status)\}
+<h3 id="system-api-canister-status">Canister status</h3>
 
 This function allows a canister to find out if it is running, stopping or stopped (see [IC method](#ic-canister_status) and [IC method](#ic-stop_canister) for context).
 
@@ -1537,7 +1537,7 @@ This function allows a canister to find out if it is running, stopping or stoppe
 
     Status `3` (stopped) can be observed, for example, in `canister_pre_upgrade` and can be used to prevent accidentally upgrading a canister that is not fully stopped.
 
-### Canister version \{#(system-api-canister-version)\}
+<h3 id="system-api-canister-version">Canister version</h3>
 
 For each canister, the system maintains a *canister version*. Upon canister creation, it is set to 0, and it is **guaranteed** to be incremented upon every change of the canister's code, settings, running status (Running, Stopping, Stopped), and memory (WASM and stable memory), i.e., upon every successful management canister call of methods `update_settings`, `install_code`, `install_chunked_code`, `uninstall_code`, `start_canister`, and `stop_canister` on that canister, code uninstallation due to that canister running out of cycles, canister's running status transitioning from Stopping to Stopped, and successful execution of update methods, response callbacks, heartbeats, and global timers. The system can arbitrarily increment the canister version also if the canister's code, settings, running status, and memory do not change.
 
@@ -1547,7 +1547,7 @@ For each canister, the system maintains a *canister version*. Upon canister crea
 
 During the canister upgrade process, `canister_pre_upgrade` sees the old counter value, and `canister_post_upgrade` sees the new counter value.
 
-### Inter-canister method calls \{#(system-api-call)\}
+<h3 id="system-api-call">Inter-canister method calls</h3>
 
 When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
 
@@ -1612,7 +1612,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     After `ic0.call_perform` and before the next call to `ic0.call_new`, all other `ic0.call_*` function calls trap.
 
-### Cycles \{#(system-api-cycles)\}
+<h3 id="system-api-cycles">Cycles</h3>
 
 Each canister maintains a balance of *cycles*, which are used to pay for platform usage. Cycles are represented by 128-bit values.
 
@@ -1738,7 +1738,7 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
 
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
-### Stable memory \{#(system-api-stable-memory)\}
+<h3 id="system-api-stable-memory">Stable memory</h3>
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this *stable memory* is to provide space to store data beyond upgrades. The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
@@ -1798,7 +1798,7 @@ The stable memory is initially empty and can be grown up to the [Wasm stable mem
 
     This system call traps if `dst+size` exceeds the size of the WebAssembly memory or `offset+size` exceeds the size of the stable memory.
 
-### System time \{#(system-api-time)\}
+<h3 id="system-api-time">System time</h3>
 
 The canister can query the IC for the current time.
 
@@ -1828,7 +1828,7 @@ The function returns the previous value of the timer. If no timer is set before 
 
 Passing zero as an argument to the function deactivates the timer and thus prevents the system from scheduling calls to the canister's `canister_global_timer` Wasm method.
 
-### Performance counter \{#(system-api-performance-counter)\}
+<h3 id="system-api-performance-counter">Performance counter</h3>
 
 The canister can query one of the "performance counters", which is a deterministic monotonically increasing integer approximating the amount of work the canister has done. Developers might use this data to profile and optimize the canister performance.
 
@@ -1846,7 +1846,7 @@ The argument `type` decides which performance counter to return:
 
 In the future, the IC might expose more performance counters.
 
-### Replicated execution check \{#(system-api-replicated-execution-check)\}
+<h3 id="system-api-replicated-execution-check">Replicated execution check</h3>
 
 The canister can check whether it is currently running in replicated or non replicated execution. 
 
@@ -1854,7 +1854,7 @@ The canister can check whether it is currently running in replicated or non repl
 
 Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
 
-### Controller check \{#(system-api-controller-check)\}
+<h3 id="system-api-controller-check">Controller check</h3>
 
 The canister can check whether a given principal is one of its controllers.
 
@@ -1864,7 +1864,7 @@ Checks whether the principal identified by `src`/`size` is one of the controller
 
 This system call traps if `src+size` exceeds the size of the WebAssembly memory or the principal identified by `src`/`size` is not a valid binary encoding of a principal.
 
-### Certified data \{#(system-api-certified-data)\}
+<h3 id="system-api-certified-data">Certified data</h3>
 
 For each canister, the IC keeps track of "certified data", a canister-defined blob. For fresh canisters (upon install or reinstall), this blob is the empty blob (`""`).
 
@@ -1910,7 +1910,7 @@ Similarly, the System API allows the canister to effectively trap, but give some
 
     The environment may copy out the data specified by `src` and `size`, and log, print or store it in an environment-appropriate way, or include it in system-generated reject messages where appropriate. The copied data may likely be a valid string in UTF8-encoding, but the environment should be prepared to handle binary data (e.g. by printing it in escaped form or substituting invalid characters).
 
-### Outlook: Using Host References \{#(host-references)\}
+<h3 id="host-references">Outlook: Using Host References</h3>
 
 The Internet Computer aims to make the most of the WebAssembly platform, and embraces WebAssembly features. With WebAssembly host references, we can make the platform more secure, the interfaces more abstract and more compositional. The above `ic0` System API does not yet use WebAssembly host references. Once they become available on our platform, a new version of the System API using host references will be available via the `ic` module. The changes will be, at least
 
@@ -1922,7 +1922,7 @@ The Internet Computer aims to make the most of the WebAssembly platform, and emb
 
 A canister may only use the old *or* the new interface; the IC detects which interface the canister intends to use based on the names and types of its function imports and exports.
 
-## The IC management canister \{#(ic-management-canister)\}
+<h2 id="ic-management-canister">The IC management canister</h2>
 
 The interfaces above provide the fundamental ability for external users and canisters to contact other canisters. But the Internet Computer provides additional functionality, such as canister and user management. This functionality is exposed to external users and canisters via the *IC management canister*.
 
@@ -1936,7 +1936,7 @@ The IC management canister address is `aaaaa-aa` (i.e. the empty blob).
 
 It is possible to use the management canister via external requests (a.k.a. ingress messages). The cost of processing that request is charged to the canister that is being managed. Most methods only permit the controllers to call them. Calls to `raw_rand` and `deposit_cycles` are never accepted as ingress messages.
 
-### Interface overview \{#(ic-candid)\}
+<h3 id="ic-candid">Interface overview</h3>
 
 The [interface description](_attachments/ic.did) below, in [Candid syntax](https://github.com/dfinity/candid/blob/master/spec/Candid.md), describes the available functionality.
 ``` candid name= ic-interface file file=_attachments/ic.did
@@ -1944,7 +1944,7 @@ The [interface description](_attachments/ic.did) below, in [Candid syntax](https
 
 The binary encoding of arguments and results are as per Candid specification.
 
-### IC method `create_canister` \{#(ic-create_canister)\}
+<h3 id="ic-create_canister">IC method `create_canister`</h3>
 
 Before deploying a canister, the administrator of the canister first has to register it with the IC, to get a canister id (with an empty canister behind it), and then separately install the code.
 
@@ -1992,7 +1992,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
-### IC method `update_settings` \{#(ic-update_settings)\}
+<h3 id="ic-update_settings">IC method `update_settings`</h3>
 
 Only *controllers* of the canister can update settings. See [IC method](#ic-create_canister) for a description of settings.
 
@@ -2000,19 +2000,19 @@ Not including a setting in the `settings` record means not changing that field. 
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-### IC method `upload_chunk` \{#(ic-upload_chunk)\}
+<h3 id="ic-upload_chunk">IC method `upload_chunk`</h3>
 
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
  
-### IC method `clear_chunk_store` \{#(ic-clear_chunk_store)\}
+<h3 id="ic-clear_chunk_store">IC method `clear_chunk_store`</h3>
 
 Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
 
-### IC method `stored_chunks` \{#(ic-stored_chunks)\}
+<h3 id="ic-stored_chunks">IC method `stored_chunks`</h3>
 
 Canister controllers (and the canister itself) can list the hashes of chunks in the chunk storage of a canister.
 
-### IC method `install_code` \{#(ic-install_code)\}
+<h3 id="ic-install_code">IC method `install_code`</h3>
 
 This method installs code into a canister.
 
@@ -2046,7 +2046,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 This method traps if the canister's cycle balance decreases below the canister's freezing limit after executing the method.
 
-### IC method `install_chunked_code` \{#(ic-install_chunked_code)\}
+<h3 id="ic-install_chunked_code">IC method `install_chunked_code`</h3>
 
 This method installs code that had previously been uploaded in chunks.
 
@@ -2059,7 +2059,7 @@ For the call to succeed, the caller must be a controller of the `store_canister`
 
 The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `store_canister` (or that of the target canister if `store_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
-### IC method `uninstall_code` \{#(ic-uninstall_code)\}
+<h3 id="ic-uninstall_code">IC method `uninstall_code`</h3>
 
 This method removes a canister's code and state, making the canister *empty* again.
 
@@ -2073,7 +2073,7 @@ A canister after *uninstalling* retains its *cycle* balances, *controllers*, his
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-### IC method `canister_status` \{#(ic-canister_status)\}
+<h3 id="ic-canister_status">IC method `canister_status`</h3>
 
 Indicates various information about the canister. It contains:
 
@@ -2101,7 +2101,7 @@ Indicates various information about the canister. It contains:
 
 Only the controllers of the canister or the canister itself can request its status.
 
-### IC method `canister_info` \{#(ic-canister-info)\}
+<h3 id="ic-canister-info">IC method `canister_info`</h3>
 
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
@@ -2125,13 +2125,13 @@ The returned response contains the following fields:
 
 -   `controllers`: the current set of canister controllers. The order of returned controllers may vary depending on the implementation.
 
-### IC method `stop_canister` \{#(ic-stop_canister)\}
+<h3 id="ic-stop_canister">IC method `stop_canister`</h3>
 
 The controllers of a canister may stop a canister (e.g., to prepare for a canister upgrade).
 
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped). The IC will reject all calls to a stopping canister, indicating that the canister is stopping. Responses to a stopping canister are processed as usual. When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
-### IC method `start_canister` \{#(ic-start_canister)\}
+<h3 id="ic-start_canister">IC method `start_canister`</h3>
 
 A canister may be started by its controllers.
 
@@ -2139,23 +2139,23 @@ If the canister status was `stopped` or `stopping` then the canister status is s
 
 If the canister was already `running` then the status stays unchanged.
 
-### IC method `delete_canister` \{#(ic-delete_canister)\}
+<h3 id="ic-delete_canister">IC method `delete_canister`</h3>
 
 This method deletes a canister from the IC.
 
 Only controllers of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
 
-### IC method `deposit_cycles` \{#(ic-deposit_cycles)\}
+<h3 id="ic-deposit_cycles">IC method `deposit_cycles`</h3>
 
 This method deposits the cycles included in this call into the specified canister.
 
 There is no restriction on who can invoke this method.
 
-### IC method `raw_rand` \{#(ic-raw_rand)\}
+<h3 id="ic-raw_rand">IC method `raw_rand`</h3>
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
-### IC method `ecdsa_public_key` \{#(ic-ecdsa_public_key)\}
+<h3 id="ic-ecdsa_public_key">IC method `ecdsa_public_key`</h3>
 
 This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
@@ -2163,7 +2163,7 @@ For curve `secp256k1`, the public key is derived using a generalization of BIP32
 
 The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
-### IC method `sign_with_ecdsa` \{#(ic-sign_with_ecdsa)\}
+<h3 id="ic-sign_with_ecdsa">IC method `sign_with_ecdsa`</h3>
 
 This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) signature of the given `message_hash` that can be separately verified against a derived ECDSA public key. This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
@@ -2171,7 +2171,7 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
-### IC method `http_request` \{#(ic-http_request)\}
+<h3 id="ic-http_request">IC method `http_request`</h3>
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
@@ -2246,7 +2246,7 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 :::
 
-### IC method `node_metrics_history` \{#(ic-node-metrics-history)\}
+<h3 id="ic-node-metrics-history">IC method `node_metrics_history`</h3>
 
 :::note
 
@@ -2266,7 +2266,7 @@ A single metric entry is a record with the following fields:
 
 - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
-### IC method `provisional_create_canister_with_cycles` \{#(ic-provisional_create_canister_with_cycles)\}
+<h3 id="ic-provisional_create_canister_with_cycles">IC method `provisional_create_canister_with_cycles`</h3>
 
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
 
@@ -2276,7 +2276,7 @@ Cycles added to this call via `ic0.call_cycles_add128` are returned to the calle
 
 This method is only available in local development instances.
 
-### IC method `provisional_top_up_canister` \{#(ic-provisional_top_up_canister)\}
+<h3 id="ic-provisional_top_up_canister">IC method `provisional_top_up_canister`</h3>
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
@@ -2286,11 +2286,11 @@ Any user can top-up any canister this way.
 
 This method is only available in local development instances.
 
-## The IC Bitcoin API \{#(ic-bitcoin-api)\}
+<h2 id="ic-bitcoin-api">The IC Bitcoin API</h2>
 
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/gas-cost) for information on pricing for the Bitcoin mainnet and testnet.
 
-### IC method `bitcoin_get_utxos` \{#(ic-bitcoin_get_utxos)\}
+<h3 id="ic-bitcoin_get_utxos">IC method `bitcoin_get_utxos`</h3>
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component. The UTXOs are returned sorted by block height in descending order.
 
@@ -2322,7 +2322,7 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
-### IC method `bitcoin_get_utxos_query` \{#(ic-bitcoin_get_utxos_query)\}
+<h3 id="ic-bitcoin_get_utxos_query">IC method `bitcoin_get_utxos_query`</h3>
 
 This method is identical to [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos), but exposed as a query.
 
@@ -2338,7 +2338,7 @@ The response of a query comes from a single replica, and is therefore not approp
 
 :::
 
-### IC method `bitcoin_get_balance` \{#(ic-bitcoin_get_balance)\}
+<h3 id="ic-bitcoin_get_balance">IC method `bitcoin_get_balance`</h3>
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
 
@@ -2348,7 +2348,7 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
 
-### IC method `bitcoin_get_balance_query` \{#(ic-bitcoin_get_balance_query)\}
+<h3 id="ic-bitcoin_get_balance_query">IC method `bitcoin_get_balance_query`</h3>
 
 This method is identical to [`bitcoin_get_balance`](#ic-bitcoin_get_balance), but exposed as a query.
 
@@ -2364,7 +2364,7 @@ The response of a query comes from a single replica, and is therefore not approp
 
 :::
 
-### IC method `bitcoin_send_transaction` \{#(ic-bitcoin_send_transaction)\}
+<h3 id="ic-bitcoin_send_transaction">IC method `bitcoin_send_transaction`</h3>
 
 Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
 
@@ -2378,7 +2378,7 @@ If at least one of these checks fails, the call is rejected.
 
 If the transaction passes these tests, the transaction is forwarded to the specified Bitcoin network. Note that the function does not provide any guarantees that the transaction will make it into the mempool or that the transaction will ever appear in a block.
 
-### IC method `bitcoin_get_current_fee_percentiles` \{#(ic-bitcoin_get_current_fee_percentiles)\}
+<h3 id="ic-bitcoin_get_current_fee_percentiles">IC method `bitcoin_get_current_fee_percentiles`</h3>
 
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
@@ -2386,7 +2386,7 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-## Certification \{#(certification)\}
+<h2 id="certification">Certification</h2>
 
 Some parts of the IC state are exposed to users in a tamperproof way via certification: the IC can reveal a *partial state tree* which includes just the data of interest, together with a signature on the root hash of the state tree. This means that a user can be sure that the response is correct, even if the user happens to be communicating with a malicious node, or has received the certificate via some other untrusted way.
 
@@ -2457,7 +2457,7 @@ is the [BLS signature verification function](https://datatracker.ietf.org/doc/ht
 
 All state trees include the time at path `/time` (see [Time](#state-tree-time)). Users that get a certificate with a state tree can look up the timestamp to guard against working on obsolete data.
 
-### Lookup \{#(lookup)\}
+<h3 id="lookup">Lookup</h3>
 
 Given a (verified) tree, the user can fetch the value at a given path, which is a sequence of labels (blobs). In this document, we write paths suggestively with slashes as separators; the actual encoding is not actually using slashes as delimiters.
 
@@ -2512,7 +2512,7 @@ The IC will only produce well-formed state trees, and the above algorithm assume
       ∀ Label _ t ∈ trees. well_formed(t) ∧
       ∀ t ∈ trees. t ≠ Leaf _
 
-### Delegation \{#(certification-delegation)\}
+<h3 id="certification-delegation">Delegation</h3>
 
 The root key can delegate certification authority to other keys.
 
@@ -2554,7 +2554,7 @@ implements DER decoding of the public key, following [RFC5480](https://datatrack
 
 Delegations are *scoped*, i.e., they indicate which set of canister principals the delegatee subnet may certify for. This set can be obtained from a delegation `d` using `lookup(["subnet",d.subnet_id,"canister_ranges"],d.certificate)`, which must be present, and is encoded as described in [Subnet information](#state-tree-subnet). The various applications of certificates describe if and how the subnet scope comes into play.
 
-### Encoding of certificates \{#(certification-encoding)\}
+<h3 id="certification-encoding">Encoding of certificates</h3>
 
 The binary encoding of a certificate is a CBOR (see [CBOR](#cbor)) value according to the following CDDL (see [CDDL](#cddl)). You can also [download the file](_attachments/certificates.cddl).
 
@@ -2626,11 +2626,11 @@ In the pruned tree, the `lookup_path` function behaves as follows:
     lookup_path(["d"],      pruned_tree) = Found "morning"
     lookup_path(["e"],      pruned_tree) = Absent
 
-## The HTTP Gateway protocol \{#(http-gateway)\}
+<h2 id="http-gateway">The HTTP Gateway protocol</h2>
 
 The HTTP Gateway Protocol has been moved into its own [specification](./http-gateway-protocol-spec.md).
 
-## Abstract behavior \{#(abstract-behavior)\}
+<h2 id="abstract-behavior">Abstract behavior</h2>
 
 The previous sections describe the interfaces, i.e. outer edges of the Internet Computer, but give only intuitive and vague information in prose about what these interfaces actually do.
 
@@ -2701,7 +2701,7 @@ Method names can be arbitrary pieces of text:
 ```
 MethodName = Text
 ```
-#### Abstract canisters \{#(abstract-canisters)\}
+<h4 id="abstract-canisters">Abstract canisters</h4>
 
 The [WebAssembly System API](#system-api) is relatively low-level, and some of its details (e.g. that the argument data is queried using separate calls, and that closures are represented by a function pointer and a number, that method names need to be mangled) would clutter this section. Therefore, we abstract over the WebAssembly details as follows:
 
@@ -3403,7 +3403,7 @@ messages = Older_messages · Younger_messages  ·
 
 ```
 
-#### Call context creation \{#(call-context-creation)\}
+<h4 id="call-context-creation">Call context creation</h4>
 
 Before invoking a heartbeat, a global timer, or a message to a public entry point, a call context is created for bookkeeping purposes. For these invocations the canister must be running (so not stopped or stopping). Additionally, these invocations only happen for "real" canisters, not the IC management canister.
 
@@ -3573,7 +3573,7 @@ The IC can execute any message that is at the head of its queue, i.e. there is n
 
 Note that new messages are executed only if the canister is Running and is not frozen.
 
-#### Message execution \{#(rule-message-execution)\}
+<h4 id="rule-message-execution">Message execution</h4>
 
 The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition "Call context creation").
 
@@ -3779,7 +3779,7 @@ system_task_as_update(f, env) = λ wasm_state →
 
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
-#### Call context starvation \{#(rule-starvation)\}
+<h4 id="rule-starvation">Call context starvation</h4>
 
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
 
@@ -3812,7 +3812,7 @@ S with
 
 ```
 
-#### Call context removal \{#(call-context-removal)\}
+<h4 id="call-context-removal">Call context removal</h4>
 
 If there is no call, downstream call context, or response that references a call context, and the call context does not need to respond (because it has already responded or its origin is a system task that does not await a response), then the call context can be removed.
 
@@ -4568,7 +4568,7 @@ S with
 
 ```
 
-#### IC Management Canister: Code uninstallation \{#(rule-uninstall)\}
+<h4 id="rule-uninstall">IC Management Canister: Code uninstallation</h4>
 
 Upon uninstallation, the canister is reverted to an empty canister, and all outstanding call contexts are rejected and marked as deleted.
 
@@ -5448,7 +5448,7 @@ S with
 
 ```
 
-#### Query call \{#(query-call)\}
+<h4 id="query-call">Query call</h4>
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
@@ -5726,7 +5726,7 @@ request_status_tree(Done) =
 
 and where `lookup_in_tree` is a function that returns `Found v` for a value `v`, `Absent`, or `Error`, appropriately. See the Section [Lookup](#lookup) for more details.
 
-### Abstract Canisters to System API \{#(concrete-canisters)\}
+<h3 id="concrete-canisters">Abstract Canisters to System API</h3>
 
 In Section [Abstract canisters](#abstract-canisters) we introduced an abstraction over the interface to a canister, to avoid cluttering the abstract specification of the Internet Computer from WebAssembly details. In this section, we will fill the gap and explain how the abstract canister interface maps to the [concrete System API](#system-api) and the WebAssembly concepts as defined in the [WebAssembly specification](https://webassembly.github.io/spec/core/index.html).
 
