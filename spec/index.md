@@ -1982,6 +1982,8 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
+Cycles to pay for the call must be explicitly transferred with the call.
+
 ### IC method `update_settings` {#ic-update_settings}
 
 Only *controllers* of the canister can update settings. See [IC method](#ic-create_canister) for a description of settings.
