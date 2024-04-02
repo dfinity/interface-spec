@@ -1434,7 +1434,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
 -   `ic0.msg_deadline : () -> i64`
 
-    The deadline, in nanoseconds since 1970-01-01, after which the caller will stop waiting for a response.
+    The deadline, in nanoseconds since 1970-01-01, after which the caller might stop waiting for a response.
 
     For calls with best-effort responses, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls, a deadline of 0 will be returned.
 
@@ -3635,7 +3635,7 @@ then
             call_context = M.call_context;
             callback = call.callback;
             deadline = if call.timeout_seconds ≠ NoTimeout
-                        then S.time[M.receiver] + call.timeout_seconds
+                        then S.time[M.receiver] + call.timeout_seconds * 10^9
                         else NoDeadline
 
           };
@@ -3734,12 +3734,12 @@ Note that by construction, a query function will either trap or return with a re
 
 #### Spontaneous request rejection {#request-rejection}
 
-The system can reject a request at any point in time, e.g., because it is overloaded. The following specification is an overapproximation of the rejection behavior. In particular, the system is guaranteed not to emit `DESTINATION_INVALID` in some cases, e.g., if the callee exists, and if the caller successfully calls the caller once, subsequent calls will not fail with `DESTINATION_INVALID`.
+The system can reject a request at any point in time, e.g., because it is overloaded.
 
 Condition:
 ```html
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
 reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
 ```
 
@@ -3757,7 +3757,7 @@ S.messages =
 
 #### Call expiry {#call-expiry}
 
-These transitions expire calls with timeouts. To account for SYS_UNKNOWN being issued early (e.g., due to high system load), we ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
+These transitions expire calls with best-effort responses. The transition can be taken before the specified call deadline (e.g., due to high system load), and we thus ignore the caller time in these transitions. We define two variants of the transition, one that expires messages, and one that expires calls that are in progress (i.e., have open downstream call contexts).
 
 The first transition defines the expiry of messages, where `reject_msg` is some textual message describing the rejection reason.
 
