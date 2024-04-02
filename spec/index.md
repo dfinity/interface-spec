@@ -2093,7 +2093,7 @@ Indicates various information about the canister. It contains:
 
     * `num_calls_total`: the total number of query and composite query methods evaluated on the canister,
 
-    * `num_instructions_total`: the total number of WebAssembly instructions executed during the evaluation of query and composite query methods and composite callbacks on the canister,
+    * `num_instructions_total`: the total number of WebAssembly instructions executed during the evaluation of query and composite query methods,
 
     * `request_payload_bytes_total`: the total number of query and composite query method payload bytes, and
 
@@ -5537,15 +5537,7 @@ We define an auxiliary method that handles calls from composite query methods by
                      Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // calling to another subnet
                   let (Response', Cycles', S') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
                   Cycles := Cycles'
-                  S := S' with
-                        query_stats[Call.callee] = S'.query_stats[Call.callee] · {
-                          timestamp = S'.time[Call.callee]
-                          num_instructions = <implementation-specific>
-                          request_payload_bytes = |Call.arg|
-                          response_payload_bytes =
-                            if Response' = Reject (RejectCode, RejectMsg) then |RejectMsg|
-                            else if Response' = Reply Res then |Res|
-                        }
+                  S := S'
                   if Cycles < MAX_CYCLES_PER_RESPONSE
                   then
                      Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // composite query out of cycles
