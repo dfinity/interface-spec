@@ -433,6 +433,26 @@ This section specifies the publicly relevant paths in the tree.
 
     All partial state trees include a timestamp, indicating the time at which the state is current.
 
+### Api boundary nodes information {#state-tree-api-bn}
+
+The state tree contains information about all API boundary nodes (the source of truth for these API boundary node records is stored in the NNS registry canister).
+
+- `/api_boundary_nodes/<node_id>/domain` (text)
+
+    Domain name associated with a node. All domains are unique across nodes.
+    Example: `api-bn1.example.com`.
+
+- `/api_boundary_nodes/<node_id>/ipv4_address` (text)
+  
+    Public IPv4 address of a node in the dotted-decimal notation.
+    If no `ipv4_address` is available for the corresponding node, then this path does not exist.  
+    Example: `192.168.10.150`.
+
+- `/api_boundary_nodes/<node_id>/ipv6_address` (text)
+
+    Public IPv6 address of a node in the hexadecimal notation with colons.
+    Example: `3002:0bd6:0000:0000:0000:ee00:0033:6778`.
+
 ### Subnet information {#state-tree-subnet}
 
 The state tree contains information about the topology of the Internet Computer.
@@ -700,7 +720,11 @@ All requested paths must have the following form:
 
 -   `/time`. Can always be requested.
 
--   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/metrics`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
+-   `/api_boundary_nodes`, `/api_boundary_nodes/<node_id>`, `/api_boundary_nodes/<node_id>/domain`,  `/api_boundary_nodes/<node_id>/ipv4_address`, `/api_boundary_nodes/<node_id>/ipv6_address`. Can always be requested.
+
+-   `/subnet`, `/subnet/<subnet_id>`, `/subnet/<subnet_id>/public_key`, `/subnet/<subnet_id>/canister_ranges`, `/subnet/<subnet_id>/node`, `/subnet/<subnet_id>/node/<node_id>`, `/subnet/<subnet_id>/node/<node_id>/public_key`. Can always be requested.
+
+-   `/subnet/<subnet_id>/metrics`. Can be requested at `/api/v2/subnet/<subnet_id>/read_state` (i.e., if the `<subnet_id>` in the URL matches the `<subnet_id>` in the paths). Cannot be requested at `/api/v2/canister/<effective_canister_id>/read_state`.
 
 -   `/request_status/<request_id>`, `/request_status/<request_id>/status`, `/request_status/<request_id>/reply`, `/request_status/<request_id>/reject_code`, `/request_status/<request_id>/reject_message`, `/request_status/<request_id>/error_code`. Can be requested if no path with such a prefix exists in the state tree or
 
@@ -2020,10 +2044,10 @@ Only controllers of the target canister can call this method.
 
 The `mode`, `arg`, and `sender_canister_version` parameters are as for `install_code`.
 The `target_canister` specifies the canister where the code should be installed.
-The optional `storage_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
-For the call to succeed, the caller must be a controller of the `storage_canister` or the caller must be the `storage_canister`. The `storage_canister` must be on the same subnet as the target canister.
+The optional `store_canister` specifies the canister in whose chunk storage the chunks are stored (this parameter defaults to `target_canister` if not specified).
+For the call to succeed, the caller must be a controller of the `store_canister` or the caller must be the `store_canister`. The `store_canister` must be on the same subnet as the target canister.
 
-The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `storage_canister` (or that of the target canister if `storage_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
+The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `store_canister` (or that of the target canister if `store_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
 
@@ -4167,7 +4191,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(hash)
+        response = candid({hash: hash})
       }
 
 ```
@@ -4221,7 +4245,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = candid(dom(S.chunk_store[A.canister_id]))
+        response = candid([{hash: hash} | hash <- dom(S.chunk_store[A.canister_id])])
       }
 
 ```
@@ -4519,16 +4543,16 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
-if A.storage_canister = null then
-  storage_canister = A.target_canister
+if A.store_canister = null then
+  store_canister = A.target_canister
 else
-  storage_canister = A.storage_canister
+  store_canister = A.store_canister
 M.caller ∈ S.controllers[A.target_canister]
-M.caller ∈ S.controllers[storage_canister] ∪ {storage_canister}
+M.caller ∈ S.controllers[store_canister] ∪ {store_canister}
 S.canister_subnet[A.target_canister] = S.canister_subnet[strorage_canister]
-∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[storage_canister])
+∀ h ∈ A.chunk_hashes_list. h ∈ dom(S.chunk_store[store_canister])
 A.chunk_hashes_list = [h1,h2,...,hk]
-wasm_module = S.chunk_store[storage_canister][h1] || ... || S.chunk_store[storage_canister][hk]
+wasm_module = S.chunk_store[store_canister][h1] || ... || S.chunk_store[store_canister][hk]
 A.wasm_module_hash = SHA-256(wasm_module)
 M' = M with
     method_name = 'install_code'
@@ -5688,7 +5712,7 @@ The predicate `may_read_path_for_subnet` is defined as follows, implementing the
     may_read_path_for_subnet(S, _, ["subnet", sid]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "public_key"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "canister_ranges"]) = True
-    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = True
+    may_read_path_for_subnet(S, _, ["subnet", sid, "metrics"]) = sid == subnet_id
     may_read_path_for_subnet(S, _, ["subnet", sid, "node"]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid]) = True
     may_read_path_for_subnet(S, _, ["subnet", sid, "node", nid, "public_key"]) = True
