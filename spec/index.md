@@ -2829,7 +2829,7 @@ To ensure that only one response is generated, and also to detect when no respon
       | FromCanister {
           calling_context : CallId;
           callback: Callback;
-          deadline : NoDeadline | Timestamp | Expired
+          deadline : NoDeadline | Timestamp | Expired Timestamp
         }
       | FromSystemTask
     CallCtxt = {
@@ -3765,12 +3765,12 @@ The first transition defines the expiry of messages, where `reject_msg` is some 
 S.messages = Older_messages · M · Younger_messages
 M = CallMessage _ ∨ M = ResponseMessage _
 M.origin = FromCanister O
-O.deadline ∉ { NoDeadline, Expired }
+O.deadline = timestamp
 ```
 
 State after
 ```html
-S.messages = Older_messages · (M with origin = FromCanister O with deadline = Expired) · Younger_messages ·
+S.messages = Older_messages · (M with origin = FromCanister O with deadline = Expired timestamp) · Younger_messages ·
     ResponseMessage {
         origin = FromCanister O with deadline = NoDeadline;
         response = Reject (SYS_UNKNOWN, reject_msg);
@@ -3785,13 +3785,13 @@ Condition
 ctxt_id ∈ S.call_contexts
 S.call_contexts[ctxt_id].origin = FromCanister O
 S.call_contexts[ctxt_id].needs_to_respond = true
-O.deadline ∉ { NoDeadline, Expired }
+O.deadline = timestamp
 ```
 
 State after
 
 ```html
-S.call_contexts[ctxt_id].origin = FromCanister O with deadline = Expired
+S.call_contexts[ctxt_id].origin = FromCanister O with deadline = Expired timestamp
 S.messages = S.messages · ResponseMessage {
         origin = FromCanister O with deadline = NoDeadline;
         response = Reject (SYS_UNKNOWN, reject_msg);
@@ -3808,10 +3808,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = true
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
 
 ```
 
@@ -3841,10 +3841,10 @@ Conditions
 ```html
 
 S.call_contexts[Ctxt_id].needs_to_respond = false
-∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
-∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired
+∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
+∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.calling_context ≠ Ctxt_id ∨ O.deadline = Expired _
 
 ```
 
@@ -5163,9 +5163,10 @@ RM.origin = FromCanister {
     callback = Callback
     deadline = D
   }
+Ctxt_id ∈ dom(S.call_contexts)
 not S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
-D ≠ Expired
+D ≠ Expired _
 
 ```
 
@@ -5200,9 +5201,10 @@ RM.origin = FromCanister {
     callback = Callback
     deadline = D
   }
+Ctxt_id ∈ dom(S.call_contexts)
 S.call_contexts[Ctxt_id].deleted
 S.call_contexts[Ctxt_id].canister ∈ dom(S.balances)
-D ≠ Expired
+D ≠ Expired _
 
 ```
 
@@ -5224,7 +5226,7 @@ Condition:
 S.messages = Older_messages · M · Younger_messages
 M = ResponseMessage _ ∨ M = CallMessage _
 M.origin = FromCanister O
-O.deadline = Expired
+O.deadline = Expired _
 ```
 
 State after
