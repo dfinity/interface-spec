@@ -3752,6 +3752,29 @@ The functions `query_as_update` and `system_task_as_update` turns a query functi
 
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
+#### Spontaneous request rejection {#request-rejection}
+
+The system can reject a request at any point in time, e.g., because it is overloaded.
+
+Condition:
+```html
+S.messages = Older_messages · CallMessage CM · Younger_messages
+(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
+```
+
+State after:
+```html
+S.messages =
+    Older_messages ·
+    ResponseMessage {
+        origin = CM.origin;
+        response = Reject (reject_code, <implementation-specific>);
+        refunded_cycles = CM.transferred_cycles;
+    } ·
+    Younger_messages
+```
+
 #### Call context starvation {#rule-starvation}
 
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
