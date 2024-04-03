@@ -127,13 +127,13 @@ This specification may refer to certain constants and limits without specifying 
 
     Maximum wall clock time spent on evaluation of a query call.
 
-### Principals {#principal}
+<h3 id="principal">Principals</h3>
 
 Principals are generic identifiers for canisters, users and possibly other concepts in the future. As far as most uses of the IC are concerned they are *opaque* binary blobs with a length between 0 and 29 bytes, and there is intentionally no mechanism to tell canister ids and user ids apart.
 
 There is, however, some structure to them to encode specific authentication and authorization behavior.
 
-#### Special forms of Principals {#id-classes}
+<h4 id="id-classes">Special forms of Principals</h4>
 
 In this section, `H` denotes SHA-224, `·` denotes blob concatenation and `|p|` denotes the length of `p` in bytes, encoded as a single byte.
 
@@ -179,7 +179,7 @@ Derived IDs are currently not explicitly used in this document, but they may be 
 
 When the IC creates a *fresh* id, it never creates a self-authenticating id, reserved id, an anonymous id or an id derived from what could be a canister or user.
 
-#### Textual representation of principals {#textual-ids}
+<h4 id="textual-ids">Textual representation of principals</h4>
 
 We specify a *canonical textual format* that is recommended whenever principals need to be printed or read in textual format, e.g. in log messages, transactions browser, command line tools, source code.
 
@@ -218,7 +218,7 @@ function textual_decode() {
 
 :::
 
-### Canister lifecycle {#canister-lifecycle}
+<h3 id="canister-lifecycle">Canister lifecycle</h3>
 
 Dapps on the Internet Computer are called *canisters*. Conceptually, they consist of the following pieces of state:
 
@@ -246,7 +246,7 @@ Canisters are empty after creation and uninstallation, and become non-empty thro
 
 If an empty canister receives a response, that response is dropped, as if the canister trapped when processing the response. The cycles set aside for its processing and the cycles carried on the responses are added to the canister's *cycles* balance.
 
-#### Canister cycles {#canister-cycles}
+<h4 id="canister-cycles">Canister cycles</h4>
 
 The IC relies on *cycles*, a utility token, to manage its resources. A canister pays for the resources it uses from its *cycle balances*. A *cycle\_balance* is stored as 128-bit unsigned integers and operations on them are saturating. In particular, if *cycles* are added to a canister that would bring its main cycle balance beyond 2<sup>128</sup>-1, then the balance will be capped at 2<sup>128</sup>-1 and any additional cycles will be lost.
 
@@ -264,7 +264,7 @@ Once the IC frees the resources of a canister, its id, *cycle* balances, *contro
 
 :::
 
-#### Canister status {#canister-status}
+<h4 id="canister-status">Canister status</h4>
 
 The canister status can be used to control whether the canister is processing calls:
 
@@ -290,7 +290,7 @@ This status is orthogonal to whether a canister is frozen or not: a frozen canis
 
 :::
 
-### Signatures {#signatures}
+<h3 id="signatures">Signatures</h3>
 
 Digital signature schemes are used for authenticating messages in various parts of the IC infrastructure. Signatures are domain separated, which means that every message is prefixed with a byte string that is unique to the purpose of the signature.
 
@@ -298,7 +298,7 @@ The IC supports multiple signature schemes, with details given in the following 
 
 In all cases, the signed *payload* is the concatenation of the domain separator and the message. All uses of signatures in this specification indicate a domain separator, to uniquely identify the purpose of the signature. The domain separators are prefix-free by construction, as their first byte indicates their length.
 
-#### Ed25519 and ECDSA signatures {#ecdsa}
+<h4 id="ecdsa">Ed25519 and ECDSA signatures</h4>
 
 Plain signatures are supported for the schemes
 
@@ -314,7 +314,7 @@ Plain signatures are supported for the schemes
 
 -   The signatures are encoded as the concatenation of the 32-byte big endian encodings of the two values *r* and *s*.
 
-#### Web Authentication {#webauthn}
+<h4 id="webauthn">Web Authentication</h4>
 
 The allowed signature schemes for web authentication are
 
@@ -356,7 +356,7 @@ You can also view the wrapping in [an online ASN.1 JavaScript decoder](https://l
 
     -   `signature` (`blob`): Signature as specified in the [WebAuthn w3c recommendation](https://www.w3.org/TR/webauthn/#signature-attestation-types), which means DER encoding in the case of an ECDSA signature.
 
-#### Canister signatures {#canister-signatures}
+<h4 id="canister-signatures">Canister signatures</h4>
 
 The IC also supports a scheme where a canister can sign a payload by declaring a special "certified variable".
 
@@ -392,9 +392,9 @@ This section makes forward references to other concepts in this document, in par
 
     where `s` is the SHA-256 hash of the `seed` used in the public key and `m` is the SHA-256 hash of the payload.
 
-### Supplementary Technologies {#supplementary-technologies}
+<h3 id="supplementary-technologies">Supplementary Technologies</h3>
 
-#### CBOR {#cbor}
+<h4 id="cbor">CBOR</h4>
 
 [Concise Binary Object Representation (CBOR)](https://www.rfc-editor.org/rfc/rfc8949) is a data format with a small code footprint, small message size and an extensible interface. CBOR is used extensively throughout the Internet Computer as the primary format for data exchange between components within the system.
 
