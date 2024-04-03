@@ -3766,13 +3766,13 @@ reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
 State after:
 ```html
 S.messages =
-    Older_messages ·
-    ResponseMessage {
+    Older_messages
+    · Younger_messages
+    · ResponseMessage {
         origin = CM.origin;
         response = Reject (reject_code, <implementation-specific>);
         refunded_cycles = CM.transferred_cycles;
-    } ·
-    Younger_messages
+      }
 ```
 
 #### Call context starvation {#rule-starvation}
