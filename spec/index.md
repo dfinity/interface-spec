@@ -2878,7 +2878,7 @@ The `queue` field is used to describe the message ordering behavior. Its concret
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document uses a single global list for a simpler and more concise system state.
 
-The following partial function `reverse_queue : S -> CanisterId -> CallOrigin -> Queue` defines the queue for a response message given its origin:
+The following partial function `reverse_queue : S -> CanisterId -> CallOrigin -> Queue` defines the queue for a response message from a callee given its origin:
 
       reverse_queue(S, callee, FromUser { … }) = Unordered
       reverse_queue(S, callee, FromCanister { calling_context = Ctxt_id; … }) = Queue { from = callee; to = S.call_contexts[Ctxt_id].canister_id }
