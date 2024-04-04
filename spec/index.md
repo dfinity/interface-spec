@@ -4543,6 +4543,7 @@ S.messages = Older_messages · CallMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
+M.arg = candid(A)
 if A.store_canister = null then
   store_canister = A.target_canister
 else
