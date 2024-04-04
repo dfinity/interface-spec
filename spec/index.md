@@ -76,7 +76,7 @@ The public entry points of canisters are called *methods*. Methods can be declar
 
 Methods can be *called*, from *caller* to *callee*, and will eventually incur a *response* which is either a *reply* or a *reject*. A method may have *parameters*, which are provided with concrete *arguments* in a method call.
 
-External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off. 
+External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off.
 Update calls are executed in *replicated* mode, i.e. execution takes place in parallel on multiple replicas who need to arrive at a consensus on what the result of the call is. Query calls are fast but offer less guarantees since they are executed in *non-replicated* mode, by a single replica.
 
 Internally, a call or a response is transmitted as a *message* from a *sender* to a *receiver*. Messages do not have a response.
@@ -109,11 +109,11 @@ This specification may refer to certain constants and limits without specifying 
 
 -   `CHUNK_STORE_SIZE`
 
-    Maximum number of chunks that can be stored within the chunk store of a canister. 
+    Maximum number of chunks that can be stored within the chunk store of a canister.
 
 -   `MAX_CHUNKS_IN_LARGE_WASM`
 
-    Maximum number of chunks that can comprise a large Wasm module. 
+    Maximum number of chunks that can comprise a large Wasm module.
 
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
@@ -443,7 +443,7 @@ The state tree contains information about all API boundary nodes (the source of 
     Example: `api-bn1.example.com`.
 
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
-  
+
     Public IPv4 address of a node in the dotted-decimal notation.
     If no `ipv4_address` is available for the corresponding node, then this path does not exist.  
     Example: `192.168.10.150`.
@@ -473,12 +473,12 @@ The state tree contains information about the topology of the Internet Computer.
 -   `/subnet/<subnet_id>/metrics` (blob)
 
      A collection of subnet-wide metrics related to this subnet's current resource usage and/or performance. The metrics are a CBOR map with the following fields:
-     
+
      - `num_canisters` (`nat`): The number of canisters on this subnet.
      - `canister_state_bytes` (`nat`): The total size of the state in bytes taken by canisters on this subnet since this subnet was created.
      - `consumed_cycles_total` (`map`): The total number of cycles consumed by all current and deleted canisters on this subnet. It's a map of two values, a low part of type `nat` and a high part of type `opt nat`.
      - `update_transactions_total` (`nat`): The total number of transactions processed on this subnet since this subnet was created.
-       
+
 
 :::note
 
@@ -1838,11 +1838,11 @@ In the future, the IC might expose more performance counters.
 
 ### Replicated execution check {#system-api-replicated-execution-check}
 
-The canister can check whether it is currently running in replicated or non replicated execution. 
+The canister can check whether it is currently running in replicated or non replicated execution.
 
 `ic0.in_replicated_execution : () -> (result: i32)`
 
-Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
+Returns 1 if the canister is being run in replicated mode and 0 otherwise.
 
 ### Controller check {#system-api-controller-check}
 
@@ -1993,10 +1993,10 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 ### IC method `upload_chunk` {#ic-upload_chunk}
 
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
- 
+
 ### IC method `clear_chunk_store` {#ic-clear_chunk_store}
 
-Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
+Canister controllers (and the canister itself) can clear the entire chunk storage of a canister.
 
 ### IC method `stored_chunks` {#ic-stored_chunks}
 
@@ -2375,6 +2375,17 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
+
+### IC method `bitcoin_get_block_headers` {#ic-bitcoin_get_block_headers}
+
+Given a start height and an optional end height, the function returns the block headers in the provided range. The range is inclusive, i.e., the block headers at the start and end heights are returned as well.
+
+ If no end height is specified, all blocks until the tip height, i.e., the largest available height, are returned. However, if the range from the start height to the end height or the tip height is large, only a prefix of the requested block headers may be returned in order to bound the size of the response.
+
+ The response is guaranteed to contain the block headers in order: if it contains any block headers, the first block header occurs at the start height, the second block header occurs at the start height plus one and so forth.
+
+ The response is a record consisting of the tip height and the vector of block headers.
+The block headers are 80-byte blobs in the [standard Bitcoin format](https://developer.bitcoin.org/reference/block_chain.html#block-headers).
 
 ## Certification {#certification}
 
@@ -4170,7 +4181,7 @@ S with
 
 #### IC Management Canister: Clear chunk store
 
-The controller of a canister, or the canister itself can clear the chunk store of that canister. 
+The controller of a canister, or the canister itself can clear the chunk store of that canister.
 
 ```html
 
@@ -5648,7 +5659,7 @@ Read response
 A record with
 
 -   `{certificate: C}`
-  
+
 
 The predicate `may_read_path_for_subnet` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 
