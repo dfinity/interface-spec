@@ -3760,10 +3760,9 @@ Condition:
 ```html
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
-reject_code ∈ { SYS_FATAL, SYS_TRANSIENT, DESTINATION_INVALID }
 ```
 
-State after:
+State after, with `reject_code` being an arbitrary reject code:
 ```html
 S.messages =
     Older_messages
