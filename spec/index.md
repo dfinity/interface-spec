@@ -3759,7 +3759,6 @@ The system can reject a request at any point in time, e.g., because it is overlo
 Condition:
 ```html
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
 ```
 
 State after, with `reject_code` being an arbitrary reject code:
