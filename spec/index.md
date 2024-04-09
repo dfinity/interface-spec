@@ -1982,7 +1982,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
-Cycles to pay for the call must be explicitly transferred with the call.
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 ### IC method `update_settings` {#ic-update_settings}
 
@@ -2163,7 +2163,7 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
-Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 ### IC method `http_request` {#ic-http_request}
 
@@ -2201,7 +2201,7 @@ The following parameters should be supplied for the call:
 
 -   `transform` - an optional record that includes a function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
-Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
