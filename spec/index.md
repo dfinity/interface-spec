@@ -2378,6 +2378,12 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `bitcoin_get_block_headers` {#ic-bitcoin_get_block_headers}
 
+:::note
+
+The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
 Given a start height and an optional end height, the function returns the block headers in the provided range. The range is inclusive, i.e., the block headers at the start and end heights are returned as well.
 
  If no end height is specified, all blocks until the tip height, i.e., the largest available height, are returned. However, if the range from the start height to the end height or the tip height is large, only a prefix of the requested block headers may be returned in order to bound the size of the response.

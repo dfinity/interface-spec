@@ -76,11 +76,13 @@ type bitcoin_network = variant {
 
 type bitcoin_address = text;
 
-type block_hash = blob;
+type bitcoin_block_hash = blob;
 
 type bitcoin_block_header = blob;
 
 type millisatoshi_per_byte = nat64;
+
+type bitcoin_block_height = nat32;
 
 type outpoint = record {
     txid : blob;
@@ -104,8 +106,8 @@ type bitcoin_get_utxos_args = record {
 
 type bitcoin_get_utxos_result = record {
     utxos : vec utxo;
-    tip_block_hash : block_hash;
-    tip_height : nat32;
+    tip_block_hash : bitcoin_block_hash;
+    tip_height : bitcoin_block_height;
     next_page : opt blob;
 };
 
@@ -120,8 +122,8 @@ type bitcoin_get_utxos_query_args = record {
 
 type bitcoin_get_utxos_query_result = record {
     utxos : vec utxo;
-    tip_block_hash : block_hash;
-    tip_height : nat32;
+    tip_block_hash : bitcoin_block_hash;
+    tip_height : bitcoin_block_height;
     next_page : opt blob;
 };
 
@@ -153,13 +155,13 @@ type bitcoin_send_transaction_args = record {
 };
 
 type bitcoin_get_block_headers_args = record {
-	start_height : nat32;
-	end_height : opt nat32;
+    start_height : bitcoin_block_height;
+    end_height : opt bitcoin_block_height;
 };
 
 type bitcoin_get_block_headers_result = record {
-	tip_height : nat32;
-	block_headers : vec bitcoin_block_header;
+    tip_height : bitcoin_block_height;
+    block_headers : vec bitcoin_block_header;
 };
 
 type node_metrics = record {
