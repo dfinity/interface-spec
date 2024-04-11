@@ -1149,7 +1149,11 @@ We want to leverage advanced WebAssembly features, such as WebAssembly host refe
 
 In order for a WebAssembly module to be usable as the code for the canister, it needs to conform to the following requirements:
 
+-   It may declare (import or export) at most one memory.
+
 -   It may only import a function if it is listed in [Overview of imports](#system-api-imports).
+    The value of `I ∈ {i32, i64}` specifying whether the imported functions have 32-bit or 64-bit pointers
+    is derived from the bit-width of the declared memory defaulting to `I = i32` if the canister declares no memory.
 
 -   It may have a `(start)` function.
 
@@ -1298,40 +1302,43 @@ In the reply callback of a [inter-canister method call](#system-api-call), the a
 ### Overview of imports {#system-api-imports}
 
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
-The notation `I ∈ {i32, i64}` means that there are actually two corresponding System API functions for the two integer types `I`: `i32` and `i64`.
+
+In the following, the value of `I ∈ {i32, i64}` specifies whether the imported functions have 32-bit or 64-bit pointers.
+Given a canister module, the value of `I ∈ {i32, i64}` is derived from the bit-width of the declared memory
+defaulting to `I = i32` if the canister declares no memory.
 
     ic0.msg_arg_data_size : () -> i32;                                                    // I U Q CQ Ry CRy F
-    ic0.msg_arg_data_copy : (dst : I, offset : i32, size : i32) -> (); I ∈ {i32, i64}     // I U Q CQ Ry CRy F
+    ic0.msg_arg_data_copy : (dst : I, offset : i32, size : i32) -> ();                    // I U Q CQ Ry CRy F
     ic0.msg_caller_size : () -> i32;                                                      // *
-    ic0.msg_caller_copy : (dst : I, offset: i32, size : i32) -> (); I ∈ {i32, i64}        // *
+    ic0.msg_caller_copy : (dst : I, offset: i32, size : i32) -> ();                       // *
     ic0.msg_reject_code : () -> i32;                                                      // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                                  // Rt CRt
-    ic0.msg_reject_msg_copy : (dst : I, offset : i32, size : i32) -> (); I ∈ {i32, i64}   // Rt CRt
+    ic0.msg_reject_msg_copy : (dst : I, offset : i32, size : i32) -> ();                  // Rt CRt
 
-    ic0.msg_reply_data_append : (src : I, size : i32) -> (); I ∈ {i32, i64}               // U Q CQ Ry Rt CRy CRt
+    ic0.msg_reply_data_append : (src : I, size : i32) -> ();                              // U Q CQ Ry Rt CRy CRt
     ic0.msg_reply : () -> ();                                                             // U Q CQ Ry Rt CRy CRt
-    ic0.msg_reject : (src : I, size : i32) -> (); I ∈ {i32, i64}                          // U Q CQ Ry Rt CRy CRt
+    ic0.msg_reject : (src : I, size : i32) -> ();                                         // U Q CQ Ry Rt CRy CRt
 
     ic0.msg_cycles_available : () -> i64;                                                 // U Rt Ry
-    ic0.msg_cycles_available128 : (dst : I) -> (); I ∈ {i32, i64}                         // U Rt Ry
+    ic0.msg_cycles_available128 : (dst : I) -> ();                                        // U Rt Ry
     ic0.msg_cycles_refunded : () -> i64;                                                  // Rt Ry
-    ic0.msg_cycles_refunded128 : (dst : I) -> (); I ∈ {i32, i64}                          // Rt Ry
+    ic0.msg_cycles_refunded128 : (dst : I) -> ();                                         // Rt Ry
     ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);                         // U Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : I)
-                           -> (); I ∈ {i32, i64}                                          // U Rt Ry
+                           -> ();                                                         // U Rt Ry
 
     ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : I)
-                           -> (); I ∈ {i32, i64}                                          // I G U Ry Rt C T
+                           -> ();                                                         // I G U Ry Rt C T
 
     ic0.canister_self_size : () -> i32;                                                   // *
-    ic0.canister_self_copy : (dst : I, offset : i32, size : i32) -> (); I ∈ {i32, i64}    // *
+    ic0.canister_self_copy : (dst : I, offset : i32, size : i32) -> ();                   // *
     ic0.canister_cycle_balance : () -> i64;                                               // *
-    ic0.canister_cycle_balance128 : (dst : I) -> (); I ∈ {i32, i64}                       // *
+    ic0.canister_cycle_balance128 : (dst : I) -> ();                                      // *
     ic0.canister_status : () -> i32;                                                      // *
     ic0.canister_version : () -> i64;                                                     // *
 
     ic0.msg_method_name_size : () -> i32;                                                 // F
-    ic0.msg_method_name_copy : (dst : I, offset : i32, size : i32) -> (); I ∈ {i32, i64}  // F
+    ic0.msg_method_name_copy : (dst : I, offset : i32, size : i32) -> ();                 // F
     ic0.accept_message : () -> ();                                                        // F
 
     ic0.call_new :
@@ -1343,9 +1350,9 @@ The notation `I ∈ {i32, i64}` means that there are actually two corresponding 
         reply_env : i32,
         reject_fun : i32,
         reject_env : i32
-      ) -> (); I ∈ {i32, i64}                                                             // U CQ Ry Rt CRy CRt T
+      ) -> ();                                                                            // U CQ Ry Rt CRy CRt T
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                                   // U CQ Ry Rt CRy CRt T
-    ic0.call_data_append : (src : I, size : i32) -> (); I ∈ {i32, i64}                    // U CQ Ry Rt CRy CRt T
+    ic0.call_data_append : (src : I, size : i32) -> ();                                   // U CQ Ry Rt CRy CRt T
     ic0.call_cycles_add : (amount : i64) -> ();                                           // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();                  // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                          // U CQ Ry Rt CRy CRt T
@@ -1359,19 +1366,19 @@ The notation `I ∈ {i32, i64}` means that there are actually two corresponding 
     ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();                     // * s
     ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();                      // * s
 
-    ic0.certified_data_set : (src: I, size: i32) -> (); I ∈ {i32, i64}                    // I G U Ry Rt T
+    ic0.certified_data_set : (src: I, size: i32) -> ();                                   // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                             // *
     ic0.data_certificate_size : () -> i32;                                                // Q CQ
-    ic0.data_certificate_copy : (dst: I, offset: i32, size: i32) -> (); I ∈ {i32, i64}    // Q CQ
+    ic0.data_certificate_copy : (dst: I, offset: i32, size: i32) -> ();                   // Q CQ
 
     ic0.time : () -> (timestamp : i64);                                                   // *
     ic0.global_timer_set : (timestamp : i64) -> i64;                                      // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);                    // * s
-    ic0.is_controller: (src: I, size: i32) -> ( result: i32); I ∈ {i32, i64}              // * s
+    ic0.is_controller: (src: I, size: i32) -> ( result: i32);                             // * s
     ic0.in_replicated_execution: () -> (result: i32);                                     // * s
 
-    ic0.debug_print : (src : I, size : i32) -> (); I ∈ {i32, i64}                         // * s
-    ic0.trap : (src : I, size : i32) -> (); I ∈ {i32, i64}                                // * s
+    ic0.debug_print : (src : I, size : i32) -> ();                                        // * s
+    ic0.trap : (src : I, size : i32) -> ();                                               // * s
 
 The comment after each function lists from where these functions may be invoked:
 
