@@ -870,7 +870,7 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
 -   If the request is a query call to the Management Canister (`aaaaa-aa`), then:
 
-    -   If the call is to the `bitcoin_get_balance_query` or `bitcoin_get_utxos_query` method, then the effective canister id for this call must be the bitcoin canister id which is left unspecified (in particular, it depends on the bitcoin network).
+    -   If the call is to the `bitcoin_get_balance_query` or `bitcoin_get_utxos_query` method, then the effective canister id for this call must be any canister id on the bitcoin subnet.
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
@@ -880,7 +880,8 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
 The expectation is that user-side agent code shields users and developers from the notion of effective canister id, in analogy to how the System API interface shields canister developers from worrying about routing.
 
-The bitcoin mainnet canister ID is `ghsi2-tqaaa-aaaan-aaaca-cai`. The bitcoin testnet canister ID is `g4xu7-jiaaa-aaaan-aaaaq-cai` (also used in local testing for the bitcoin regtest network).
+A canister id on the bitcoin subnet of the IC mainnet is `ghsi2-tqaaa-aaaan-aaaca-cai`.
+A canister id on the bitcoin subnet of IC testnets is `g4xu7-jiaaa-aaaan-aaaaq-cai` (also to be used in local testing for the bitcoin `regtest` network).
 
 The Internet Computer blockchain mainnet does not support `provisional_create_canister_with_cycles` and thus all calls to this method are rejected independently of the effective canister id.
 
