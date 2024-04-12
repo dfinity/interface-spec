@@ -2380,7 +2380,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 :::note
 
-The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+The `bitcoin_get_block_headers` endpoint is considered EXPERIMENTAL. Canister developers must be aware that this endpoint may evolve in a non-backward-compatible way.
 
 :::
 
