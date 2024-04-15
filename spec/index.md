@@ -6360,7 +6360,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         callee_src  : I,
         callee_size : I,
         name_src    : I,
-        name_size : I,
+        name_size   : I,
         reply_fun   : i32,
         reply_env   : i32,
         reject_fun  : i32,
