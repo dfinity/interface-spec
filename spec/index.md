@@ -1956,7 +1956,10 @@ The optional `settings` parameter can be used to set the following settings:
 
 -   `memory_allocation` (`nat`)
 
-    Must be a number between 0 and 2<sup>48</sup> (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If the IC cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected. If set to 0, then memory growth of the canister will be best-effort and subject to the available memory on the IC.
+    Must be a number between 0 and 2<sup>48</sup> (i.e 256TB), inclusively.
+    It indicates the maximum amount of memory that the canister is allowed to use in total (i.e., any attempt to grow memory usage beyond the memory allocation will fail) and also guarantees availability of this amount of memory.
+    If the IC cannot guarantee the requested memory allocation, for example because it is oversubscribed, then the call will be rejected.
+    If set to 0, then memory growth of the canister will have no explicit limit but will only be best-effort and subject to the available memory on the IC.
 
     Default value: 0
 
