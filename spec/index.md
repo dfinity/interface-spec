@@ -431,7 +431,7 @@ This section specifies the publicly relevant paths in the tree.
 
 -   `/time` (natural):
 
-    All partial state trees include a timestamp, indicating the time at which the state is current.
+    All partial state trees include a timestamp, expressed in nanoseconds since 1970-01-01, indicating the time at which the state is current.
 
 ### Api boundary nodes information {#state-tree-api-bn}
 
@@ -1982,6 +1982,8 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
 
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+
 ### IC method `update_settings` {#ic-update_settings}
 
 Only *controllers* of the canister can update settings. See [IC method](#ic-create_canister) for a description of settings.
@@ -2161,6 +2163,8 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+
 ### IC method `http_request` {#ic-http_request}
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
@@ -2197,7 +2201,7 @@ The following parameters should be supplied for the call:
 
 -   `transform` - an optional record that includes a function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
-Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
@@ -2270,7 +2274,7 @@ This method is only available in local development instances.
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
-Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
 
 Any user can top-up any canister this way.
 
@@ -5124,6 +5128,12 @@ State after
 
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid())
+        refunded_cycles = M.transferred_cycles
+      }
 
 ```
 
