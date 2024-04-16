@@ -2256,7 +2256,7 @@ A single metric entry is a record with the following fields:
 
 - `node_id` (`principal`): the principal characterizing a node;
 
-- `num_blocks_total` (`nat64`): the number of blocks proposed by this node;
+- `num_blocks_proposed_total` (`nat64`): the number of blocks proposed by this node;
 
 - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
