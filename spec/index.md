@@ -536,7 +536,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 -   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
 
--   At `/api/v2/canister/<effective_canister_id>/sync_call` the user can submit update calls and either get a synchronous HTTPS response with a certified status (if the update call completes within one execution round) or have the update call processed asynchronously.
+-   At `/api/v3/canister/<effective_canister_id>/call` the user can submit update calls and get a synchronous HTTPS response with a certificate for the call status.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -546,7 +546,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/sync_call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -559,10 +559,10 @@ This document does not yet explain how to find the location and port of the Inte
 Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
 
 The Internet Computer has two HTTPS APIs for canister calling:
-- [*Asynchronous*](#http-async-call) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
-- [*Synchronous*](#http-sync-call) canister calling, where the status of the canister call is in the response of the original HTTPS request.
+- [*Asynchronous*](#http-async-call-overview) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
+- [*Synchronous*](#http-sync-call-overview) canister calling, where the status of the canister call is in the response of the original HTTPS request.
 
-#### Asynchronous canister calling {#http-async-call}
+#### Asynchronous canister calling {#http-async-call-overview}
 
 1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
 
@@ -621,23 +621,15 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
-#### Synchronous canister calling {#http-sync-call}
+#### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within one execution round.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within a timeout.
 
-The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned with a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned with the status of the update call in a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
 Replicas will reply back to users' submitted update calls with a certificate of the state of the call. A replica will keep the HTTPS connection for the request alive and respond once the state transitions to `replied`, `rejected`, or `done`. If a timeout for the request is reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned. In such cases, the user should poll the IC to determine the terminal state of the update call.
 
-A certificate is returned by the IC to the user if:
-
--   The execution of the call completes within one execution round, and the status is certified by the IC within the ingress expiry time. The status will be either `replied`, `rejected` or `done`.
-
--   The call expires before it is queued and is dropped by the IC. The status of the call will be `unknown` with the certificate time stamp at a later time than the ingress expiry time.
-
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
-
-Synchronous calls are therefore best suited for calls that are fast and expected to complete within one execution round. If a call does not complete within one execution round, the replica won't return a certificate and the user will need to poll the IC to determine the status of the call.
 
 ### Request: Call {#http-call}
 
@@ -2929,7 +2921,7 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v2/…/sync_call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v3/…/call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
 These are the read-only messages:
 
@@ -3173,7 +3165,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Potentially state changing API requests that are submitted via `/api/v2/…/call` and `/api/v2/…/sync_call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v2/…/call` and `/api/v3/…/call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
@@ -3219,7 +3211,7 @@ A `Request` has an effective canister id according to the rules in [Effective ca
 
 #### API Request submission
 
-After a node accepts a request via `/api/v2/canister/<ECID>/call` or `/api/v2/canister/<ECID>/sync_call`, the request gets added to the IC state as `Received`.
+After a node accepts a request via `/api/v2/canister/<ECID>/call` or `/api/v3/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
 
 This may only happen if the signature is valid and is created with a correct key. Due to this check, the envelope is discarded after this point.
 
