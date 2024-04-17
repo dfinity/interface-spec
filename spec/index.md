@@ -623,11 +623,11 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within a timeout.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes. The purpose of the synchronous call endpoint is to give the user a certified response for their canister call.
 
-The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned with the status of the update call in a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+If the returned certificate for the status of the update call is in a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
-Replicas will reply back to users' submitted update calls with a certificate of the state of the call. A replica will keep the HTTPS connection for the request alive and respond once the state transitions to `replied`, `rejected`, or `done`. If a timeout for the request is reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned. In such cases, the user should poll the IC to determine the terminal state of the update call.
+A replica will keep the HTTPS connection for the request alive and respond once the state transitions to a terminal state. If a timeout for the request is reached while waiting for the terminal state to be reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned. In such cases, the user should poll the IC to determine the terminal state of the update call.
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
