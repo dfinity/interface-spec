@@ -623,11 +623,11 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate to the HTTPS request. If the returned certificate indicates the that the update call is in a terminal state, `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate to the HTTPS request. If the returned certificate indicates that the update call is in a terminal state, `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
-The replica will keep the HTTPS connection for the request alive and respond once the state transitions to a terminal state. If a timeout for the request is reached while waiting for the terminal state to be reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned.
+The replica will maintain the HTTPS connection for the request and will respond once the state transitions to a terminal state. If a timeout for the request is reached while waiting for the terminal state to be reached,  then the replica will reply before the call completes, meaning a certificate with the state in `unknown`, `received`, or `processing` is returned.
 
 The user should take the following actions for the returned certificate states:
 
