@@ -625,7 +625,9 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes within one execution round.
 
-The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+The purpose of the synchronous call endpoint is to give the user a certified response for their canister call. This means that if a certificate is returned with a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
+
+Replicas will reply back to users' submitted update calls with a certificate of the state of the call. A replica will keep the HTTPS connection for the request alive and respond once the state transitions to `replied`, `rejected`, or `done`. If a timeout for the request is reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned. In such cases, the user should poll the IC to determine the terminal state of the update call.
 
 A certificate is returned by the IC to the user if:
 
@@ -638,6 +640,48 @@ The synchronous call endpoint is useful for users as it removes the networking o
 Synchronous calls are therefore best suited for calls that are fast and expected to complete within one execution round. If a call does not complete within one execution round, the replica won't return a certificate and the user will need to poll the IC to determine the status of the call.
 
 ### Request: Call {#http-call}
+
+In order to make an update call to a canister and potentially get a synchronous response, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+
+-   `request_type` (`text`): Always `call`
+
+-   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
+
+-   `canister_id` (`blob`): The principal of the canister to call.
+
+-   `method_name` (`text`): Name of the canister method to call.
+
+-   `arg` (`blob`): Argument to pass to the canister method.
+
+The HTTP response to this request can have the following responses:
+
+-   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
+    
+    -   If the update call completes within one execution round, or the call expires, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+
+        -   `status` (`text`): `"terminal"`
+
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
+
+    -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
+
+        -   `status` (`text`): `"non_replicated_rejection"`
+
+        -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+
+        -   `reject_message` (`text`): a textual diagnostic message.
+
+        -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when the canister call is running for more than one execution round. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+
+-   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+
+-   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
+
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
+
+### Request: Asynchronous Call {#http-async-call}
 
 In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
@@ -676,48 +720,6 @@ This request type can *also* be used to call a query method (but not a composite
 The functionality exposed via the [The IC management canister](#ic-management-canister) can be used this way.
 
 :::
-
-### Request: Sync Call {#http-sync-call}
-
-In order to make an update call to a canister and potentially get a synchronous response, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/sync_call`. The request body consists of an authentication envelope with a `content` map with the following fields:
-
--   `request_type` (`text`): Always `sync_call`
-
--   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
-
--   `canister_id` (`blob`): The principal of the canister to call.
-
--   `method_name` (`text`): Name of the canister method to call.
-
--   `arg` (`blob`): Argument to pass to the canister method.
-
-The HTTP response to this request can have the following responses:
-
--   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
-    
-    -   If the update call completes within one execution round, or the call expires, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
-
-        -   `status` (`text`): `"terminal"`
-
-        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
-
-    -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
-
-        -   `status` (`text`): `"non_replicated_rejection"`
-
-        -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
-
-        -   `reject_message` (`text`): a textual diagnostic message.
-
-        -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
-
--   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when the canister call is running for more than one execution round. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
-
--   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
-
--   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
-
-This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending an update call request type for a query method (except for cycle balance change due to message execution).
 
 ### Request: Read state {#http-read-state}
 
