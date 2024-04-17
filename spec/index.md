@@ -623,13 +623,19 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will respond with a certificate if the call completes. The purpose of the synchronous call endpoint is to give the user a certified response for their canister call.
-
-If the returned certificate for the status of the update call is in a terminal state, i.e. `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
-
-A replica will keep the HTTPS connection for the request alive and respond once the state transitions to a terminal state. If a timeout for the request is reached while waiting for the terminal state to be reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned. In such cases, the user should poll the IC to determine the terminal state of the update call.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate to the HTTPS request. If the returned certificate indicates the that the update call is in a terminal state, `replied`, `rejected`, or `done`, then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call.
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
+
+The replica will keep the HTTPS connection for the request alive and respond once the state transitions to a terminal state. If a timeout for the request is reached while waiting for the terminal state to be reached,  then the replica will reply before the call completes, meaning a certificate with the state in in `unknown`, `received`, or `processing` is returned.
+
+The user should take the following actions for the returned certificate states:
+
+-    `processing`: The call is being executed. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
+
+-    `received`: The call has been received by the IC. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
+
+-    `unknown`: The user can conclude that the message was not received by the IC at the attached timestamp. The user can retry the call, or poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
 
 ### Request: Call {#http-call}
 
