@@ -641,7 +641,7 @@ Synchronous calls are therefore best suited for calls that are fast and expected
 
 ### Request: Call {#http-call}
 
-In order to make an update call to a canister and potentially get a synchronous response, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+In order to call a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
 -   `request_type` (`text`): Always `call`
 
@@ -657,13 +657,13 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
     
-    -   If the update call completes within one execution round, or the call expires, the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completes, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
-        -   `status` (`text`): `"terminal"`
+        -   `status` (`text`): `"certified_state"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   If the update call resulted in a (non-replicated) reject, the response is a CBOR map with the following fields:
+    -   If the update call resulted in a non-replicated reject, the response is a CBOR map with the following fields:
 
         -   `status` (`text`): `"non_replicated_rejection"`
 
@@ -673,7 +673,11 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with an empty body. This status is returned as a fallback mechanism for when the canister call is running for more than one execution round. This implies that the request was accepted by the IC for further processing. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+-   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+
+    -   `status` (`text`): `"certified_state"`
+
+    -   `reply` (`blob`): A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
