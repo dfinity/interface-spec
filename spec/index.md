@@ -691,7 +691,7 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with non-empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. The returned call state will be in `unknown`, `received`, or `done`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+-   202 HTTP status with non-empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. The returned call state will be in `unknown`, `received`, or `processing`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
 
     -   `status` (`text`): `"certified_state"`
 
