@@ -1,6 +1,11 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
+* Update subnet read state request conditions on requested paths.
+* Fix: allow inter-canister calls (requests) to be spontaneously rejected in the abstract spec.
+
+### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
@@ -9,6 +14,9 @@
 * Specify the resource reservation mechanism.
 * Allow `in_replicated_execution` system API method to be executed during `canister_start`.
 * Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
+* Canister version is guaranteed to increase if the canister's running status changes.
+* Calls to frozen canisters are rejected with `SYS_TRANSIENT` instead of `CANISTER_ERROR`.
+* Add API boundary nodes information into the certified state tree.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.
