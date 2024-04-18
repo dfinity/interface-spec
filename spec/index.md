@@ -673,17 +673,17 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 The HTTP response to this request can have the following responses:
 
--   200 HTTP status with a non-empty body. The response contains the canister response, which is either a `reply` or a `reject`.
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected.
     
-    -   If the update call completes, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completes, meaning the call state is in `reply`, `reject`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
         -   `status` (`text`): `"certified_state"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   If the update call resulted in a non-replicated reject, the response is a CBOR map with the following fields:
+    -   If a non-replicated pre-processing error occurred due to [canister inspect message](#system-api-inspect-message), then the body of the response contains information about the IC specific error encountered. The body is a CBOR map with the following fields:
 
-        -   `status` (`text`): `"non_replicated_rejection"`
+        -   `status` (`text`): `"canister_inspect_message_rejected"`
 
         -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
@@ -691,7 +691,7 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+-   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. The returned call state will be in `unknown`, `received`, or `done`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
 
     -   `status` (`text`): `"certified_state"`
 
