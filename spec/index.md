@@ -643,7 +643,7 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate to the HTTPS request. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate of the state of the call to the HTTPS request. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
@@ -675,7 +675,7 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
     
-    -   If the update call completes, meaning the call state is in `reply`, `reject`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completes, meaning the call state is in `replied`, `rejected`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
         -   `status` (`text`): `"certified_state"`
 
