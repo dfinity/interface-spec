@@ -673,9 +673,9 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 The HTTP response to this request can have the following responses:
 
--   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
+-   200 HTTP status with a non-empty body. This status is returned if the replica received the message.
     
-    -   If the update call completed, meaning the call state in `replied`, `rejected`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   A certificate for the state of the update call is produced, and returned as a CBOR (see [CBOR](#cbor)) map with the following fields:
 
         -   `status` (`text`): `"certified_state"`
 
@@ -690,12 +690,6 @@ The HTTP response to this request can have the following responses:
         -   `reject_message` (`text`): a textual diagnostic message.
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
-
--   202 HTTP status with non-empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. The returned call state will be in `unknown`, `received`, or `processing`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
-
-    -   `status` (`text`): `"certified_state"`
-
-    -   `reply` (`blob`): A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
