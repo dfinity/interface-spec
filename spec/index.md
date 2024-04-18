@@ -651,11 +651,11 @@ The replica will maintain the HTTPS connection for the request and will respond 
 
 The user should take the following actions for the returned certificate states:
 
--    `processing`: The call is being executed. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
+-    `processing`: The call is being executed by the IC. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
 
 -    `received`: The call has been received by the IC. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
 
--    `unknown`: The user can conclude that the message was not received by the IC at the attached timestamp. The user can retry the call, or poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
+-    `unknown`: The user can conclude that the message was not received by the IC at the attached timestamp. The user can retry the call, or poll the IC using [`read_state`](#http-read-state) requests.
 
 ### Request: Call {#http-call}
 
@@ -675,13 +675,13 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
     
-    -   If the update call completes, meaning the call state is in `replied`, `rejected`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   If the update call completed, meaning the call state in `replied`, `rejected`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
         -   `status` (`text`): `"certified_state"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   If a non-replicated pre-processing error occurred due to [canister inspect message](#system-api-inspect-message), then the body of the response contains information about the IC specific error encountered. The body is a CBOR map with the following fields:
+    -   If a non-replicated pre-processing error occurred due to the [canister inspect message](#system-api-inspect-message), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
 
         -   `status` (`text`): `"canister_inspect_message_rejected"`
 
@@ -691,7 +691,7 @@ The HTTP response to this request can have the following responses:
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
 
--   202 HTTP status with non-empty body. This status is returned if the replica times out while waiting for the canister call to complete. The returned call state will be in `unknown`, `received`, or `done`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
+-   202 HTTP status with non-empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. The returned call state will be in `unknown`, `received`, or `done`. Users should poll [`read_state`](#http-read-state) for the result of the call. The response is a CBOR (see [CBOR](#cbor)) map with the following fields.
 
     -   `status` (`text`): `"certified_state"`
 
