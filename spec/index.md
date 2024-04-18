@@ -673,7 +673,7 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 The HTTP response to this request can have the following responses:
 
--   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected.
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
     
     -   If the update call completes, meaning the call state is in `reply`, `reject`, or `done`, then the response is a CBOR (see [CBOR](#cbor)) map with the following fields:
 
