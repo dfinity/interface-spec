@@ -675,7 +675,7 @@ The HTTP response to this request can have the following responses:
 
 -   200 HTTP status with a non-empty body. This status is returned if the replica received the message.
     
-    -   A certificate for the state of the update call is produced, and returned as a CBOR (see [CBOR](#cbor)) map with the following fields:
+    -   A certificate for the state of the update call is produced, and returned as a CBOR (see [CBOR](#cbor)) map with the fields below. The user should use the certificate to determine the state of the call:
 
         -   `status` (`text`): `"certified_state"`
 
