@@ -643,7 +643,7 @@ When asking the IC about the state or call of a request, the user uses the reque
 
 #### Synchronous canister calling {#http-sync-call-overview}
 
-A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond with a certificate of the state of the call to the HTTPS request. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond to the HTTPS request with a certificate of the call status. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
@@ -671,17 +671,17 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 -   `arg` (`blob`): Argument to pass to the canister method.
 
-The HTTP response to this request can have the following responses:
+The HTTP response to this request can have the following forms:
 
--   200 HTTP status with a non-empty body. This status is returned if the replica received the message.
+-   200 HTTP status with a non-empty body. This status is returned if the replica successfully received the message.
     
-    -   A certificate for the state of the update call is produced, and returned as a CBOR (see [CBOR](#cbor)) map with the fields below. The user should use the certificate to determine the state of the call:
+    -   A certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below. The user should use the certificate to determine the state of the call:
 
         -   `status` (`text`): `"certified_state"`
 
-        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`. See [Request status](#state-tree-request-status) for more details on the request status.
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
 
-    -   If a non-replicated pre-processing error occurred due to the [canister inspect message](#system-api-inspect-message), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
+    -   If a non-replicated pre-processing error occurred (e.g., due to the [canister inspect message](#system-api-inspect-message)), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
 
         -   `status` (`text`): `"canister_inspect_message_rejected"`
 
