@@ -1,5 +1,7 @@
 ## Changelog {#changelog}
 
+### ∞ (unreleased)
+
 ### 0.24.0 (2024-04-23) {#0_24_0}
 * Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
 * Update subnet read state request conditions on requested paths.
