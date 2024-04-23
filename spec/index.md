@@ -2880,7 +2880,7 @@ Therefore, a message can have different shapes:
           refunded_cycles : Nat;
         }
 
-The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
+The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered so they have no `queue` field.
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document uses a single global list for a simpler and more concise system state.
 
@@ -3328,7 +3328,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping
 ```
@@ -3355,7 +3355,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = liquid_balance(
   S.balances[CM.callee],
@@ -3402,6 +3402,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Running
 liquid_balance(
@@ -3564,7 +3565,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · FuncMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 S.canisters[M.receiver] ≠ EmptyCanister
 Mod = S.canisters[M.receiver].module
 
@@ -3849,7 +3850,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'create_canister'
 M.arg = candid(A)
@@ -3971,7 +3972,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'update_settings'
 M.arg = candid(A)
@@ -4076,7 +4077,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'canister_status'
 M.arg = candid(A)
@@ -4132,7 +4133,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'canister_info'
 M.arg = candid(A)
@@ -4173,7 +4174,8 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'upload_chunk'
 M.arg = candid(A)
 |dom(S.chunk_store[A.canister_id]) ∪ {SHA-256(A.chunk)}| <= CHUNK_STORE_SIZE
@@ -4192,6 +4194,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid({hash: hash})
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4203,7 +4206,8 @@ The controller of a canister, or the canister itself can clear the chunk store o
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'clear_chunk_store'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
@@ -4219,6 +4223,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid()
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4230,7 +4235,8 @@ The controller of a canister, or the canister itself can list the hashes of the 
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'stored_chunks'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
@@ -4246,6 +4252,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid([{hash: hash} | hash <- dom(S.chunk_store[A.canister_id])])
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4262,7 +4269,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
@@ -4390,7 +4397,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
@@ -4540,9 +4547,10 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
+M.arg = candid(A)
 if A.store_canister = null then
   store_canister = A.target_canister
 else
@@ -4578,7 +4586,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'uninstall_code'
 M.arg = candid(A)
@@ -4651,7 +4659,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4676,7 +4684,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4732,7 +4740,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4790,7 +4798,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'start_canister'
 M.arg = candid(A)
@@ -4822,7 +4830,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'start_canister'
 M.arg = candid(A)
@@ -4861,7 +4869,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'delete_canister'
 M.arg = candid(A)
@@ -4906,7 +4914,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'deposit_cycles'
 M.arg = candid(A)
@@ -4941,7 +4949,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'raw_rand'
 M.arg = candid()
@@ -4979,7 +4987,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'node_metrics_history'
 M.arg = candid(A)
@@ -5010,7 +5018,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'provisional_create_canister_with_cycles'
 M.arg = candid(A)
@@ -5117,7 +5125,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'provisional_top_up_canister'
 M.arg = candid(A)
