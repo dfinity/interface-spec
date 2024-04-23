@@ -1,5 +1,10 @@
 ## Changelog {#changelog}
 
+### 0.24.0 (2024-04-23) {#0_24_0}
+* Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
+* Update subnet read state request conditions on requested paths.
+* Fix: allow inter-canister calls (requests) to be spontaneously rejected in the abstract spec.
+
 ### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
