@@ -683,7 +683,7 @@ The HTTP response to this request can have the following forms:
 
     -   If a non-replicated pre-processing error occurred (e.g., due to the [canister inspect message](#system-api-inspect-message)), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
 
-        -   `status` (`text`): `"canister_inspect_message_rejected"`
+        -   `status` (`text`): `"non_replicated_rejection"`
 
         -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
 
