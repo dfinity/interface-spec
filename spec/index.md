@@ -647,7 +647,7 @@ A synchronous update call, also known as a "call and await", is a type of update
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
-The replica will maintain the HTTPS connection for the request and will respond once the state transitions to a terminal state. If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply before the call completes, meaning a certificate for the call state in `unknown`, `received`, or `processing` is returned.
+The replica will maintain the HTTPS connection for the request and will respond once the call status transitions to a terminal state. If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply before the call completes, meaning a certificate for the call state in `unknown`, `received`, or `processing` is returned.
 
 The user should take the following actions for the returned certificate states:
 
