@@ -647,15 +647,9 @@ A synchronous update call, also known as a "call and await", is a type of update
 
 The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
 
-The replica will maintain the HTTPS connection for the request and will respond once the call status transitions to a terminal state. If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply before the call completes, meaning a certificate for the call state in `unknown`, `received`, or `processing` is returned.
+The replica will maintain the HTTPS connection for the request and will respond once the call status transitions to a terminal state. 
 
-The user should take the following actions for the returned certificate states:
-
--    `processing`: The call is being executed by the IC. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
-
--    `received`: The call has been received by the IC. The user should poll the IC using [`read_state`](#http-read-state) requests to determine the result of the call.
-
--    `unknown`: The user can conclude that the message was not received by the IC at the attached timestamp. The user can retry the call, or poll the IC using [`read_state`](#http-read-state) requests.
+If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply with an empty body and a 202 HTTP status code. In such cases, the user should use [`read_state`](#http-read-state) to determine the status of the call.
 
 ### Request: Call {#http-call}
 
@@ -673,9 +667,9 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 The HTTP response to this request can have the following forms:
 
--   200 HTTP status with a non-empty body. This status is returned if the replica successfully received the message.
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
     
-    -   A certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below. The user should use the certificate to determine the state of the call:
+    -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
 
         -   `status` (`text`): `"certified_state"`
 
@@ -690,6 +684,8 @@ The HTTP response to this request can have the following forms:
         -   `reject_message` (`text`): a textual diagnostic message.
 
         -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with an empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. Users should use [`read_state`](#http-read-state) to determine the status of the call.
 
 -   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
 
