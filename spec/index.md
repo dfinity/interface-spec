@@ -1560,8 +1560,6 @@ The reply callback is executed upon successful completion of the method call, wh
 
 The reject callback is executed if the method call fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing.
-
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 
 -   `ic0.call_on_cleanup : (fun : i32, env : i32) → ()`
@@ -1595,6 +1593,8 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 -   `ic0.call_perform  : () -> ( err_code : i32 )`
 
     This concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
+
+    This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
 
     If the function returns `0` as the `err_code`, the IC was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callbacks will be executed.
 
