@@ -1594,7 +1594,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     This concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
 
-    This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
+    This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing.
 
     If the function returns `0` as the `err_code`, the IC was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callbacks will be executed.
 
@@ -6459,7 +6459,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
-      if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
       es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
 
       // are we below the freezing threshold?
