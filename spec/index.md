@@ -431,7 +431,7 @@ This section specifies the publicly relevant paths in the tree.
 
 -   `/time` (natural):
 
-    All partial state trees include a timestamp, indicating the time at which the state is current.
+    All partial state trees include a timestamp, expressed in nanoseconds since 1970-01-01, indicating the time at which the state is current.
 
 ### Api boundary nodes information {#state-tree-api-bn}
 
@@ -1560,8 +1560,6 @@ The reply callback is executed upon successful completion of the method call, wh
 
 The reject callback is executed if the method call fails asynchronously or the other canister explicitly rejects the call. The reject code and message can be queried using `ic0.msg_reject_code` and `ic0.msg_reject_msg_*`.
 
-This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing. This will trap if not sufficient cycles are available.
-
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 
 -   `ic0.call_on_cleanup : (fun : i32, env : i32) → ()`
@@ -1595,6 +1593,8 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 -   `ic0.call_perform  : () -> ( err_code : i32 )`
 
     This concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
+
+    This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing.
 
     If the function returns `0` as the `err_code`, the IC was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callbacks will be executed.
 
@@ -1956,7 +1956,10 @@ The optional `settings` parameter can be used to set the following settings:
 
 -   `memory_allocation` (`nat`)
 
-    Must be a number between 0 and 2<sup>48</sup> (i.e 256TB), inclusively. It indicates how much memory the canister is allowed to use in total. Any attempt to grow memory usage beyond this allocation will fail. If the IC cannot provide the requested allocation, for example because it is oversubscribed, the call will be rejected. If set to 0, then memory growth of the canister will be best-effort and subject to the available memory on the IC.
+    Must be a number between 0 and 2<sup>48</sup> (i.e 256TB), inclusively.
+    It indicates the maximum amount of memory that the canister is allowed to use in total (i.e., any attempt to grow memory usage beyond the memory allocation will fail) and also guarantees availability of this amount of memory.
+    If the IC cannot guarantee the requested memory allocation, for example because it is oversubscribed, then the call will be rejected.
+    If set to 0, then memory growth of the canister will have no explicit limit but will only be best-effort and subject to the available memory on the IC.
 
     Default value: 0
 
@@ -1981,6 +1984,8 @@ The optional `settings` parameter can be used to set the following settings:
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
+
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 ### IC method `update_settings` {#ic-update_settings}
 
@@ -2171,6 +2176,8 @@ The signatures are encoded as the concatenation of the [SEC1](https://www.secg.o
 
 This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
 
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+
 ### IC method `http_request` {#ic-http_request}
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
@@ -2207,7 +2214,7 @@ The following parameters should be supplied for the call:
 
 -   `transform` - an optional record that includes a function that transforms raw responses to sanitized responses, and a byte-encoded context that is provided to the function upon invocation, along with the response to be sanitized. If provided, the calling canister itself must export this function.
 
-Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 The returned response (and the response provided to the `transform` function, if specified) contains the following fields:
 
@@ -2280,7 +2287,7 @@ This method is only available in local development instances.
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
-Cycles added to this call via `ic0.call_cycles_add128` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
 
 Any user can top-up any canister this way.
 
@@ -2883,7 +2890,7 @@ Therefore, a message can have different shapes:
           refunded_cycles : Nat;
         }
 
-The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered, as explained above, so they have no `queue` field.
+The `queue` field is used to describe the message ordering behavior. Its concrete value is only used to determine when the relative order of two messages must be preserved, and is otherwise not interpreted. Response messages are not ordered so they have no `queue` field.
 
 A reference implementation would likely maintain a separate list of `messages` for each such queue to efficiently find eligible messages; this document uses a single global list for a simpler and more concise system state.
 
@@ -3339,7 +3346,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Stopped or S.canister_status[CM.callee] = Stopping
 ```
@@ -3366,7 +3373,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
-(CM.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ CM.queue)
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = liquid_balance(
   S.balances[CM.callee],
@@ -3413,6 +3420,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage CM · Younger_messages
+(CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Running
 liquid_balance(
@@ -3575,7 +3583,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · FuncMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 S.canisters[M.receiver] ≠ EmptyCanister
 Mod = S.canisters[M.receiver].module
 
@@ -3770,6 +3778,27 @@ The functions `query_as_update` and `system_task_as_update` turns a query functi
 
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
+#### Spontaneous request rejection {#request-rejection}
+
+The system can reject a request at any point in time, e.g., because it is overloaded.
+
+Condition:
+```html
+S.messages = Older_messages · CallMessage CM · Younger_messages
+```
+
+State after, with `reject_code` being an arbitrary reject code:
+```html
+S.messages =
+    Older_messages
+    · Younger_messages
+    · ResponseMessage {
+        origin = CM.origin;
+        response = Reject (reject_code, <implementation-specific>);
+        refunded_cycles = CM.transferred_cycles;
+      }
+```
+
 #### Call context starvation {#rule-starvation}
 
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
@@ -3839,7 +3868,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'create_canister'
 M.arg = candid(A)
@@ -3962,7 +3991,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'update_settings'
 M.arg = candid(A)
@@ -4067,7 +4096,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'canister_status'
 M.arg = candid(A)
@@ -4132,7 +4161,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'canister_info'
 M.arg = candid(A)
@@ -4173,7 +4202,8 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'upload_chunk'
 M.arg = candid(A)
 |dom(S.chunk_store[A.canister_id]) ∪ {SHA-256(A.chunk)}| <= CHUNK_STORE_SIZE
@@ -4192,6 +4222,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid({hash: hash})
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4203,7 +4234,8 @@ The controller of a canister, or the canister itself can clear the chunk store o
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'clear_chunk_store'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
@@ -4219,6 +4251,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid()
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4230,7 +4263,8 @@ The controller of a canister, or the canister itself can list the hashes of the 
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+M.callee = ic_principal
 M.method_name = 'stored_chunks'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id] ∪ {A.canister_id}
@@ -4246,6 +4280,7 @@ S with
       ResponseMessage {
         origin = M.origin
         response = candid([{hash: hash} | hash <- dom(S.chunk_store[A.canister_id])])
+        refunded_cycles = M.transferred_cycles
       }
 
 ```
@@ -4262,7 +4297,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
@@ -4390,7 +4425,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_code'
 M.arg = candid(A)
@@ -4540,9 +4575,10 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'install_chunked_code'
+M.arg = candid(A)
 if A.store_canister = null then
   store_canister = A.target_canister
 else
@@ -4578,7 +4614,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'uninstall_code'
 M.arg = candid(A)
@@ -4651,7 +4687,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4676,7 +4712,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4732,7 +4768,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'stop_canister'
 M.arg = candid(A)
@@ -4790,7 +4826,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'start_canister'
 M.arg = candid(A)
@@ -4822,7 +4858,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'start_canister'
 M.arg = candid(A)
@@ -4861,7 +4897,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'delete_canister'
 M.arg = candid(A)
@@ -4907,7 +4943,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'deposit_cycles'
 M.arg = candid(A)
@@ -4942,7 +4978,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'raw_rand'
 M.arg = candid()
@@ -4980,7 +5016,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'node_metrics_history'
 M.arg = candid(A)
@@ -5011,7 +5047,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'provisional_create_canister_with_cycles'
 M.arg = candid(A)
@@ -5119,7 +5155,7 @@ Conditions
 ```html
 
 S.messages = Older_messages · CallMessage M · Younger_messages
-(M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
 M.callee = ic_principal
 M.method_name = 'provisional_top_up_canister'
 M.arg = candid(A)
@@ -5133,6 +5169,12 @@ State after
 
 S with
     balances[A.canister_id] = S.balances[A.canister_id] + A.amount
+    messages = Older_messages · Younger_messages ·
+      ResponseMessage {
+        origin = M.origin
+        response = Reply (candid())
+        refunded_cycles = M.transferred_cycles
+      }
 
 ```
 
@@ -6389,9 +6431,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       discard_pending_call<es>()
 
-      if es.balance < MAX_CYCLES_PER_RESPONSE then Trap {cycles_used = es.cycles_used;}
-      es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
-
       callee := copy_from_canister<es>(callee_src, callee_size);
       method_name := copy_from_canister<es>(name_src, name_size);
 
@@ -6467,7 +6506,9 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
-      // are we below the threezing threshold?
+      es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
+
+      // are we below the freezing threshold?
       // Or maybe the system has other reasons to not perform this
       if liquid_balance(
         es.balance,
@@ -6482,7 +6523,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       ) < 0 or system_cannot_do_this_call_now()
       then
         discard_pending_call<es>()
-        return 1
+        return <implementation-specific>
       or
         es.calls := es.calls · es.pending_call
         es.pending_call := NoPendingCall
