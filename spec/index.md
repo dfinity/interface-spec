@@ -1297,31 +1297,35 @@ Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
 
 In the reply callback of a [inter-canister method call](#system-api-call), the argument refers to the response to that call. In reject callbacks, no argument is available.
 
+### Replicated and Non-Replicated execution mode
+
+Canister methods can be executed either in *replicated mode* where the method runs on all subnet nodes and the results go through consensus or in *non-replicated mode* where the method runs on a single node and the result does not go through consensus. Update methods can only be run in replicated mode (as they need to preserve state changes) while composite query methods can only be executed in non-replicated mode. Query methods can be executed in either mode.
+
 ### Overview of imports {#system-api-imports}
 
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
 
-    ic0.msg_arg_data_size : () -> i32;                                          // I U Q CQ Ry CRy F
-    ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q CQ Ry CRy F
+    ic0.msg_arg_data_size : () -> i32;                                          // I U RQ NRQ CQ Ry CRy F
+    ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U RQ NRQ CQ Ry CRy F
     ic0.msg_caller_size : () -> i32;                                            // *
     ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // *
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
 
-    ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q CQ Ry Rt CRy CRt
-    ic0.msg_reply : () -> ();                                                   // U Q CQ Ry Rt CRy CRt
-    ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q CQ Ry Rt CRy CRt
+    ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U RQ NRQ CQ Ry Rt CRy CRt
+    ic0.msg_reply : () -> ();                                                   // U RQ NRQ CQ Ry Rt CRy CRt
+    ic0.msg_reject : (src : i32, size : i32) -> ();                             // U RQ NRQ CQ Ry Rt CRy CRt
 
     ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
     ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
     ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
     ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
+    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U RQ Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
-                           -> ();                                               // U Rt Ry
+                           -> ();                                               // U RQ Rt Ry
 
-    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U Ry Rt C T
+    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U RQ Ry Rt C T
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -1361,11 +1365,11 @@ The following sections describe various System API functions, also referred to a
 
     ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                   // *
-    ic0.data_certificate_size : () -> i32;                                      // Q CQ
-    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // Q CQ
+    ic0.data_certificate_size : () -> i32;                                      // NRQ CQ
+    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // NRQ CQ
 
     ic0.time : () -> (timestamp : i64);                                         // *
-    ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
+    ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U RQ Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
     ic0.is_controller: (src: i32, size: i32) -> ( result: i32);                 // * s
     ic0.in_replicated_execution: () -> (result: i32);                           // * s
@@ -1381,7 +1385,9 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `U`: from `canister_update …`
 
--   `Q`: from `canister_query …`
+-   `RQ`: from `canister_query …` in replicated mode
+
+-   `NRQ`: from `canister_query …` in non-replicated mode
 
 -   `CQ`: from `canister_composite_query …`
 
@@ -6292,7 +6298,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
       es.cycles_accepted := es.cycles_accepted + amount
@@ -6300,7 +6306,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return amount
 
     ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let max_amount = max_amount_high * 2^64 + max_amount_low
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
@@ -6309,7 +6315,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
-      if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, G, U, RQ, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       let burned_amount = min(
         amount,
