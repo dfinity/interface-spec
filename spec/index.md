@@ -1409,7 +1409,7 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer`)
 
--   `*` = `I G U Q CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
+-   `*` = `I G U RQ NRQ CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
