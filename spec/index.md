@@ -1231,13 +1231,13 @@ The IC assumes the canister to be fully instantiated if the `canister_init` meth
 
 When a canister is upgraded to a new WebAssembly module, the IC:
 
-1.  Invokes `canister_pre_upgrade` (if exported by the current canister code and  `skip_pre_upgrade` is not `opt true` ) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
+1.  Invokes `canister_pre_upgrade` (if exported by the current canister code and `skip_pre_upgrade` is not `opt true`) on the old instance, to give the canister a chance to clean up (e.g. move data to [stable memory](#system-api-stable-memory)).
 
 2.  Instantiates the new module, including the execution of `(start)`, with a fresh WebAssembly state.
 
 3.  Invokes `canister_post_upgrade` (if present) on the new instance, passing the `arg` provided in the `install_code` call ([IC method](#ic-install_code)).
 
-The stable memory is preserved throughout the process; any other WebAssembly state is discarded.
+The stable memory is preserved throughout the process; the WebAssembly memory is discarded unless `wasm_memory_persistence` is `opt keep`; any other WebAssembly state is discarded.
 
 During these steps, no other entry point of the old or new canister is invoked. The `canister_init` function of the new canister is *not* invoked.
 
@@ -2019,9 +2019,7 @@ Only controllers of the canister can install code.
 
     Note that this is different from `uninstall_code` followed by `install_code`, as `uninstall_code` generates a synthetic reject response to all callers of the uninstalled canister that the uninstalled canister did not yet reply to and ensures that callbacks to outstanding calls made by the uninstalled canister won't be executed (i.e., upon receiving a response from a downstream call made by the uninstalled canister, the cycles attached to the response are refunded, but no callbacks are executed).
 
--   If `mode =  variant { upgrade }`,  `mode = variant  { upgrade  = opt record { skip_pre_upgrade = null } }`, or `mode = variant { upgrade = opt record { skip_pre_upgrade = opt false} }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance.
-
--   If `mode = variant { upgrade = opt record { skip_pre_upgrade = opt true} }`, the system handles this method similarly to the `mode = variant { upgrade }` case, except that it does not execute the `canister_pre_upgrade` method on the old instance.
+-   If `mode = variant { upgrade }` or `mode = variant { upgrade = opt record { skip_pre_upgrade = .., wasm_memory_persistence = .. } }`, this will perform an upgrade of a non-empty canister as described in [Canister upgrades](#system-api-upgrades), passing `arg` to the `canister_post_upgrade` method of the new instance. If `skip_pre_upgrade = opt true`, then the `canister_pre_upgrade` method on the old instance is not executed. If `wasm_memory_persistence = opt keep`, then the WebAssembly memory is preserved.
 
 This is atomic: If the response to this request is a `reject`, then this call had no effect.
 
@@ -2787,11 +2785,11 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
             cycles_used : Nat;
           }
           pre_upgrade : (WasmState, Principal, Env) -> Trap { cycles_used : Nat; } | Return {
-            stable_memory : StableMemory;
+            new_state : WasmState;
             new_certified_data : NoCertifiedData | Blob;
             cycles_used : Nat;
           }
-          post_upgrade : (CanisterId, StableMemory, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
+          post_upgrade : (WasmState, Arg, CallerId, Env) -> Trap { cycles_used : Nat; } | Return {
             new_state : WasmState;
             new_certified_data : NoCertifiedData | Blob;
             new_global_timer : NoGlobalTimer | Nat;
@@ -2811,7 +2809,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section [Canister interface (System API)](#system-api).
 
-The `CanisterId` parameter of `init` and `post_upgrade` is merely passed through to the canister, via the `canister.self` system call.
+The `CanisterId` parameter of `init` is merely passed through to the canister, via the `canister.self` system call.
 
 The `Env` parameter provides synchronous read-only access to portions of the system state and canister metadata that are always available.
 
@@ -4418,7 +4416,13 @@ S with
 
 #### IC Management Canister: Code upgrade
 
-Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods.
+Only the controllers of the given canister can install new code. This changes the code of an *existing* canister, preserving the state in the stable memory. This involves invoking the `canister_pre_upgrade` method, if the `skip_pre_upgrade` flag is not set to `opt true`, on the old and `canister_post_upgrade` method on the new canister, which must succeed and must not invoke other methods. If the `wasm_memory_persistence` flag is set to `opt keep`, then the WebAssembly memory is preserved.
+
+In the following, the `initial_wasm_store` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module`, before executing a potential `(start)` function. The store `initialize_store(State, A.wasm_module)` is the store of the WebAssembly module after instantiation (as per WebAssembly spec) of the WebAssembly module contained in `A.wasm_module` while reusing the WebAssembly memory of `State`.
+
+If the old canister module exports a private custom section with the name "enhanced-orthogonal-persistence", then the `wasm_memory_persistence` option must be set to `opt keep` or `opt replace`, i.e., the option must not be `null`.
+
+If the `wasm_memory_persistence` option is set to `opt keep`, then the new canister module must export a private custom section with the name "enhanced-orthogonal-persistence".
 
 Conditions  
 
@@ -4456,20 +4460,38 @@ Env = {
 }
 
 (
-  (A.mode = upgrade or A.mode = upgrade {skip_pre_upgrade = false})
+  (A.mode = upgrade U and U.skip_pre_upgrade ≠ true)
   Env1 = Env with {
     global_timer = S.global_timer[A.canister_id];
     canister_version = S.canister_version[A.canister_id];
   }
-  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {stable_memory = Stable_memory; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
+  Old_module.pre_upgrade(Old_State, M.caller, Env1) = Return {new_state = Intermediate_state; new_certified_data = New_certified_data; cycles_used = Cycles_used;}
 )
 or
 (
-  A.mode = upgrade {skip_pre_upgrade = true}
-  Stable_memory = Old_State.stable_mem
+  (A.mode = upgrade U and U.skip_pre_upgrade = true)
+  Intermediate_state = Old_state
   New_certified_data = NoCertifiedData
   Cycles_used = 0
 )
+
+(
+  (A.mode = upgrade U and U.wasm_memory_persistence ≠ keep)
+  Persisted_state = {store = initial_wasm_store; self_id = A.canister_id; stable_mem = Intermediate_state.stable_memory}
+)
+or
+(
+  (A.mode = upgrade U and U.wasm_memory_persistence = keep)
+  Persisted_state = initialize_store(Intermediate_state, A.wasm_module)
+)
+
+(A.mode = upgrade U and U.wasm_memory_persistence = keep)
+or
+(A.mode = upgrade U and U.wasm_memory_persistence = replace)
+or
+(S.canisters[A.canister_id].private_custom_sections["enhanced-orthogonal-persistence"] = null)
+
+not (A.mode = upgrade U and U.wasm_memory_persistence = keep and Private_custom_sections["enhanced-orthogonal-persistence"] = null)
 
 Env2 = Env with {
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
@@ -4477,7 +4499,8 @@ Env2 = Env with {
   global_timer = 0;
   canister_version = S.canister_version[A.canister_id] + 1;
 }
-Mod.post_upgrade(A.canister_id, Stable_memory, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
+
+Mod.post_upgrade(Persisted_state, A.arg, M.caller, Env2) = Return {new_state = New_state; new_certified_data = New_certified_data'; new_global_timer = New_global_timer; cycles_used = Cycles_used';}
 
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_reserved
@@ -5885,11 +5908,11 @@ It is nonsensical to pass to an execution function a WebAssembly store `S` that 
 
 Finally we can specify the abstract `CanisterModule` that models a concrete WebAssembly module.
 
--   The `initial_wasm_store` mentioned below is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WasmModule contained in the [canister module](#canister-module-format), before executing a potential `(start)` function.
+-   The `initial_wasm_store` mentioned below is the store of the WebAssembly module after *instantiation* (as per WebAssembly spec) of the WebAssembly module contained in the [canister module](#canister-module-format), before executing a potential `(start)` function.
 
 -   We define a helper function
 
-        start : (CanisterId) -> Trap { cycles_used : Nat; } | Return {
+        start : (WasmState) -> Trap { cycles_used : Nat; } | Return {
             new_state : WasmState;
             cycles_used : Nat;
           }
@@ -5898,17 +5921,17 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
     If the WebAssembly module does not export a function called under the name `start`, then
 
-        start = λ (self_id) →
+        start = λ (wasm_state) →
           Return {
-            new_state = {store = initial_wasm_store; self_id = self_id; stable_mem = ""};
+            new_state = wasm_state;
             cycles_used = 0;
           }
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `start`, it is
 
-        start = λ (self_id) →
+        start = λ (wasm_state) →
           let es = ref {empty_execution_state with
-            wasm_state = {store = initial_wasm_store; self_id = self_id; stable_mem = ""};
+            wasm_state = wasm_state;
             context = s;
           }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
@@ -5924,7 +5947,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
     If the WebAssembly module does not export a function called under the name `canister_init`, then
 
         init = λ (self_id, arg, caller, sysenv) →
-          match start(self_id) with
+          match start({store = initial_wasm_store; self_id = self_id; stable_mem = ""}) with
             Trap trap → Trap trap
             Return res → Return {
                 new_state = res.wasm_state;
@@ -5936,7 +5959,7 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_init`, it is
 
         init = λ (self_id, arg, caller, sysenv) →
-          match start(self_id) with
+          match start({store = initial_wasm_store; self_id = self_id; stable_mem = ""}) with
             Trap trap → Trap trap
             Return res →
               let es = ref {empty_execution_state with
@@ -5961,9 +5984,9 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
 -   The `pre_upgrade` field of the `CanisterModule` is defined as follows:
 
-    If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the stable memory:
+    If the WebAssembly module does not export a function called under the name `canister_pre_upgrade`, then it simply returns the current state:
 
-        pre_upgrade = λ (old_state, caller, sysenv) → Return {stable_memory = old_state.stable_mem; new_certified_data = NoCertifiedData; cycles_used = 0;}
+        pre_upgrade = λ (old_state, caller, sysenv) → Return {new_state = old_state; new_certified_data = NoCertifiedData; cycles_used = 0;}
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_pre_upgrade`, it is
 
@@ -5976,34 +5999,50 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
             }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
           Return {
-            stable_memory = es.wasm_state.stable_mem;
+            new_state = es.wasm_state;
             new_certified_data = es.new_certified_data;
             cycles_used = es.cycles_used;
           }
 
 -   The `post_upgrade` field of the `CanisterModule` is defined as follows:
 
-    If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then the argument blob is ignored and the `initial_wasm_store` is returned:
+    If the WebAssembly module does not export a function called under the name `canister_post_upgrade`, then
 
-        post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
-          Return {new_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }; new_certified_data = NoCertifiedData; new_global_timer = NoGlobalTimer; cycles_used = 0;}
+        post_upgrade = λ (wasm_state, arg, caller, sysenv) →
+          match start(wasm_state) with
+            Trap trap → Trap trap
+            Return res → Return {
+                new_state = res.wasm_state;
+                new_certified_data = NoCertifiedData;
+                new_global_timer = NoGlobalTimer;
+                cycles_used = res.cycles_used;
+              }
 
     Otherwise, if the WebAssembly module exports a function `func` under the name `canister_post_upgrade`, it is
 
-        post_upgrade = λ (self_id, stable_mem, arg, caller, sysenv) →
-          let es = ref {empty_execution_state with
-              wasm_state = { store = initial_wasm_store; self_id = self_id; stable_mem = stable_mem }
-              params = empty_params with { arg = arg; caller = caller; sysenv }
-              balance = sysenv.balance
-              context = I
-            }
-          try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
-          Return {
-            new_state = es.wasm_state;
-            new_certified_data = es.new_certified_data;
-            new_global_timer = es.new_global_timer;
-            cycles_used = es.cycles_used;
-          }
+        post_upgrade = λ (wasm_state, arg, caller, sysenv) →
+          match start(wasm_state) with
+            Trap trap → Trap trap
+            Return res →
+              let es = ref {empty_execution_state with
+                  wasm_state = res.wasm_state
+                  params = empty_params with {
+                      arg = arg;
+                      caller = caller;
+                      sysenv = sysenv with {
+                          balance = sysenv.balance - res.cycles_used
+                        }
+                    }
+                  balance = sysenv.balance - res.cycles_used
+                  context = I
+                }
+              try func<es>() with Trap then Trap {cycles_used = res.cycles_used + es.cycles_used;}
+              Return {
+                  new_state = es.wasm_state;
+                  new_certified_data = es.new_certified_data;
+                  new_global_timer = es.new_global_timer;
+                  cycles_used = res.cycles_used + es.cycles_used;
+                }
 
 -   The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 

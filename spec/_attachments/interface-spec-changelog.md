@@ -2,6 +2,7 @@
 
 ### ∞ (unreleased)
 * Query call statistics.
+* New `wasm_memory_persistence` option for canister upgrades.
 
 ### 0.24.0 (2024-04-23) {#0_24_0}
 * Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
