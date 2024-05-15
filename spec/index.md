@@ -1321,11 +1321,11 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
     ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
     ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U RQ Rt Ry
+    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
-                           -> ();                                               // U RQ Rt Ry
+                           -> ();                                               // U Rt Ry
 
-    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U RQ Ry Rt C T
+    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U Ry Rt C T
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -6298,7 +6298,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
-      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
       es.cycles_accepted := es.cycles_accepted + amount
@@ -6306,7 +6306,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return amount
 
     ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
-      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let max_amount = max_amount_high * 2^64 + max_amount_low
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
@@ -6315,7 +6315,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
-      if es.context ∉ {I, G, U, RQ, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       let burned_amount = min(
         amount,
