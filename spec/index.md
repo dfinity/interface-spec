@@ -1319,11 +1319,8 @@ defaulting to `I = i32` if the canister declares no memory.
     ic0.msg_reply : () -> ();                                                             // U Q CQ Ry Rt CRy CRt
     ic0.msg_reject : (src : I, size : I) -> ();                                           // U Q CQ Ry Rt CRy CRt
 
-    ic0.msg_cycles_available : () -> i64;                                                 // U Rt Ry
     ic0.msg_cycles_available128 : (dst : I) -> ();                                        // U Rt Ry
-    ic0.msg_cycles_refunded : () -> i64;                                                  // Rt Ry
     ic0.msg_cycles_refunded128 : (dst : I) -> ();                                         // Rt Ry
-    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);                         // U Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : I)
                            -> ();                                                         // U Rt Ry
 
@@ -1332,7 +1329,6 @@ defaulting to `I = i32` if the canister declares no memory.
 
     ic0.canister_self_size : () -> I;                                                     // *
     ic0.canister_self_copy : (dst : I, offset : I, size : I) -> ();                       // *
-    ic0.canister_cycle_balance : () -> i64;                                               // *
     ic0.canister_cycle_balance128 : (dst : I) -> ();                                      // *
     ic0.canister_status : () -> i32;                                                      // *
     ic0.canister_version : () -> i64;                                                     // *
@@ -1353,14 +1349,9 @@ defaulting to `I = i32` if the canister declares no memory.
       ) -> ();                                                                            // U CQ Ry Rt CRy CRt T
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                                   // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : I, size : I) -> ();                                     // U CQ Ry Rt CRy CRt T
-    ic0.call_cycles_add : (amount : i64) -> ();                                           // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();                  // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                          // U CQ Ry Rt CRy CRt T
 
-    ic0.stable_size : () -> (page_count : i32);                                           // * s
-    ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);                        // * s
-    ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();                       // * s
-    ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();                        // * s
     ic0.stable64_size : () -> (page_count : i64);                                         // * s
     ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64);                      // * s
     ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();                     // * s
@@ -1379,6 +1370,19 @@ defaulting to `I = i32` if the canister declares no memory.
 
     ic0.debug_print : (src : I, size : I) -> ();                                          // * s
     ic0.trap : (src : I, size : I) -> ();                                                 // * s
+
+The following System API functions are only available if `I = i32`, i.e., if the bit-width of the declared memory is 32
+or if the canister declares no memory.
+
+    ic0.msg_cycles_available : () -> i64;                                                 // U Rt Ry
+    ic0.msg_cycles_refunded : () -> i64;                                                  // Rt Ry
+    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);                         // U Rt Ry
+    ic0.canister_cycle_balance : () -> i64;                                               // *
+    ic0.call_cycles_add : (amount : i64) -> ();                                           // U Ry Rt T
+    ic0.stable_size : () -> (page_count : i32);                                           // * s
+    ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);                        // * s
+    ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();                       // * s
+    ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();                        // * s
 
 The comment after each function lists from where these functions may be invoked:
 
