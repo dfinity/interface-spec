@@ -1297,21 +1297,39 @@ Callbacks are addressed by their table index (as a proxy for a Wasm `funcref`).
 
 In the reply callback of a [inter-canister method call](#system-api-call), the argument refers to the response to that call. In reject callbacks, no argument is available.
 
+### Replicated and Non-Replicated execution mode
+
+Canister methods can be executed either in *replicated* mode where the method runs on all subnet nodes and the results go through consensus or in *non-replicated* mode where the method runs on a single node and the result does not go through consensus. The trade-off between replicated and non-replicated mode is therefore one between the result's latency and trustworthiness.
+
+The following table captures the modes that different canister methods can be executed in.
+
+| Canister method          | Replicated Mode | Non-Replicated Mode |
+| ------------------------ | --------------- | ------------------- |
+| canister_update          | Yes             | No                  |
+| canister_query           | Yes             | Yes                 |
+| canister_composite_query | No              | Yes                 |
+| canister_inspect_message | No              | Yes                 |
+| canister_init            | Yes             | No                  |
+| canister_pre_upgrade     | Yes             | No                  |
+| canister_post_upgrade    | Yes             | No                  |
+| canister_heartbeat       | Yes             | No                  |
+| canister_global_timer    | Yes             | No                  |
+
 ### Overview of imports {#system-api-imports}
 
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
 
-    ic0.msg_arg_data_size : () -> i32;                                          // I U Q CQ Ry CRy F
-    ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q CQ Ry CRy F
+    ic0.msg_arg_data_size : () -> i32;                                          // I U RQ NRQ CQ Ry CRy F
+    ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U RQ NRQ CQ Ry CRy F
     ic0.msg_caller_size : () -> i32;                                            // *
     ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // *
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
 
-    ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q CQ Ry Rt CRy CRt
-    ic0.msg_reply : () -> ();                                                   // U Q CQ Ry Rt CRy CRt
-    ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q CQ Ry Rt CRy CRt
+    ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U RQ NRQ CQ Ry Rt CRy CRt
+    ic0.msg_reply : () -> ();                                                   // U RQ NRQ CQ Ry Rt CRy CRt
+    ic0.msg_reject : (src : i32, size : i32) -> ();                             // U RQ NRQ CQ Ry Rt CRy CRt
 
     ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
     ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
@@ -1361,8 +1379,8 @@ The following sections describe various System API functions, also referred to a
 
     ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                   // *
-    ic0.data_certificate_size : () -> i32;                                      // Q CQ
-    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // Q CQ
+    ic0.data_certificate_size : () -> i32;                                      // NRQ CQ
+    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // NRQ CQ
 
     ic0.time : () -> (timestamp : i64);                                         // *
     ic0.global_timer_set : (timestamp : i64) -> i64;                            // I G U Ry Rt C T
@@ -1381,7 +1399,9 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `U`: from `canister_update …`
 
--   `Q`: from `canister_query …`
+-   `RQ`: from `canister_query …` in replicated mode
+
+-   `NRQ`: from `canister_query …` in non-replicated mode
 
 -   `CQ`: from `canister_composite_query …`
 
@@ -1403,7 +1423,7 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer`)
 
--   `*` = `I G U Q CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
+-   `*` = `I G U RQ NRQ CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
 
 If the canister invokes a system call from somewhere else, it will trap.
 
@@ -6313,11 +6333,11 @@ Upon *instantiation* of the WebAssembly module, we can provide the following fun
 The pseudo-code below does *not* explicitly enforce the restrictions of which imports are available in which contexts; for that the table in [Overview of imports](#system-api-imports) is authoritative, and is assumed to be part of the implementation.
 
     ic0.msg_arg_data_size<es>() : i32 =
-      if es.context ∉ {I, U, Q, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, U, RQ, NRQ, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
       return |es.params.arg|
 
     ic0.msg_arg_data_copy<es>(dst:i32, offset:i32, size:i32) =
-      if es.context ∉ {I, U, Q, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, U, RQ, NRQ, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
     ic0.msg_caller_size() : i32 =
@@ -6341,18 +6361,18 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
     ic0.msg_reply_data_append<es>(src : i32, size : i32) =
-      if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, NRQ, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.reply_params.arg := es.reply_params.arg · copy_from_canister<es>(src, size)
 
     ic0.msg_reply<es>() =
-      if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, NRQ, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.response := Reply (es.reply_params.arg)
       es.cycles_available := 0
 
     ic0.msg_reject<es>(src : i32, size : i32) =
-      if es.context ∉ {U, Q, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, NRQ, CQ, Ry, Rt, CRy, CRt} then Trap {cycles_used = es.cycles_used;}
       if es.response ≠ NoResponse then Trap {cycles_used = es.cycles_used;}
       es.response := Reject (CANISTER_REJECT, copy_from_canister<es>(src, size))
       es.cycles_available := 0
@@ -6638,12 +6658,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       else return 1
 
     ic0.data_certificate_size<es>() : i32 =
-      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {NRQ, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       return |es.params.sysenv.certificate|
 
     ic0.data_certificate_copy<es>(dst: i32, offset: i32, size: i32) =
-      if es.context ∉ {Q, CQ} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {NRQ, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
