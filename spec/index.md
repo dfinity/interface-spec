@@ -1299,7 +1299,7 @@ In the reply callback of a [inter-canister method call](#system-api-call), the a
 
 ### Replicated and Non-Replicated execution mode
 
-Canister methods can be executed either in *replicated* mode where the method runs on all subnet nodes and the results go through consensus or in *non-replicated* mode where the method runs on a single node and the result does not go through consensus. The trade-off between replicated and non-replicated mode is therefore one between speed of getting a result and trustworthiness of the result.
+Canister methods can be executed either in *replicated* mode where the method runs on all subnet nodes and the results go through consensus or in *non-replicated* mode where the method runs on a single node and the result does not go through consensus. The trade-off between replicated and non-replicated mode is therefore one between the result's latency and trustworthiness.
 
 The following table captures the modes that different canister methods can be executed in.
 
