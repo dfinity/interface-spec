@@ -1,6 +1,10 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Query call statistics.
+* New `wasm_memory_persistence` option for canister upgrades.
+
+### 0.24.0 (2024-04-23) {#0_24_0}
 * Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
 * Update subnet read state request conditions on requested paths.
 * Fix: allow inter-canister calls (requests) to be spontaneously rejected in the abstract spec.
