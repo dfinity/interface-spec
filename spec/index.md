@@ -1299,7 +1299,21 @@ In the reply callback of a [inter-canister method call](#system-api-call), the a
 
 ### Replicated and Non-Replicated execution mode
 
-Canister methods can be executed either in *replicated mode* where the method runs on all subnet nodes and the results go through consensus or in *non-replicated mode* where the method runs on a single node and the result does not go through consensus. Update methods can only be run in replicated mode (as they need to preserve state changes) while composite query methods can only be executed in non-replicated mode. Query methods can be executed in either mode.
+Canister methods can be executed either in *replicated* mode where the method runs on all subnet nodes and the results go through consensus or in *non-replicated* mode where the method runs on a single node and the result does not go through consensus. The trade-off between replicated and non-replicated mode is therefore one between speed of getting a result and trustworthiness of the result.
+
+The following table captures the modes that different canister methods can be executed in.
+
+| Canister method          | Replicated Mode | Non-Replicated Mode |
+| ------------------------ | --------------- | ------------------- |
+| canister_update          | Yes             | No                  |
+| canister_query           | Yes             | Yes                 |
+| canister_composite_query | No              | Yes                 |
+| canister_inspect_message | No              | Yes                 |
+| canister_init            | Yes             | No                  |
+| canister_pre_upgrade     | Yes             | No                  |
+| canister_post_upgrade    | Yes             | No                  |
+| canister_heartbeat       | Yes             | No                  |
+| canister_global_timer    | Yes             | No                  |
 
 ### Overview of imports {#system-api-imports}
 
