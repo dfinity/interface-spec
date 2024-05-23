@@ -2430,8 +2430,8 @@ The canister logs management canister API is considered EXPERIMENTAL. Canister d
 :::
 
 Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
-The total length of all log contents does not exceed 4KiB.
-If new logs are added resulting in exceeding the maximum total log length of 4KiB, the oldest logs will be removed.
+The total size of all returned logs does not exceed 4KiB.
+If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
 The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
 
@@ -5625,14 +5625,14 @@ S with
 
 #### Trimming canister logs
 
-Canister logs can be trimmed if the total length of their contents exceeds 4KiB.
+Canister logs can be trimmed if their total length exceeds 4KiB.
 
 Conditions
 
 ```html
 
 S.canister_logs[CanisterId] = Older_logs · Newer_logs
-SUM { |l.content| | l <- Older_logs } > 4KiB
+SUM { |l| | l <- Older_logs } > 4KiB
 
 ```
 
