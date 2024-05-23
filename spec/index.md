@@ -868,7 +868,15 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
 
--   If the request is an update call to a canister that is not the Management Canister (`aaaaa-aa`) or if the request is a query call, then the effective canister id must be the `canister_id` in the request.
+-   If the request is a query call to the Management Canister (`aaaaa-aa`), then:
+
+    -   If the call is to the `bitcoin_get_balance_query` or `bitcoin_get_utxos_query` method, then the effective canister id for this call must be the Management Canister (`aaaaa-aa`).
+
+    -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
+
+    -   Otherwise, the call is rejected by the system independently of the effective canister id.
+
+-   If the request is an update or query call to a canister that is not the Management Canister (`aaaaa-aa`), then the effective canister id must be the `canister_id` in the request.
 
 :::note
 
@@ -2102,6 +2110,8 @@ Indicates various information about the canister. It contains:
 
     -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
 
+    -   The canister log visibility of the canister.
+
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
 -   The actual memory usage of the canister.
@@ -2410,6 +2420,41 @@ The transaction fees in the Bitcoin network change dynamically based on the numb
 This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
+
+### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
+
+:::note
+
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
+The total size of all returned logs does not exceed 4KiB.
+If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
+Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
+The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
+
+A single log is a record with the following fields:
+
+- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
+- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
+- `content` (`blob`): the actual content of the log;
+
+:::note
+
+This method is exposed as a query and is only accessible in non-replicated mode. 
+Calls in replicated mode are rejected.
+Only users can call this method, not canisters (also no nested composite query calls).
+
+:::
+
+:::warning
+
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
+
+:::
 
 ## Certification {#certification}
 
@@ -3023,6 +3068,14 @@ Finally, we can describe the state of the IC as a record having the following fi
       total_num_changes : Nat;
       recent_changes : [Change];
     }
+    CanisterLogVisibility
+      = Controllers
+      | Public
+    CanisterLog = {
+      idx : Nat;
+      timestamp_nanos : Nat;
+      content : Blob;
+    }
     QueryStats = {
       timestamp : Timestamp;
       num_instructions : Nat;
@@ -3050,6 +3103,8 @@ Finally, we can describe the state of the IC as a record having the following fi
       reserved_balance_limits: CanisterId ↦ Nat;
       certified_data: CanisterId ↦ Blob;
       canister_history: CanisterId ↦ CanisterHistory;
+      canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
+      canister_logs: CanisterId ↦ [CanisterLog];
       query_stats: CanisterId ↦ [QueryStats];
       system_time : Timestamp
       call_contexts : CallId ↦ CallCtxt;
@@ -3119,6 +3174,8 @@ The initial state of the IC is
       reserved_balance_limits = ();
       certified_data = ();
       canister_history = ();
+      canister_log_visibility = ();
+      canister_logs = ();
       query_stats = ();
       system_time = T;
       call_contexts = ();
@@ -3732,6 +3789,8 @@ then
 
     balances[M.receiver] = New_balance
     reserved_balances[M.receiver] = New_reserved_balance
+
+    canister_logs[M.receiver] = S.canister_logs[M.receiver] · canister_logs
 else
   S with
     messages = Older_messages · Younger_messages
@@ -3744,6 +3803,8 @@ else
 Depending on whether this is a call message and a response messages, we have either set aside `MAX_CYCLES_PER_MESSAGE` or `MAX_CYCLES_PER_RESPONSE`, either in the call context creation rule or the Callback invocation rule.
 
 The cycle consumption of executing this message is modeled via the unspecified `cycles_used` variable; the variable takes some value between 0 and `MAX_CYCLES_PER_MESSAGE`/`MAX_CYCLES_PER_RESPONSE` (for call execution and response execution, respectively).
+
+The logs produced by the canister during message execution are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[M.receiver]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 This transition detects certain behavior that will appear as a trap (and which an implementation may implement by trapping directly in a system call):
 
@@ -3948,6 +4009,11 @@ New_canister_history = {
   }
 }
 
+if A.settings.log_visibility is not null:
+  New_canister_log_visibility = A.settings.log_visibility
+else:
+  New_canister_log_visibility = Controllers
+
 ```
 
 State after  
@@ -3969,6 +4035,8 @@ S with
     certified_data[Canister_id] = ""
     query_stats[Canister_id] = []
     canister_history[Canister_id] = New_canister_history
+    canister_log_visibility[Canister_id] = New_canister_log_visibility
+    canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -4092,6 +4160,8 @@ S with
     reserved_balances[A.canister_id] = New_reserved_balance
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
+    if A.settings.log_visibility is not null:
+      canister_log_visibility[A.canister_id] = A.settings.log_visibility
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -4425,6 +4495,7 @@ S with
     balances[A.canister_id] = New_balance
     reserved_balances[A.canister_id] = New_reserved_balance
     canister_history[A.canister_id] = New_canister_history
+    canister_logs[A.canister_id] = canister_logs
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4433,6 +4504,8 @@ S with
       }
 
 ```
+
+The logs produced by the canister during the execution of the WebAssembly `start` and `canister_init` functions are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[A.canister_id]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 #### IC Management Canister: Code upgrade
 
@@ -4602,6 +4675,7 @@ S with
     balances[A.canister_id] = New_balance;
     reserved_balances[A.canister_id] = New_reserved_balance;
     canister_history[A.canister_id] = New_canister_history
+    canister_logs[A.canister_id] = S.canister_logs[A.canister_id] · canister_logs
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4610,6 +4684,8 @@ S with
       }
 
 ```
+
+The logs produced by the canister during the execution of the WebAssembly `canister_pre_upgrade`, `start`, and `canister_post_upgrade` functions are modeled via the unspecified `canister_logs` variable; the variable stores a list of logs (each of type `CanisterLog`) with consecutive sequence numbers, timestamps equal to `S.time[A.canister_id]`, and contents produced by the canister calling `ic0.debug_print`, `ic0.trap`, or produced by the WebAssembly runtime when the canister WebAssembly module traps.
 
 #### IC Management Canister: Install chunked code
 
@@ -4686,6 +4762,7 @@ S with
           details = CodeUninstall;
         };
     }
+    canister_logs[A.canister_id] = []
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     global_timer[A.canister_id] = 0
 
@@ -4969,6 +5046,8 @@ S with
     reserved_balance_limits[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
+    canister_log_visibility[A.canister_id] = (deleted)
+    canister_logs[A.canister_id] = (deleted)
     query_stats[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -5156,6 +5235,11 @@ New_canister_history {
   }
 }
 
+if A.settings.log_visibility is not null:
+  New_canister_log_visibility = A.settings.log_visibility
+else:
+  New_canister_log_visibility = Controllers
+
 ```
 
 State after  
@@ -5175,6 +5259,8 @@ S with
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
+    canister_log_visibility[Canister_id] = New_canister_log_visibility
+    canister_logs[Canister_id] = []
     query_stats[CanisterId] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -5384,6 +5470,7 @@ S with
       total_num_changes = N;
       recent_changes = [];
     }
+    canister_logs[CanisterId] = []
     canister_version[CanisterId] = S.canister_version[CanisterId] + 1
     global_timer[CanisterId] = 0
 
@@ -5536,7 +5623,75 @@ S with
 
 ```
 
+#### Trimming canister logs
+
+Canister logs can be trimmed if their total length exceeds 4KiB.
+
+Conditions
+
+```html
+
+S.canister_logs[CanisterId] = Older_logs · Newer_logs
+SUM { |l| | l <- Older_logs } > 4KiB
+
+```
+
+State after
+
+```html
+
+S with
+    canister_logs[CanisterId] = Newer_logs
+
+```
+
+#### IC Management Canister: Canister logs (query call) {#ic-mgmt-canister-fetch-canister-logs}
+
+:::note
+
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+
+:::
+
+This section specifies management canister query calls.
+They are calls to `/api/v2/canister/<effective_canister_id>/query`
+with CBOR body `Q` such that `Q.canister_id = ic_principal`.
+
+The management canister offers the method `fetch_canister_logs`
+that can be called as a query call and
+returns logs of a requested canister.
+
+Conditions
+
+```html
+
+Q.canister_id = ic_principal
+Q.method_name = 'fetch_canister_logs'
+Q.arg = candid(A)
+A.canister_id = effective_canister_id
+S[A.canister_id].canister_log_visibility = Public or Q.sender in S[A.canister_id].controllers
+
+```
+
+Query response `R`:
+
+```html
+
+{status: "replied"; reply: {arg: candid(S.canister_logs[A.canister_id])}, signatures: Sigs}
+
+```
+
+where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
+
+```html
+
+verify_response(Q, R, Cert') ∧ lookup(["time"], Cert') = Found S.system_time // or "recent enough"
+
+```
+
 #### Query call {#query-call}
+
+This section specifies query calls `Q` whose `Q.canister_id` is a non-empty canister `S.canisters[Q.canister_id]`. Query calls to the management canister, i.e., `Q.canister_id = ic_principal`, are specified in Section [Canister logs](#ic-mgmt-canister-fetch-canister-logs).
 
 Canister query calls to `/api/v2/canister/<ECID>/query` can be executed directly. They can only be executed against non-empty canisters which have a status of `Running` and are also not frozen.
 
