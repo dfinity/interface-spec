@@ -3,6 +3,7 @@
 ### ∞ (unreleased)
 * Query call statistics.
 * New `wasm_memory_persistence` option for canister upgrades.
+* Rename `num_blocks_total` to `num_blocks_proposed_total` in node metrics served by the management canister.
 * Management canister query call to fetch canister logs.
 
 ### 0.24.0 (2024-04-23) {#0_24_0}
