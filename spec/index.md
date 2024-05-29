@@ -5496,7 +5496,7 @@ New_canister_history = {
     canister_version = S.canister_version[A.canister_id] + 1
     origin = change_origin(M.caller, A.sender_canister_version, M.origin);
     details = LoadSnapshot {
-      snapshot_id = A.snapshot_id
+      snapshot_id = S.snapshots[A.canister_id].snapshot_id
       canister_version = S.snapshots[A.canister_id].canister_version
       taken_at_timestamp = S.snapshots[A.canister_id].take_at_timestamp
     };
