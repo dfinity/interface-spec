@@ -3811,7 +3811,8 @@ if
   ) ≥ 0
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
-    memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
+    memory_usage_canister_history(S.canister_history[M.receiver]) +
+    memory_usage_snapshot(S.snapshots[M.receiver]) ≤ S.memory_allocation[M.receiver])
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
@@ -4044,7 +4045,7 @@ if A.settings.reserved_cycles_limit is not null:
 else:
   New_reserved_balance_limit = 5_000_000_000_000
 
-Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
+Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, null, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
@@ -4152,7 +4153,8 @@ M.caller ∈ S.controllers[A.canister_id]
 if New_memory_allocation > 0:
   memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
     memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(New_canister_history) ≤ New_memory_allocation
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ New_memory_allocation
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
@@ -4185,7 +4187,8 @@ if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_al
       New_freezing_threshold,
       memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
         memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-        memory_usage_canister_history(New_canister_history),
+        memory_usage_canister_history(New_canister_history) +
+        memory_usage_snapshot(S.snapshots[A.canister_id]),
       S.canister_subnet[A.canister_id].subnet_size,
     )
   ) ≥ 0
@@ -4498,7 +4501,8 @@ liquid_balance(
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
       memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[A.canister_id]),
+      memory_usage_canister_history(S.canister_history[A.canister_id]) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   )
 ) ≥ MAX_CYCLES_PER_MESSAGE
@@ -4512,7 +4516,8 @@ liquid_balance(
     S.freezing_threshold[A.canister_id],
     memory_usage_wasm_state(New_state) +
       memory_usage_raw_module(A.wasm_module) +
-      memory_usage_canister_history(New_canister_history),
+      memory_usage_canister_history(New_canister_history) +
+      memory_usage_snapshot(S.snapshots[A.canister_id]),
     S.canister_subnet[A.canister_id].subnet_size,
   )
 ) ≥ 0
@@ -4520,7 +4525,8 @@ liquid_balance(
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4700,7 +4706,8 @@ liquid_balance(
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -5381,7 +5388,7 @@ S with
 #### IC Management Canister: Take canister snapshot
 
 Only the controllers of the given canister can take a snapshot. 
-A snapshot will be identified internally by a system-generated opaque `snapshot ID`.
+A snapshot will be identified internally by a system-generated opaque `Snapshot_id`.
 
 
 ```html
@@ -5462,7 +5469,7 @@ M.callee = ic_principal
 M.method_name = 'load_canister_snapshot'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
-S.snapshots[A.canister_id].snapshot_id  = A.snapshot_id
+S.snapshots[A.canister_id].snapshot_id = A.snapshot_id
 
 New_state = {
   wasm_state = S.snapshots[A.canister_id].wasm_state;
@@ -5511,7 +5518,8 @@ liquid_balance(
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state.wasm_state) +
     memory_usage_raw_module(New_state.raw_module) +
-    memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
+    memory_usage_canister_history(New_canister_history) +
+    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 ```
 
@@ -5558,11 +5566,11 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid({
+        response = Reply (candid([{
           id = S.snapshots[A.canister_id].snapshot_id;
           taken_at_timestamp = S.snapshots[A.canister_id].taken_at_timestamp;
           total_size = memory_usage_snapshot(S.snapshots[A.canister_id]);
-        }))
+        }]))
         refunded_cycles = M.transferred_cycles
       }
 
