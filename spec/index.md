@@ -2975,6 +2975,7 @@ Finally, we can describe the state of the IC as a record having the following fi
       = Install
       | Reinstall
       | Upgrade
+    SnapshotId = (abstract)
     ChangeDetails
       = Creation {
           controllers : [PrincipalId];
@@ -2986,6 +2987,7 @@ Finally, we can describe the state of the IC as a record having the following fi
         }
       | LoadSnapshot {
           canister_version : CanisterVersion;
+          snapshot_id: SnapshotId;
           taken_at_timestamp : Timestamp;
         }
       | ControllersChange {
@@ -5210,6 +5212,7 @@ New_canister_history = {
     canister_version = S.canister_version[A.canister_id] + 1
     origin = change_origin(M.caller, A.sender_canister_version, M.origin);
     details = LoadSnapshot {
+      snapshot_id: A.snapshot_id
       canister_version: S.snapshots[A.canister_id].canister_version
       taken_at_timestamp: S.snapshots[A.canister_id].take_at_timestamp
     };
