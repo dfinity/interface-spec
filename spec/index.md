@@ -4088,7 +4088,7 @@ State after
 
 S with
     canisters[Canister_id] = EmptyCanister
-    snapshots[A.canister_id] = ()
+    snapshots[A.canister_id] = null
     time[Canister_id] = CurrentTime
     global_timer[Canister_id] = 0
     controllers[Canister_id] = New_controllers
@@ -5596,7 +5596,7 @@ State after
 ```html
 
 S with
-    S.snapshots[A.canister_id] = (deleted)
+    S.snapshots[A.canister_id] = null
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5764,7 +5764,7 @@ State after
 
 S with
     canisters[CanisterId] = EmptyCanister
-    snapshots[CanisterId] = (deleted)
+    snapshots[CanisterId] = null
     certified_data[CanisterId] = ""
     canister_history[CanisterId] = {
       total_num_changes = N;
