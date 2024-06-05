@@ -2455,7 +2455,7 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 ### IC method `list_canister_snapshots` {#ic-list_canister_snapshots}
 
-This method lists the snapshots of the canister identified by `canister_id`. Currently, at most one snapshot per canister will be stored.
+This method lists the snapshots of the canister identified by `canister_id`. Only controllers of the canister can list its snapshots. Currently, at most one snapshot per canister will be stored.
 
 ### IC method `delete_canister_snapshot` {#ic-delete_canister_snapshot}
 
@@ -5559,6 +5559,12 @@ M.method_name = 'list_canister_snapshots'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
+Snapshots = if S.snapshots[A.canister_id] is null then [] else [{
+    id = S.snapshots[A.canister_id].snapshot_id;
+    taken_at_timestamp = S.snapshots[A.canister_id].taken_at_timestamp;
+    total_size = memory_usage_snapshot(S.snapshots[A.canister_id]);
+  }]
+
 ```
 
 State after
@@ -5569,11 +5575,7 @@ S with
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
-        response = Reply (candid([{
-          id = S.snapshots[A.canister_id].snapshot_id;
-          taken_at_timestamp = S.snapshots[A.canister_id].taken_at_timestamp;
-          total_size = memory_usage_snapshot(S.snapshots[A.canister_id]);
-        }]))
+        response = Reply (candid(Snapshots))
         refunded_cycles = M.transferred_cycles
       }
 
