@@ -1325,6 +1325,12 @@ The following table captures the modes that different canister methods can be ex
 
 ### Overview of imports {#system-api-imports}
 
+:::note
+
+The 32-bit stable memory System API (`ic0.stable_size`, `ic0.stable_grow`, `ic0.stable_write`, and `ic0.stable_read`) is DEPRECATED. Canister developers are advised to use the 64-bit stable memory System API instead.
+
+:::
+
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
 
     ic0.msg_arg_data_size : () -> i32;                                          // I U RQ NRQ CQ Ry CRy F
@@ -1757,6 +1763,12 @@ This call traps if the amount of cycles refunded does not fit into a 64-bit valu
     This function can only be used in a callback handler (reply or reject), and indicates the amount of cycles that came back with the response as a refund. The refund has already been added to the canister balance automatically.
 
 ### Stable memory {#system-api-stable-memory}
+
+:::note
+
+The 32-bit stable memory System API (`ic0.stable_size`, `ic0.stable_grow`, `ic0.stable_write`, and `ic0.stable_read`) is DEPRECATED. Canister developers are advised to use the 64-bit stable memory System API instead.
+
+:::
 
 Canisters have the ability to store and retrieve data from a secondary memory. The purpose of this *stable memory* is to provide space to store data beyond upgrades. The interface mirrors roughly the memory-related instructions of WebAssembly, and tries to be forward compatible with exposing this feature as an additional memory.
 
