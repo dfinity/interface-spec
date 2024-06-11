@@ -1961,6 +1961,8 @@ The optional `settings` parameter can be used to set the following settings:
     An operation (update method, global timer, heartbeat, canister init, canister post_upgrade) that causes the WASM heap memory consumption to exceed this limit will trap.
     The WASM heap memory limit is ignored for query methods, response callback handlers, and canister pre_upgrade.
 
+    If set to 0, then there's no upper limit on the WASM heap memory consumption of the canister subject to the available memory on the IC.
+
     Default value: 3_221_225_472 (3 GiB).
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
@@ -3553,13 +3555,13 @@ or
 ( M.entry_point = PublicMethod Name Caller Arg
   F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
   New_canister_version = S.canister_version[M.receiver]
-  Wasm_memory_limit = null
+  Wasm_memory_limit = 0
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
   F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
-  Wasm_memory_limit = null
+  Wasm_memory_limit = 0
 )
 or
 ( M.entry_point = Heartbeat
@@ -3613,7 +3615,7 @@ if
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
-  (Wasm_memory_limit = null) or |res.new_state.store.mem| <= Wasm_memory_limit
+  (Wasm_memory_limit = 0) or |res.new_state.store.mem| <= Wasm_memory_limit
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
   S with
