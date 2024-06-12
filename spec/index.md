@@ -2123,11 +2123,9 @@ Indicates various information about the canister. It contains:
 
     -   The reserved cycles limit of the canister, i.e., the maximum number of cycles that can be in the canister's reserved balance after increasing the canister's memory allocation and/or actual memory usage.
 
-<<<<<<< HEAD
-    -   The WASM heap memory limit of the canister in bytes.
-=======
     -   The canister log visibility of the canister.
->>>>>>> master
+
+    -   The WASM heap memory limit of the canister in bytes.
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
