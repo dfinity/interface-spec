@@ -4489,7 +4489,7 @@ if S.memory_allocation[A.canister_id] > 0:
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
-|New_state.store.mem| <= wasm_memory_limit[A.canister_id]
+(S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4669,7 +4669,7 @@ if S.memory_allocation[A.canister_id] > 0:
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) ≤ S.memory_allocation[A.canister_id]
 
-|New_state.store.mem| <= wasm_memory_limit[A.canister_id]
+(S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
