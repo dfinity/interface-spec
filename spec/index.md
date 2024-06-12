@@ -2125,7 +2125,7 @@ Indicates various information about the canister. It contains:
 
     -   The canister log visibility of the canister.
 
-    -   The WASM heap memory limit of the canister in bytes.
+    -   The WASM heap memory limit of the canister in bytes (the value of `0` means that there is no explicit limit).
 
 -   A SHA256 hash of the module installed on the canister. This is `null` if the canister is empty.
 
