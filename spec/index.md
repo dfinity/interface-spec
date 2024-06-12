@@ -2013,12 +2013,12 @@ The optional `settings` parameter can be used to set the following settings:
 
     Must be a number between 0 and 2<sup>48</sup>-1 (i.e., 256TB), inclusively, and indicates the upper limit on the WASM heap memory consumption of the canister.
 
-    An operation (update method, global timer, heartbeat, canister init, canister post_upgrade) that causes the WASM heap memory consumption to exceed this limit will trap.
-    The WASM heap memory limit is ignored for query methods, response callback handlers, and canister pre_upgrade.
+    An operation (update method, canister init, canister post_upgrade) that causes the WASM heap memory consumption to exceed this limit will trap.
+    The WASM heap memory limit is ignored for query methods, response callback handlers, global timers, heartbeats, and canister pre_upgrade.
 
     If set to 0, then there's no upper limit on the WASM heap memory consumption of the canister subject to the available memory on the IC.
 
-    Default value: 3_221_225_472 (3 GiB).
+    Default value: 0 (i.e., no explicit limit).
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
@@ -3721,13 +3721,13 @@ or
 ( M.entry_point = Heartbeat
   F = system_task_as_update(Mod.heartbeat, Env)
   New_canister_version = S.canister_version[M.receiver] + 1
-  Wasm_memory_limit = S.wasm_memory_limit[M.receiver]
+  Wasm_memory_limit = 0
 )
 or
 ( M.entry_point = GlobalTimer
   F = system_task_as_update(Mod.global_timer, Env)
   New_canister_version = S.canister_version[M.receiver] + 1
-  Wasm_memory_limit = S.wasm_memory_limit[M.receiver]
+  Wasm_memory_limit = 0
 )
 
 R = F(S.canisters[M.receiver].wasm_state)
@@ -4004,7 +4004,7 @@ else:
 if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
-  New_wasm_memory_limit = 3_221_225_472
+  New_wasm_memory_limit = 0
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
@@ -5243,7 +5243,7 @@ else:
 if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
-  New_wasm_memory_limit = 3_221_225_472
+  New_wasm_memory_limit = 0
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, EmptyCanister.wasm_state)
 if A.amount is not null:
