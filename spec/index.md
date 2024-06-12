@@ -1339,15 +1339,15 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_reply : () -> ();                                                   // U RQ NRQ CQ Ry Rt CRy CRt
     ic0.msg_reject : (src : i32, size : i32) -> ();                             // U RQ NRQ CQ Ry Rt CRy CRt
 
-    ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
-    ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
+    ic0.msg_cycles_available : () -> i64;                                       // U RQ Rt Ry
+    ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U RQ Rt Ry
     ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
     ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
+    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U RQ Rt Ry
     ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
-                           -> ();                                               // U Rt Ry
+                           -> ();                                               // U RQ Rt Ry
 
-    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U Ry Rt C T
+    ic0.cycles_burn128 : (amount_high : i64, amount_low : i64, dst : i32) -> ();               // I G U RQ Ry Rt C T
 
     ic0.canister_self_size : () -> i32;                                         // *
     ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
@@ -2823,6 +2823,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         }
         QueryFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
           response : Response;
+          cycles_accepted : Nat;
           cycles_used : Nat;
         }
         CompositeQueryFunc = WasmState -> Trap { cycles_used : Nat; } | Return {
@@ -3689,7 +3690,7 @@ Available = S.call_contexts[M.call_contexts].available_cycles
 )
 or
 ( M.entry_point = PublicMethod Name Caller Arg
-  F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env)
+  F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env, Available)
   New_canister_version = S.canister_version[M.receiver]
 )
 or
@@ -6242,16 +6243,18 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
 -   The partial map `query_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_query <method>`, and has value
 
-        query_methods[method] = λ (arg, caller, sysenv) → λ wasm_state →
+        query_methods[method] = λ (arg, caller, sysenv, available) → λ wasm_state →
           let es = ref {empty_execution_state with
               wasm_state = wasm_state;
               params = empty_params with { arg = arg; caller = caller; sysenv }
               balance = sysenv.balance
+              cycles_available = available;
               context = Q
             }
           try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
           Return {
             response = es.response;
+            cycles_accepted = es.cycles_accepted;
             cycles_used = es.cycles_used;
           }
 
@@ -6533,12 +6536,12 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.cycles_available := 0
 
     ic0.msg_cycles_available<es>() : i64 =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       if es.cycles_available >= 2^64 then Trap {cycles_used = es.cycles_used;}
       return es.cycles_available
 
     ic0.msg_cycles_available128<es>(dst : i32) =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = es.cycles_available
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
@@ -6553,7 +6556,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.msg_cycles_accept<es>(max_amount : i64) : i64 =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
       es.cycles_accepted := es.cycles_accepted + amount
@@ -6561,7 +6564,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return amount
 
     ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : i32) =
-      if es.context ∉ {U, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {U, RQ, Rt, Ry} then Trap {cycles_used = es.cycles_used;}
       let max_amount = max_amount_high * 2^64 + max_amount_low
       let amount = min(max_amount, es.cycles_available)
       es.cycles_available := es.cycles_available - amount
@@ -6570,7 +6573,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
-      if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
+      if es.context ∉ {I, G, U, RQ, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
       let amount = amount_high * 2^64 + amount_low
       let burned_amount = min(
         amount,
