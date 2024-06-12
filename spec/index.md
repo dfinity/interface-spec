@@ -3690,7 +3690,8 @@ Available = S.call_contexts[M.call_contexts].available_cycles
 )
 or
 ( M.entry_point = PublicMethod Name Caller Arg
-  F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env, Available)
+  F = query_as_update(f, arg, caller, env, available) = λ wasm_state → 
+    match f(arg, caller, env, available)(wasm_state) with
   New_canister_version = S.canister_version[M.receiver]
 )
 or
@@ -3839,7 +3840,7 @@ The functions `query_as_update` and `system_task_as_update` turns a query functi
           new_certified_data = NoCertifiedData;
           new_global_timer = NoGlobalTimer;
           response = res.response;
-          cycles_accepted = 0;
+          cycles_accepted = res.cycles_accepted;
           cycles_used = res.cycles_used;
         }
 
