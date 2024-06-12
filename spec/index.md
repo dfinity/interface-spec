@@ -2020,6 +2020,8 @@ The optional `settings` parameter can be used to set the following settings:
 
     Default value: 0 (i.e., no explicit limit).
 
+    Note: in a future release of this specification, the default value and whether the limit is enforced for global timers and heartbeats might change.
+
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 Until code is installed, the canister is `Empty` and behaves like a canister that has no public methods.
