@@ -3690,8 +3690,7 @@ Available = S.call_contexts[M.call_contexts].available_cycles
 )
 or
 ( M.entry_point = PublicMethod Name Caller Arg
-  F = query_as_update(f, arg, caller, env, available) = λ wasm_state → 
-    match f(arg, caller, env, available)(wasm_state) with
+  F = query_as_update(Mod.query_methods[Name], Arg, Caller, Env, Available)
   New_canister_version = S.canister_version[M.receiver]
 )
 or
@@ -3831,8 +3830,8 @@ The function `validate_sender_canister_version` checks that `sender_canister_ver
 
 The functions `query_as_update` and `system_task_as_update` turns a query function (note that composite query methods cannot be called when executing a message during this transition) resp the heartbeat or global timer into an update function; this is merely a notational trick to simplify the rule:
 
-    query_as_update(f, arg, env) = λ wasm_state →
-      match f(arg, env)(wasm_state) with
+    query_as_update(f, arg, caller, env, available) = λ wasm_state →
+      match f(arg, caller, env, available)(wasm_state) with
         Trap trap → Trap trap
         Return res → Return {
           new_state = wasm_state;
