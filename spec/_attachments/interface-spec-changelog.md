@@ -7,6 +7,7 @@
 * Management canister query call to fetch canister logs.
 * WASM heap memory limit in canisters settings.
 * 32-bit stable memory System API is marked DEPRECATED.
+* Remove the management canister query calls `bitcoin_get_balance_query` and `bitcoin_get_utxos_query`.
 
 ### 0.24.0 (2024-04-23) {#0_24_0}
 * Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
