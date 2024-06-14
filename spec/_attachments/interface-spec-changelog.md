@@ -1,5 +1,14 @@
 ## Changelog {#changelog}
 
+### 0.25.0 (2024-06-14) {#0_25_0}
+* Query call statistics.
+* New `wasm_memory_persistence` option for canister upgrades.
+* Rename `num_blocks_total` to `num_blocks_proposed_total` in node metrics served by the management canister.
+* Management canister query call to fetch canister logs.
+* WASM heap memory limit in canisters settings.
+* 32-bit stable memory System API is marked DEPRECATED.
+* Remove the management canister query calls `bitcoin_get_balance_query` and `bitcoin_get_utxos_query`.
+
 ### 0.24.0 (2024-04-23) {#0_24_0}
 * Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
 * Update subnet read state request conditions on requested paths.
