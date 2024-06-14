@@ -1378,8 +1378,6 @@ The following sections describe various System API functions, also referred to a
     ic0.call_data_append : (src : i32, size : i32) -> ();                       // U CQ Ry Rt CRy CRt T
     ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt T
-    ic0.call_cycles_add128_up_to : (max_amount_high : i64, max_amount_low: i64, dst: i32)
-      -> ();                                                                    // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                // U CQ Ry Rt CRy CRt T
 
     ic0.stable_size : () -> (page_count : i32);                                 // * s
@@ -1642,24 +1640,6 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     This system call traps if the cycle balance of the canister after transferring cycles decreases below the canister's freezing limit.
 
--   `ic0.call_cycles_add128_up_to : (max_amount_high : i64, max_amount_low : i64, dst: i32) -> ()`
-
-    This system call moves cycles from the canister balance onto the call under construction, to be transferred with that call.
-
-    This moves the maximum possible amount of cycles onto the call, up to these constraints:
-
-    - It moves no more cycles than represented by a 128-bit value which can be obtained by combining the `max_amount_high` and `max_amount_low` parameters.
-
-    - The cycle balance of the canister after transferring cycles does not decrease below the canister's freezing limit.
-
-    The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, if the canister invokes `ic0.call_new`, or returns without calling `ic0.call_perform`).
-
-    This may be called multiple times between `ic0.call_new` and `ic0.call_perform`, each time possibly moving more cycles onto the call.
-
-    This system call traps if there is no call under construction, i.e., if not called between `ic0.call_new` and `ic0.call_perform`.
-
-    This system call also copies the actual amount of cycles that were moved onto the call represented by a 128-bit value starting at the location `dst` in the canister memory.
-
 -   `ic0.call_perform  : () -> ( err_code : i32 )`
 
     This concludes assembling the call. It queues the call message to the given destination, but does not actually act on it until the current WebAssembly function returns without trapping.
@@ -1684,7 +1664,7 @@ This specification currently does not go into details about which actions cost h
 
 -   `ic0.canister_cycle_balance : () → i64`
 
-    Indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
+    Indicates the current cycle balance of the canister. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add` and `ic0.call_cycles_add128`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 
 :::note
 
@@ -1694,7 +1674,7 @@ This call traps if the current balance does not fit into a 64-bit value. Caniste
 
 -   `ic0.canister_cycle_balance128 : (dst : i32) → ()`
 
-    Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
+    Indicates the current cycle balance of the canister by copying the value at the location `dst` in the canister memory. It is the canister balance before the execution of the current message, minus a reserve to pay for the execution of the current message, minus any cycles queued up to be sent via `ic0.call_cycles_add` and `ic0.call_cycles_add128`. After execution of the message, the IC may add unused cycles from the reserve back to the balance.
 
 -   `ic0.msg_cycles_available : () → i64`
 
@@ -2348,7 +2328,7 @@ As a provisional method on development instances, the `provisional_create_canist
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
 
 This method is only available in local development instances.
 
@@ -2356,7 +2336,7 @@ This method is only available in local development instances.
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
-Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
 
 Any user can top-up any canister this way.
 
@@ -6759,26 +6739,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
       es.balance := es.balance - amount
       es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
-
-    ic0.call_cycles_add128_up_to<es>(max_amount_high : i64, max_amount_low : i64, dst: i32) =
-      if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
-      if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-      let max_amount = max_amount_high * 2^64 + max_amount_low
-      let amount = min(max_amount, liquid_balance(
-        es.balance,
-        es.params.sysenv.reserved_balance,
-        freezing_limit(
-          es.params.sysenv.compute_allocation,
-          es.params.sysenv.memory_allocation,
-          es.params.sysenv.freezing_threshold,
-          memory_usage_wasm_state(es.wasm_state) + es.params.sysenv.memory_usage_raw_module + es.params.sysenv.memory_usage_canister_history,
-          es.params.sysenv.subnet_size,
-        )
-      ))
-
-      es.balance := es.balance - amount
-      es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
-      copy_cycles_to_canister<es>(dst, amount.to_little_endian_bytes())
 
     ic0.call_peform<es>() : ( err_code : i32 ) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
