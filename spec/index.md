@@ -2464,7 +2464,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
-This method can only be called by external users via non-replicated query calls, i.e., it cannot be called by canisters, as replicated update calls, and as nested composite query calls.
+This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, as replicated calls, and from composite query calls.
 
 :::note
 
