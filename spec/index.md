@@ -1974,7 +1974,7 @@ The binary encoding of arguments and results are as per Candid specification.
 
 ### IC method `create_canister` {#ic-create_canister}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Before deploying a canister, the administrator of the canister first has to register it with the IC, to get a canister id (with an empty canister behind it), and then separately install the code.
 
@@ -2179,7 +2179,7 @@ Only the controllers of the canister or the canister itself can request its stat
 
 ### IC method `canister_info` {#ic-canister-info}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
@@ -2231,19 +2231,19 @@ Only controllers of the canister can delete it and the canister must already be 
 
 ### IC method `deposit_cycles` {#ic-deposit_cycles}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method deposits the cycles included in this call into the specified canister.
 
 ### IC method `raw_rand` {#ic-raw_rand}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
 ### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
@@ -2253,7 +2253,7 @@ The return result is an extended public key consisting of an ECDSA `public_key`,
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) signature of the given `message_hash` that can be separately verified against a derived ECDSA public key. This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
@@ -2265,7 +2265,7 @@ Cycles to pay for the call must be explicitly transferred with the call, i.e., t
 
 ### IC method `http_request` {#ic-http_request}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
@@ -2342,7 +2342,7 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 ### IC method `node_metrics_history` {#ic-node-metrics-history}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 :::note
 
@@ -2392,7 +2392,7 @@ The Bitcoin functionality is exposed via the management canister. Information ab
 
 ### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component. The UTXOs are returned sorted by block height in descending order.
 
@@ -2426,7 +2426,7 @@ The recommended workflow is to issue a request with the desired number of confir
 
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
 
@@ -2438,7 +2438,7 @@ Given an address and the optional `min_confirmations` parameter, `bitcoin_get_ba
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
 
@@ -2454,7 +2454,7 @@ If the transaction passes these tests, the transaction is forwarded to the speci
 
 ### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin_get_current_fee_percentiles}
 
-This method can only be called by canisters, i.e., it must not be called by external users via ingress messages.
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
@@ -2464,7 +2464,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 ### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
-This method can only be called by external users via non-replicated query calls, i.e., it must not be called by canisters, as replicated update calls, and as nested composite query calls.
+This method can only be called by external users via non-replicated query calls, i.e., it cannot be called by canisters, as replicated update calls, and as nested composite query calls.
 
 :::note
 
