@@ -1,6 +1,8 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+
+### 0.25.0 (2024-06-14) {#0_25_0}
 * Query call statistics.
 * New `wasm_memory_persistence` option for canister upgrades.
 * Rename `num_blocks_total` to `num_blocks_proposed_total` in node metrics served by the management canister.

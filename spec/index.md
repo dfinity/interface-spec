@@ -1990,6 +1990,8 @@ The binary encoding of arguments and results are as per Candid specification.
 
 ### IC method `create_canister` {#ic-create_canister}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 Before deploying a canister, the administrator of the canister first has to register it with the IC, to get a canister id (with an empty canister behind it), and then separately install the code.
 
 The optional `settings` parameter can be used to set the following settings:
@@ -2056,6 +2058,8 @@ Cycles to pay for the call must be explicitly transferred with the call, i.e., t
 
 ### IC method `update_settings` {#ic-update_settings}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 Only *controllers* of the canister can update settings. See [IC method](#ic-create_canister) for a description of settings.
 
 Not including a setting in the `settings` record means not changing that field. The defaults described above are only relevant during canister creation.
@@ -2064,17 +2068,25 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 ### IC method `upload_chunk` {#ic-upload_chunk}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
  
 ### IC method `clear_chunk_store` {#ic-clear_chunk_store}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
 
 ### IC method `stored_chunks` {#ic-stored_chunks}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 Canister controllers (and the canister itself) can list the hashes of chunks in the chunk storage of a canister.
 
 ### IC method `install_code` {#ic-install_code}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 This method installs code into a canister.
 
@@ -2108,6 +2120,8 @@ This method traps if the canister's cycle balance decreases below the canister's
 
 ### IC method `install_chunked_code` {#ic-install_chunked_code}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 This method installs code that had previously been uploaded in chunks.
 
 Only controllers of the target canister can call this method.
@@ -2120,6 +2134,8 @@ For the call to succeed, the caller must be a controller of the `store_canister`
 The `chunk_hashes_list` specifies a list of hash values `[h1,...,hk]` with `k <= MAX_CHUNKS_IN_LARGE_WASM`. The system looks up in the chunk store of `store_canister` (or that of the target canister if `store_canister` is not specified) blobs corresponding to `h1,...,hk` and concatenates them to obtain a blob of bytes referred to as `wasm_module` in `install_code`. It then checks that the SHA-256 hash of `wasm_module` is equal to the `wasm_module_hash` parameter and calls `install_code` with parameters `(record {mode; target_canister; wasm_module; arg; sender_canister_version})`.
 
 ### IC method `uninstall_code` {#ic-uninstall_code}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 This method removes a canister's code and state, making the canister *empty* again.
 
@@ -2134,6 +2150,8 @@ A canister after *uninstalling* retains its *cycle* balances, *controllers*, his
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
 ### IC method `canister_status` {#ic-canister_status}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 Indicates various information about the canister. It contains:
 
@@ -2177,6 +2195,8 @@ Only the controllers of the canister or the canister itself can request its stat
 
 ### IC method `canister_info` {#ic-canister-info}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 Provides the history of the canister, its current module SHA-256 hash, and its current controllers. Every canister can call this method on every other canister (including itself). Users cannot call this method.
 
 The canister history consists of a list of canister changes (canister creation, code uninstallation, code deployment, or controllers change). Every canister change consists of the system timestamp at which the change was performed, the canister version after performing the change, the change's origin (a user or a canister), and its details. The change origin includes the principal (called *originator* in the following) that initiated the change and, if the originator is a canister, the originator's canister version when the originator initiated the change (if available). Code deployments are described by their mode (code install, code reinstall, code upgrade) and the SHA-256 hash of the newly deployed canister module. Canister creations and controllers changes are described by the full new set of the canister controllers after the change. The order of controllers stored in the canister history may vary depending on the implementation.
@@ -2201,11 +2221,15 @@ The returned response contains the following fields:
 
 ### IC method `stop_canister` {#ic-stop_canister}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 The controllers of a canister may stop a canister (e.g., to prepare for a canister upgrade).
 
 Stopping a canister is not an atomic action. The immediate effect is that the status of the canister is changed to `stopping` (unless the canister is already stopped). The IC will reject all calls to a stopping canister, indicating that the canister is stopping. Responses to a stopping canister are processed as usual. When all outstanding responses have been processed (so there are no open call contexts), the canister status is changed to `stopped` and the management canister responds to the caller of the `stop_canister` request.
 
 ### IC method `start_canister` {#ic-start_canister}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 A canister may be started by its controllers.
 
@@ -2215,21 +2239,27 @@ If the canister was already `running` then the status stays unchanged.
 
 ### IC method `delete_canister` {#ic-delete_canister}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 This method deletes a canister from the IC.
 
 Only controllers of the canister can delete it and the canister must already be stopped. Deleting a canister cannot be undone, any state stored on the canister is permanently deleted and its cycles are discarded. Once a canister is deleted, its ID cannot be reused.
 
 ### IC method `deposit_cycles` {#ic-deposit_cycles}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 This method deposits the cycles included in this call into the specified canister.
 
-There is no restriction on who can invoke this method.
-
 ### IC method `raw_rand` {#ic-raw_rand}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method takes no input and returns 32 pseudo-random bytes to the caller. The return value is unknown to any part of the IC at time of the submission of this call. A new return value is generated for each call to this method.
 
 ### IC method `ecdsa_public_key` {#ic-ecdsa_public_key}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
 
@@ -2238,6 +2268,8 @@ For curve `secp256k1`, the public key is derived using a generalization of BIP32
 The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) signature of the given `message_hash` that can be separately verified against a derived ECDSA public key. This public key can be obtained by calling `ecdsa_public_key` with the caller's `canister_id`, and the same `derivation_path` and `key_id` used here.
 
@@ -2248,6 +2280,8 @@ This call requires that the ECDSA feature is enabled, the caller is a canister, 
 Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
 ### IC method `http_request` {#ic-http_request}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 This method makes an HTTP request to a given URL and returns the HTTP response, possibly after a transformation.
 
@@ -2324,6 +2358,8 @@ If you do not specify the `max_response_bytes` parameter, the maximum of a `2MB`
 
 ### IC method `node_metrics_history` {#ic-node-metrics-history}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 :::note
 
 The node metrics management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
@@ -2344,6 +2380,8 @@ A single metric entry is a record with the following fields:
 
 ### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
 
 The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
@@ -2353,6 +2391,8 @@ Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, a
 This method is only available in local development instances.
 
 ### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
 
@@ -2367,6 +2407,8 @@ This method is only available in local development instances.
 The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/gas-cost) for information on pricing for the Bitcoin mainnet and testnet.
 
 ### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `get_utxos_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns all unspent transaction outputs (UTXOs) associated with the provided address in the specified Bitcoin network based on the current view of the Bitcoin blockchain available to the Bitcoin component. The UTXOs are returned sorted by block height in descending order.
 
@@ -2400,6 +2442,8 @@ The recommended workflow is to issue a request with the desired number of confir
 
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
 
 If the address is malformed, the call is rejected.
@@ -2409,6 +2453,8 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `send_transaction_request`, which must specify a `blob` of a Bitcoin transaction and a Bitcoin network (`mainnet` or `testnet`), several checks are performed:
 
@@ -2424,6 +2470,8 @@ If the transaction passes these tests, the transaction is forwarded to the speci
 
 ### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin_get_current_fee_percentiles}
 
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
 
 This function returns fee percentiles, measured in millisatoshi/vbyte (1000 millisatoshi = 1 satoshi), over the last 10,000 transactions in the specified network, i.e., over the transactions in the last approximately 4-10 blocks.
@@ -2431,6 +2479,8 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
 ### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
+
+This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, as replicated calls, and from composite query calls.
 
 :::note
 
@@ -2449,14 +2499,6 @@ A single log is a record with the following fields:
 - `idx` (`nat64`): the unique sequence number of the log for this particular canister;
 - `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
 - `content` (`blob`): the actual content of the log;
-
-:::note
-
-This method is exposed as a query and is only accessible in non-replicated mode. 
-Calls in replicated mode are rejected.
-Only users can call this method, not canisters (also no nested composite query calls).
-
-:::
 
 :::warning
 
@@ -3304,11 +3346,12 @@ is_effective_canister_id(E.content, ECID)
   E.content.sender ∈ S.controllers[CanisterId]
   E.content.method_name ∈
     { "install_code", "install_chunked_code", "uninstall_code", "update_settings", "start_canister", "stop_canister",
-      "canister_status", "delete_canister" }
+      "canister_status", "delete_canister", "upload_chunk", "clear_chunk_store", "stored_chunks",
+      "provisional_top_up_canister" }
 ) ∨ (
   E.content.canister_id = ic_principal
   E.content.method_name ∈
-    { "provisional_create_canister_with_cycles", "provisional_top_up_canister" }
+    { "provisional_create_canister_with_cycles" }
 ) ∨ (
   E.content.canister_id ≠ ic_principal
   S.canisters[E.content.canister_id] ≠ EmptyCanister
