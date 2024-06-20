@@ -1372,12 +1372,12 @@ defaulting to `I = i32` if the canister declares no memory.
     ic0.call_new :
       ( callee_src  : I,
         callee_size : I,
-        name_src  : I,
-        name_size : I,
-        reply_fun : i32,
-        reply_env : i32,
-        reject_fun : i32,
-        reject_env : i32
+        name_src    : I,
+        name_size   : I,
+        reply_fun   : i32,
+        reply_env   : i32,
+        reject_fun  : i32,
+        reject_env  : i32
       ) -> ();                                                                            // U CQ Ry Rt CRy CRt T
     ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                                   // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : I, size : I) -> ();                                     // U CQ Ry Rt CRy CRt T
@@ -1389,15 +1389,15 @@ defaulting to `I = i32` if the canister declares no memory.
     ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();                     // * s
     ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();                      // * s
 
-    ic0.certified_data_set : (src: I, size : I) -> ();                                    // I G U Ry Rt T
+    ic0.certified_data_set : (src : I, size : I) -> ();                                   // I G U Ry Rt T
     ic0.data_certificate_present : () -> i32;                                             // *
     ic0.data_certificate_size : () -> I;                                                  // NRQ CQ
-    ic0.data_certificate_copy : (dst: I, offset : I, size : I) -> ();                     // NRQ CQ
+    ic0.data_certificate_copy : (dst : I, offset : I, size : I) -> ();                    // NRQ CQ
 
     ic0.time : () -> (timestamp : i64);                                                   // *
     ic0.global_timer_set : (timestamp : i64) -> i64;                                      // I G U Ry Rt C T
     ic0.performance_counter : (counter_type : i32) -> (counter : i64);                    // * s
-    ic0.is_controller: (src: I, size : I) -> ( result: i32);                              // * s
+    ic0.is_controller: (src : I, size : I) -> ( result: i32);                             // * s
     ic0.in_replicated_execution: () -> (result: i32);                                     // * s
 
     ic0.debug_print : (src : I, size : I) -> ();                                          // * s
@@ -1587,14 +1587,14 @@ During the canister upgrade process, `canister_pre_upgrade` sees the old counter
 When handling an update call (or a callback), a canister can do further calls to another canister. Calls are assembled in a builder-like fashion, starting with `ic0.call_new`, adding more attributes using the `ic0.call_*` functions, and eventually performing the call with `ic0.call_perform`.
 
 -   `ic0.call_new :
-    ( callee_src : I,
+    ( callee_src  : I,
       callee_size : I,
-      name_src  : I,
-      name_size : I,
-      reply_fun : i32,
-      reply_env : i32,
-      reject_fun : i32,
-      reject_env : i32,
+      name_src    : I,
+      name_size   : I,
+      reply_fun   : i32,
+      reply_env   : i32,
+      reject_fun  : i32,
+      reject_env  : i32,
     ) → ()`; I ∈ {i32, i64}
 
 Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
@@ -6576,7 +6576,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return |es.params.arg|
 
     I ∈ {i32, i64}
-    ic0.msg_arg_data_copy<es>(dst:I, offset : I, size : I) =
+    ic0.msg_arg_data_copy<es>(dst : I, offset : I, size : I) =
       if es.context ∉ {I, U, RQ, NRQ, CQ, Ry, CRy, F} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.arg)
 
@@ -6586,7 +6586,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return |es.params.caller|
 
     I ∈ {i32, i64}
-    ic0.msg_caller_copy(dst:I, offset : I, size : I) =
+    ic0.msg_caller_copy(dst : I, offset : I, size : I) =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.caller)
 
@@ -6600,7 +6600,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return |es.params.reject_msg|
 
     I ∈ {i32, i64}
-    ic0.msg_reject_msg_copy<es>(dst:I, offset : I, size : I) =
+    ic0.msg_reject_msg_copy<es>(dst : I, offset : I, size : I) =
       if es.context ∉ {Rt, CRt} then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.reject_msg)
 
@@ -6690,7 +6690,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return |es.wasm_state.self_id|
 
     I ∈ {i32, i64}
-    ic0.canister_self_copy<es>(dst:I, offset : I, size : I) =
+    ic0.canister_self_copy<es>(dst : I, offset : I, size : I) =
       if es.context = s then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.wasm_state.self_id)
 
@@ -6905,7 +6905,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       es.wasm_state.store.mem[offset..offset+size] := es.wasm_state.stable.mem[src..src+size]
 
     I ∈ {i32, i64}
-    ic0.certified_data_set<es>(src: I, size : I) =
+    ic0.certified_data_set<es>(src : I, size : I) =
       if es.context ∉ {I, G, U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
       es.new_certified_data := es.wasm_state[src..src+size]
 
@@ -6922,7 +6922,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       return |es.params.sysenv.certificate|
 
     I ∈ {i32, i64}
-    ic0.data_certificate_copy<es>(dst: I, offset : I, size : I) =
+    ic0.data_certificate_copy<es>(dst : I, offset : I, size : I) =
       if es.context ∉ {NRQ, CQ} then Trap {cycles_used = es.cycles_used;}
       if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
       copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
@@ -6943,7 +6943,7 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       arbitrary()
 
     I ∈ {i32, i64}
-    ic0.is_controller<es>(src: I, size : I) : (result: i32) =
+    ic0.is_controller<es>(src : I, size : I) : (result: i32) =
       bytes = copy_from_canister<es>(src, size)
       if bytes encode a principal then
         if bytes ∉ es.params.sysenv.controllers
