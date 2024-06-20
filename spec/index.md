@@ -1227,7 +1227,9 @@ The canister provides entry points which are invoked by the IC under various cir
 
 -   The canister may export functions with name `canister_composite_query <name>` and type `() -> ()`.
 
--   The canister table may contain functions of type `(env : i32) -> ()` which may be used as callbacks for inter-canister calls and composite query methods.
+-   The canister table may contain functions of type `(env : I) -> ()` which may be used as callbacks for inter-canister calls and composite query methods.
+    The value of `I ∈ {i32, i64}` specifying whether the imported functions have 32-bit or 64-bit pointers
+    is derived from the bit-width of the declared memory defaulting to `I = i32` if the canister declares no memory.
 
 If the execution of any of these entry points traps for any reason, then all changes to the WebAssembly state, as well as the effect of any externally visible system call (like `ic0.msg_reply`, `ic0.msg_reject`, `ic0.call_perform`), are discarded. For upgrades, this transactional behavior applies to the `canister_pre_upgrade`/`canister_post_upgrade` sequence as a whole.
 
@@ -1374,12 +1376,12 @@ defaulting to `I = i32` if the canister declares no memory.
         callee_size : I,
         name_src    : I,
         name_size   : I,
-        reply_fun   : i32,
-        reply_env   : i32,
-        reject_fun  : i32,
-        reject_env  : i32
+        reply_fun   : I,
+        reply_env   : I,
+        reject_fun  : I,
+        reject_env  : I
       ) -> ();                                                                            // U CQ Ry Rt CRy CRt T
-    ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                                   // U CQ Ry Rt CRy CRt T
+    ic0.call_on_cleanup : (fun : I, env : I) -> ();                                       // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : I, size : I) -> ();                                     // U CQ Ry Rt CRy CRt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();                  // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                          // U CQ Ry Rt CRy CRt T
@@ -1591,15 +1593,15 @@ When handling an update call (or a callback), a canister can do further calls to
       callee_size : I,
       name_src    : I,
       name_size   : I,
-      reply_fun   : i32,
-      reply_env   : i32,
-      reject_fun  : i32,
-      reject_env  : i32,
+      reply_fun   : I,
+      reply_env   : I,
+      reject_fun  : I,
+      reject_env  : I,
     ) → ()`; I ∈ {i32, i64}
 
 Begins assembling a call to the canister specified by `callee_src/_size` at method `name_src/_size`.
 
-The IC records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `(env : i32) -> ()`, and passed the corresponding `*_env` value.
+The IC records two mandatory callback functions, represented by a table entry index `*_fun` and some additional value `*_env`. When the response comes back, the table is read at the corresponding index, expected to be a function of type `(env : I) -> ()`, and passed the corresponding `*_env` value.
 
 The reply callback is executed upon successful completion of the method call, which can query the reply using `ic0.msg_arg_data_*`.
 
@@ -1607,9 +1609,9 @@ The reject callback is executed if the method call fails asynchronously or the o
 
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 
--   `ic0.call_on_cleanup : (fun : i32, env : i32) → ()`
+-   `ic0.call_on_cleanup : (fun : I, env : I) → ()`; I ∈ {i32, i64}
 
-If a cleanup callback (of type `(env : i32) -> ()`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
+If a cleanup callback (of type `(env : I) -> ()`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 
 During the execution of the `cleanup` function, only a subset of the System API is available (namely `ic0.debug_print`, `ic0.trap` and the `ic0.stable_*` functions). The cleanup function is expected to run swiftly (within a fixed, yet to be specified cycle limit) and serves to free resources associated with the callback.
 
@@ -6075,9 +6077,10 @@ We model `mem` as an array of bytes, and `table` as an array of execution functi
 
 The abstract `Callback` type above models an entry point for responses:
 
+    I ∈ {i32, i64}
     Closure = {
-        fun   : i32,
-        env   : i32,
+        fun   : I,
+        env   : I,
     }
 
     Callback = {
@@ -6406,6 +6409,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 
 -   The function `callbacks` of the `CanisterModule` is defined as follows
 
+        I ∈ {i32, i64}
         callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
           let params0 = empty_params with {
             sysenv
@@ -6428,7 +6432,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
           try
             if fun > |es.wasm_state.store.table| then Trap
             let func = es.wasm_state.store.table[fun]
-            if typeof(func) ≠ func (i32) -> () then Trap
+            if typeof(func) ≠ func (I) -> () then Trap
 
             func<es>(env)
             discard_pending_call<es>()
@@ -6445,7 +6449,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
             if callbacks.on_cleanup = NoClosure then Trap {cycles_used = es.cycles_used;}
             if callbacks.on_cleanup.fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
             let func = es.wasm_state.store.table[callbacks.on_cleanup.fun]
-            if typeof(func) ≠ func (i32) -> () then Trap {cycles_used = es.cycles_used;}
+            if typeof(func) ≠ func (I) -> () then Trap {cycles_used = es.cycles_used;}
 
             let es' = ref { empty_execution_state with
               wasm_state = wasm_state;
@@ -6466,6 +6470,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 
 -   The function `composite_callbacks` of the `CanisterModule` is defined as follows
 
+        I ∈ {i32, i64}
         composite_callbacks = λ(callbacks, response, sysenv) → λ wasm_state →
           let params0 = empty_params with {
             sysenv
@@ -6486,7 +6491,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
           try
             if fun > |es.wasm_state.store.table| then Trap
             let func = es.wasm_state.store.table[fun]
-            if typeof(func) ≠ func (i32) -> () then Trap
+            if typeof(func) ≠ func (I) -> () then Trap
 
             func<es>(env)
             discard_pending_call<es>()
@@ -6500,7 +6505,7 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
             if callbacks.on_cleanup = NoClosure then Trap {cycles_used = es.cycles_used;}
             if callbacks.on_cleanup.fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
             let func = es.wasm_state.store.table[callbacks.on_cleanup.fun]
-            if typeof(func) ≠ func (i32) -> () then Trap {cycles_used = es.cycles_used;}
+            if typeof(func) ≠ func (I) -> () then Trap {cycles_used = es.cycles_used;}
 
             let es' = ref { empty_execution_state with
               wasm_state = wasm_state;
@@ -6737,10 +6742,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         callee_size : I,
         name_src    : I,
         name_size   : I,
-        reply_fun   : i32,
-        reply_env   : i32,
-        reject_fun  : i32,
-        reject_env  : i32,
+        reply_fun   : I,
+        reply_env   : I,
+        reject_fun  : I,
+        reject_env  : I,
       ) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
 
@@ -6750,10 +6755,10 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       method_name := copy_from_canister<es>(name_src, name_size);
 
       if reply_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
+      if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (I) -> () then Trap {cycles_used = es.cycles_used;}
 
       if reject_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
+      if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (I) -> () then Trap {cycles_used = es.cycles_used;}
 
       es.pending_call = MethodCall {
         callee = callee;
@@ -6767,10 +6772,11 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
         };
       }
 
-    ic0.call_on_cleanup<es> (fun : i32, env : i32) =
+    I ∈ {i32, i64}
+    ic0.call_on_cleanup<es> (fun : I, env : I) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
       if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
+      if typeof(es.wasm_state.store.table[fun]) ≠ func (I) -> () then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
       es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
