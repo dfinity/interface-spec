@@ -6715,12 +6715,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
       callee := copy_from_canister<es>(callee_src, callee_size);
       method_name := copy_from_canister<es>(name_src, name_size);
 
-      if reply_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[reply_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
-
-      if reject_fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[reject_fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
-
       es.pending_call = MethodCall {
         callee = callee;
         method_name = callee;
@@ -6735,8 +6729,6 @@ The pseudo-code below does *not* explicitly enforce the restrictions of which im
 
     ic0.call_on_cleanup<es> (fun : i32, env : i32) =
       if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
-      if fun > |es.wasm_state.store.table| then Trap {cycles_used = es.cycles_used;}
-      if typeof(es.wasm_state.store.table[fun]) ≠ func (anyref, i32) -> () then Trap {cycles_used = es.cycles_used;}
       if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
       if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
       es.pending_call.callback.on_cleanup := Closure { fun = fun; env = env}
