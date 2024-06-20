@@ -3163,97 +3163,98 @@ hash_of_map: Request -> RequestId
 #### The system state
 
 Finally, we can describe the state of the IC as a record having the following fields:
-
-    CanState
-     = EmptyCanister | {
-      wasm_state : WasmState;
-      module : CanisterModule;
-      raw_module : Blob;
-      public_custom_sections: Text ↦ Blob;
-      private_custom_sections: Text ↦ Blob;
+```
+CanState
+ = EmptyCanister | {
+  wasm_state : WasmState;
+  module : CanisterModule;
+  raw_module : Blob;
+  public_custom_sections: Text ↦ Blob;
+  private_custom_sections: Text ↦ Blob;
+}
+CanStatus
+  = Running
+  | Stopping (List (CallOrigin, Nat))
+  | Stopped
+ChangeOrigin
+  = FromUser {
+      user_id : PrincipalId;
     }
-    CanStatus
-      = Running
-      | Stopping (List (CallOrigin, Nat))
-      | Stopped
-    ChangeOrigin
-      = FromUser {
-          user_id : PrincipalId;
-        }
-      | FromCanister {
-          canister_id : PrincipalId;
-          canister_version : CanisterVersion | NoCanisterVersion;
-        }
-    CodeDeploymentMode
-      = Install
-      | Reinstall
-      | Upgrade
-    ChangeDetails
-      = Creation {
-          controllers : [PrincipalId];
-        }
-      | CodeUninstall
-      | CodeDeployment {
-          mode : CodeDeploymentMode;
-          module_hash : Blob;
-        }
-      | ControllersChange {
-          controllers : [PrincipalId];
-        }
-    Change = {
-      timestamp_nanos : Timestamp;
-      canister_version : CanisterVersion;
-      origin : ChangeOrigin;
-      details : ChangeDetails;
+  | FromCanister {
+      canister_id : PrincipalId;
+      canister_version : CanisterVersion | NoCanisterVersion;
     }
-    CanisterHistory = {
-      total_num_changes : Nat;
-      recent_changes : [Change];
+CodeDeploymentMode
+  = Install
+  | Reinstall
+  | Upgrade
+ChangeDetails
+  = Creation {
+      controllers : [PrincipalId];
     }
-    CanisterLogVisibility
-      = Controllers
-      | Public
-    CanisterLog = {
-      idx : Nat;
-      timestamp_nanos : Nat;
-      content : Blob;
+  | CodeUninstall
+  | CodeDeployment {
+      mode : CodeDeploymentMode;
+      module_hash : Blob;
     }
-    QueryStats = {
-      timestamp : Timestamp;
-      num_instructions : Nat;
-      request_payload_bytes : Nat;
-      response_payload_bytes : Nat;
+  | ControllersChange {
+      controllers : [PrincipalId];
     }
-    Subnet = {
-      subnet_id : Principal;
-      subnet_size : Nat;
-    }
-    S = {
-      requests : Request ↦ (RequestStatus, Principal);
-      canisters : CanisterId ↦ CanState;
-      controllers : CanisterId ↦ Set Principal;
-      compute_allocation : CanisterId ↦ Nat;
-      memory_allocation : CanisterId ↦ Nat;
-      freezing_threshold : CanisterId ↦ Nat;
-      canister_status: CanisterId ↦ CanStatus;
-      canister_version: CanisterId ↦ CanisterVersion;
-      canister_subnet : CanisterId ↦ Subnet;
-      time : CanisterId ↦ Timestamp;
-      global_timer : CanisterId ↦ Timestamp;
-      balances: CanisterId ↦ Nat;
-      reserved_balances: CanisterId ↦ Nat;
-      reserved_balance_limits: CanisterId ↦ Nat;
-      wasm_memory_limit: CanisterId ↦ Nat;
-      certified_data: CanisterId ↦ Blob;
-      canister_history: CanisterId ↦ CanisterHistory;
-      canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
-      canister_logs: CanisterId ↦ [CanisterLog];
-      query_stats: CanisterId ↦ [QueryStats];
-      system_time : Timestamp
-      call_contexts : CallId ↦ CallCtxt;
-      messages : List Message; // ordered!
-      root_key : PublicKey
-    }
+Change = {
+  timestamp_nanos : Timestamp;
+  canister_version : CanisterVersion;
+  origin : ChangeOrigin;
+  details : ChangeDetails;
+}
+CanisterHistory = {
+  total_num_changes : Nat;
+  recent_changes : [Change];
+}
+CanisterLogVisibility
+  = Controllers
+  | Public
+CanisterLog = {
+  idx : Nat;
+  timestamp_nanos : Nat;
+  content : Blob;
+}
+QueryStats = {
+  timestamp : Timestamp;
+  num_instructions : Nat;
+  request_payload_bytes : Nat;
+  response_payload_bytes : Nat;
+}
+Subnet = {
+  subnet_id : Principal;
+  subnet_size : Nat;
+}
+S = {
+  requests : Request ↦ (RequestStatus, Principal);
+  canisters : CanisterId ↦ CanState;
+  controllers : CanisterId ↦ Set Principal;
+  compute_allocation : CanisterId ↦ Nat;
+  memory_allocation : CanisterId ↦ Nat;
+  freezing_threshold : CanisterId ↦ Nat;
+  canister_status: CanisterId ↦ CanStatus;
+  canister_version: CanisterId ↦ CanisterVersion;
+  canister_subnet : CanisterId ↦ Subnet;
+  time : CanisterId ↦ Timestamp;
+  global_timer : CanisterId ↦ Timestamp;
+  balances: CanisterId ↦ Nat;
+  reserved_balances: CanisterId ↦ Nat;
+  reserved_balance_limits: CanisterId ↦ Nat;
+  wasm_memory_limit: CanisterId ↦ Nat;
+  certified_data: CanisterId ↦ Blob;
+  canister_history: CanisterId ↦ CanisterHistory;
+  canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
+  canister_logs: CanisterId ↦ [CanisterLog];
+  query_stats: CanisterId ↦ [QueryStats];
+  system_time : Timestamp
+  call_contexts : CallId ↦ CallCtxt;
+  messages : List Message; // ordered!
+  root_key : PublicKey
+}
+```
 
 To convert `CanStatus` into `status : Running | Stopping | Stopped` from `Env`, we define the following conversion function:
 ```
@@ -3303,33 +3304,34 @@ The amount of cycles that need to be reserved after operations that allocate res
 #### Initial state
 
 The initial state of the IC is
-
-    {
-      requests = ();
-      canisters = ();
-      controllers = ();
-      compute_allocation = ();
-      memory_allocation = ();
-      freezing_threshold = ();
-      canister_status = ();
-      canister_version = ();
-      canister_subnet = ();
-      time = ();
-      global_timer = ();
-      balances = ();
-      reserved_balances = ();
-      reserved_balance_limits = ();
-      wasm_memory_limit = ();
-      certified_data = ();
-      canister_history = ();
-      canister_log_visibility = ();
-      canister_logs = ();
-      query_stats = ();
-      system_time = T;
-      call_contexts = ();
-      messages = [];
-      root_key = PublicKey;
-    }
+```
+{
+  requests = ();
+  canisters = ();
+  controllers = ();
+  compute_allocation = ();
+  memory_allocation = ();
+  freezing_threshold = ();
+  canister_status = ();
+  canister_version = ();
+  canister_subnet = ();
+  time = ();
+  global_timer = ();
+  balances = ();
+  reserved_balances = ();
+  reserved_balance_limits = ();
+  wasm_memory_limit = ();
+  certified_data = ();
+  canister_history = ();
+  canister_log_visibility = ();
+  canister_logs = ();
+  query_stats = ();
+  system_time = T;
+  call_contexts = ();
+  messages = [];
+  root_key = PublicKey;
+}
+```
 
 for some time stamp `T`, some DER-encoded BLS public key `PublicKey`, and using `()` to denote the empty map or bag.
 
@@ -5890,103 +5892,104 @@ Composite query methods are EXPERIMENTAL and there might be breaking changes of 
 Composite query methods can call query methods and composite query methods up to a maximum depth `MAX_CALL_DEPTH_COMPOSITE_QUERY` of the call graph. The total amount of cycles consumed by executing a (composite) query method and all (transitive) calls it makes must be at most `MAX_CYCLES_PER_QUERY`. This limit applies in addition to the limit `MAX_CYCLES_PER_MESSAGE` for executing a single (composite) query method and `MAX_CYCLES_PER_RESPONSE` for executing a single callback of a (composite) query method.
 
 We define an auxiliary method that handles calls from composite query methods by performing a call graph traversal. It can also be (trivially) invoked for query methods that do not make further calls.
-
-    composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, Method_name, Arg) =
-      let Mod = S.canisters[Canister_id].module
-      let Cert <- { Cert | verify_cert(Cert) and
-                           lookup(["canister", Canister_id, "certified_data"], Cert) = Found S.certified_data[Canister_id] and
-                           lookup(["time"], Cert) = Found S.system_time // or "recent enough"
-                  }
-      if Canister_id ≠ Root_canister_id
-      then
-        Cert := NoCertificate // no certificate available in query and composite query methods evaluated on canisters other than the target canister of the query call
-      let Env = { time = S.time[Canister_id];
-                  global_timer = S.global_timer[Canister_id];
-                  balance = S.balances[Canister_id];
-                  reserved_balance = S.reserved_balances[Canister_id];
-                  reserved_balance_limit = S.reserved_balance_limits[Canister_id];
-                  compute_allocation = S.compute_allocation[Canister_id];
-                  memory_allocation = S.memory_allocation[Canister_id];
-                  memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
-                  memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
-                  freezing_threshold = S.freezing_threshold[Canister_id];
-                  subnet_size = S.canister_subnet[Canister_id].subnet_size;
-                  certificate = Cert;
-                  status = simple_status(S.canister_status[Canister_id]);
-                  canister_version = S.canister_version[Canister_id];
-                }
-      if S.canisters[Canister_id] ≠ EmptyCanister and
-         S.canister_status[Canister_id] = Running and
-         (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
-         Cycles >= MAX_CYCLES_PER_MESSAGE
-      then
-         let W = S.canisters[Canister_id].wasm_state
-         let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
-         if liquid_balance(
-             S.balances[Canister_id],
-             S.reserved_balances[Canister_id],
-             freezing_limit(
-               S.compute_allocation[Canister_id],
-               S.memory_allocation[Canister_id],
-               S.freezing_threshold[Canister_id],
-               memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
-                 memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-                 memory_usage_canister_history(S.canister_history[Canister_id]),
-               S.canister_subnet[Canister_id].subnet_size,
-             )
-           ) < 0
-         then
-           Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles, S)
-         let R = F(Arg, Caller, Env)(W)
-         if R = Trap trap
-         then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used, S)
-         else if R = Return {new_state = W'; new_calls = Calls; response = Response; cycles_used = Cycles_used}
-         then
-            W := W'
-            if Cycles_used > MAX_CYCLES_PER_MESSAGE
-            then
-               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_MESSAGE, S) // single message execution out of cycles
-            Cycles := Cycles - Cycles_used
-            if Response = NoResponse
-            then
-               while Calls ≠ []
-               do
-                  if Depth = MAX_CALL_DEPTH_COMPOSITE_QUERY
-                  then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // max call graph depth exceeded
-                  let Calls' · Call · Calls''  = Calls
-                  Calls := Calls' · Calls''
-                  if S.canister_subnet[Canister_id].subnet_id ≠ S.canister_subnet[Call.callee].subnet_id
-                  then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // calling to another subnet
-                  let (Response', Cycles', S') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
-                  Cycles := Cycles'
-                  S := S'
-                  if Cycles < MAX_CYCLES_PER_RESPONSE
-                  then
-                     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // composite query out of cycles
-                  Env.Cert = NoCertificate // no certificate available in composite query callbacks
-                  let F' = Mod.composite_callbacks(Call.callback, Response', Env)
-                  let R'' = F'(W')
-                  if R'' = Trap trap''
-                  then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap''.cycles_used, S)
-                  else if R'' = Return {new_state = W''; new_calls = Calls''; response = Response''; cycles_used = Cycles_used''}
-                  then
-                     W := W''
-                     if Cycles_used'' > MAX_CYCLES_PER_RESPONSE
-                     then
-                        Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_RESPONSE, S) // single message execution out of cycles
-                     Cycles := Cycles - Cycles_used''
-                     if Response'' = NoResponse
-                     then
-                        Calls := Calls'' · Calls
-                     else
-                        Return (Response'', Cycles, S)
-               Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // canister did not respond
-            else
-               Return (Response, Cycles, S)
-      else
-         Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S)
+```
+composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, Method_name, Arg) =
+  let Mod = S.canisters[Canister_id].module
+  let Cert <- { Cert | verify_cert(Cert) and
+                       lookup(["canister", Canister_id, "certified_data"], Cert) = Found S.certified_data[Canister_id] and
+                       lookup(["time"], Cert) = Found S.system_time // or "recent enough"
+              }
+  if Canister_id ≠ Root_canister_id
+  then
+    Cert := NoCertificate // no certificate available in query and composite query methods evaluated on canisters other than the target canister of the query call
+  let Env = { time = S.time[Canister_id];
+              global_timer = S.global_timer[Canister_id];
+              balance = S.balances[Canister_id];
+              reserved_balance = S.reserved_balances[Canister_id];
+              reserved_balance_limit = S.reserved_balance_limits[Canister_id];
+              compute_allocation = S.compute_allocation[Canister_id];
+              memory_allocation = S.memory_allocation[Canister_id];
+              memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
+              memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
+              freezing_threshold = S.freezing_threshold[Canister_id];
+              subnet_size = S.canister_subnet[Canister_id].subnet_size;
+              certificate = Cert;
+              status = simple_status(S.canister_status[Canister_id]);
+              canister_version = S.canister_version[Canister_id];
+            }
+  if S.canisters[Canister_id] ≠ EmptyCanister and
+     S.canister_status[Canister_id] = Running and
+     (Method_name ∈ dom(Mod.query_methods) or Method_name ∈ dom(Mod.composite_query_methods)) and
+     Cycles >= MAX_CYCLES_PER_MESSAGE
+  then
+     let W = S.canisters[Canister_id].wasm_state
+     let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
+     if liquid_balance(
+         S.balances[Canister_id],
+         S.reserved_balances[Canister_id],
+         freezing_limit(
+           S.compute_allocation[Canister_id],
+           S.memory_allocation[Canister_id],
+           S.freezing_threshold[Canister_id],
+           memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
+             memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
+             memory_usage_canister_history(S.canister_history[Canister_id]),
+           S.canister_subnet[Canister_id].subnet_size,
+         )
+       ) < 0
+     then
+       Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles, S)
+     let R = F(Arg, Caller, Env)(W)
+     if R = Trap trap
+     then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap.cycles_used, S)
+     else if R = Return {new_state = W'; new_calls = Calls; response = Response; cycles_used = Cycles_used}
+     then
+        W := W'
+        if Cycles_used > MAX_CYCLES_PER_MESSAGE
+        then
+           Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_MESSAGE, S) // single message execution out of cycles
+        Cycles := Cycles - Cycles_used
+        if Response = NoResponse
+        then
+           while Calls ≠ []
+           do
+              if Depth = MAX_CALL_DEPTH_COMPOSITE_QUERY
+              then
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // max call graph depth exceeded
+              let Calls' · Call · Calls''  = Calls
+              Calls := Calls' · Calls''
+              if S.canister_subnet[Canister_id].subnet_id ≠ S.canister_subnet[Call.callee].subnet_id
+              then
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // calling to another subnet
+              let (Response', Cycles', S') = composite_query_helper(S, Cycles, Depth + 1, Root_canister_id, Canister_id, Call.callee, Call.method_name, Call.arg)
+              Cycles := Cycles'
+              S := S'
+              if Cycles < MAX_CYCLES_PER_RESPONSE
+              then
+                 Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // composite query out of cycles
+              Env.Cert = NoCertificate // no certificate available in composite query callbacks
+              let F' = Mod.composite_callbacks(Call.callback, Response', Env)
+              let R'' = F'(W')
+              if R'' = Trap trap''
+              then Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - trap''.cycles_used, S)
+              else if R'' = Return {new_state = W''; new_calls = Calls''; response = Response''; cycles_used = Cycles_used''}
+              then
+                 W := W''
+                 if Cycles_used'' > MAX_CYCLES_PER_RESPONSE
+                 then
+                    Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles - MAX_CYCLES_PER_RESPONSE, S) // single message execution out of cycles
+                 Cycles := Cycles - Cycles_used''
+                 if Response'' = NoResponse
+                 then
+                    Calls := Calls'' · Calls
+                 else
+                    Return (Response'', Cycles, S)
+           Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S) // canister did not respond
+        else
+           Return (Response, Cycles, S)
+  else
+     Return (Reject (CANISTER_ERROR, <implementation-specific>), Cycles, S)
+ ```
 
 Submitted request  
 `E`
@@ -6010,16 +6013,18 @@ Query response `R`:
     {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
     ```
 -   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _, S')` then
-
-        {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
+    ```
+    {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
+    ```
 
 -   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _)` then
     ```
     {status: "replied"; reply: {arg: Res}, signatures: Sigs}
     ```
 -   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _, S')` then
-
-        {status: "replied"; reply: {arg: Res}, signatures: Sigs}
+    ```
+    {status: "replied"; reply: {arg: Res}, signatures: Sigs}
+    ```
 
 where the query `Q`, the response `R`, and a certificate `Cert'` that is obtained by requesting the path `/subnet` in a **separate** read state request to `/api/v2/canister/<effective_canister_id>/read_state` satisfy the following:
 
