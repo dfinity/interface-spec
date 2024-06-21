@@ -1415,7 +1415,7 @@ The comment after each function lists from where these functions may be invoked:
 
 -   `F`: from `canister_inspect_message`
 
--   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer` `canister_on_low_wasm_memory`)
+-   `T`: from *system task* (`canister_heartbeat` or `canister_global_timer` or `canister_on_low_wasm_memory`)
 
 -   `*` = `I G U Q CQ Ry Rt CRy CRt C CC F T` (NB: Not `(start)`)
 
