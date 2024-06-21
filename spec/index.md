@@ -2511,7 +2511,7 @@ A `get_utxos_request` without the optional `filter` results in a request that co
 
 The recommended workflow is to issue a request with the desired number of confirmations. If the `next_page` field in the response is not empty, there are more UTXOs than in the returned vector. In that case, the `page` field should be set to the `next_page` bytes in the subsequent request to obtain the next batch of UTXOs.
 
-### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
+### IC method `bitcoin_get_balance`
 <h3 id="ic-bitcoin_get_balance" style={{ display: "none" }} />
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
@@ -4017,7 +4017,7 @@ system_task_as_update(f, env) = λ wasm_state →
 
 Note that by construction, a query function will either trap or return with a response; it will never send calls, and it will never change the state of the canister.
 
-#### Spontaneous request rejection {#request-rejection}
+#### Spontaneous request rejection
 <h4 id="request-rejection" style={{ display: "none" }} />
 
 The system can reject a request at any point in time, e.g., because it is overloaded.
@@ -4039,7 +4039,7 @@ S.messages =
       }
 ```
 
-#### Call context starvation {#rule-starvation}
+#### Call context starvation
 <h4 id="rule-starvation" style={{ display: "none" }} />
 
 If the call context needs to respond (in particular, if the call context is not for a system task) and there is no call, downstream call context, or response that references a call context, then a reject is synthesized. The error message below is *not* indicative. In particular, if the IC has an idea about *why* this starved, it can put that in there (e.g. the initial message handler trapped with an out-of-memory access).
@@ -6008,19 +6008,11 @@ S.system_time <= Q.ingress_expiry
 
 Query response `R`:
 
--   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _)` then
-    ```
-    {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
-    ```
 -   if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reject (RejectCode, RejectMsg), _, S')` then
     ```
     {status: "rejected"; reject_code: RejectCode; reject_message: RejectMsg; error_code: <implementation-specific>, signatures: Sigs}
     ```
 
--   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _)` then
-    ```
-    {status: "replied"; reply: {arg: Res}, signatures: Sigs}
-    ```
 -   Else if `composite_query_helper(S, MAX_CYCLES_PER_QUERY, 0, Q.canister_id, Q.sender, Q.canister_id, Q.method_name, Q.arg) = (Reply Res, _, S')` then
     ```
     {status: "replied"; reply: {arg: Res}, signatures: Sigs}
