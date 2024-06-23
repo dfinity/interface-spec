@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add new management canister methods for canister snapshot support.
 
 ### 0.25.0 (2024-06-14) {#0_25_0}
 * Query call statistics.
