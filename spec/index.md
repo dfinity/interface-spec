@@ -3009,7 +3009,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
         status : Accept | Reject;
       }
     }
-  ```
+    ```
 
 This high-level interface presents a pure, mathematical model of a canister, and hides the bookkeeping required to provide the System API as seen in Section [Canister interface (System API)](#system-api).
 
