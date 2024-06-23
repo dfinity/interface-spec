@@ -1086,7 +1086,7 @@ When canisters explicitly reject a message (see [Public methods](#system-api-req
 ### Error codes
 <h3 id="error-codes" style={{ display: "none" }} />
 
-Implementations of the API can provide additional details for rejected messages in the form of a textual label identifying the error condition. API clients can use these labels to handle errors programmatically or suggest recovery paths to the user. The specification reserves error codes matching the regular expression `IC[0-9]+` (e.g., `IC502`) for the DFINITY implementation of the API.
+Implementations of the API can provide additional details for rejected messages in the form of a textual label identifying the error condition. API clients and canisters can use these labels to handle errors programmatically or suggest recovery paths to the user. The specification reserves error codes matching the regular expression `IC[0-9]+` (e.g., `IC502`) for the DFINITY implementation of the API.
 
 ### Status endpoint
 <h3 id="api-status" style={{ display: "none" }} />
@@ -1390,7 +1390,8 @@ The following sections describe various System API functions, also referred to a
     ic0.msg_reject_code : () -> i32;                                            // Ry Rt CRy CRt
     ic0.msg_reject_msg_size : () -> i32;                                        // Rt CRt
     ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
-
+    ic0.msg_error_code_size : () -> i32;                                        // Rt CRt
+    ic0.msg_error_code_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt CRt
     ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U RQ NRQ CQ Ry Rt CRy CRt
     ic0.msg_reply : () -> ();                                                   // U RQ NRQ CQ Ry Rt CRy CRt
     ic0.msg_reject : (src : i32, size : i32) -> ();                             // U RQ NRQ CQ Ry Rt CRy CRt
@@ -1531,6 +1532,10 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 -   `ic0.msg_reject_msg_size : () → i32` and `ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) → ()`
 
     The reject message. Traps if there is no reject message (i.e. if `reject_code` is `0`).
+
+-   `ic0.error_code_size : () → i32` and `ic0.error_code_copy : (dst : i32, offset : i32, size : i32) → ()`
+
+    The error code. Traps if there is no reject message (i.e. if `reject_code` is `0`).
 
 ### Responding
 <h3 id="responding" style={{ display: "none" }} />
