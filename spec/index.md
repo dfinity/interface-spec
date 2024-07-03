@@ -1383,6 +1383,7 @@ The 32-bit stable memory System API (`ic0.stable_size`, `ic0.stable_grow`, `ic0.
 
 The following sections describe various System API functions, also referred to as system calls, which we summarize here.
 
+```
     ic0.msg_arg_data_size : () -> i32;                                          // I U RQ NRQ CQ Ry CRy F
     ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U RQ NRQ CQ Ry CRy F
     ic0.msg_caller_size : () -> i32;                                            // *
@@ -1454,6 +1455,7 @@ The following sections describe various System API functions, also referred to a
 
     ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
     ic0.trap : (src : i32, size : i32) -> ();                                   // * s
+```
 
 The comment after each function lists from where these functions may be invoked:
 
