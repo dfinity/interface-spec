@@ -2563,7 +2563,7 @@ The canister logs management canister API is considered EXPERIMENTAL. Canister d
 :::
 
 Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
-The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#overview-of-imports)).
+The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#overview-of-imports)) and the canister logs are *purged* when the canister is reinstalled or uninstalled.
 The total size of all returned logs does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
