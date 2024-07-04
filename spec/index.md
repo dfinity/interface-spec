@@ -1717,6 +1717,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
     This system call traps if there is no call under construction, i.e., if not called between `ic0.call_new` and `ic0.call_perform`.
 
     This system call also copies the actual amount of cycles that were moved onto the call represented by a 128-bit value starting at the location `dst` in the canister memory.
+    This amount might be lower than the 128-bit value obtained by combining the `max_amount_high` and `max_amount_low` parameters.
 
 -   `ic0.call_perform  : () -> ( err_code : i32 )`
 
