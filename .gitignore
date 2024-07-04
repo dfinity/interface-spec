@@ -1,3 +1,7 @@
 # IDEs
 .vscode/
 .idea/
+
+node_modules
+docusaurus/build
+docusaurus/.docusaurus
