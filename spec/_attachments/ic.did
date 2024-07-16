@@ -166,6 +166,7 @@ type bitcoin_send_transaction_args = record {
 type bitcoin_get_block_headers_args = record {
     start_height : bitcoin_block_height;
     end_height : opt bitcoin_block_height;
+    network: bitcoin_network;
 };
 
 type bitcoin_get_block_headers_result = record {
