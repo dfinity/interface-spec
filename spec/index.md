@@ -1662,7 +1662,8 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     - It moves no more cycles than represented by a 128-bit value which can be obtained by combining the `max_amount_high` and `max_amount_low` parameters.
 
-    - The cycle balance of the canister after transferring cycles does not decrease below the canister's freezing limit.
+    - A subsequent `ic0.call_perform` does not fail because of insufficient cycles balance
+      (if no extra bytes were added to the message via `ic0.call_data_append` between `ic0.call_cycles_add128_up_to` and `ic0.call_perform`)
 
     The cycles are deducted from the balance as shown by `ic0.canister_cycles_balance128` immediately, and moved back if the call cannot be performed (e.g. if `ic0.call_perform` signals an error, if the canister invokes `ic0.call_new`, or returns without calling `ic0.call_perform`).
 
@@ -6857,7 +6858,7 @@ ic0.call_cycles_add128_up_to<es>(max_amount_high : i64, max_amount_low : i64, ds
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   let max_amount = max_amount_high * 2^64 + max_amount_low
   let amount = min(max_amount, liquid_balance(
-    es.balance,
+    es.balance - MAX_CYCLES_PER_RESPONSE,
     es.params.sysenv.reserved_balance,
     freezing_limit(
       es.params.sysenv.compute_allocation,
