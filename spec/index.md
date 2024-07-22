@@ -1354,7 +1354,7 @@ While an implementation will likely try to keep the interval between the value o
 
 #### On Low Wasm Memory {#on-low-wasm-memory}
 
-A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's wasm memory size in bytes grows from below a threshold `t` to >= `t`.
+A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's remaining wasm memory size in bytes falls from above a threshold `t` to < `t`.
 The threshold `t` can be defined in the [canister's settings](#ic-canister_status) and by default it is set to 2<sup>64</sup> − 1.
 
 :::note
