@@ -1,5 +1,7 @@
 ## Changelog {#changelog}
 
+### ∞ (unreleased)
+
 ### 0.26.0 (2024-07-23) {#0_26_0}
 * EXPERIMENTAL: Management canister API for threshold Schnorr signatures.
 
