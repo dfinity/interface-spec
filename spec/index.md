@@ -1387,12 +1387,12 @@ defaulting to `I = i32` if the canister declares no memory.
         callee_size : I,
         name_src    : I,
         name_size   : I,
-        reply_fun   : I,
+        reply_fun   : i32,
         reply_env   : I,
-        reject_fun  : I,
+        reject_fun  : i32,
         reject_env  : I
       ) -> ();                                                                            // U CQ Ry Rt CRy CRt T
-    ic0.call_on_cleanup : (fun : I, env : I) -> ();                                       // U CQ Ry Rt CRy CRt T
+    ic0.call_on_cleanup : (fun : i32, env : I) -> ();                                     // U CQ Ry Rt CRy CRt T
     ic0.call_data_append : (src : I, size : I) -> ();                                     // U CQ Ry Rt CRy CRt T
     ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();                  // U Ry Rt T
     ic0.call_perform : () -> ( err_code : i32 );                                          // U CQ Ry Rt CRy CRt T
@@ -1610,9 +1610,9 @@ When handling an update call (or a callback), a canister can do further calls to
       callee_size : I,
       name_src    : I,
       name_size   : I,
-      reply_fun   : I,
+      reply_fun   : i32,
       reply_env   : I,
-      reject_fun  : I,
+      reject_fun  : i32,
       reject_env  : I,
     ) → ()`; `I ∈ {i32, i64}`
 
@@ -1626,7 +1626,7 @@ The reject callback is executed if the method call fails asynchronously or the o
 
 Subsequent calls to the following functions set further attributes of that call, until the call is concluded (with `ic0.call_perform`) or discarded (by returning without calling `ic0.call_perform` or by starting a new call with `ic0.call_new`.)
 
--   `ic0.call_on_cleanup : (fun : I, env : I) → ()`; `I ∈ {i32, i64}`
+-   `ic0.call_on_cleanup : (fun : i32, env : I) → ()`; `I ∈ {i32, i64}`
 
 If a cleanup callback (of type `(env : I) -> ()`) is specified for this call, it is executed if and only if the `reply` or the `reject` callback was executed and trapped (for any reason).
 
@@ -6801,9 +6801,9 @@ ic0.call_new<es>(
     callee_size : I,
     name_src    : I,
     name_size   : I,
-    reply_fun   : I,
+    reply_fun   : i32,
     reply_env   : I,
-    reject_fun  : I,
+    reject_fun  : i32,
     reject_env  : I,
   ) =
   if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
@@ -6826,7 +6826,7 @@ ic0.call_new<es>(
   }
 
 I ∈ {i32, i64}
-ic0.call_on_cleanup<es> (fun : I, env : I) =
+ic0.call_on_cleanup<es> (fun : i32, env : I) =
   if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   if es.pending_call.callback.on_cleanup ≠ NoClosure then Trap {cycles_used = es.cycles_used;}
