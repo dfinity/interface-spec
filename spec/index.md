@@ -2603,7 +2603,12 @@ The canister logs are *not* collected in canister methods running in non-replica
 The total size of all returned logs does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
+
+The log visibility is defined in the `log_visibility` field of `canister_settings` and it can be:
+
+- `controllers`: only visible to the canister's controllers (by default)
+- `allowlist`: visible to the provided list of principals
+- `public`: visible to everyone
 
 A single log is a record with the following fields:
 
