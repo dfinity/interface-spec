@@ -2607,7 +2607,7 @@ Logs persist across canister upgrades and they are deleted if the canister is re
 The log visibility is defined in the `log_visibility` field of `canister_settings` and it can be:
 
 - `controllers`: only visible to the canister's controllers (by default)
-- `allowlist`: visible to the provided list of principals
+- `allowlist`: visible to the provided list of principals, max number is limited by 10
 - `public`: visible to everyone
 
 A single log is a record with the following fields:
