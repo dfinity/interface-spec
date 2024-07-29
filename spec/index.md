@@ -2755,9 +2755,9 @@ A certificate by the root subnet does not have a delegation field. A certificate
 The certificate included in the delegation (if present) must not itself again contain a delegation.
 
 :::
+
 ```
-Delegation =
- Delegation {
+Delegation = {
    subnet_id : Principal;
    certificate : Certificate;
  }
