@@ -3247,7 +3247,7 @@ CanisterHistory = {
 }
 CanisterLogVisibility
   = Controllers
-  | AllowList
+  | AllowedViewers
   | Public
 CanisterLog = {
   idx : Nat;
