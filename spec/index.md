@@ -3283,7 +3283,6 @@ S = {
   certified_data: CanisterId ↦ Blob;
   canister_history: CanisterId ↦ CanisterHistory;
   canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
-  canister_log_allowlist: CanisterId ↦ Set Principal;
   canister_logs: CanisterId ↦ [CanisterLog];
   query_stats: CanisterId ↦ [QueryStats];
   system_time : Timestamp
@@ -3361,7 +3360,6 @@ The initial state of the IC is
   certified_data = ();
   canister_history = ();
   canister_log_visibility = ();
-  canister_log_allowlist = ();
   canister_logs = ();
   query_stats = ();
   system_time = T;
@@ -4211,8 +4209,6 @@ New_canister_history = {
 
 if A.settings.log_visibility is not null:
   New_canister_log_visibility = A.settings.log_visibility
-  if New_canister_log_visibility is AllowList:
-    New_canister_log_allowlist = A.settings.log_visibility ?? how to get allowlist?
 else:
   New_canister_log_visibility = Controllers
 
@@ -4239,7 +4235,6 @@ S with
     query_stats[Canister_id] = []
     canister_history[Canister_id] = New_canister_history
     canister_log_visibility[Canister_id] = New_canister_log_visibility
-    canister_log_allowlist[Canister_id] = New_canister_log_allowlist
     canister_logs[Canister_id] = []
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
@@ -4371,7 +4366,6 @@ S with
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     if A.settings.log_visibility is not null:
       canister_log_visibility[A.canister_id] = A.settings.log_visibility
-      // TODO: update canister_log_allowlist
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
