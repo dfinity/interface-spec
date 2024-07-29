@@ -5257,7 +5257,6 @@ S with
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
     canister_log_visibility[A.canister_id] = (deleted)
-    canister_log_allowlist[A.canister_id] = (deleted)
     canister_logs[A.canister_id] = (deleted)
     query_stats[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
@@ -5452,7 +5451,6 @@ New_canister_history {
 
 if A.settings.log_visibility is not null:
   New_canister_log_visibility = A.settings.log_visibility
-  // TODO: update New_canister_log_allowlist
 else:
   New_canister_log_visibility = Controllers
 
@@ -5477,7 +5475,6 @@ S with
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
     canister_log_visibility[Canister_id] = New_canister_log_visibility
-    canister_log_allowlist[Canister_id] = New_canister_log_allowlist
     canister_logs[Canister_id] = []
     query_stats[CanisterId] = []
     messages = Older_messages · Younger_messages ·
@@ -5887,7 +5884,7 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_canister_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].canister_log_visibility = Public or Q.sender in S[A.canister_id].controllers or Q.sender in S[A.canister_id].canister_log_allowlist
+S[A.canister_id].canister_log_visibility = Public or (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and Q.sender in Principals) or Q.sender in S[A.canister_id].controllers
 
 ```
 
