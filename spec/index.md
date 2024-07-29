@@ -2604,10 +2604,10 @@ The total size of all returned logs does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
 
-The log visibility is defined in the `log_visibility` field of `canister_settings`:
+The log visibility is defined in the `log_visibility` field of `canister_settings` and can be one of the following variants:
 
 - `controllers`: only canister's controllers can fetch logs (by default)
-- `allowed_viewers`: only provided list of principals can fetch logs, the maximum length of the list is 10
+- `allowed_viewers` (`vec principal`): only provided list of principals can fetch logs, the maximum length of the list is 10
 - `public`: everyone can fetch logs
 
 A single log is a record with the following fields:
