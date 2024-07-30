@@ -2607,8 +2607,8 @@ Logs persist across canister upgrades and they are deleted if the canister is re
 The log visibility is defined in the `log_visibility` field of `canister_settings` and can be one of the following variants:
 
 - `controllers`: only canister's controllers can fetch logs (by default)
-- `allowed_viewers` (`vec principal`): only the provided list of principals can fetch logs, the maximum length of the list is 10
 - `public`: everyone can fetch logs
+- `allowed_viewers` (`vec principal`): only the provided list of principals can fetch logs, the maximum length of the list is 10
 
 A single log is a record with the following fields:
 
@@ -3247,8 +3247,8 @@ CanisterHistory = {
 }
 CanisterLogVisibility
   = Controllers
-  | AllowedViewers [Principal]
   | Public
+  | AllowedViewers [Principal]
 CanisterLog = {
   idx : Nat;
   timestamp_nanos : Nat;
@@ -5886,9 +5886,9 @@ Q.arg = candid(A)
 A.canister_id = effective_canister_id
 (S[A.canister_id].canister_log_visibility = Public)
   or 
-  (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and Q.sender in Principals) 
-  or 
   (S[A.canister_id].canister_log_visibility = Controllers and Q.sender in S[A.canister_id].controllers)
+  or 
+  (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and Q.sender in Principals) 
 
 ```
 

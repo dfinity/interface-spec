@@ -3,8 +3,8 @@ type wasm_module = blob;
 
 type log_visibility = variant {
     controllers;
-    allowed_viewers : vec principal;
     public;
+    allowed_viewers : vec principal;
 };
 
 type canister_settings = record {
