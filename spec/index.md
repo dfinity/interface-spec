@@ -5884,8 +5884,7 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_canister_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].canister_log_visibility = 
-  Public 
+(S[A.canister_id].canister_log_visibility = Public)
   or 
   (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and Q.sender in Principals) 
   or 
