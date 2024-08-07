@@ -2185,7 +2185,7 @@ Indicates various information about the canister. It contains:
 
 Only the controllers of the canister or the canister itself can request its status.
 
-### IC method `canister_info` {#ic-canister-info}
+### IC method `canister_info` {#ic-canister_info}
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
