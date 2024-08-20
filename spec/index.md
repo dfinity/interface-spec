@@ -2488,29 +2488,35 @@ A single metric entry is a record with the following fields:
 
 - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
-### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
+### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
-This method can be called by canisters as well as by external users via ingress messages.
+This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, cannot be called via replicated calls, and cannot be called from composite query calls.
 
-As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
+:::note
 
-The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
-Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
+:::
 
-This method is only available in local development instances.
+Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
+The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#system-api-imports)) and the canister logs are *purged* when the canister is reinstalled or uninstalled.
+The total size of all returned logs does not exceed 4KiB.
+If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
+Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
+The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
 
-### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
+A single log is a record with the following fields:
 
-This method can be called by canisters as well as by external users via ingress messages.
+- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
+- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
+- `content` (`blob`): the actual content of the log;
 
-As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
+:::warning
 
-Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
 
-Any user can top-up any canister this way.
-
-This method is only available in local development instances.
+:::
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
 
@@ -2588,35 +2594,33 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
+## The IC Provisional API {#ic-provisional-api}
 
-This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, cannot be called via replicated calls, and cannot be called from composite query calls.
+The IC Provisional API for creating canisters and topping up canisters out of thin air is only available in local development instances.
 
-:::note
+### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
 
-The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+This method can be called by canisters as well as by external users via ingress messages.
 
-:::
+As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
 
-Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
-The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#system-api-imports)) and the canister logs are *purged* when the canister is reinstalled or uninstalled.
-The total size of all returned logs does not exceed 4KiB.
-If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
-Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
 
-A single log is a record with the following fields:
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
 
-- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
-- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
-- `content` (`blob`): the actual content of the log;
+This method is only available in local development instances.
 
-:::warning
+### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
 
-The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
-Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
+This method can be called by canisters as well as by external users via ingress messages.
 
-:::
+As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
+
+Cycles added to this call via `ic0.call_cycles_add` and `ic0.call_cycles_add128` are returned to the caller.
+
+Any user can top-up any canister this way.
+
+This method is only available in local development instances.
 
 ## Certification {#certification}
 
