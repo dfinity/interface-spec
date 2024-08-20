@@ -2608,7 +2608,7 @@ The log visibility is defined in the `log_visibility` field of `canister_setting
 
 - `controllers`: only canister's controllers can fetch logs (by default)
 - `public`: everyone can fetch logs
-- `allowed_viewers` (`vec principal`): only the provided list of principals can fetch logs, the maximum length of the list is 10
+- `allowed_viewers` (`vec principal`): only the provided list of principals and the canister's controllers can fetch logs, the maximum length of the list is 10
 
 A single log is a record with the following fields:
 
