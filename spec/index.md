@@ -5888,7 +5888,7 @@ A.canister_id = effective_canister_id
   or 
   (S[A.canister_id].canister_log_visibility = Controllers and Q.sender in S[A.canister_id].controllers)
   or 
-  (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and Q.sender in Principals) 
+  (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and (Q.sender in S[A.canister_id].controllers or Q.sender in Principals))
 
 ```
 
