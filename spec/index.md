@@ -5774,8 +5774,9 @@ S with
     chunk_store[A.canister_id] = S.snapshots[A.canister_id].chunk_store
     certified_data[A.canister_id] = S.snapshots[A.canister_id].certified_data
     balances[A.canister_id] = New_balance
-    reserved_balances[Canister_id] = New_reserved_balance
-    canister_history[Canister_id] = New_canister_history
+    reserved_balances[A.canister_id] = New_reserved_balance
+    canister_history[A.canister_id] = New_canister_history
+    canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
