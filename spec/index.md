@@ -2494,7 +2494,7 @@ This method takes a snapshot of the specified canister. A snapshot consists of t
 
 Subsequent `take_canister_snapshot` calls will create a new snapshot. However, a `take_canister_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
 
-It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the canister's balance must have a sufficient amount of cycles to support the new freezing threshold.
+It's important to note that a snapshot will increase the memory footprint of the canister. Thus, the canister's balance must have a sufficient amount of cycles to not become frozen.
 
 Only controllers can take a snapshot of a canister and load it back to the canister.
 
