@@ -1,7 +1,11 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
 * Add new management canister methods for canister snapshot support.
+
+### 0.26.0 (2024-07-23) {#0_26_0}
+* EXPERIMENTAL: Management canister API for threshold Schnorr signatures.
 
 ### 0.25.0 (2024-06-14) {#0_25_0}
 * Query call statistics.
