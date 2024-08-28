@@ -3030,6 +3030,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
       memory_allocation : Nat;
       memory_usage_raw_module : Nat;
       memory_usage_canister_history : Nat;
+      memory_usage_snapshot : Nat;
       freezing_threshold : Nat;
       subnet_size : Nat;
       certificate : NoCertificate | Blob;
@@ -3579,6 +3580,7 @@ is_effective_canister_id(E.content, ECID)
     memory_allocation = S.memory_allocation[E.content.canister_id];
     memory_usage_raw_module = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module);
     memory_usage_canister_history = memory_usage_canister_history(S.canister_history[E.content.canister_id]);
+    memory_usage_snapshot = memory_usage_snapshot(S.snapshots[E.content.canister_id]);
     freezing_threshold = S.freezing_threshold[E.content.canister_id];
     subnet_size = S.canister_subnet[E.content.canister_id].subnet_size;
     certificate = NoCertificate;
@@ -3882,7 +3884,7 @@ liquid_balance(
     S.freezing_threshold[C],
     memory_usage_wasm_state(S.canisters[C].wasm_state) +
       memory_usage_raw_module(S.canisters[C].raw_module) +
-      memory_usage_canister_history(S.canister_history[C])
+      memory_usage_canister_history(S.canister_history[C]) +
       memory_usage_snapshot(S.snapshots[C]),
     S.canister_subnet[C].subnet_size,
   )
@@ -3946,6 +3948,7 @@ Env = {
   memory_allocation = S.memory_allocation[M.receiver];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[M.receiver].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(S.canister_history[M.receiver]);
+  memory_usage_snapshot = memory_usage_snapshot(S.snapshots[M.receiver]);
   freezing_threshold = S.freezing_threshold[M.receiver];
   subnet_size = S.canister_subnet[M.receiver].subnet_size;
   certificate = NoCertificate;
@@ -4706,6 +4709,7 @@ Env = {
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
+  memory_usage_snapshot = memory_usage_snapshot(S.snapshots[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
@@ -4847,6 +4851,7 @@ Env = {
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(S.canister_history[A.canister_id]);
+  memory_usage_snapshot = memory_usage_snapshot(S.snapshots[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
@@ -6264,6 +6269,7 @@ composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, 
               memory_allocation = S.memory_allocation[Canister_id];
               memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
               memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
+              memory_usage_snapshot = memory_usage_snapshot(S.snapshots[Canister_id]);
               freezing_threshold = S.freezing_threshold[Canister_id];
               subnet_size = S.canister_subnet[Canister_id].subnet_size;
               certificate = Cert;
