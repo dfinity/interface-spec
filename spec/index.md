@@ -76,7 +76,7 @@ The public entry points of canisters are called *methods*. Methods can be declar
 
 Methods can be *called*, from *caller* to *callee*, and will eventually incur a *response* which is either a *reply* or a *reject*. A method may have *parameters*, which are provided with concrete *arguments* in a method call.
 
-External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off. 
+External calls can be update calls, which can *only* call update and query methods, and query calls, which can *only* call query and composite query methods. Inter-canister calls issued while evaluating an update call can call update and query methods (just like update calls). Inter-canister calls issued while evaluating a query call (to a composite query method) can call query and composite query methods (just like query calls). Note that calls from a canister to itself also count as "inter-canister". Update and query call offer a security/efficiency trade-off.
 Update calls are executed in *replicated* mode, i.e. execution takes place in parallel on multiple replicas who need to arrive at a consensus on what the result of the call is. Query calls are fast but offer less guarantees since they are executed in *non-replicated* mode, by a single replica.
 
 Internally, a call or a response is transmitted as a *message* from a *sender* to a *receiver*. Messages do not have a response.
@@ -109,11 +109,11 @@ This specification may refer to certain constants and limits without specifying 
 
 -   `CHUNK_STORE_SIZE`
 
-    Maximum number of chunks that can be stored within the chunk store of a canister. 
+    Maximum number of chunks that can be stored within the chunk store of a canister.
 
 -   `MAX_CHUNKS_IN_LARGE_WASM`
 
-    Maximum number of chunks that can comprise a large Wasm module. 
+    Maximum number of chunks that can comprise a large Wasm module.
 
 -   `DEFAULT_PROVISIONAL_CYCLES_BALANCE`
 
@@ -448,7 +448,7 @@ The state tree contains information about all API boundary nodes (the source of 
     Example: `api-bn1.example.com`.
 
 - `/api_boundary_nodes/<node_id>/ipv4_address` (text)
-  
+
     Public IPv4 address of a node in the dotted-decimal notation.
     If no `ipv4_address` is available for the corresponding node, then this path does not exist.  
     Example: `192.168.10.150`.
@@ -479,12 +479,12 @@ The state tree contains information about the topology of the Internet Computer.
 -   `/subnet/<subnet_id>/metrics` (blob)
 
      A collection of subnet-wide metrics related to this subnet's current resource usage and/or performance. The metrics are a CBOR map with the following fields:
-     
+
      - `num_canisters` (`nat`): The number of canisters on this subnet.
      - `canister_state_bytes` (`nat`): The total size of the state in bytes taken by canisters on this subnet since this subnet was created.
      - `consumed_cycles_total` (`map`): The total number of cycles consumed by all current and deleted canisters on this subnet. It's a map of two values, a low part of type `nat` and a high part of type `opt nat`.
      - `update_transactions_total` (`nat`): The total number of transactions processed on this subnet since this subnet was created.
-       
+
 
 :::note
 
@@ -1906,11 +1906,11 @@ In the future, the IC might expose more performance counters.
 
 ### Replicated execution check {#system-api-replicated-execution-check}
 
-The canister can check whether it is currently running in replicated or non replicated execution. 
+The canister can check whether it is currently running in replicated or non replicated execution.
 
 `ic0.in_replicated_execution : () -> (result: i32)`
 
-Returns 1 if the canister is being run in replicated mode and 0 otherwise. 
+Returns 1 if the canister is being run in replicated mode and 0 otherwise.
 
 ### Controller check {#system-api-controller-check}
 
@@ -2085,12 +2085,12 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 This method can be called by canisters as well as by external users via ingress messages.
 
 Canisters have associated some storage space (hence forth chunk storage) where they can hold chunks of Wasm modules that are too lage to fit in a single message. This method allows the controllers of a canister (and the canister itself) to upload such chunks. The method returns the hash of the chunk that was stored. The size of each chunk must be at most 1MiB. The maximum number of chunks in the chunk store is `CHUNK_STORE_SIZE` chunks. The storage cost of each chunk is fixed and corresponds to storing 1MiB of data.
- 
+
 ### IC method `clear_chunk_store` {#ic-clear_chunk_store}
 
 This method can be called by canisters as well as by external users via ingress messages.
 
-Canister controllers (and the canister itself) can clear the entire chunk storage of a canister. 
+Canister controllers (and the canister itself) can clear the entire chunk storage of a canister.
 
 ### IC method `stored_chunks` {#ic-stored_chunks}
 
@@ -2207,7 +2207,7 @@ Indicates various information about the canister. It contains:
 
 Only the controllers of the canister or the canister itself can request its status.
 
-### IC method `canister_info` {#ic-canister-info}
+### IC method `canister_info` {#ic-canister_info}
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
@@ -2275,11 +2275,13 @@ This method takes no input and returns 32 pseudo-random bytes to the caller. The
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
-This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on implementation.
+This method returns a [SEC1](https://www.secg.org/sec1-v2.pdf) encoded ECDSA public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both a curve and a name. The availability of a particular `key_id` depends on the implementation.
 
 For curve `secp256k1`, the public key is derived using a generalization of BIP32 (see [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330)). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
 
-The return result is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+The return value is an extended public key consisting of an ECDSA `public_key`, encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form, and a `chain_code`, which can be used to deterministically derive child keys of the `public_key`.
+
+This call requires that an ECDSA key with ID `key_id` was generated by the IC. Otherwise, the call is rejected.
 
 ### IC method `sign_with_ecdsa` {#ic-sign_with_ecdsa}
 
@@ -2289,7 +2291,123 @@ This method returns a new [ECDSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FI
 
 The signatures are encoded as the concatenation of the [SEC1](https://www.secg.org/sec1-v2.pdf) encodings of the two values r and s. For curve `secp256k1`, this corresponds to 32-byte big-endian encoding.
 
-This call requires that the ECDSA feature is enabled, the caller is a canister, and `message_hash` is 32 bytes long. Otherwise it will be rejected.
+This call requires that an ECDSA key with ID `key_id` was generated by the IC, the signing functionality for that key was enabled, and `message_hash` is 32 bytes long. Otherwise, the call is is rejected.
+
+Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
+
+### IC method `schnorr_public_key` {#ic-schnorr_public_key}
+
+:::note
+
+Threshold Schnorr API is EXPERIMENTAL and there might be breaking changes of the behavior in the future. Use at your own risk!
+
+:::
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
+This method returns a (derived) Schnorr public key for the given canister using the given derivation path. If the `canister_id` is unspecified, it will default to the canister id of the caller. The `derivation_path` is a vector of variable length byte strings. Each byte string may be of arbitrary length, including empty. The total number of byte strings in the `derivation_path` must be at most 255. The `key_id` is a struct specifying both an algorithm and a name. The availability of a particular `key_id` depends on the implementation.
+
+The return value is an extended Schnorr public key consisting of a Schnorr `public_key` and a `chain_code`. The chain code can be used to deterministically derive child keys of the `public_key`. Both the derivation and the encoding of the public key depends on the key ID's `algorithm`:
+
+-   For algorithm `bip340secp256k1`, the public key is derived using the generalization of BIP32 defined in [ia.cr/2021/1330, Appendix D](https://ia.cr/2021/1330). To derive (non-hardened) [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)-compatible public keys, each byte string (`blob`) in the `derivation_path` must be a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>. If the `derivation_path` contains a byte string that is not a 4-byte big-endian encoding of an unsigned integer less than 2<sup>31</sup>, then a derived public key will be returned, but that key derivation process will not be compatible with the [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) standard.
+
+    The public key is encoded in [SEC1](https://www.secg.org/sec1-v2.pdf) compressed form. To use BIP32 public keys to verify BIP340 Schnorr signatures, the first byte of the (33-byte) SEC1-encoded public key must be removed (see [BIP-340, Public Key Conversion](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki#public-key-conversion)).
+
+-   For algorithm `ed25519`, the public key is derived using the scheme specified in [Ed25519 hierarchical key derivation](#ed25519-key-derivation).
+
+    The public key is encoded in standard 32-byte compressed form (see [RFC8032, 5.1.2 Encoding](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.2)).
+
+This call requires that a Schnorr key with ID `key_id` was generated by the IC. Otherwise, the call is rejected.
+
+#### Ed25519 hierarchical key derivation {#ed25519-key-derivation}
+
+This section describes a child key derivation (CKD) function for computing child public keys from Ed25519 parent public keys.
+The section is inspired by [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) and uses similar wording and structure.
+
+##### Motivation
+
+To support the Ed25519 variant of threshold Schnorr signatures on the Internet Computer, a key derivation scheme compatible with Ed25519 signatures is required.
+For a respective signing service on the Internet Computer to be efficient, the signing subnet maintains only a single master key pair and _derives_ signing child keys for each canister.
+Although there exist various hierarchical key derivation schemes (e.g., [BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki), [SLIP10](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), [BIP32-Ed25519](https://input-output-hk.github.io/adrestia/static/Ed25519_BIP.pdf), [Schnorrkel](https://github.com/w3f/schnorrkel)), all of the analyzed schemes are either incompatible in a threshold setting (e.g., use hardened key derivation only), comply with clamping which adds unnecessary complexity, or otherwise rely on non-standard primitives.
+For these reasons, a new derivation scheme is specified here.
+This scheme does not make use of _clamping_ (see [RFC8032, Section 5.1.5, Item 2](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.5)), because it is unnecessary in the given setting, and satisfies the following requirements:
+
+- Off-chain availability: New public keys can be computed off-chain from a master public key without requiring interaction with the IC.
+- Hierarchical derivation: Derived keys are organized in a tree such that from any public key it is possible to derive new child keys. The first level is used to derive unique canister-specific keys from the master key.
+- Simplicity: The scheme is simple to implement using existing libraries.
+
+##### Conventions
+
+We will assume the elliptic curve (EC) operations using the field and curve parameters as defined by Ed25519 (see [RFC8032, Section 5.1](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1)). Variables below are either:
+
+- Integers modulo the order of the curve's prime order subgroup (referred to as L).
+- Points on the curve.
+- Byte sequences.
+
+Addition (+) of two points is defined as application of the EC group operation.
+Concatenation (||) is the operation of appending one byte sequence onto another.
+
+We assume the following functions:
+
+- point(p): returns the point resulting from EC point multiplication (repeated application of the EC group operation) of the Ed25519 base point with the integer p.
+- ser<sub>P</sub>(P): serializes the point to a byte sequence using standard 32-byte compressed form (see [RFC8032, 5.1.2 Encoding](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.2)).
+- utf8(s): returns the UTF-8 encoding of string s.
+- parse<sub>512</sub>(p): interprets a 64-byte sequence as a 512-bit number, most significant byte first.
+- HKDF(salt,IKM,info,N) -> OKM: HMAC-based key derivation function (see [RFC5869](https://datatracker.ietf.org/doc/html/rfc5869)) using HMAC-SHA512 (see [RFC4231](https://datatracker.ietf.org/doc/html/rfc4231)) calculating N-bytes long output key material (OKM) from (byte sequences) salt, input key material (IKM), and application specific information *info*.
+
+##### Extended keys
+
+Public keys are extended with an extra 32 bytes of entropy, which extension is called chain code.
+An extended public key is represented as (K, c), with K = point(k) and c being the chain code, for some private key k.
+Each extended key can have an arbitrary number of child keys.
+The scheme does not support hardened derivation of child keys.
+
+##### Child key derivation (CKD) function
+
+Given a parent extended public key and an index i, it is possible to compute the corresponding child extended public key.
+The function CKDpub computes a child extended public key from a parent extended public key and an index i, where i is a byte sequence of arbitrary length (including empty).
+
+CKDpub((K<sub>par</sub>, c<sub>par</sub>), i) → (K<sub>i</sub>, c<sub>i</sub>):
+- let IKM = ser<sub>P</sub>(K<sub>par</sub>) || i.
+- let OKM = HKDF(c<sub>par</sub>, IKM, utf8("Ed25519"), 96).
+- Split OKM into a 64-byte and a 32-byte sequence, tweak and c<sub>i</sub>.
+- let K<sub>i</sub> = K<sub>par</sub> + point(parse<sub>512</sub>(tweak) mod L).
+- return (K<sub>i</sub>, c<sub>i</sub>).
+
+##### Key tree
+
+A key tree can be built by repeatedly applying CKDpub, starting with one root, called the master extended public key M.
+Computing CKDpub(M, i) for different values of i results in a number of level-0 derived keys.
+As each of these is again an extended key, CKDpub can be applied to those as well.
+The sequence of indices used when repeatedly applying CKDpub is called the _derivation path_.
+
+The function KTpub computes a child extended public key from a parent extended public key and a derivation path d.
+
+KTpub((K<sub>par</sub>, c<sub>par</sub>), d) → (K<sub>d</sub>, c<sub>d</sub>):
+- let (K<sub>d</sub>, c<sub>d</sub>) = (K<sub>par</sub>, c<sub>par</sub>)
+- for all indices i in d:
+  (K<sub>d</sub>, c<sub>d</sub>) = CKDpub((K<sub>d</sub>, c<sub>d</sub>), i)
+- return (K<sub>d</sub>, c<sub>d</sub>).
+
+### IC method `sign_with_schnorr` {#ic-sign_with_schnorr}
+
+:::note
+
+Threshold Schnorr API is EXPERIMENTAL and there might be breaking changes of the behavior in the future. Use at your own risk!
+
+:::
+
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
+
+This method returns a Schnorr signature of the given `message` that can be verified against a (derived) public key obtained by calling `schnorr_public_key` using the caller's `canister_id` and the given `derivation_path` and `key_id`.
+
+The encoding of the signature depends on the key ID's `algorithm`:
+
+-   For algorithm `bip340secp256k1`, the signature is encoded in 64 bytes according to [BIP340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
+
+-   For algorithm `ed25519`, the signature is encoded in 64 bytes according to [RFC8032, 5.1.6 Sign](https://datatracker.ietf.org/doc/html/rfc8032#section-5.1.6).
+
+This call requires that a Schnorr key with ID `key_id` was generated by the IC and the signing functionality for that key was enabled. Otherwise, the call is is rejected.
 
 Cycles to pay for the call must be explicitly transferred with the call, i.e., they are not automatically deducted from the caller's balance implicitly (e.g., as for inter-canister calls).
 
@@ -2392,29 +2510,35 @@ A single metric entry is a record with the following fields:
 
 - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
-### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
+### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
 
-This method can be called by canisters as well as by external users via ingress messages.
+This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, cannot be called via replicated calls, and cannot be called from composite query calls.
 
-As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
+:::note
 
-The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
 
-Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+:::
 
-This method is only available in local development instances.
+Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
+The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#system-api-imports)) and the canister logs are *purged* when the canister is reinstalled or uninstalled.
+The total size of all returned logs does not exceed 4KiB.
+If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
+Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
+The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
 
-### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
+A single log is a record with the following fields:
 
-This method can be called by canisters as well as by external users via ingress messages.
+- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
+- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
+- `content` (`blob`): the actual content of the log;
 
-As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
+:::warning
 
-Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
+Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
 
-Any user can top-up any canister this way.
-
-This method is only available in local development instances.
+:::
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
 
@@ -2492,35 +2616,53 @@ This function returns fee percentiles, measured in millisatoshi/vbyte (1000 mill
 
 The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method), inclusive, with the addition of a 0th percentile is used. Concretely, for any i from 1 to 100, the ith percentile is the fee with rank `⌈i * 100⌉`. The 0th percentile is defined as the smallest fee (excluding coinbase transactions).
 
-### IC method `fetch_canister_logs` {#ic-fetch_canister_logs}
-
-This method can only be called by external users via non-replicated calls, i.e., it cannot be called by canisters, cannot be called via replicated calls, and cannot be called from composite query calls.
+### IC method `bitcoin_get_block_headers` {#ic-bitcoin_get_block_headers}
 
 :::note
 
-The canister logs management canister API is considered EXPERIMENTAL. Canister developers must be aware that the API may evolve in a non-backward-compatible way.
+The `bitcoin_get_block_headers` endpoint is considered EXPERIMENTAL. Canister developers must be aware that this endpoint may evolve in a non-backward-compatible way.
 
 :::
 
-Given a canister ID as input, this method returns a vector of logs of that canister including its trap messages.
-The canister logs are *not* collected in canister methods running in non-replicated mode (NRQ, CQ, CRy, CRt, CC, and F modes, as defined in [Overview of imports](#system-api-imports)) and the canister logs are *purged* when the canister is reinstalled or uninstalled.
-The total size of all returned logs does not exceed 4KiB.
-If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
-Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
+This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
-A single log is a record with the following fields:
+Given a start height, an optional end height, and a Bitcoin network (`mainnet` or `testnet`), the function returns the block headers in the provided range. The range is inclusive, i.e., the block headers at the start and end heights are returned as well.
+An error is returned when an end height is specified that is greater than the tip height.
 
-- `idx` (`nat64`): the unique sequence number of the log for this particular canister;
-- `timestamp_nanos` (`nat64`): the timestamp as nanoseconds since 1970-01-01 at which the log was recorded;
-- `content` (`blob`): the actual content of the log;
+If no end height is specified, all blocks until the tip height, i.e., the largest available height, are returned. However, if the range from the start height to the end height or the tip height is large, only a prefix of the requested block headers may be returned in order to bound the size of the response.
 
-:::warning
+The response is guaranteed to contain the block headers in order: if it contains any block headers, the first block header occurs at the start height, the second block header occurs at the start height plus one and so forth.
 
-The response of a query comes from a single replica, and is therefore not appropriate for security-sensitive applications.
-Replica-signed queries may improve security because the recipient can verify the response comes from the correct subnet.
+The response is a record consisting of the tip height and the vector of block headers.
+The block headers are 80-byte blobs in the [standard Bitcoin format](https://developer.bitcoin.org/reference/block_chain.html#block-headers).
 
-:::
+## The IC Provisional API {#ic-provisional-api}
+
+The IC Provisional API for creating canisters and topping up canisters out of thin air is only available in local development instances.
+
+### IC method `provisional_create_canister_with_cycles` {#ic-provisional_create_canister_with_cycles}
+
+This method can be called by canisters as well as by external users via ingress messages.
+
+As a provisional method on development instances, the `provisional_create_canister_with_cycles` method is provided. It behaves as `create_canister`, but initializes the canister's balance with `amount` fresh cycles (using `DEFAULT_PROVISIONAL_CYCLES_BALANCE` if `amount = null`). If `specified_id` is provided, the canister is created under this id. Note that canister creation using `create_canister` or `provisional_create_canister_with_cycles` with `specified_id = null` can fail after calling `provisional_create_canister_with_cycles` with provided `specified_id`. In that case, canister creation should be retried.
+
+The optional `sender_canister_version` parameter can contain the caller's canister version. If provided, its value must be equal to `ic0.canister_version`.
+
+Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+
+This method is only available in local development instances.
+
+### IC method `provisional_top_up_canister` {#ic-provisional_top_up_canister}
+
+This method can be called by canisters as well as by external users via ingress messages.
+
+As a provisional method on development instances, the `provisional_top_up_canister` method is provided. It adds `amount` cycles to the balance of canister identified by `amount`.
+
+Cycles added to this call via `ic0.call_cycles_add`, `ic0.call_cycles_add128`, and `ic0.call_cycles_add128_up_to` are returned to the caller.
+
+Any user can top-up any canister this way.
+
+This method is only available in local development instances.
 
 ## Certification {#certification}
 
@@ -2659,9 +2801,9 @@ A certificate by the root subnet does not have a delegation field. A certificate
 The certificate included in the delegation (if present) must not itself again contain a delegation.
 
 :::
+
 ```
-Delegation =
- Delegation {
+Delegation = {
    subnet_id : Principal;
    certificate : Certificate;
  }
@@ -4420,7 +4562,7 @@ S with
 
 #### IC Management Canister: Clear chunk store
 
-The controller of a canister, or the canister itself can clear the chunk store of that canister. 
+The controller of a canister, or the canister itself can clear the chunk store of that canister.
 
 ```html
 
@@ -6052,7 +6194,7 @@ Read response
 A record with
 
 -   `{certificate: C}`
-  
+
 
 The predicate `may_read_path_for_subnet` is defined as follows, implementing the access control outlined in [Request: Read state](#http-read-state):
 ```
