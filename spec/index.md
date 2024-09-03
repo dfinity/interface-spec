@@ -5277,6 +5277,7 @@ S with
     canister_log_visibility[A.canister_id] = (deleted)
     canister_logs[A.canister_id] = (deleted)
     query_stats[A.canister_id] = (deleted)
+    chunk_store[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
