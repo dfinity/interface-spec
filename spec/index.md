@@ -673,7 +673,7 @@ In order to call a canister, the user makes a POST request to `/api/v3/canister/
 
 The HTTP response to this request can have the following forms:
 
--   200 HTTP status with a non-empty body. This status is returned if the canister call completed or was rejected within an implementation-specific timeout.
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed within an implementation-specific timeout or was rejected within an implementation-specific timeout.
     
     -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
 
