@@ -2,6 +2,7 @@
 
 ### ∞ (unreleased)
 * EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
+* Synchronous update call API at `/api/v3/canister/.../call`.
 
 ### 0.26.0 (2024-07-23) {#0_26_0}
 * EXPERIMENTAL: Management canister API for threshold Schnorr signatures.

@@ -498,7 +498,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 ### Request status {#state-tree-request-status}
 
-For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
+For each update call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
 
 -   `/request_status/<request_id>/status` (text)
 
@@ -558,9 +558,11 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 ## HTTPS Interface {#http-interface}
 
-The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes four endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
+-   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
+
+-   At `/api/v3/canister/<effective_canister_id>/call` the user can submit update calls and get a synchronous HTTPS response with a certificate for the call status.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -570,7 +572,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -580,7 +582,13 @@ This document does not yet explain how to find the location and port of the Inte
 
 ### Overview of canister calling {#http-call-overview}
 
-Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
+
+The Internet Computer has two HTTPS APIs for canister calling:
+- [*Asynchronous*](#http-async-call-overview) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
+- [*Synchronous*](#http-sync-call-overview) canister calling, where the status of the canister call is in the response of the original HTTPS request.
+
+#### Asynchronous canister calling {#http-async-call-overview}
 
 1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
 
@@ -639,7 +647,59 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
+#### Synchronous canister calling {#http-sync-call-overview}
+
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond to the HTTPS request with a certificate of the call status. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
+
+The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
+
+The replica will maintain the HTTPS connection for the request and will respond once the call status transitions to a terminal state. 
+
+If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply with an empty body and a 202 HTTP status code. In such cases, the user should use [`read_state`](#http-read-state) to determine the status of the call.
+
 ### Request: Call {#http-call}
+
+In order to call a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+
+-   `request_type` (`text`): Always `call`
+
+-   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
+
+-   `canister_id` (`blob`): The principal of the canister to call.
+
+-   `method_name` (`text`): Name of the canister method to call.
+
+-   `arg` (`blob`): Argument to pass to the canister method.
+
+The HTTP response to this request can have the following forms:
+
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed within an implementation-specific timeout or was rejected within an implementation-specific timeout.
+    
+    -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
+
+        -   `status` (`text`): `"certified_state"`
+
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
+
+    -   If a non-replicated pre-processing error occurred (e.g., due to the [canister inspect message](#system-api-inspect-message)), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
+
+        -   `status` (`text`): `"non_replicated_rejection"`
+
+        -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+
+        -   `reject_message` (`text`): a textual diagnostic message.
+
+        -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with an empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+
+-   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+
+-   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
+
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
+
+### Request: Asynchronous Call {#http-async-call}
 
 In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
@@ -899,7 +959,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -3152,9 +3212,9 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v3/…/call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
-These are the synchronous read messages:
+These are the read-only messages:
 ```
 Path = List(Blob)
 APIReadRequest
@@ -3453,7 +3513,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v2/…/call` and `/api/v3/…/call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
@@ -3497,7 +3557,7 @@ is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_princip
 ```
 #### API Request submission
 
-After a node accepts a request via `/api/v2/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
+After a node accepts a request via `/api/v2/canister/<ECID>/call` or `/api/v3/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
 
 This may only happen if the signature is valid and is created with a correct key. Due to this check, the envelope is discarded after this point.
 
