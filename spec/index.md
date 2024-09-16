@@ -3360,7 +3360,7 @@ ChangeDetails
     }
   | LoadSnapshot {
       canister_version : CanisterVersion;
-      snapshot_id: SnapshotId;
+      snapshot_id : SnapshotId;
       taken_at_timestamp : Timestamp;
     }
   | ControllersChange {
@@ -3395,7 +3395,7 @@ Subnet = {
   subnet_size : Nat;
 }
 Snapshot = {
-  snapshot_id: Nat;
+  snapshot_id : SnapshotId;
   wasm_state : WasmState;
   raw_module : Blob;
   chunk_store : ChunkStore;
@@ -3466,7 +3466,7 @@ The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_a
 freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 ```
 
-The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, `memory_usage_canister_history(canister_history)`, and `memory_usage_chunk_store(chunk_store)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, canister history, and chunk store, respectively.
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, `memory_usage_canister_history(canister_history)`, `memory_usage_chunk_store(chunk_store)`, and `memory_usage_snapshot(snapshot)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, canister history, chunk store, and snapshot, respectively.
 
 The freezing limit of canister `A` in state `S` can be obtained as follows:
 ```
@@ -4415,7 +4415,7 @@ if A.settings.wasm_memory_limit is not null:
 else:
   New_wasm_memory_limit = S.wasm_memory_limit[A.canister_id]
 
-Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation,  S.snapshots[A.canister_id], S.canisters[A.canister_id].wasm_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation, S.snapshots[A.canister_id], S.canisters[A.canister_id].wasm_state)
 New_balance = S.balances[A.canister_id] - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
@@ -4721,7 +4721,7 @@ Env = {
   canister_version = S.canister_version[A.canister_id] + 1;
 }
 Mod.init(A.canister_id, A.arg, M.caller, Env) = Return {new_state = New_state; new_certified_data = New_certified_data; new_global_timer = New_global_timer; cycles_used = Cycles_used;}
-Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id],  S.snapshots[A.canister_id], New_state)
+Cycles_reserved = cycles_to_reserve(S, A.canister_id, S.compute_allocation[A.canister_id], S.memory_allocation[A.canister_id], S.snapshots[A.canister_id], New_state)
 New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
@@ -5606,27 +5606,14 @@ New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
 
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[A.canister_id]) +
-      memory_usage_snapshot(New_snapshot),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ 0
+liquid_balance(S, A.canister_id) ≥ 0
 ```
 
 State after  
 
 ```html
 
-S with
+S' = S with
     snapshots[A.canister_id] = New_snapshot
     balances[A.canister_id] = New_balance
     reserved_balances[A.canister_id] = New_reserved_balance
@@ -5689,25 +5676,13 @@ New_canister_history = {
   };
 }
 
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(New_state.wasm_state) +
-      memory_usage_raw_module(New_state.raw_module) +
-      memory_usage_canister_history(New_canister_history) +
-      memory_usage_snapshot(S.snapshots[A.canister_id]),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ 0
+liquid_balance(S', A.canister_id) ≥ 0
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state.wasm_state) +
     memory_usage_raw_module(New_state.raw_module) +
     memory_usage_canister_history(New_canister_history) +
+    memory_usage_chunk_store(S.chunk_store[A.canister_id]) +
     memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 ```
@@ -5716,7 +5691,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     canisters[A.canister_id] = New_state
     chunk_store[A.canister_id] = S.snapshots[A.canister_id].chunk_store
     certified_data[A.canister_id] = S.snapshots[A.canister_id].certified_data
