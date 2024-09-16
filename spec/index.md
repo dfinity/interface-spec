@@ -2550,6 +2550,8 @@ A single metric entry is a record with the following fields:
 
 ### IC method `take_canister_snapshot` {#ic-take_canister_snapshot}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 This method takes a snapshot of the specified canister. A snapshot consists of the wasm memory, stable memory, certified variables, wasm chunk store and wasm binary.
 
 Subsequent `take_canister_snapshot` calls will create a new snapshot. However, a `take_canister_snapshot` call might fail if the maximum number of snapshots per canister is reached. This error can be avoided by providing a snapshot ID via the optional `replace_snapshot` parameter. The snapshot identified by the specified ID will be deleted once a new snapshot has been successfully created. Currently, only one snapshot per canister is allowed.
@@ -2567,6 +2569,8 @@ It is expected that the canister controllers (or their tooling) do this separate
 
 ### IC method `load_canister_snapshot` {#ic-load_canister_snapshot}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 This method loads a snapshot identified by `snapshot_id` onto the canister. It fails if no snapshot with the specified `snapshot_id` can be found.
 
 Only controllers can take a snapshot of a canister and load it back to the canister.
@@ -2582,9 +2586,13 @@ The optional `sender_canister_version` parameter can contain the caller's canist
 
 ### IC method `list_canister_snapshots` {#ic-list_canister_snapshots}
 
+This method can be called by canisters as well as by external users via ingress messages.
+
 This method lists the snapshots of the canister identified by `canister_id`. Only controllers of the canister can list its snapshots. Currently, at most one snapshot per canister will be stored.
 
 ### IC method `delete_canister_snapshot` {#ic-delete_canister_snapshot}
+
+This method can be called by canisters as well as by external users via ingress messages.
 
 This method deletes a specified snapshot that belongs to an existing canister. An error will be returned if the snapshot is not found. 
 
