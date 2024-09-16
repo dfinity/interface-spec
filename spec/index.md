@@ -498,7 +498,7 @@ Because this uses the lexicographic ordering of princpials, and the byte disting
 
 ### Request status {#state-tree-request-status}
 
-For each asynchronous request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how asynchronous requests work.
+For each update call request known to the Internet Computer, its status is in a subtree at `/request_status/<request_id>`. Please see [Overview of canister calling](#http-call-overview) for more details on how update call requests work.
 
 -   `/request_status/<request_id>/status` (text)
 
@@ -558,9 +558,11 @@ Users have the ability to learn about the hash of the canister's module, its cur
 
 ## HTTPS Interface {#http-interface}
 
-The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes three endpoints to handle interactions, plus one for diagnostics:
+The concrete mechanism that users use to send requests to the Internet Computer is via an HTTPS API, which exposes four endpoints to handle interactions, plus one for diagnostics:
 
--   At `/api/v2/canister/<effective_canister_id>/call` the user can submit (asynchronous, potentially state-changing) calls.
+-   At `/api/v2/canister/<effective_canister_id>/call` the user can submit update calls that are asynchronous and might change the IC state.
+
+-   At `/api/v3/canister/<effective_canister_id>/call` the user can submit update calls and get a synchronous HTTPS response with a certificate for the call status.
 
 -   At `/api/v2/canister/<effective_canister_id>/read_state` or `/api/v2/subnet/<subnet_id>/read_state` the user can read various information about the state of the Internet Computer. In particular, they can poll for the status of a call here.
 
@@ -570,7 +572,7 @@ The concrete mechanism that users use to send requests to the Internet Computer 
 
 In these paths, the `<effective_canister_id>` is the [textual representation](#textual-ids) of the [*effective* canister id](#http-effective-canister-id).
 
-Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
+Requests to `/api/v2/canister/<effective_canister_id>/call`, `/api/v3/canister/<effective_canister_id>/call`, `/api/v2/canister/<effective_canister_id>/read_state`, `/api/v2/subnet/<subnet_id>/read_state`, and `/api/v2/canister/<effective_canister_id>/query` are POST requests with a CBOR-encoded request body, which consists of a authentication envelope (as per [Authentication](#authentication)) and request-specific content as described below.
 
 :::note
 
@@ -580,7 +582,13 @@ This document does not yet explain how to find the location and port of the Inte
 
 ### Overview of canister calling {#http-call-overview}
 
-Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way. This implies the following high-level workflow:
+Users interact with the Internet Computer by calling canisters. By the very nature of a blockchain protocol, they cannot be acted upon immediately, but only with a delay. Moreover, the actual node that the user talks to may not be honest or, for other reasons, may fail to get the request on the way.
+
+The Internet Computer has two HTTPS APIs for canister calling:
+- [*Asynchronous*](#http-async-call-overview) canister calling, where the user must poll the Internet Computer for the status of the canister call by _separate_ HTTPS requests.
+- [*Synchronous*](#http-sync-call-overview) canister calling, where the status of the canister call is in the response of the original HTTPS request.
+
+#### Asynchronous canister calling {#http-async-call-overview}
 
 1.  A user submits a call via the [HTTPS Interface](#http-interface). No useful information is returned in the immediate response (as such information cannot be trustworthy anyways).
 
@@ -639,7 +647,59 @@ Calls must stay in `replied` or `rejected` long enough for polling users to catc
 
 When asking the IC about the state or call of a request, the user uses the request id (see [Request ids](#request-id)) to read the request status (see [Request status](#state-tree-request-status)) from the state tree (see [Request: Read state](#http-read-state)).
 
+#### Synchronous canister calling {#http-sync-call-overview}
+
+A synchronous update call, also known as a "call and await", is a type of update call where the replica will attempt to respond to the HTTPS request with a certificate of the call status. If the returned certificate indicates that the update call is in a terminal state (`replied`, `rejected`, or `done`), then the user __does not need to poll__ (using [`read_state`](#http-read-state) requests) to determine the result of the call. A terminal state means the call has completed its execution.
+
+The synchronous call endpoint is useful for users as it removes the networking overhead of polling the IC to determine the status of their call.
+
+The replica will maintain the HTTPS connection for the request and will respond once the call status transitions to a terminal state. 
+
+If an implementation specific timeout for the request is reached while the replica waits for the terminal state, then the replica will reply with an empty body and a 202 HTTP status code. In such cases, the user should use [`read_state`](#http-read-state) to determine the status of the call.
+
 ### Request: Call {#http-call}
+
+In order to call a canister, the user makes a POST request to `/api/v3/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
+
+-   `request_type` (`text`): Always `call`
+
+-   `sender`, `nonce`, `ingress_expiry`: See [Authentication](#authentication)
+
+-   `canister_id` (`blob`): The principal of the canister to call.
+
+-   `method_name` (`text`): Name of the canister method to call.
+
+-   `arg` (`blob`): Argument to pass to the canister method.
+
+The HTTP response to this request can have the following forms:
+
+-   200 HTTP status with a non-empty body. This status is returned if the canister call completed within an implementation-specific timeout or was rejected within an implementation-specific timeout.
+    
+    -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
+
+        -   `status` (`text`): `"certified_state"`
+
+        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
+
+    -   If a non-replicated pre-processing error occurred (e.g., due to the [canister inspect message](#system-api-inspect-message)), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
+
+        -   `status` (`text`): `"non_replicated_rejection"`
+
+        -   `reject_code` (`nat`): The reject code (see [Reject codes](#reject-codes)).
+
+        -   `reject_message` (`text`): a textual diagnostic message.
+
+        -   `error_code` (`text`): an optional implementation-specific textual error code (see [Error codes](#error-codes)).
+
+-   202 HTTP status with an empty body. This status is returned if an implementation-specific timeout is reached before the canister call completes. Users should use [`read_state`](#http-read-state) to determine the status of the call.
+
+-   4xx HTTP status for client errors (e.g. malformed request). Except for 429 HTTP status, retrying the request will likely have the same outcome.
+
+-   5xx HTTP status when the server has encountered an error or is otherwise incapable of performing the request. The request might succeed if retried at a later time.
+
+This request type can *also* be used to call a query method (but not a composite query method). A user may choose to go this way, instead of via the faster and cheaper [Request: Query call](#http-query) below, if they want to get a *certified* response. Note that the canister state will not be changed by sending a call request type for a query method (except for cycle balance change due to message execution).
+
+### Request: Asynchronous Call {#http-async-call}
 
 In order to call a canister, the user makes a POST request to `/api/v2/canister/<effective_canister_id>/call`. The request body consists of an authentication envelope with a `content` map with the following fields:
 
@@ -899,7 +959,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies to synchronous and asynchronous requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -3030,6 +3090,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
       memory_allocation : Nat;
       memory_usage_raw_module : Nat;
       memory_usage_canister_history : Nat;
+      memory_usage_chunk_store : Nat;
       memory_usage_snapshot : Nat;
       freezing_threshold : Nat;
       subnet_size : Nat;
@@ -3196,9 +3257,9 @@ A reference implementation would likely maintain a separate list of `messages` f
 
 #### API requests
 
-We distinguish between the *asynchronous* API requests (type `Request`) passed to `/api/v2/…/call`, which may be present in the IC state, and the *synchronous* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
+We distinguish between API requests (type `Request`) passed to `/api/v2/…/call` and `/api/v3/…/call`, which may be present in the IC state, and the *read-only* API requests passed to `/api/v2/…/read_state` and `/api/v2/…/query`, which are only ephemeral.
 
-These are the synchronous read messages:
+These are the read-only messages:
 ```
 Path = List(Blob)
 APIReadRequest
@@ -3405,11 +3466,37 @@ The (unspecified) function `idle_cycles_burned_rate(compute_allocation, memory_a
 freezing_limit(compute_allocation, memory_allocation, freezing_threshold, memory_usage, subnet_size) = idle_cycles_burned_rate(compute_allocation, memory_allocation, memory_usage, subnet_size) * freezing_threshold / (24 * 60 * 60)
 ```
 
-The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, and `memory_usage_canister_history(canister_history)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, and canister history, respectively.
+The (unspecified) functions `memory_usage_wasm_state(wasm_state)`, `memory_usage_raw_module(raw_module)`, `memory_usage_canister_history(canister_history)`, and `memory_usage_chunk_store(chunk_store)` determine the canister's memory usage in bytes consumed by its Wasm state, raw Wasm binary, canister history, and chunk store, respectively.
+
+The freezing limit of canister `A` in state `S` can be obtained as follows:
+```
+freezing_limit(S, A) =
+  freezing_limit(
+    S.compute_allocation[A],
+    S.memory_allocation[A],
+    S.freezing_threshold[A],
+    memory_usage_wasm_state(S.canisters[A].wasm_state) +
+      memory_usage_raw_module(S.canisters[A].raw_module) +
+      memory_usage_canister_history(S.canister_history[A]) +
+      memory_usage_chunk_store(S.chunk_store[A]) +
+      memory_usage_snapshot(S.snapshots[A]),
+    S.canister_subnet[A].subnet_size,
+  )
+```
 
 The amount of cycles that is available for spending in calls and execution is computed by the function `liquid_balance(balance, reserved_balance, freezing_limit)`:
 ```
 liquid_balance(balance, reserved_balance, freezing_limit) = balance - max(freezing_limit - reserved_balance, 0)
+```
+
+The "liquid" balance of canister `A` in state `S` can be obtained as follows:
+```
+liquid_balance(S, A) =
+  liquid_balance(
+    S.balances[A],
+    S.reserved_balances[A],
+    freezing_limit(S, A),
+  )
 ```
 
 The reasoning behind this is that resource payments first drain the reserved balance and only when the reserved balance gets to zero, they start draining the main balance.
@@ -3490,7 +3577,7 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 Based on this abstract notion of the state, we can describe the behavior of the IC. There are three classes of behaviors:
 
--   Asynchronous API requests that are submitted via `/api/v2/…/call`. These transitions describe checks that the request must pass to be considered received.
+-   Potentially state changing API requests that are submitted via `/api/v2/…/call` and `/api/v3/…/call`. These transitions describe checks that the request must pass to be considered received.
 
 -   Spontaneous transitions that model the internal behavior of the IC, by describing conditions on the state that allow the transition to happen, and the state after.
 
@@ -3534,7 +3621,7 @@ is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_princip
 ```
 #### API Request submission
 
-After a node accepts a request via `/api/v2/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
+After a node accepts a request via `/api/v2/canister/<ECID>/call` or `/api/v3/canister/<ECID>/call`, the request gets added to the IC state as `Received`.
 
 This may only happen if the signature is valid and is created with a correct key. Due to this check, the envelope is discarded after this point.
 
@@ -3580,6 +3667,7 @@ is_effective_canister_id(E.content, ECID)
     memory_allocation = S.memory_allocation[E.content.canister_id];
     memory_usage_raw_module = memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module);
     memory_usage_canister_history = memory_usage_canister_history(S.canister_history[E.content.canister_id]);
+    memory_usage_chunk_store = memory_usage_chunk_store(S.chunk_store[E.content.canister_id]);
     memory_usage_snapshot = memory_usage_snapshot(S.snapshots[E.content.canister_id]);
     freezing_threshold = S.freezing_threshold[E.content.canister_id];
     subnet_size = S.canister_subnet[E.content.canister_id].subnet_size;
@@ -3587,20 +3675,7 @@ is_effective_canister_id(E.content, ECID)
     status = simple_status(S.canister_status[E.content.canister_id]);
     canister_version = S.canister_version[E.content.canister_id];
   }
-  liquid_balance(
-    S.balances[E.content.canister_id],
-    S.reserved_balances[E.content.canister_id],
-    freezing_limit(
-      S.compute_allocation[E.content.canister_id],
-      S.memory_allocation[E.content.canister_id],
-      S.freezing_threshold[E.content.canister_id],
-      memory_usage_wasm_state(S.canisters[E.content.canister_id].wasm_state) +
-        memory_usage_raw_module(S.canisters[E.content.canister_id].raw_module) +
-        memory_usage_canister_history(S.canister_history[E.content.canister_id]) +
-        memory_usage_snapshot(S.snapshots[E.content.canister_id]),
-      S.canister_subnet[E.content.canister_id].subnet_size,
-    )
-  ) ≥ 0
+  liquid_balance(S, E.content.canister_id) ≥ 0
   S.canisters[E.content.canister_id].module.inspect_message
     (E.content.method_name, S.canisters[E.content.canister_id].wasm_state, E.content.arg, E.content.sender, Env) = Return {status = Accept;}
 )
@@ -3719,20 +3794,7 @@ Conditions
 S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
-S.canister_status[CM.callee] = liquid_balance(
-  S.balances[CM.callee],
-  S.reserved_balances[CM.callee],
-  freezing_limit(
-    S.compute_allocation[CM.callee],
-    S.memory_allocation[CM.callee],
-    S.freezing_threshold[CM.callee],
-    memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
-      memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-      memory_usage_canister_history(S.canister_history[CM.callee]) +
-      memory_usage_snapshot(S.snapshots[CM.callee]),
-    S.canister_subnet[CM.callee].subnet_size,
-  )
-) < 0
+liquid_balance(S, CM.callee) < 0
 ```
 
 State after:
@@ -3768,20 +3830,7 @@ S.messages = Older_messages · CallMessage CM · Younger_messages
 (CM.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ CM.queue)
 S.canisters[CM.callee] ≠ EmptyCanister
 S.canister_status[CM.callee] = Running
-liquid_balance(
-  S.balances[CM.callee],
-  S.reserved_balances[CM.callee],
-  freezing_limit(
-    S.compute_allocation[CM.callee],
-    S.memory_allocation[CM.callee],
-    S.freezing_threshold[CM.callee],
-    memory_usage_wasm_state(S.canisters[CM.callee].wasm_state) +
-      memory_usage_raw_module(S.canisters[CM.callee].raw_module) +
-      memory_usage_canister_history(S.canister_history[CM.callee]) +
-      memory_usage_snapshot(S.snapshots[CM.callee]),
-    S.canister_subnet[CM.callee].subnet_size,
-  )
-) ≥ MAX_CYCLES_PER_MESSAGE
+liquid_balance(S, CM.callee) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3821,20 +3870,7 @@ Conditions
 
 S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
-liquid_balance(
-  S.balances[C],
-  S.reserved_balance[C],
-  freezing_limit(
-    S.compute_allocation[C],
-    S.memory_allocation[C],
-    S.freezing_threshold[C],
-    memory_usage_wasm_state(S.canisters[C].wasm_state) +
-      memory_usage_raw_module(S.canisters[C].raw_module) +
-      memory_usage_canister_history(S.canister_history[C]) +
-      memory_usage_snapshot(S.snapshots[C]),
-    S.canister_subnet[C].subnet_size,
-  )
-) ≥ MAX_CYCLES_PER_MESSAGE
+liquid_balance(S, C) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3875,20 +3911,7 @@ S.canisters[C] ≠ EmptyCanister
 S.canister_status[C] = Running
 S.global_timer[C] ≠ 0
 S.time[C] ≥ S.global_timer[C]
-liquid_balance(
-  S.balances[C],
-  S.reserved_balances[C],
-  freezing_limit(
-    S.compute_allocation[C],
-    S.memory_allocation[C],
-    S.freezing_threshold[C],
-    memory_usage_wasm_state(S.canisters[C].wasm_state) +
-      memory_usage_raw_module(S.canisters[C].raw_module) +
-      memory_usage_canister_history(S.canister_history[C]) +
-      memory_usage_snapshot(S.snapshots[C]),
-    S.canister_subnet[C].subnet_size,
-  )
-) ≥ MAX_CYCLES_PER_MESSAGE
+liquid_balance(S, C) ≥ MAX_CYCLES_PER_MESSAGE
 Ctxt_id ∉ dom(S.call_contexts)
 
 ```
@@ -3948,6 +3971,7 @@ Env = {
   memory_allocation = S.memory_allocation[M.receiver];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[M.receiver].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(S.canister_history[M.receiver]);
+  memory_usage_chunk_store = memory_usage_chunk_store(S.chunk_store[M.receiver]);
   memory_usage_snapshot = memory_usage_snapshot(S.snapshots[M.receiver]);
   freezing_threshold = S.freezing_threshold[M.receiver];
   subnet_size = S.canister_subnet[M.receiver].subnet_size;
@@ -4015,6 +4039,7 @@ if
     memory_usage_wasm_state(res.new_state) +
       memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
       memory_usage_canister_history(S.canister_history[M.receiver]) +
+      memory_usage_chunk_store(S.chunk_store[M.receiver]) +
       memory_usage_snapshot(S.snapshots[M.receiver]),
     S.canister_subnet[M.receiver].subnet_size,
   )
@@ -4027,6 +4052,7 @@ if
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) +
+    memory_usage_chunk_store(S.chunk_store[M.receiver]) +
     memory_usage_snapshot(S.snapshots[M.receiver]) ≤ S.memory_allocation[M.receiver])
   (Wasm_memory_limit = 0) or |res.new_state.store.mem| <= Wasm_memory_limit
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
@@ -4272,18 +4298,7 @@ New_balance = M.transferred_cycles - Cycles_reserved
 New_reserved_balance = Cycles_reserved
 New_reserved_balance <= New_reserved_balance_limit
 if New_compute_allocation > 0 or New_memory_allocation > 0 or Cycles_reserved > 0:
-  liquid_balance(
-    New_balance,
-    New_reserved_balance,
-    freezing_limit(
-      New_compute_allocation,
-      New_memory_allocation,
-      New_freezing_threshold,
-      memory_usage_canister_history(New_canister_history),
-      SubnetSize,
-    )
-  ) ≥ 0
-
+  liquid_balance(S', Canister_id) ≥ 0
 
 New_canister_history = {
   total_num_changes = 1
@@ -4308,7 +4323,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     canisters[Canister_id] = EmptyCanister
     snapshots[A.canister_id] = null
     time[Canister_id] = CurrentTime
@@ -4405,20 +4420,7 @@ New_balance = S.balances[A.canister_id] - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
 if New_compute_allocation > S.compute_allocation[A.canister_id] or New_memory_allocation > S.memory_allocation[A.canister_id] or Cycles_reserved > 0:
-  liquid_balance(
-    New_balance,
-    New_reserved_balance,
-    freezing_limit(
-      New_compute_allocation,
-      New_memory_allocation,
-      New_freezing_threshold,
-      memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-        memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-        memory_usage_canister_history(New_canister_history) +
-        memory_usage_snapshot(S.snapshots[A.canister_id]),
-      S.canister_subnet[A.canister_id].subnet_size,
-    )
-  ) ≥ 0
+  liquid_balance(S', A.canister_id) ≥ 0
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4445,7 +4447,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     if A.settings.controllers is not null:
       controllers[A.canister_id] = A.settings.controllers
       canister_history[A.canister_id] = New_canister_history
@@ -4520,6 +4522,7 @@ S with
             memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
               memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
               memory_usage_canister_history(S.canister_history[A.canister_id]) +
+              memory_usage_chunk_store(S.chunk_store[A.canister_id]) +
               memory_usage_snapshot(S.snapshots[A.canister_id]),
             S.freezing_threshold[A.canister_id],
             S.canister_subnet[A.canister_id].subnet_size,
@@ -4709,6 +4712,7 @@ Env = {
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(A.wasm_module);
   memory_usage_canister_history = memory_usage_canister_history(New_canister_history);
+  memory_usage_chunk_store = memory_usage_chunk_store(New_chunk_store);
   memory_usage_snapshot = memory_usage_snapshot(S.snapshots[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
@@ -4722,40 +4726,15 @@ New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_reserved
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
 
-liquid_balance(
-  S.balances[A.canister_id],
-  S.reserved_balances[A.canister_id],
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[A.canister_id]) +
-      memory_usage_snapshot(S.snapshots[A.canister_id]),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ MAX_CYCLES_PER_MESSAGE
+liquid_balance(S, A.canister_id) ≥ MAX_CYCLES_PER_MESSAGE
 
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(A.wasm_module) +
-      memory_usage_canister_history(New_canister_history) +
-      memory_usage_snapshot(S.snapshots[A.canister_id]),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ 0
+liquid_balance(S', A.canister_id) ≥ 0
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) +
+    memory_usage_chunk_store(New_chunk_store) +
     memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 (S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
@@ -4783,7 +4762,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     canisters[A.canister_id] = {
       wasm_state = New_state;
       module = Mod;
@@ -4844,6 +4823,7 @@ dom(Mod.query_methods) ∩ dom(Mod.composite_query_methods) = ∅
 Env = {
   time = S.time[A.canister_id];
   controllers = S.controllers[A.canister_id];
+  global_timer = S.global_timer[A.canister_id];
   balance = S.balances[A.canister_id];
   reserved_balance = S.reserved_balances[A.canister_id];
   reserved_balance_limit = S.reserved_balance_limits[A.canister_id];
@@ -4851,11 +4831,13 @@ Env = {
   memory_allocation = S.memory_allocation[A.canister_id];
   memory_usage_raw_module = memory_usage_raw_module(S.canisters[A.canister_id].raw_module);
   memory_usage_canister_history = memory_usage_canister_history(S.canister_history[A.canister_id]);
+  memory_usage_chunk_store = memory_usage_chunk_store(S.chunk_store[A.canister_id]);
   memory_usage_snapshot = memory_usage_snapshot(S.snapshots[A.canister_id]);
   freezing_threshold = S.freezing_threshold[A.canister_id];
   subnet_size = S.canister_subnet[A.canister_id].subnet_size;
   certificate = NoCertificate;
   status = simple_status(S.canister_status[A.canister_id]);
+  canister_version = S.canister_version[A.canister_id];
 }
 
 (
@@ -4906,40 +4888,15 @@ New_balance = S.balances[A.canister_id] - Cycles_used - Cycles_used' - Cycles_re
 New_reserved_balance = S.reserved_balances[A.canister_id] + Cycles_reserved
 New_reserved_balance ≤ S.reserved_balance_limits[A.canister_id]
 
-liquid_balance(
-  S.balances[A.canister_id],
-  S.reserved_balances[A.canister_id],
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-      memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-      memory_usage_canister_history(S.canister_history[A.canister_id]) +
-      memory_usage_snapshot(S.snapshots[A.canister_id]),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ MAX_CYCLES_PER_MESSAGE
+liquid_balance(S, A.canister_id) ≥ MAX_CYCLES_PER_MESSAGE
 
-liquid_balance(
-  New_balance,
-  New_reserved_balance,
-  freezing_limit(
-    S.compute_allocation[A.canister_id],
-    S.memory_allocation[A.canister_id],
-    S.freezing_threshold[A.canister_id],
-    memory_usage_wasm_state(New_state) +
-      memory_usage_raw_module(A.wasm_module) +
-      memory_usage_canister_history(New_canister_history) +
-      memory_usage_snapshot(S.snapshots[A.canister_id]),
-    S.canister_subnet[A.canister_id].subnet_size,
-  )
-) ≥ 0
+liquid_balance(S', A.canister_id) ≥ 0
 
 if S.memory_allocation[A.canister_id] > 0:
   memory_usage_wasm_state(New_state) +
     memory_usage_raw_module(A.wasm_module) +
     memory_usage_canister_history(New_canister_history) +
+    memory_usage_chunk_store(S[A.canister_id].chunk_store) +
     memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
 
 (S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
@@ -4966,7 +4923,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     canisters[A.canister_id] = {
       wasm_state = New_state;
       module = Mod;
@@ -5362,6 +5319,7 @@ S with
     canister_log_visibility[A.canister_id] = (deleted)
     canister_logs[A.canister_id] = (deleted)
     query_stats[A.canister_id] = (deleted)
+    chunk_store[A.canister_id] = (deleted)
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin
@@ -5527,18 +5485,7 @@ else:
 New_reserved_balance = Cycles_reserved
 New_reserved_balance ≤ New_reserved_balance_limit
 if New_compute_allocation > 0 or New_memory_allocation > 0 or Cycles_reserved > 0:
-  liquid_balance(
-    New_balance,
-    New_reserved_balance,
-    freezing_limit(
-      New_compute_allocation,
-      New_memory_allocation,
-      New_freezing_threshold,
-      memory_usage_canister_history(New_canister_history),
-      SubnetSize,
-    )
-  ) ≥ 0
-
+  liquid_balance(S', Canister_id) ≥ 0
 
 New_canister_history {
   total_num_changes = 1
@@ -5563,7 +5510,7 @@ State after
 
 ```html
 
-S with
+S' = S with
     canisters[Canister_id] = EmptyCanister
     snapshots[Canister_id] = null
     time[Canister_id] = CurrentTime
@@ -6262,6 +6209,7 @@ composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, 
   then
     Cert := NoCertificate // no certificate available in query and composite query methods evaluated on canisters other than the target canister of the query call
   let Env = { time = S.time[Canister_id];
+              controllers = S.controllers[Canister_id];
               global_timer = S.global_timer[Canister_id];
               balance = S.balances[Canister_id];
               reserved_balance = S.reserved_balances[Canister_id];
@@ -6270,6 +6218,7 @@ composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, 
               memory_allocation = S.memory_allocation[Canister_id];
               memory_usage_raw_module = memory_usage_raw_module(S.canisters[Canister_id].raw_module);
               memory_usage_canister_history = memory_usage_canister_history(S.canister_history[Canister_id]);
+              memory_usage_chunk_store = memory_usage_chunk_store(S.chunk_store[Canister_id]);
               memory_usage_snapshot = memory_usage_snapshot(S.snapshots[Canister_id]);
               freezing_threshold = S.freezing_threshold[Canister_id];
               subnet_size = S.canister_subnet[Canister_id].subnet_size;
@@ -6284,20 +6233,7 @@ composite_query_helper(S, Cycles, Depth, Root_canister_id, Caller, Canister_id, 
   then
      let W = S.canisters[Canister_id].wasm_state
      let F = if Method_name ∈ dom(Mod.query_methods) then Mod.query_methods[Method_name] else Mod.composite_query_methods[Method_name]
-     if liquid_balance(
-         S.balances[Canister_id],
-         S.reserved_balances[Canister_id],
-         freezing_limit(
-           S.compute_allocation[Canister_id],
-           S.memory_allocation[Canister_id],
-           S.freezing_threshold[Canister_id],
-           memory_usage_wasm_state(S.canisters[Canister_id].wasm_state) +
-             memory_usage_raw_module(S.canisters[Canister_id].raw_module) +
-             memory_usage_canister_history(S.canister_history[Canister_id]) +
-             memory_usage_snapshot(S.snapshots[Canister_id]),
-           S.canister_subnet[Canister_id].subnet_size,
-         )
-       ) < 0
+     if liquid_balance(S, Canister_id) < 0
      then
        Return (Reject (SYS_TRANSIENT, <implementation-specific>), Cycles, S)
      let R = F(Arg, Caller, Env)(W)
@@ -6602,6 +6538,26 @@ This allows us to model WebAssembly functions, including host-provided imports, 
 It is nonsensical to pass to an execution function a WebAssembly store `S` that comes from a different WebAssembly module than one defining the function.
 
 :::
+
+The "liquid" balance of a canister with a given `ExecutionState` can be obtained as follows:
+```
+liquid_balance(es) =
+  liquid_balance(
+    es.balance,
+    es.params.sysenv.reserved_balance,
+    freezing_limit(
+      es.params.sysenv.compute_allocation,
+      es.params.sysenv.memory_allocation,
+      es.params.sysenv.freezing_threshold,
+      memory_usage_wasm_state(es.wasm_state) +
+        es.params.sysenv.memory_usage_raw_module +
+        es.params.sysenv.memory_usage_canister_history +
+        es.params.sysenv.memory_usage_chunk_store +
+        es.params.sysenv.memory_usage_snapshot,
+      es.params.sysenv.subnet_size,
+    )
+  )
+```
 
 -   For more convenience when creating a new `ExecutionState`, we define the following partial records:
     ```
@@ -7151,23 +7107,7 @@ ic0.msg_cycles_accept128<es>(max_amount_high : i64, max_amount_low : i64, dst : 
 ic0.cycles_burn128<es>(amount_high : i64, amount_low : i64, dst : i32) =
   if es.context ∉ {I, G, U, Ry, Rt, C, T} then Trap {cycles_used = es.cycles_used;}
   let amount = amount_high * 2^64 + amount_low
-  let burned_amount = min(
-    amount,
-    liquid_balance(
-      es.balance,
-      es.params.sysenv.reserved_balance,
-      freezing_limit(
-        es.params.sysenv.compute_allocation,
-        es.params.sysenv.memory_allocation,
-        es.params.sysenv.freezing_threshold,
-        memory_usage_wasm_state(es.wasm_state) + 
-          es.params.sysenv.memory_usage_raw_module + 
-          es.params.sysenv.memory_usage_canister_history +
-          es.params.sysenv.memory_usage_snapshot,
-        es.params.sysenv.subnet_size,
-      )
-    )
-  )
+  let burned_amount = min(amount, liquid_balance(es))
   es.balance := es.balance - burned_amount
   copy_cycles_to_canister<es>(dst, burned_amount.to_little_endian_bytes())
 
@@ -7256,20 +7196,7 @@ ic0.call_data_append<es> (src : i32, size : i32) =
 ic0.call_cycles_add<es>(amount : i64) =
   if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
-  if liquid_balance(
-    es.balance,
-    es.params.sysenv.reserved_balance,
-    freezing_limit(
-      es.params.sysenv.compute_allocation,
-      es.params.sysenv.memory_allocation,
-      es.params.sysenv.freezing_threshold,
-      memory_usage_wasm_state(es.wasm_state) + 
-        es.params.sysenv.memory_usage_raw_module + 
-        es.params.sysenv.memory_usage_canister_history +
-        es.params.sysenv.memory_usage_snapshot,
-      es.params.sysenv.subnet_size,
-    )
-  ) < amount then Trap {cycles_used = es.cycles_used;}
+  if liquid_balance(es) < amount then Trap {cycles_used = es.cycles_used;}
 
   es.balance := es.balance - amount
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -7278,20 +7205,7 @@ ic0.call_cycles_add128<es>(amount_high : i64, amount_low : i64) =
   if es.context ∉ {U, Ry, Rt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
   let amount = amount_high * 2^64 + amount_low
-  if liquid_balance(
-    es.balance,
-    es.params.sysenv.reserved_balance,
-    freezing_limit(
-      es.params.sysenv.compute_allocation,
-      es.params.sysenv.memory_allocation,
-      es.params.sysenv.freezing_threshold,
-      memory_usage_wasm_state(es.wasm_state) + 
-        es.params.sysenv.memory_usage_raw_module + 
-        es.params.sysenv.memory_usage_canister_history +
-        es.params.sysenv.memory_usage_snapshot,
-      es.params.sysenv.subnet_size,
-    )
-  ) < amount then Trap {cycles_used = es.cycles_used;}
+  if liquid_balance(es) < amount then Trap {cycles_used = es.cycles_used;}
 
   es.balance := es.balance - amount
   es.pending_call.transferred_cycles := es.pending_call.transferred_cycles + amount
@@ -7304,20 +7218,7 @@ ic0.call_peform<es>() : ( err_code : i32 ) =
 
   // are we below the freezing threshold?
   // Or maybe the system has other reasons to not perform this
-  if liquid_balance(
-    es.balance,
-    es.params.sysenv.reserved_balance,
-    freezing_limit(
-      es.params.sysenv.compute_allocation,
-      es.params.sysenv.memory_allocation,
-      es.params.sysenv.freezing_threshold,
-      memory_usage_wasm_state(es.wasm_state) + 
-        es.params.sysenv.memory_usage_raw_module + 
-        es.params.sysenv.memory_usage_canister_history +
-        es.params.sysenv.memory_usage_snapshot,
-      es.params.sysenv.subnet_size,
-    )
-  ) < 0 or system_cannot_do_this_call_now()
+  if liquid_balance(es) < 0 or system_cannot_do_this_call_now()
   then
     discard_pending_call<es>()
     return <implementation-specific>
