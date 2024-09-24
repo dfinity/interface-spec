@@ -1536,8 +1536,8 @@ WebAssembly functions parameter and result types can only be primitive number ty
 
 To provide access to a string or blob `foo`, the System API provides two functions:
 ```
-ic0.foo_size : () -> I; `I ∈ {i32, i64}`
-ic0.foo_copy : (dst : I, offset : I, size : I) -> (); `I ∈ {i32, i64}`
+ic0.foo_size : () -> I; I ∈ {i32, i64}
+ic0.foo_copy : (dst : I, offset : I, size : I) -> (); I ∈ {i32, i64}
 ```
 
 The `*_size` function indicates the size, in bytes, of `foo`. The `*_copy` function copies `size` bytes from `foo[offset..offset+size]` to `memory[dst..dst+size]`. This traps if `offset+size` is greater than the size of `foo`, or if `dst+size` exceeds the size of the Wasm memory.
@@ -1545,7 +1545,7 @@ The `*_size` function indicates the size, in bytes, of `foo`. The `*_copy` funct
 Dually, a System API function that conceptually takes a blob or string as a parameter `foo` has two parameters:
 
 ```
-ic0.set_foo : (src : I, size : I) -> …; `I ∈ {i32, i64}`
+ic0.set_foo : (src : I, size : I) -> …; I ∈ {i32, i64}
 ```
 
 which copies, at the time of function invocation, the data referred to by `src`/`size` out of the canister. Unless otherwise noted, this traps if `src+size` exceeds the size of the WebAssembly memory.
@@ -7045,7 +7045,7 @@ ic0.data_certificate_copy<es>(dst : I, offset : I, size : I) =
   if es.params.sysenv.certificate = NoCertificate then Trap {cycles_used = es.cycles_used;}
   copy_to_canister<es>(dst, offset, size, es.params.sysenv.certificate)
 
-ic0.time<es>() : i32 =
+ic0.time<es>() : i64 =
   if es.context = s then Trap {cycles_used = es.cycles_used;}
   return es.params.sysenv.time
 
