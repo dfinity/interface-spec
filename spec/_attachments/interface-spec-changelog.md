@@ -1,11 +1,11 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add new management canister methods for canister snapshot support.
 
 ### 0.27.0 (2024-09-20) {#0_27_0}
 * EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
 * Synchronous update call API at `/api/v3/canister/.../call`.
-* Add new management canister methods for canister snapshot support.
 
 ### 0.26.0 (2024-07-23) {#0_26_0}
 * EXPERIMENTAL: Management canister API for threshold Schnorr signatures.
