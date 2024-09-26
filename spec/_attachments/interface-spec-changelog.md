@@ -1,6 +1,7 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add new management canister methods for canister snapshot support.
 
 ### 0.27.0 (2024-09-20) {#0_27_0}
 * EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
