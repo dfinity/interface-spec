@@ -3116,10 +3116,10 @@ The following is an incomplete list of invariants that should hold for the abstr
 
 -   Referenced call contexts exist, unless the origins have expired deadlines:
 
-        ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.deadline ≠ Expired ⇒ O.calling_context ∈ dom(S.call_contexts)
-        ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.deadline ≠ Expired ⇒ O.calling_context ∈ dom(S.call_contexts)
-        ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.deadline ≠ Expired ⇒ O.calling_context ∈ dom(S.call_contexts)
-        ∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.deadline ≠ Expired ⇒ O.calling_context ∈ dom(S.call_contexts)
+        ∀ CallMessage {origin = FromCanister O, …} ∈ S.messages. O.deadline ≠ Expired _ ⇒ O.calling_context ∈ dom(S.call_contexts)
+        ∀ ResponseMessage {origin = FromCanister O, …} ∈ S.messages. O.deadline ≠ Expired _ ⇒ O.calling_context ∈ dom(S.call_contexts)
+        ∀ (_ ↦ {needs_to_respond = true, origin = FromCanister O, …}) ∈ S.call_contexts: O.deadline ≠ Expired _ ⇒ O.calling_context ∈ dom(S.call_contexts)
+        ∀ (_ ↦ Stopping Origins) ∈ S.canister_status: ∀(FromCanister O, _) ∈ Origins. O.deadline ≠ Expired _ ⇒ O.calling_context ∈ dom(S.call_contexts)
 
 ### State transitions
 
