@@ -1436,7 +1436,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
     The deadline, in nanoseconds since 1970-01-01, after which the caller might stop waiting for a response.
 
-    For calls with best-effort responses, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls, a deadline of 0 will be returned.
+    For calls to update methods with best-effort responses, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls (ingress messages and all calls to query and composite query methods, including calls in replicated mode) a deadline of 0 is returned.
 
 ### Responding {#responding}
 
@@ -2781,7 +2781,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
             new_global_timer : NoGlobalTimer | Nat;
             cycles_used : Nat;
           }
-          update_methods : MethodName ↦ ((Arg, CallerId, Env, AvailableCycles) -> UpdateFunc)
+          update_methods : MethodName ↦ ((Arg, CallerId, Deadline, Env, AvailableCycles) -> UpdateFunc)
           query_methods : MethodName ↦ ((Arg, CallerId, Env) -> QueryFunc)
           composite_query_methods : MethodName ↦ ((Arg, CallerId, Env) -> CompositeQueryFunc)
           heartbeat : (Env) -> SystemTaskFunc
@@ -3528,6 +3528,13 @@ Note that new messages are executed only if the canister is Running and is not f
 
 The transition models the actual execution of a message, whether it is an initial call to a public method or a response. In either case, a call context already exists (see transition "Call context creation").
 
+For convenience, we first define a function that extracts the deadline from a call context. Note that user and system messages have no deadline.
+
+    deadline_of_context(ctxt) = match ctxt.origin with
+        FromCanister O if O.deadline ≠ Expired _ → O.deadline
+        FromCanister O if O.deadline = Expired ts → ts
+        otherwise → NoDeadline
+
 Conditions  
 
 ```html
@@ -3536,6 +3543,8 @@ S.messages = Older_messages · FuncMessage M · Younger_messages
 (M.queue = Unordered) or (∀ msg ∈ Older_messages. msg.queue ≠ M.queue)
 S.canisters[M.receiver] ≠ EmptyCanister
 Mod = S.canisters[M.receiver].module
+Ctxt = S.call_contexts[M.call_context]
+Deadline = deadline_of_context(Ctxt)
 
 Is_response = M.entry_point == Callback _ _ _
 
@@ -3557,9 +3566,9 @@ Env = {
   canister_version = S.canister_version[M.receiver];
 }
 
-Available = S.call_contexts[M.call_contexts].available_cycles
+Available = Ctxt.available_cycles
 ( M.entry_point = PublicMethod Name Caller Arg
-  F = Mod.update_methods[Name](Arg, Caller, Env, Available)
+  F = Mod.update_methods[Name](Arg, Caller, Deadline, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
 )
 or
@@ -3569,7 +3578,7 @@ or
 )
 or
 ( M.entry_point = Callback Callback Response RefundedCycles
-  F = Mod.callbacks(Callback, Response, RefundedCycles, Env, Available)
+  F = Mod.callbacks(Callback, Response, Deadline, RefundedCycles, Env, Available)
   New_canister_version = S.canister_version[M.receiver] + 1
 )
 or
@@ -3622,7 +3631,7 @@ if
   (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) ≤ S.memory_allocation[M.receiver])
-  (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
+  (res.response = NoResponse) or Ctxt.needs_to_respond
 then
   S with
     canisters[M.receiver].wasm_state = res.new_state;
@@ -3648,7 +3657,7 @@ then
         }
       | call ∈ res.new_calls ] ·
       [ ResponseMessage {
-          origin = S.call_contexts[M.call_context].origin;
+          origin = Ctxt.origin;
           response = res.response;
           refunded_cycles = Available - res.cycles_accepted;
         }
@@ -5812,6 +5821,7 @@ It is nonsensical to pass to an execution function a WebAssembly store `S` that 
           sysenv = (undefined);
           cycles_refunded = 0;
           method_name = NoText;
+          deadline = NoDeadline;
         }
 
         empty_execution_state = {
@@ -5957,10 +5967,15 @@ Finally we can specify the abstract `CanisterModule` that models a concrete WebA
 
 -   The partial map `update_methods` of the `CanisterModule` is defined for all method names `method` for which the WebAssembly program exports a function `func` named `canister_update <method>`, and has value
 
-        update_methods[method] = λ (arg, caller, sysenv, available) → λ wasm_state →
+        update_methods[method] = λ (arg, caller, deadline, sysenv, available) → λ wasm_state →
           let es = ref {empty_execution_state with
               wasm_state = wasm_state;
-              params = empty_params with { arg = arg; caller = caller; sysenv }
+              params = empty_params with {
+                  arg = arg;
+                  caller = caller;
+                  deadline = deadline;
+                  sysenv
+              }
               balance = sysenv.balance
               cycles_available = available;
               context = U
@@ -6064,10 +6079,11 @@ global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 
 -   The function `callbacks` of the `CanisterModule` is defined as follows
 
-        callbacks = λ(callbacks, response, refunded_cycles, sysenv, available) → λ wasm_state →
+        callbacks = λ(callbacks, response, deadline, refunded_cycles, sysenv, available) → λ wasm_state →
           let params0 = empty_params with {
-            sysenv
+            sysenv;
             cycles_refunded = refund_cycles;
+            deadline;
           }
           let (fun, env, params, context) = match response with
             Reply data ->
