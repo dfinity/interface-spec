@@ -2786,7 +2786,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           composite_query_methods : MethodName ↦ ((Arg, CallerId, Env) -> CompositeQueryFunc)
           heartbeat : (Env) -> SystemTaskFunc
           global_timer : (Env) -> SystemTaskFunc
-          callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
+          callbacks : (Callback, Response, Deadline, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
           composite_callbacks : (Callback, Response, Env) -> UpdateFunc
           inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return {
             status : Accept | Reject;
