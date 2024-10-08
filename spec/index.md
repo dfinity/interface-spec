@@ -1436,7 +1436,7 @@ The canister can access an argument. For `canister_init`, `canister_post_upgrade
 
     The deadline, in nanoseconds since 1970-01-01, after which the caller might stop waiting for a response.
 
-    For calls to update methods with best-effort responses, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls (ingress messages and all calls to query and composite query methods, including calls in replicated mode) a deadline of 0 is returned.
+    For calls to update methods with best-effort responses and their callbacks, the deadline is computed based on the time the call was made, and the `timeout_seconds` parameter provided by the caller. For other calls (ingress messages and all calls to query and composite query methods, including calls in replicated mode) a deadline of 0 is returned.
 
 ### Responding {#responding}
 
