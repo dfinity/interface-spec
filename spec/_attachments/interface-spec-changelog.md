@@ -1,6 +1,30 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Add new management canister methods for canister snapshot support.
+
+### 0.27.0 (2024-09-20) {#0_27_0}
+* EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
+* Synchronous update call API at `/api/v3/canister/.../call`.
+
+### 0.26.0 (2024-07-23) {#0_26_0}
+* EXPERIMENTAL: Management canister API for threshold Schnorr signatures.
+
+### 0.25.0 (2024-06-14) {#0_25_0}
+* Query call statistics.
+* New `wasm_memory_persistence` option for canister upgrades.
+* Rename `num_blocks_total` to `num_blocks_proposed_total` in node metrics served by the management canister.
+* Management canister query call to fetch canister logs.
+* WASM heap memory limit in canisters settings.
+* 32-bit stable memory System API is marked DEPRECATED.
+* Remove the management canister query calls `bitcoin_get_balance_query` and `bitcoin_get_utxos_query`.
+
+### 0.24.0 (2024-04-23) {#0_24_0}
+* Wrap chunk hash for install chunked code in a record and rename `storage_canister` to `store_canister`.
+* Update subnet read state request conditions on requested paths.
+* Fix: allow inter-canister calls (requests) to be spontaneously rejected in the abstract spec.
+
+### 0.23.0 (2024-03-06) {#0_23_0}
 * The maximum length of a nonce in an ingress message is 32 bytes.
 * Update specification of responses from the endpoint `/api/v2/status`.
 * Stop canister calls might be rejected upon timeout.
@@ -9,6 +33,9 @@
 * Specify the resource reservation mechanism.
 * Allow `in_replicated_execution` system API method to be executed during `canister_start`.
 * Set the maximum depth of a delegation in a read_state response/certified variable certificate to 1.
+* Canister version is guaranteed to increase if the canister's running status changes.
+* Calls to frozen canisters are rejected with `SYS_TRANSIENT` instead of `CANISTER_ERROR`.
+* Add API boundary nodes information into the certified state tree.
 
 ### 0.22.0 (2023-11-15) {#0_22_0}
 * Add metrics on subnet usage into the certified state tree and a new HTTP endpoint `/api/v2/subnet/<subnet_id>/read_state` for retrieving them.

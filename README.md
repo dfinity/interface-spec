@@ -2,10 +2,12 @@
 
 **A preview of the latest `master` branch can be found [here](https://khsfq-wqaaa-aaaak-qckvq-cai.icp0.io/docs).**
 
+**The latest *released* version can be found [here](https://internetcomputer.org/docs/current/references/ic-interface-spec).**
+
 This repository contains the source files of the Interface Spec, which describes the externally visible behaviour of the Internet Computer.
 The language-independent description of this IC interface is available in [ic.did](./spec/_attachments/ic.did).
 
-It used to contain a reference implementation and acceptance test suite; these can now be found at <https://github.com/dfinity/ic-hs>.
+It used to contain a reference implementation and acceptance test suite; these can now be found at [https://github.com/dfinity/ic-hs](https://github.com/dfinity/ic-hs).
 
 ## About the Interface Spec
 
