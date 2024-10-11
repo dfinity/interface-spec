@@ -1,6 +1,6 @@
 ## Changelog {#changelog}
 
-### ∞ (unreleased)
+### 0.28.0 (2024-10-11) {#0_28_0}
 * Add new management canister methods for canister snapshot support.
 
 ### 0.27.0 (2024-09-20) {#0_27_0}
