@@ -1718,7 +1718,7 @@ There must be at most one call to `ic0.call_on_cleanup` between `ic0.call_new` a
 
     This deducts `MAX_CYCLES_PER_RESPONSE` cycles from the canister balance and sets them aside for response processing.
 
-    If the function returns `0` as the `err_code`, the IC was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callbacks will be executed.
+    If the function returns `0` as the `err_code`, the IC was able to enqueue the call. In this case, the call will either be delivered, returned because the destination canister does not exist, returned due to a lack of resources within the IC, or returned because of an out of cycles condition. This also means that exactly one of the reply or reject callbacks will be executed.
 
     If the function returns a non-zero value, the call cannot (and will not be) performed. This can happen due to a lack of resources within the IC, but also if it would reduce the current cycle balance to a level below where the canister would be frozen.
 
@@ -7197,15 +7197,13 @@ ic0.call_peform<es>() : ( err_code : i32 ) =
   if es.context ∉ {U, CQ, Ry, Rt, CRy, CRt, T} then Trap {cycles_used = es.cycles_used;}
   if es.pending_call = NoPendingCall then Trap {cycles_used = es.cycles_used;}
 
-  es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
-
-  // are we below the freezing threshold?
-  // Or maybe the system has other reasons to not perform this
-  if liquid_balance(es) < 0 or system_cannot_do_this_call_now()
+  // `system_cannot_do_this_call_now` abstracts over resource issues preventing the call from being made
+  if liquid_balance(es) < MAX_CYCLES_PER_RESPONSE or system_cannot_do_this_call_now()
   then
     discard_pending_call<es>()
     return <implementation-specific>
   or
+    es.balance := es.balance - MAX_CYCLES_PER_RESPONSE
     es.calls := es.calls · es.pending_call
     es.pending_call := NoPendingCall
     return 0
@@ -7213,7 +7211,7 @@ ic0.call_peform<es>() : ( err_code : i32 ) =
 // helper function
 discard_pending_call<es>() =
   if es.pending_call ≠ NoPendingCall then
-    es.balance := es.balance + MAX_CYCLES_PER_RESPONSE + es.pending_call.transferred_cycles
+    es.balance := es.balance + es.pending_call.transferred_cycles
     es.pending_call := NoPendingCall
 
 ic0.stable_size<es>() : (page_count : i32) =
