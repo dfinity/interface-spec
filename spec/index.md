@@ -5454,17 +5454,23 @@ The management canister returns subnet metadata given a subnet ID.
 Conditions
 
 ```html
-S.messages = Older_messages · CallMessage M · Younger_messages (M.queue =
-Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠
-M.queue) M.callee = ic_principal M.method_name = 'subnet_stats' R =
-<implementation-specific> </implementation-specific>
+S.messages = Older_messages · CallMessage M · Younger_messages 
+(M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue) 
+M.callee = ic_principal 
+M.method_name = 'subnet_stats' 
+R = <implementation-specific> 
 ```
 
 State after
 
 ```html
-S with messages = Older_messages · Younger_messages · ResponseMessage { origin =
-M.origin response = Reply (candid(R)) refunded_cycles = M.transferred_cycles }
+S with 
+    messages = Older_messages · Younger_messages · 
+      ResponseMessage { 
+        origin = M.origin 
+        response = Reply (candid(R)) 
+        refunded_cycles = M.transferred_cycles 
+      }
 ```
 
 
