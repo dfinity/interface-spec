@@ -1373,12 +1373,12 @@ While an implementation will likely try to keep the interval between the value o
 
 #### On Low Wasm Memory {#on-low-wasm-memory}
 
-A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's remaining wasm memory size in bytes falls from above a threshold `t` to strictly less than `t`.
+A canister can export a function with the name `canister_on_low_wasm_memory`, which is scheduled whenever the canister's remaining wasm memory size in bytes falls from at least a threshold `t` to strictly less than `t`.
 The threshold `t` can be defined in the [canister's settings](#ic-canister_status) and by default it is set to 0.
 
 :::note
 
-While the above function is scheduled immediately once the condition above is triggered, it may not necessarily be executed immediately if it does not have enough cycles.
+While the above function is scheduled immediately once the condition above is triggered, it may not necessarily be executed immediately if the canister does not have enough cycles.
 If the canister gets frozen immediately after the function is scheduled for execution, the function will run once the canister's unfrozen _if_ the canister's wasm memory remains above the threshold `t`.
 
 :::
@@ -3188,6 +3188,7 @@ The [WebAssembly System API](#system-api) is relatively low-level, and some of i
           composite_query_methods : MethodName ↦ ((Arg, CallerId, Env) -> CompositeQueryFunc)
           heartbeat : (Env) -> SystemTaskFunc
           global_timer : (Env) -> SystemTaskFunc
+          on_low_wasm_memory : (Env) -> SystemTaskFunc
           callbacks : (Callback, Response, RefundedCycles, Env, AvailableCycles) -> UpdateFunc
           composite_callbacks : (Callback, Response, Env) -> UpdateFunc
           inspect_message : (MethodName, WasmState, Arg, CallerId, Env) -> Trap | Return {
@@ -3254,6 +3255,7 @@ EntryPoint
   | Callback Callback Response RefundedCycles
   | Heartbeat
   | GlobalTimer
+  | OnLowWasmMemory
 Message
   = CallMessage {
       origin : CallOrigin;
@@ -3410,6 +3412,10 @@ CanisterLog = {
   timestamp_nanos : Nat;
   content : Blob;
 }
+OnLowWasmMemoryHookStatus
+  = ConditionNotSatisfied
+  | Ready
+  | Executed
 QueryStats = {
   timestamp : Timestamp;
   num_instructions : Nat;
@@ -3446,6 +3452,8 @@ S = {
   reserved_balances: CanisterId ↦ Nat;
   reserved_balance_limits: CanisterId ↦ Nat;
   wasm_memory_limit: CanisterId ↦ Nat;
+  wasm_memory_threshold: CanisterId ↦ Nat;
+  on_low_wasm_memory_hook_status: CanisterId ↦ OnLowWasmMemoryHookStatus;
   certified_data: CanisterId ↦ Blob;
   canister_history: CanisterId ↦ CanisterHistory;
   canister_log_visibility: CanisterId ↦ CanisterLogVisibility;
@@ -3551,6 +3559,8 @@ The initial state of the IC is
   reserved_balances = ();
   reserved_balance_limits = ();
   wasm_memory_limit = ();
+  wasm_memory_threshold = ();
+  on_low_wasm_memory_hook_status = ();
   certified_data = ();
   canister_history = ();
   canister_log_visibility = ();
@@ -3967,6 +3977,47 @@ S with
 
 ```
 
+*Call context creation: On low wasm memory*
+
+If canister `C` exports a method with name `canister_on_low_wasm_memory` and `S.on_low_wasm_memory_hook_status[C]` is `Ready`, the IC will create the corresponding call context and set `S.on_low_wasm_memory_hook_status[C]` to `Executed`.
+
+Conditions
+
+```html
+
+S.canisters[C] ≠ EmptyCanister
+S.canister_status[C] = Running
+S.on_low_wasm_memory_hook_status[C] = Ready
+liquid_balance(S, C) ≥ MAX_CYCLES_PER_MESSAGE
+Ctxt_id ∉ dom(S.call_contexts)
+
+```
+
+State after
+
+```html
+
+S with
+    messages =
+      FuncMessage {
+        call_context = Ctxt_id;
+        receiver = C;
+        entry_point = OnLowWasmMemory;
+        queue = Queue { from = System; to = C };
+      }
+      · S.messages
+    call_contexts[Ctxt_id] = {
+      canister = C;
+      origin = FromSystemTask;
+      needs_to_respond = false;
+      deleted = false;
+      available_cycles = 0;
+    }
+    on_low_wasm_memory_hook_status[C] = Executed
+    balances[C] = S.balances[C] - MAX_CYCLES_PER_MESSAGE
+
+```
+
 The IC can execute any message that is at the head of its queue, i.e. there is no older message with the same abstract `queue` field. The actual message execution, if successful, may enqueue further messages and --- if the function returns a response --- record this response. The new call and response messages are enqueued at the end.
 
 Note that new messages are executed only if the canister is Running and is not frozen.
@@ -3981,6 +4032,8 @@ Conditions
 
 S.messages = Older_messages · FuncMessage M · Younger_messages
 (M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue)
+(∀ FuncMessage M' ∈ Older_messages · Younger_messages. M'.receiver ≠ M.receiver or M.entry_point ≠ OnLowWasmMemory)
+S.on_low_wasm_memory_hook_status[M.receiver] ≠ Ready
 S.canisters[M.receiver] ≠ EmptyCanister
 Mod = S.canisters[M.receiver].module
 
@@ -4036,6 +4089,12 @@ or
   New_canister_version = S.canister_version[M.receiver] + 1
   Wasm_memory_limit = 0
 )
+or
+( M.entry_point = OnLowWasmMemory
+  F = system_task_as_update(Mod.on_low_wasm_memory, Env)
+  New_canister_version = S.canister_version[M.receiver] + 1
+  Wasm_memory_limit = 0
+)
 
 R = F(S.canisters[M.receiver].wasm_state)
 
@@ -4075,11 +4134,12 @@ if
     New_reserved_balance,
     Min_balance
   ) ≥ 0
-  (S.memory_allocation[M.receiver] = 0) or (memory_usage_wasm_state(res.new_state) +
+  Total_memory_usage = memory_usage_wasm_state(res.new_state) +
     memory_usage_raw_module(S.canisters[M.receiver].raw_module) +
     memory_usage_canister_history(S.canister_history[M.receiver]) +
     memory_usage_chunk_store(S.chunk_store[M.receiver]) +
-    memory_usage_snapshot(S.snapshots[M.receiver]) ≤ S.memory_allocation[M.receiver])
+    memory_usage_snapshot(S.snapshots[M.receiver])
+  (S.memory_allocation[M.receiver] = 0) or (Total_memory_usage ≤ S.memory_allocation[M.receiver])
   (Wasm_memory_limit = 0) or |res.new_state.store.mem| <= Wasm_memory_limit
   (res.response = NoResponse) or S.call_contexts[M.call_context].needs_to_respond
 then
@@ -4125,6 +4185,21 @@ then
     reserved_balances[M.receiver] = New_reserved_balance
 
     canister_logs[M.receiver] = S.canister_logs[M.receiver] · canister_logs
+
+    if S.memory_allocation[M.receiver] = 0:
+      Wasm_memory_capacity = S.wasm_memory_limit[M.receiver]
+    else:
+      Wasm_memory_capacity = min(S.memory_allocation[M.receiver] - (Total_memory_usage - |res.new_state.store.mem|), S.wasm_memory_limit[M.receiver])
+
+    if Wasm_memory_capacity < |New_state.store.mem| + S.wasm_memory_threshold[M.receiver]:
+      if S.on_low_wasm_memory_hook_status[M.receiver] = ConditionNotSatisfied:
+        On_low_wasm_memory_hook_status = Ready
+      else:
+        On_low_wasm_memory_hook_status = S.on_low_wasm_memory_hook_status[M.receiver]
+    else:
+      On_low_wasm_memory_hook_status = ConditionNotSatisfied
+
+    on_low_wasm_memory_hook_status[M.receiver] = On_low_wasm_memory_hook_status
 else
   S with
     messages = Older_messages · Younger_messages
@@ -4318,6 +4393,10 @@ if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
   New_wasm_memory_limit = 0
+if A.settings.wasm_memory_threshold is not null:
+  New_wasm_memory_threshold = A.settings.wasm_memory_threshold
+else:
+  New_wasm_memory_threshold = 0
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation, null, EmptyCanister.wasm_state)
 New_balance = M.transferred_cycles - Cycles_reserved
@@ -4363,6 +4442,8 @@ S' = S with
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     wasm_memory_limit[Canister_id] = New_wasm_memory_limit
+    wasm_memory_threshold[Canister_id] = New_wasm_memory_threshold
+    on_low_wasm_memory_hook_status[Canister_id] = ConditionNotSatisfied
     certified_data[Canister_id] = ""
     query_stats[Canister_id] = []
     canister_history[Canister_id] = New_canister_history
@@ -4414,11 +4495,30 @@ M.method_name = 'update_settings'
 M.arg = candid(A)
 M.caller ∈ S.controllers[A.canister_id]
 
+Total_memory_usage = memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
+  memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
+  memory_usage_canister_history(New_canister_history) +
+  memory_usage_chunk_store(S.chunk_store[A.canister_id]) +
+  memory_usage_snapshot(S.snapshots[A.canister_id])
+
 if New_memory_allocation > 0:
-  memory_usage_wasm_state(S.canisters[A.canister_id].wasm_state) +
-    memory_usage_raw_module(S.canisters[A.canister_id].raw_module) +
-    memory_usage_canister_history(New_canister_history) +
-    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ New_memory_allocation
+  Total_memory_usage ≤ New_memory_allocation
+
+if New_wasm_memory_limit > 0:
+  |S.canisters[A.canister_id].wasm_state.store.mem| ≤ New_wasm_memory_limit
+
+if New_memory_allocation = 0:
+  Wasm_memory_capacity = New_wasm_memory_limit
+else:
+  Wasm_memory_capacity = min(New_memory_allocation - (Total_memory_usage - |S.canisters[A.canister_id].wasm_state.store.mem|), New_wasm_memory_limit)
+
+if Wasm_memory_capacity < |S.canisters[A.canister_id].wasm_state.store.mem| + New_wasm_memory_threshold:
+  if S.on_low_wasm_memory_hook_status[A.canister_id] = ConditionNotSatisfied:
+    On_low_wasm_memory_hook_status = Ready
+  else:
+    On_low_wasm_memory_hook_status = S.on_low_wasm_memory_hook_status[A.canister_id]
+else:
+  On_low_wasm_memory_hook_status = ConditionNotSatisfied
 
 if A.settings.compute_allocation is not null:
   New_compute_allocation = A.settings.compute_allocation
@@ -4440,6 +4540,10 @@ if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
   New_wasm_memory_limit = S.wasm_memory_limit[A.canister_id]
+if A.settings.wasm_memory_threshold is not null:
+  New_wasm_memory_threshold = A.settings.wasm_memory_threshold
+else:
+  New_wasm_memory_threshold = S.wasm_memory_threshold[A.canister_id]
 
 Cycles_reserved = cycles_to_reserve(S, A.canister_id, New_compute_allocation, New_memory_allocation, S.snapshots[A.canister_id], S.canisters[A.canister_id].wasm_state)
 New_balance = S.balances[A.canister_id] - Cycles_reserved
@@ -4484,6 +4588,8 @@ S' = S with
     reserved_balances[A.canister_id] = New_reserved_balance
     reserved_balance_limits[A.canister_id] = New_reserved_balance_limit
     wasm_memory_limit[A.canister_id] = New_wasm_memory_limit
+    wasm_memory_threshold[A.canister_id] = New_wasm_memory_threshold
+    on_low_wasm_memory_hook_status[A.canister_id] = On_low_wasm_memory_hook_status
     canister_version[A.canister_id] = S.canister_version[A.canister_id] + 1
     if A.settings.log_visibility is not null:
       canister_log_visibility[A.canister_id] = A.settings.log_visibility
@@ -4534,6 +4640,7 @@ S with
             freezing_threshold = S.freezing_threshold[A.canister_id];
             reserved_cycles_limit = S.reserved_balance_limit[A.canister_id];
             wasm_memory_limit = S.wasm_memory_limit[A.canister_id];
+            wasm_memory_threshold = S.wasm_memory_threshold[A.canister_id];
           }
           module_hash =
             if S.canisters[A.canister_id] = EmptyCanister
@@ -4756,14 +4863,29 @@ liquid_balance(S, A.canister_id) ≥ MAX_CYCLES_PER_MESSAGE
 
 liquid_balance(S', A.canister_id) ≥ 0
 
+Total_memory_usage = memory_usage_wasm_state(New_state) +
+  memory_usage_raw_module(A.wasm_module) +
+  memory_usage_canister_history(New_canister_history) +
+  memory_usage_chunk_store(New_chunk_store) +
+  memory_usage_snapshot(S.snapshots[A.canister_id])
+
 if S.memory_allocation[A.canister_id] > 0:
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history) +
-    memory_usage_chunk_store(New_chunk_store) +
-    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
+  Total_memory_usage ≤ S.memory_allocation[A.canister_id]
 
 (S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
+
+if S.memory_allocation[A.canister_id] = 0:
+  Wasm_memory_capacity = S.wasm_memory_limit[A.canister_id]
+else:
+  Wasm_memory_capacity = min(S.memory_allocation[A.canister_id] - (Total_memory_usage - |New_state.store.mem|), S.wasm_memory_limit[A.canister_id])
+
+if Wasm_memory_capacity < |New_state.store.mem| + S.wasm_memory_threshold[A.canister_id]:
+  if S.on_low_wasm_memory_hook_status[A.canister_id] = ConditionNotSatisfied:
+    On_low_wasm_memory_hook_status = Ready
+  else:
+    On_low_wasm_memory_hook_status = S.on_low_wasm_memory_hook_status[A.canister_id]
+else:
+  On_low_wasm_memory_hook_status = ConditionNotSatisfied
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4806,6 +4928,7 @@ S' = S with
     reserved_balances[A.canister_id] = New_reserved_balance
     canister_history[A.canister_id] = New_canister_history
     canister_logs[A.canister_id] = canister_logs
+    on_low_wasm_memory_hook_status[A.canister_id] = On_low_wasm_memory_hook_status
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -4918,14 +5041,29 @@ liquid_balance(S, A.canister_id) ≥ MAX_CYCLES_PER_MESSAGE
 
 liquid_balance(S', A.canister_id) ≥ 0
 
+Total_memory_usage = memory_usage_wasm_state(New_state) +
+  memory_usage_raw_module(A.wasm_module) +
+  memory_usage_canister_history(New_canister_history) +
+  memory_usage_chunk_store(S[A.canister_id].chunk_store) +
+  memory_usage_snapshot(S.snapshots[A.canister_id])
+
 if S.memory_allocation[A.canister_id] > 0:
-  memory_usage_wasm_state(New_state) +
-    memory_usage_raw_module(A.wasm_module) +
-    memory_usage_canister_history(New_canister_history) +
-    memory_usage_chunk_store(S[A.canister_id].chunk_store) +
-    memory_usage_snapshot(S.snapshots[A.canister_id]) ≤ S.memory_allocation[A.canister_id]
+  Total_memory_usage ≤ S.memory_allocation[A.canister_id]
 
 (S.wasm_memory_limit[A.canister_id] = 0) or |New_state.store.mem| <= S.wasm_memory_limit[A.canister_id]
+
+if S.memory_allocation[A.canister_id] = 0:
+  Wasm_memory_capacity = S.wasm_memory_limit[A.canister_id]
+else:
+  Wasm_memory_capacity = min(S.memory_allocation[A.canister_id] - (Total_memory_usage - |New_state.store.mem|), S.wasm_memory_limit[A.canister_id])
+
+if Wasm_memory_capacity < |New_state.store.mem| + S.wasm_memory_threshold[A.canister_id]:
+  if S.on_low_wasm_memory_hook_status[A.canister_id] = ConditionNotSatisfied:
+    On_low_wasm_memory_hook_status = Ready
+  else:
+    On_low_wasm_memory_hook_status = S.on_low_wasm_memory_hook_status[A.canister_id]
+else:
+  On_low_wasm_memory_hook_status = ConditionNotSatisfied
 
 S.canister_history[A.canister_id] = {
   total_num_changes = N;
@@ -4970,6 +5108,7 @@ S' = S with
     reserved_balances[A.canister_id] = New_reserved_balance;
     canister_history[A.canister_id] = New_canister_history
     canister_logs[A.canister_id] = S.canister_logs[A.canister_id] · canister_logs
+    on_low_wasm_memory_hook_status[A.canister_id] = On_low_wasm_memory_hook_status
     messages = Older_messages · Younger_messages ·
       ResponseMessage {
         origin = M.origin;
@@ -5340,6 +5479,8 @@ S with
     reserved_balances[A.canister_id] = (deleted)
     reserved_balance_limits[A.canister_id] = (deleted)
     wasm_memory_limit[A.canister_id] = (deleted)
+    wasm_memory_threshold[A.canister_id] = (deleted)
+    on_low_wasm_memory_hook_status[A.canister_id] = (deleted)
     certified_data[A.canister_id] = (deleted)
     canister_history[A.canister_id] = (deleted)
     canister_log_visibility[A.canister_id] = (deleted)
@@ -5502,6 +5643,10 @@ if A.settings.wasm_memory_limit is not null:
   New_wasm_memory_limit = A.settings.wasm_memory_limit
 else:
   New_wasm_memory_limit = 0
+if A.settings.wasm_memory_threshold is not null:
+  New_wasm_memory_threshold = A.settings.wasm_memory_threshold
+else:
+  New_wasm_memory_threshold = 0
 
 Cycles_reserved = cycles_to_reserve(S, Canister_id, New_compute_allocation, New_memory_allocation,  null, EmptyCanister.wasm_state)
 if A.amount is not null:
@@ -5549,6 +5694,8 @@ S' = S with
     reserved_balances[Canister_id] = New_reserved_balance
     reserved_balance_limits[Canister_id] = New_reserved_balance_limit
     wasm_memory_limit[Canister_id] = New_wasm_memory_limit
+    wasm_memory_threshold[Canister_id] = New_wasm_memory_threshold
+    on_low_wasm_memory_hook_status[Canister_id] = ConditionNotSatisfied
     certified_data[Canister_id] = ""
     canister_history[Canister_id] = New_canister_history
     canister_log_visibility[Canister_id] = New_canister_log_visibility
@@ -6851,6 +6998,34 @@ heartbeat = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 ```html
 
 global_timer = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
+
+```
+
+-   The function `on_low_wasm_memory` of the `CanisterModule` is defined if the WebAssembly program exports a function `func` named `canister_on_low_wasm_memory`, and has value
+    ```
+    on_low_wasm_memory = λ (sysenv) → λ wasm_state →
+      let es = ref {empty_execution_state with
+        wasm_state = wasm_state;
+        params = empty_params with { arg = NoArg; caller = ic_principal; sysenv }
+        balance = sysenv.balance
+        context = T
+      }
+      try func<es>() with Trap then Trap {cycles_used = es.cycles_used;}
+      discard_pending_call<es>()
+      Return {
+        new_state = es.wasm_state;
+        new_calls = es.calls;
+        new_certified_data = es.certified_data;
+        new_global_timer = es.new_global_timer;
+        cycles_used = es.cycles_used;
+      }
+    ```
+
+    otherwise it is
+
+```html
+
+on_low_wasm_memory = λ (sysenv) → λ wasm_state → Trap {cycles_used = 0;}
 
 ```
 
