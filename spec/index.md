@@ -2632,9 +2632,17 @@ Replica-signed queries may improve security because the recipient can verify the
 
 ## The IC Bitcoin API {#ic-bitcoin-api}
 
-The Bitcoin functionality is exposed via the management canister. Information about Bitcoin can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/). Invoking the functions of the Bitcoin API will cost cycles. We refer the reader to the [Bitcoin documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works) for further relevant information and the [IC pricing page](https://internetcomputer.org/docs/current/developer-docs/gas-cost) for information on pricing for the Bitcoin mainnet and testnet.
+The Bitcoin API exposed by the management canister is DEPRECATED.
+Developers should interact with the Bitcoin canisters (`ghsi2-tqaaa-aaaan-aaaca-cai` for Bitcoin mainnet and `g4xu7-jiaaa-aaaan-aaaaq-cai` for Bitcoin testnet) directly.
+Information about Bitcoin and the IC Bitcoin integration can be found in the [Bitcoin developer guides](https://developer.bitcoin.org/devguide/) and  the [Bitcoin integration documentation](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/bitcoin-how-it-works).
 
 ### IC method `bitcoin_get_utxos` {#ic-bitcoin_get_utxos}
+
+:::note
+
+This method is DEPRECATED. Canister developers are advised to call the method of the same name on the Bitcoin (mainnet or testnet) canister.
+
+:::
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
@@ -2670,6 +2678,12 @@ The recommended workflow is to issue a request with the desired number of confir
 
 ### IC method `bitcoin_get_balance` {#ic-bitcoin_get_balance}
 
+:::note
+
+This method is DEPRECATED. Canister developers are advised to call the method of the same name on the Bitcoin (mainnet or testnet) canister.
+
+:::
+
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 Given a `get_balance_request`, which must specify a Bitcoin address and a Bitcoin network (`mainnet` or `testnet`), the function returns the current balance of this address in `Satoshi` (10^8 Satoshi = 1 Bitcoin) in the specified Bitcoin network. The same address formats as for [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) are supported.
@@ -2681,6 +2695,12 @@ The optional `min_confirmations` parameter can be used to limit the set of consi
 Given an address and the optional `min_confirmations` parameter, `bitcoin_get_balance` iterates over all UTXOs, i.e., the same balance is returned as when calling [`bitcoin_get_utxos`](#ic-bitcoin_get_utxos) for the same address and the same number of confirmations and, if necessary, using pagination to get all UTXOs for the same tip hash.
 
 ### IC method `bitcoin_send_transaction` {#ic-bitcoin_send_transaction}
+
+:::note
+
+This method is DEPRECATED. Canister developers are advised to call the method of the same name on the Bitcoin (mainnet or testnet) canister.
+
+:::
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
@@ -2698,6 +2718,12 @@ If the transaction passes these tests, the transaction is forwarded to the speci
 
 ### IC method `bitcoin_get_current_fee_percentiles` {#ic-bitcoin_get_current_fee_percentiles}
 
+:::note
+
+This method is DEPRECATED. Canister developers are advised to call the method of the same name on the Bitcoin (mainnet or testnet) canister.
+
+:::
+
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
 The transaction fees in the Bitcoin network change dynamically based on the number of pending transactions. It must be possible for a canister to determine an adequate fee when creating a Bitcoin transaction.
@@ -2710,7 +2736,7 @@ The [standard nearest-rank estimation method](https://en.wikipedia.org/wiki/Perc
 
 :::note
 
-The `bitcoin_get_block_headers` endpoint is considered EXPERIMENTAL. Canister developers must be aware that this endpoint may evolve in a non-backward-compatible way.
+This method is DEPRECATED. Canister developers are advised to call the method of the same name on the Bitcoin (mainnet or testnet) canister.
 
 :::
 
