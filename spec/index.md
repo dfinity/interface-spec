@@ -2548,11 +2548,11 @@ A single metric entry is a record with the following fields:
 
 - `num_block_failures_total` (`nat64`): the number of failed block proposals by this node.
 
-### IC method `subnet_metrics` {#ic-subnet-metrics}
+### IC method `subnet_info` {#ic-subnet-info}
 
 This method can only be called by canisters, i.e., it cannot be called by external users via ingress messages.
 
-Given a subnet ID as input, this method returns a record `subnet_metrics` containing metadata about that subnet.
+Given a subnet ID as input, this method returns a record `subnet_info` containing metadata about that subnet.
 
 Currently, the only field returned is the `replica_version` (`text`) of the targeted subnet.
 
@@ -5457,7 +5457,7 @@ Conditions
 S.messages = Older_messages · CallMessage M · Younger_messages 
 (M.queue = Unordered) or (∀ CallMessage M' | FuncMessage M' ∈ Older_messages. M'.queue ≠ M.queue) 
 M.callee = ic_principal 
-M.method_name = 'subnet_metrics' 
+M.method_name = 'subnet_info'
 R = <implementation-specific> 
 ```
 
