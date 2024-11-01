@@ -931,6 +931,8 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
 
+    -   If the call is to the `install_chunked_code` method and the `arg` is a Candid-encoded record with a `target_canister` field of type `principal`, then the effective canister id must be that principal.
+
     -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
@@ -959,7 +961,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. These rules for ingress expiry apply not only to update calls but all requests alike (and could have been called `request_expiry`), except for anonymous `query` and anonymous `read_state` requests for which the IC may accept any provided expiry timestamp.
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -2615,7 +2617,12 @@ The canister logs are *not* collected in canister methods running in non-replica
 The total size of all returned logs does not exceed 4KiB.
 If new logs are added resulting in exceeding the maximum total log size of 4KiB, the oldest logs will be removed.
 Logs persist across canister upgrades and they are deleted if the canister is reinstalled or uninstalled.
-The log visibility is defined in the `log_visibility` field of `canister_settings`: logs can be either public (visible to everyone) or only visible to the canister's controllers (by default).
+
+The log visibility is defined in the `log_visibility` field of `canister_settings` and can be one of the following variants:
+
+- `controllers`: only the canister's controllers can fetch logs (default);
+- `public`: everyone can fetch logs;
+- `allowed_viewers` (`vec principal`): only principals in the provided list and the canister's controllers can fetch logs, the maximum length of the list is 10.
 
 A single log is a record with the following fields:
 
@@ -3413,6 +3420,7 @@ CanisterHistory = {
 CanisterLogVisibility
   = Controllers
   | Public
+  | AllowedViewers [Principal]
 CanisterLog = {
   idx : Nat;
   timestamp_nanos : Nat;
@@ -3650,6 +3658,7 @@ delegation_targets(D)
 A `Request` has an effective canister id according to the rules in [Effective canister id](#http-effective-canister-id):
 ```
 is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
+is_effective_canister_id(Request {canister_id = ic_principal, method = install_chunked_code, arg = candid({target_canister = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ```
@@ -6170,7 +6179,11 @@ Q.canister_id = ic_principal
 Q.method_name = 'fetch_canister_logs'
 Q.arg = candid(A)
 A.canister_id = effective_canister_id
-S[A.canister_id].canister_log_visibility = Public or Q.sender in S[A.canister_id].controllers
+(S[A.canister_id].canister_log_visibility = Public)
+  or
+  (S[A.canister_id].canister_log_visibility = Controllers and Q.sender in S[A.canister_id].controllers)
+  or
+  (S[A.canister_id].canister_log_visibility = AllowedViewers Principals and (Q.sender in S[A.canister_id].controllers or Q.sender in Principals))
 
 ```
 
@@ -6308,7 +6321,7 @@ E.content = CanisterQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
 |Q.nonce| <= 32
 is_effective_canister_id(E.content, ECID)
-S.system_time <= Q.ingress_expiry
+S.system_time <= Q.ingress_expiry or Q.sender = anonymous_id
 
 ```
 
@@ -6370,7 +6383,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 |E.content.nonce| <= 32
-S.system_time <= RS.ingress_expiry
+S.system_time <= RS.ingress_expiry or RS.sender = anonymous_id
 ∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
