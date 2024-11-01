@@ -961,7 +961,7 @@ All requests coming in via the HTTPS interface need to be either *anonymous* or 
 
 -   `nonce` (`blob`, optional): Arbitrary user-provided data of length at most 32 bytes, typically randomly generated. This can be used to create distinct requests with otherwise identical fields.
 
--   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. This applies not only to update calls, but all requests alike (and could have been called `request_expiry`).
+-   `ingress_expiry` (`nat`, required): An upper limit on the validity of the request, expressed in nanoseconds since 1970-01-01 (like [ic0.time()](#system-api-time)). This avoids replay attacks: The IC will not accept requests, or transition requests from status `received` to status `processing`, if their expiry date is in the past. The IC may refuse to accept requests with an ingress expiry date too far in the future. These rules for ingress expiry apply not only to update calls but all requests alike (and could have been called `request_expiry`), except for anonymous `query` and anonymous `read_state` requests for which the IC may accept any provided expiry timestamp.
 
 -   `sender` (`Principal`, required): The user who issued the request.
 
@@ -6285,7 +6285,7 @@ E.content = CanisterQuery Q
 Q.canister_id ∈ verify_envelope(E, Q.sender, S.system_time)
 |Q.nonce| <= 32
 is_effective_canister_id(E.content, ECID)
-S.system_time <= Q.ingress_expiry
+S.system_time <= Q.ingress_expiry or Q.sender = anonymous_id
 
 ```
 
@@ -6347,7 +6347,7 @@ Conditions
 E.content = ReadState RS
 TS = verify_envelope(E, RS.sender, S.system_time)
 |E.content.nonce| <= 32
-S.system_time <= RS.ingress_expiry
+S.system_time <= RS.ingress_expiry or RS.sender = anonymous_id
 ∀ path ∈ RS.paths. may_read_path_for_canister(S, R.sender, path)
 ∀ (["request_status", Rid] · _) ∈ RS.paths.  ∀ R ∈ dom(S.requests). hash_of_map(R) = Rid => R.canister_id ∈ TS
 
