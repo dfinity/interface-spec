@@ -2,6 +2,7 @@
 
 ### ∞ (unreleased)
 * Allow anonymous query and read state requests with invalid `ingress_expiry`.
+* Add allowed viewers variant to canister log visibility.
 
 ### 0.28.0 (2024-10-11) {#0_28_0}
 * Add new management canister methods for canister snapshot support.
