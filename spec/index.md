@@ -931,6 +931,8 @@ It must be contained in the canister ranges of a subnet, otherwise the correspon
 
     -   If the call is to the `provisional_create_canister_with_cycles` method, then any principal can be used as the effective canister id for this call.
 
+    -   If the call is to the `install_chunked_code` method and the `arg` is a Candid-encoded record with a `target_canister` field of type `principal`, then the effective canister id must be that principal.
+
     -   Otherwise, if the `arg` is a Candid-encoded record with a `canister_id` field of type `principal`, then the effective canister id must be that principal.
 
     -   Otherwise, the call is rejected by the system independently of the effective canister id.
@@ -3624,6 +3626,7 @@ delegation_targets(D)
 A `Request` has an effective canister id according to the rules in [Effective canister id](#http-effective-canister-id):
 ```
 is_effective_canister_id(Request {canister_id = ic_principal, method = provisional_create_canister_with_cycles, …}, p)
+is_effective_canister_id(Request {canister_id = ic_principal, method = install_chunked_code, arg = candid({target_canister = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = ic_principal, arg = candid({canister_id = p, …}), …}, p)
 is_effective_canister_id(Request {canister_id = p, …}, p), if p ≠ ic_principal
 ```
