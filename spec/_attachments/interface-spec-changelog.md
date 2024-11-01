@@ -1,7 +1,14 @@
 ## Changelog {#changelog}
 
 ### ∞ (unreleased)
+* Allow anonymous query and read state requests with invalid `ingress_expiry`.
+
+### 0.28.0 (2024-10-11) {#0_28_0}
+* Add new management canister methods for canister snapshot support.
+
+### 0.27.0 (2024-09-20) {#0_27_0}
 * EXPERIMENTAL: Management canister API to fetch Bitcoin block headers.
+* Synchronous update call API at `/api/v3/canister/.../call`.
 
 ### 0.26.0 (2024-07-23) {#0_26_0}
 * EXPERIMENTAL: Management canister API for threshold Schnorr signatures.
