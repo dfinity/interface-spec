@@ -3979,7 +3979,7 @@ S with
 
 *Call context creation: On low wasm memory*
 
-If canister `C` exports a method with name `canister_on_low_wasm_memory` and `S.on_low_wasm_memory_hook_status[C]` is `Ready`, the IC will create the corresponding call context and set `S.on_low_wasm_memory_hook_status[C]` to `Executed`.
+If `S.on_low_wasm_memory_hook_status[C]` is `Ready` for a canister `C`, the IC will create the corresponding call context and set `S.on_low_wasm_memory_hook_status[C]` to `Executed`.
 
 Conditions
 
