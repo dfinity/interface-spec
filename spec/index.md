@@ -677,7 +677,7 @@ The HTTP response to this request can have the following forms:
     
     -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
 
-        -   `status` (`text`): `"certified_state"`
+        -   `status` (`text`): `"replied"`
 
         -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
 
