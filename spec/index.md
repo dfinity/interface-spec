@@ -677,9 +677,9 @@ The HTTP response to this request can have the following forms:
     
     -   If the update call completed, a certificate for the state of the update call is produced, and returned in a CBOR (see [CBOR](#cbor)) map with the fields specified below:
 
-        -   `status` (`text`): `"certified_state"`
+        -   `status` (`text`): `"replied"`
 
-        -   `reply` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
+        -   `certificate` (`blob`):  A certificate (see [Certification](#certification)) with subtrees at `/request_status/<request_id>` and `/time`, where `<request_id>` is the [request ID](#request-id) of the update call. See [Request status](#state-tree-request-status) for more details on the request status.
 
     -   If a non-replicated pre-processing error occurred (e.g., due to the [canister inspect message](#system-api-inspect-message)), then a body with information about the IC specific error encountered is returned. The body is a CBOR map with the following fields:
 
